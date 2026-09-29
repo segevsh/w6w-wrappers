@@ -26,6 +26,15 @@
  * (`subscription-route.ts`), so both methods here call this package's
  * `unwrap()` helper rather than returning `res.body` verbatim.
  *
+ * **`allowance()` (W-12) is the caller's own EFFECTIVE allowance, credits and
+ * current-month usage** — `GET /commerce/allowance`, AUTHENTICATED like
+ * `subscription()`, unwrapped from the `allowance` envelope. `credits.balance`
+ * is SIGNED and never clamped: negative means over by that many executions.
+ * Egress-pinned: never `reason`, `setBy`, `grantedBy`, `grants`, `override` or
+ * a `/stripe/i` key at any depth — those are operator/control-internal, not
+ * account-facing. Any non-200 (including a 424 `control_unavailable` or an old
+ * control's 404 `text/plain`) is treated as "unavailable" by callers.
+ *
  * @module
  */
 
@@ -266,6 +275,64 @@ export interface SubscriptionChangeResult {
 }
 
 /**
+ * A metered/countable dimension's value as `GET /commerce/allowance` states
+ * it — a real number, or one of the catalog's two non-numeric arms. Mirrors
+ * the vocabulary of `PlanQuotas`' own `Quota.kind` but is deliberately flat
+ * (W-12): this endpoint reports one EFFECTIVE number per dimension, never a
+ * `{kind, included}` shape.
+ */
+export type AllowanceValue = number | "unlimited" | "custom";
+
+/**
+ * The caller's own accrued extra-usage balance (HITL-1 (b) — "extra
+ * executions", not a Stripe balance credit and not a comped plan). `balance`
+ * is SIGNED and never clamped: `granted - consumed`, so a negative value means
+ * the account is over by that many executions.
+ */
+export interface AccountAllowanceCredits {
+  readonly granted: number;
+  readonly consumed: number;
+  readonly balance: number;
+}
+
+/**
+ * The account's effective per-dimension limits for the current month — the
+ * override where the operator set one, the catalog value otherwise. Same 8
+ * dimensions `PlanQuotas`/`PlanLimits` bound, flattened to one
+ * {@link AllowanceValue} each; no `override`/`metered` field travels on this
+ * wire (that provenance is operator/control-internal, never account-facing —
+ * see this module's egress pin).
+ */
+export interface AccountAllowanceLimits {
+  readonly runs: AllowanceValue;
+  readonly parallelExecutions: AllowanceValue;
+  readonly monitors: AllowanceValue;
+  readonly monitorMinCadenceMinutes: AllowanceValue;
+  readonly retentionBodiesDays: AllowanceValue;
+  readonly retentionMetadataDays: AllowanceValue;
+  readonly projects: AllowanceValue;
+  readonly seats: AllowanceValue;
+}
+
+/**
+ * `GET /commerce/allowance`'s response (W-12) — the caller's own effective
+ * allowance, credits and current-month usage. `month` is the reporting month
+ * (`"YYYY-MM"`); `executions` is actual usage so far; `included` is the
+ * effective monthly allowance; `overage` is executions beyond `included`,
+ * reported but not consumed by this SDK's own callers (no enforcement,
+ * HITL-3).
+ */
+export interface AccountAllowance {
+  readonly month: string;
+  readonly executions: number;
+  readonly included: AllowanceValue;
+  readonly overage: number;
+  readonly credits: AccountAllowanceCredits;
+  readonly limits: AccountAllowanceLimits;
+  readonly customTerms: boolean;
+}
+
+/**
  * The `console.commerce` namespace on a `W6WClient`.
  *
  * @example
@@ -434,5 +501,25 @@ export class CommerceApi {
       body: input,
     });
     return res.body;
+  }
+
+  /**
+   * Fetch the caller's own effective allowance, credits and current-month
+   * usage (W-12).
+   *
+   * AUTHENTICATED — the default `requireAuth` applies: the account is
+   * derived server-side from the principal.
+   *
+   * @returns The allowance, unwrapped from the `allowance` envelope.
+   * @throws {ApiError} On any non-2xx, including `424 control_unavailable`
+   *   when the host cannot reach control — callers should treat ANY non-200
+   *   here as "unavailable", not just this one code.
+   */
+  async allowance(): Promise<AccountAllowance> {
+    const res = await this.#host.request<{ allowance: AccountAllowance }>({
+      method: "GET",
+      path: "/commerce/allowance",
+    });
+    return unwrap<AccountAllowance>(res, "allowance");
   }
 }
