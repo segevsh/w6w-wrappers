@@ -78,6 +78,10 @@ export { DashboardApi } from "./dashboard.ts";
 export type { DashboardHost, DashboardStats, DashboardStatsParams } from "./dashboard.ts";
 export { CommerceApi } from "./commerce.ts";
 export type {
+  AccountAllowance,
+  AccountAllowanceCredits,
+  AccountAllowanceLimits,
+  AllowanceValue,
   BillingInterval,
   ChangeSubscriptionInput,
   CheckoutInput,
