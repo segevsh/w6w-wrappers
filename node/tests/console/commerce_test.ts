@@ -14,7 +14,13 @@
 import { assertEquals } from "@std/assert";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
-import type { CommerceSubscription, Invoice, Plan } from "../../src/console/commerce.ts";
+import type {
+  CommerceSubscription,
+  Invoice,
+  Plan,
+  PlanCapabilities,
+  SupportLevel,
+} from "../../src/console/commerce.ts";
 
 /**
  * Compile-time-only: the exported `Invoice` type must carry EXACTLY the ten
@@ -37,6 +43,40 @@ const _INVOICE_KEYS: Record<keyof Invoice, true> = {
   createdAt: true,
 };
 void _INVOICE_KEYS;
+
+/**
+ * Compile-time-only, mirroring `_INVOICE_KEYS`: `PlanCapabilities` must carry
+ * EXACTLY these eleven keys, no twelfth and none dropped — a capability added
+ * to control's wire type and not mirrored here (or vice versa) fails
+ * `deno task check` with an excess/missing-property error.
+ */
+const _CAPABILITY_KEYS: Record<keyof PlanCapabilities, true> = {
+  catalogImport: true,
+  privateRegistry: true,
+  implSwapAndConfig: true,
+  versionPinsAndBlocks: true,
+  egressCaptureExport: true,
+  embeddedWhiteLabel: true,
+  sso: true,
+  auditLog: true,
+  rbac: true,
+  dataResidency: true,
+  selfHostLicence: true,
+};
+void _CAPABILITY_KEYS;
+
+/**
+ * Compile-time-only: `SupportLevel` must carry EXACTLY these four literals —
+ * a dropped, added or renamed arm fails `deno task check` here rather than
+ * surfacing later as a blank/wrong Support row in Studio.
+ */
+const _SUPPORT_LEVELS: Record<SupportLevel, true> = {
+  community: true,
+  email: true,
+  "email-1-business-day": true,
+  "sla-named-contact-dpa": true,
+};
+void _SUPPORT_LEVELS;
 
 /** One recorded call to the fake transport. */
 interface Call {
@@ -92,6 +132,10 @@ const PLAN: Plan = {
       versionPinsAndBlocks: false,
       egressCaptureExport: false,
       embeddedWhiteLabel: false,
+      sso: false,
+      auditLog: false,
+      rbac: false,
+      dataResidency: false,
       selfHostLicence: { available: false, annualSurcharge: null },
     },
     support: "community",

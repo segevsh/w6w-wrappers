@@ -92,11 +92,15 @@ export interface PlanCapabilities {
   readonly versionPinsAndBlocks: boolean;
   readonly egressCaptureExport: boolean;
   readonly embeddedWhiteLabel: boolean;
+  readonly sso: boolean;
+  readonly auditLog: boolean;
+  readonly rbac: boolean;
+  readonly dataResidency: boolean;
   readonly selfHostLicence: SelfHostLicence;
 }
 
 /** A plan's support tier. */
-export type SupportLevel = "community" | "email" | "slack-1-business-day" | "sla-named-contact-dpa";
+export type SupportLevel = "community" | "email" | "email-1-business-day" | "sla-named-contact-dpa";
 
 /** Everything a plan bounds or grants: quotas, capabilities, and support level. */
 export interface PlanLimits {
@@ -150,6 +154,8 @@ export interface Plan {
   readonly description: string;
   readonly rank: number;
   readonly retired: boolean;
+  /** Whether an upgrade INTO this plan must go through sales rather than self-serve checkout — true only for `enterprise` today. Optional/forward-compatible on this SDK copy: absent means false. */
+  readonly topTier?: boolean;
   readonly features: readonly string[];
   readonly limits: PlanLimits;
   readonly price: PlanPrice;
@@ -340,7 +346,9 @@ export class CommerceApi {
    *   (`window.location.href = url`); do not fetch it.
    * @throws {ApiError} `409 plan_not_billable` for a `contact-sales`/`none`
    *   plan or an interval the plan doesn't offer; `409 price_not_synced` if
-   *   the catalog says billable but Stripe has no matching active price yet.
+   *   the catalog says billable but Stripe has no matching active price yet;
+   *   `409 plan_not_self_serve` if the account's CURRENT plan is a top-tier
+   *   plan — an upgrade off it goes through sales, not self-serve checkout.
    */
   async checkout(input: CheckoutInput): Promise<CheckoutResult> {
     const res = await this.#host.request<{ checkout: CheckoutResult }>({
@@ -393,7 +401,9 @@ export class CommerceApi {
    * anything. AUTHENTICATED.
    *
    * @throws {ApiError} `409 no_active_subscription` if the account has no
-   *   active Stripe subscription to change — use {@link checkout} instead.
+   *   active Stripe subscription to change — use {@link checkout} instead;
+   *   `409 plan_not_self_serve` if the account's CURRENT plan is a top-tier
+   *   plan — an upgrade off it goes through sales, not self-serve checkout.
    */
   async previewSubscriptionChange(
     input: ChangeSubscriptionInput,
@@ -413,7 +423,9 @@ export class CommerceApi {
    * AUTHENTICATED.
    *
    * @throws {ApiError} `409 no_active_subscription` if the account has no
-   *   active Stripe subscription to change — use {@link checkout} instead.
+   *   active Stripe subscription to change — use {@link checkout} instead;
+   *   `409 plan_not_self_serve` if the account's CURRENT plan is a top-tier
+   *   plan — an upgrade off it goes through sales, not self-serve checkout.
    */
   async changeSubscription(input: ChangeSubscriptionInput): Promise<SubscriptionChangeResult> {
     const res = await this.#host.request<SubscriptionChangeResult>({
