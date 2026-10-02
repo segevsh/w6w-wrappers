@@ -57,7 +57,7 @@ export interface EndpointsHost {
 }
 
 /** What an Endpoint dispatches to, when the target is a Function or Workflow. */
-export type Callable =
+export type CallableRef =
   | { kind: "function"; function: string }
   | { kind: "workflow"; workflow: string };
 
@@ -85,7 +85,7 @@ export interface EndpointRefTarget {
  * legal only for the latter: an Endpoint's own target can never be another
  * Endpoint (see {@linkcode EndpointRefTarget}).
  */
-export type EndpointTarget = Callable | ActionTarget | EndpointRefTarget;
+export type EndpointTarget = CallableRef | ActionTarget | EndpointRefTarget;
 
 /**
  * Attempt policy for a Function/Endpoint call. Absent ⇒ one attempt. Mirrors
@@ -110,7 +110,7 @@ export interface RetryPolicy {
  * failure into one would re-enter through the front door and re-run that
  * Endpoint's own auth, rate limit and error policy, including its own reroute.
  */
-export type ErrorHandlerTarget = Callable | ActionTarget;
+export type ErrorHandlerTarget = CallableRef | ActionTarget;
 
 /**
  * Where a failed Function/Endpoint invocation — or a failed workflow RUN — is
@@ -118,9 +118,9 @@ export type ErrorHandlerTarget = Callable | ActionTarget;
  * be an `Edge.when: "error"`.
  *
  * ⚠️ Widened 2026-08-21: the target is {@linkcode ErrorHandlerTarget}, not
- * {@linkcode Callable}. It was Function-or-Workflow only, which left the most
+ * {@linkcode CallableRef}. It was Function-or-Workflow only, which left the most
  * obvious handler there is (post to Slack, send me an email) expressible only
- * by first wrapping the action in a Function. The `Callable` arms stay first
+ * by first wrapping the action in a Function. The `CallableRef` arms stay first
  * in the union, so every reroute stored before the widening keeps its type.
  */
 export interface ErrorReroute {
