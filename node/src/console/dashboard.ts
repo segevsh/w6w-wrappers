@@ -69,6 +69,8 @@ export interface DashboardStats {
     durationMs: number | null;
     /** The owning project id; `null` when none. */
     project: string | null;
+    /** The step's id within its workflow; non-null only on `kind: "workflow_step"` rows. */
+    stepId: string | null;
   }>;
 }
 

@@ -64,6 +64,7 @@ const STATS: DashboardStats = {
       functionId: null,
       durationMs: 1500,
       project: "prj_1",
+      stepId: null,
     },
     {
       id: "run_2",
@@ -75,6 +76,7 @@ const STATS: DashboardStats = {
       functionId: null,
       durationMs: null,
       project: null,
+      stepId: null,
     },
   ],
 };
@@ -90,6 +92,7 @@ type RecentRow = DashboardStats["recent"][number];
 const _functionId: Equals<RecentRow["functionId"], string | null> = true;
 const _durationMs: Equals<RecentRow["durationMs"], number | null> = true;
 const _project: Equals<RecentRow["project"], string | null> = true;
+const _stepId: Equals<RecentRow["stepId"], string | null> = true;
 
 /** A client wired to a fake transport. */
 function client(respond: (call: Call) => Response): { client: W6WClient; calls: Call[] } {
