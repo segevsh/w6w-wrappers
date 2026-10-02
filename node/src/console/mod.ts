@@ -183,7 +183,7 @@ export type {
 export { EndpointsApi, SECRET_MASK } from "./endpoints.ts";
 export type {
   ActionTarget,
-  Callable,
+  CallableRef,
   CallableOnError,
   EndpointAuthMode,
   EndpointDef,
