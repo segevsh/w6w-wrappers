@@ -11,10 +11,20 @@
  * `unwrap()` rather than returning `res.body` verbatim.
  */
 
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
-import type { CommerceSubscription, Invoice, Plan } from "../../src/console/commerce.ts";
+import type {
+  AccountAllowance,
+  AccountAllowanceCredits,
+  AccountAllowanceLimits,
+  CommerceSubscription,
+  Invoice,
+  Plan,
+  PlanCapabilities,
+  SupportLevel,
+} from "../../src/console/commerce.ts";
+import { ApiError } from "../../src/errors.ts";
 
 /**
  * Compile-time-only: the exported `Invoice` type must carry EXACTLY the ten
@@ -37,6 +47,87 @@ const _INVOICE_KEYS: Record<keyof Invoice, true> = {
   createdAt: true,
 };
 void _INVOICE_KEYS;
+
+/**
+ * Compile-time-only, mirroring `_INVOICE_KEYS`: `PlanCapabilities` must carry
+ * EXACTLY these eleven keys, no twelfth and none dropped — a capability added
+ * to control's wire type and not mirrored here (or vice versa) fails
+ * `deno task check` with an excess/missing-property error.
+ */
+const _CAPABILITY_KEYS: Record<keyof PlanCapabilities, true> = {
+  catalogImport: true,
+  privateRegistry: true,
+  implSwapAndConfig: true,
+  versionPinsAndBlocks: true,
+  egressCaptureExport: true,
+  embeddedWhiteLabel: true,
+  sso: true,
+  auditLog: true,
+  rbac: true,
+  dataResidency: true,
+  selfHostLicence: true,
+};
+void _CAPABILITY_KEYS;
+
+/**
+ * Compile-time-only: `SupportLevel` must carry EXACTLY these four literals —
+ * a dropped, added or renamed arm fails `deno task check` here rather than
+ * surfacing later as a blank/wrong Support row in Studio.
+ */
+const _SUPPORT_LEVELS: Record<SupportLevel, true> = {
+  community: true,
+  email: true,
+  "email-1-business-day": true,
+  "sla-named-contact-dpa": true,
+};
+void _SUPPORT_LEVELS;
+
+/**
+ * Compile-time-only, mirroring `_INVOICE_KEYS`: `AccountAllowance` must carry
+ * EXACTLY these seven top-level keys, nested exactly as W-12 states them — a
+ * flattened `credits`/`limits`, a dropped key, or an added key (e.g.
+ * `reason?`) at this level fails `deno task check` with an excess/missing-
+ * property error rather than surfacing later as a leaked operator-internal
+ * field.
+ */
+const _ALLOWANCE_KEYS: Record<keyof AccountAllowance, true> = {
+  month: true,
+  executions: true,
+  included: true,
+  overage: true,
+  credits: true,
+  limits: true,
+  customTerms: true,
+};
+void _ALLOWANCE_KEYS;
+
+/**
+ * Compile-time-only: `AccountAllowanceCredits` must carry EXACTLY these
+ * three keys — an added `grants?`/`setBy?`/`grantedBy?` (operator-internal,
+ * egress-pinned) fails `deno task check` here.
+ */
+const _ALLOWANCE_CREDIT_KEYS: Record<keyof AccountAllowanceCredits, true> = {
+  granted: true,
+  consumed: true,
+  balance: true,
+};
+void _ALLOWANCE_CREDIT_KEYS;
+
+/**
+ * Compile-time-only: `AccountAllowanceLimits` must carry EXACTLY these eight
+ * dimensions — a dropped one (e.g. `seats`) fails `deno task check` here.
+ */
+const _ALLOWANCE_LIMIT_KEYS: Record<keyof AccountAllowanceLimits, true> = {
+  runs: true,
+  parallelExecutions: true,
+  monitors: true,
+  monitorMinCadenceMinutes: true,
+  retentionBodiesDays: true,
+  retentionMetadataDays: true,
+  projects: true,
+  seats: true,
+};
+void _ALLOWANCE_LIMIT_KEYS;
 
 /** One recorded call to the fake transport. */
 interface Call {
@@ -92,6 +183,10 @@ const PLAN: Plan = {
       versionPinsAndBlocks: false,
       egressCaptureExport: false,
       embeddedWhiteLabel: false,
+      sso: false,
+      auditLog: false,
+      rbac: false,
+      dataResidency: false,
       selfHostLicence: { available: false, annualSurcharge: null },
     },
     support: "community",
@@ -113,6 +208,26 @@ const INVOICE: Invoice = {
   issuedAt: "2026-09-01T00:00:00.000Z",
   dueAt: "2026-10-01T00:00:00.000Z",
   createdAt: "2026-09-01T00:00:00.000Z",
+};
+
+/** A realistic allowance, matching every one of W-12's seven pinned fields. */
+const ALLOWANCE: AccountAllowance = {
+  month: "2026-09",
+  executions: 1234,
+  included: 5000,
+  overage: 0,
+  credits: { granted: 1000000, consumed: 1500, balance: 998500 },
+  limits: {
+    runs: 5000,
+    parallelExecutions: 1,
+    monitors: 3,
+    monitorMinCadenceMinutes: 60,
+    retentionBodiesDays: 3,
+    retentionMetadataDays: 30,
+    projects: 1,
+    seats: 2,
+  },
+  customTerms: true,
 };
 
 /** A client wired to a fake transport, WITH a token — the interesting case for `requireAuth`. */
@@ -227,3 +342,61 @@ Deno.test("console.commerce: plans, subscription and invoices are functions on a
   assertEquals(typeof c.console.commerce.subscription, "function");
   assertEquals(typeof c.console.commerce.invoices, "function");
 });
+
+Deno.test(
+  "console.commerce.allowance() hits GET /commerce/allowance, DOES send the bearer, sends no body, and unwraps",
+  async () => {
+    const c = client(() => json({ allowance: ALLOWANCE }));
+
+    const result = await c.client.console.commerce.allowance();
+
+    assertEquals(c.calls[0].method, "GET");
+    assertEquals(c.calls[0].url, "https://api.example.com/commerce/allowance");
+    assertEquals(c.calls[0].headers.get("authorization"), "Bearer tok_1");
+    assertEquals(c.calls[0].body, null);
+    // Asserted against an INDEPENDENT literal, never the `ALLOWANCE` fixture
+    // variable — a `return res.body` implementation (no envelope peel) or a
+    // wrong envelope key (`unwrap(res, "data")`) both fail here.
+    assertEquals(result, {
+      month: "2026-09",
+      executions: 1234,
+      included: 5000,
+      overage: 0,
+      credits: { granted: 1000000, consumed: 1500, balance: 998500 },
+      limits: {
+        runs: 5000,
+        parallelExecutions: 1,
+        monitors: 3,
+        monitorMinCadenceMinutes: 60,
+        retentionBodiesDays: 3,
+        retentionMetadataDays: 30,
+        projects: 1,
+        seats: 2,
+      },
+      customTerms: true,
+    });
+  },
+);
+
+Deno.test(
+  "console.commerce.allowance() rejects with ApiError on a 424 JSON reply and on a 404 text/plain reply",
+  async () => {
+    const c424 = client(() => json({ error: { code: "control_unavailable" } }, 424));
+    const err424 = await assertRejects(
+      () => c424.client.console.commerce.allowance(),
+      ApiError,
+    );
+    assertEquals(err424.status, 424);
+    assertEquals(err424.code, "control_unavailable");
+
+    const c404 = client(() =>
+      new Response("404 Not Found", { status: 404, headers: { "content-type": "text/plain" } })
+    );
+    const err404 = await assertRejects(
+      () => c404.client.console.commerce.allowance(),
+      ApiError,
+    );
+    assertEquals(err404.status, 404);
+    assertEquals(err404.code, "bad_response");
+  },
+);
