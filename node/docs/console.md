@@ -201,7 +201,7 @@ Return shape — `DashboardStats`:
 | `range`    | `{ from: string; to: string; bucket: "day" \| "week" }`                                                     | The resolved window actually applied.                                 |
 | `headline` | `{ workflowRuns: number; succeeded: number; failed: number }`                                               | Workflow runs only.                                                   |
 | `series`   | `Array<{ bucket: string; kind: string; ok: boolean \| null; count: number }>`                               | The charts-later seam — a flat payload the caller slices client-side. |
-| `recent`   | `Array<{ id, kind, ok: boolean \| null, summary: string \| null, occurredAt, workflowId: string \| null }>` | Most recent activity, `id`/`kind`/`occurredAt` always `string`.       |
+| `recent`   | `Array<{ id, kind, ok: boolean \| null, summary: string \| null, occurredAt, workflowId: string \| null, functionId: string \| null, durationMs: number \| null, project: string \| null }>` | Most recent activity, `id`/`kind`/`occurredAt` always `string`; `functionId` is non-null only for `kind: "function"` rows, and `durationMs`/`project` are `null` when unknown. |
 
 ## `RequestOptions.requireAuth`
 

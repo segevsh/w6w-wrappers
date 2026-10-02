@@ -61,6 +61,9 @@ const STATS: DashboardStats = {
       summary: "ok",
       occurredAt: "2026-08-09T01:00:00.000Z",
       workflowId: "wf_1",
+      functionId: null,
+      durationMs: 1500,
+      project: "prj_1",
     },
     {
       id: "run_2",
@@ -69,9 +72,24 @@ const STATS: DashboardStats = {
       summary: null,
       occurredAt: "2026-08-09T00:30:00.000Z",
       workflowId: null,
+      functionId: null,
+      durationMs: null,
+      project: null,
     },
   ],
 };
+
+/**
+ * Compile-time exact-type pin on the widened `recent` row: a field made
+ * optional (`?:`) or non-nullable no longer satisfies `Equals`, so this file
+ * fails `deno check` rather than silently accepting a drifted wire shape.
+ */
+type Equals<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true
+  : false;
+type RecentRow = DashboardStats["recent"][number];
+const _functionId: Equals<RecentRow["functionId"], string | null> = true;
+const _durationMs: Equals<RecentRow["durationMs"], number | null> = true;
+const _project: Equals<RecentRow["project"], string | null> = true;
 
 /** A client wired to a fake transport. */
 function client(respond: (call: Call) => Response): { client: W6WClient; calls: Call[] } {
