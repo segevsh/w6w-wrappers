@@ -48,7 +48,7 @@
 
 import { type HttpResponse, path, type RequestOptions } from "../http.ts";
 import { unwrap } from "../types.ts";
-import type { CallableRef, CallableOnError, ErrorReroute, RetryPolicy } from "./endpoints.ts";
+import type { CallableOnError, CallableRef, ErrorReroute, RetryPolicy } from "./endpoints.ts";
 
 /**
  * The slice of `W6WClient` this namespace needs: the transport, and nothing
