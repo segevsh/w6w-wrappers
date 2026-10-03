@@ -63,6 +63,14 @@ export interface DashboardStats {
     summary: string | null;
     occurredAt: string;
     workflowId: string | null;
+    /** The Function's `fn_…` id; non-null only for `kind: "function"` rows. */
+    functionId: string | null;
+    /** Wall-clock duration in milliseconds; `null` when unknown. */
+    durationMs: number | null;
+    /** The owning project id; `null` when none. */
+    project: string | null;
+    /** The step's id within its workflow; non-null only on `kind: "workflow_step"` rows. */
+    stepId: string | null;
   }>;
 }
 

@@ -934,11 +934,12 @@ POST /workflows[?project=<id>]
 The create half of the server's single upsert route, which is why §21 and §22
 share a method and a path.
 
-**The server does not mint ids.** `validateDefinition` rejects a body with no
-`id` as `400 invalid_workflow`, so every wrapper mints one client-side
-(`wf_<uuid>`) when the definition carries none, and forwards an `id` the caller
-supplied untouched. That is not a convenience: without it the most natural call
-there is — "create this workflow" — fails.
+**The server mints an id only when the caller sends none.** `validateDefinition`
+accepts a body with no `id` — the server mints `wf_<uuid>` itself — and accepts
+a caller-supplied `id` only if it matches `^wf_[A-Za-z0-9-]{1,64}$`; anything
+else is `400 invalid_workflow`. Every wrapper still mints one client-side
+(`wf_<uuid>`) when the definition carries none and forwards an `id` the caller
+supplied untouched, so what it sends already satisfies that grammar.
 
 The definition is sent **verbatim as the body**, never wrapped in an envelope
 key. `manifestVersion` must be `"2"`. A definition whose `trigger.cron` is set
@@ -1121,8 +1122,10 @@ POST /functions
 
 `status: required` · served today · **`201`**
 
-The create half of the server's single upsert route. **The server does not mint
-ids** — wrappers mint `fn_<uuid>` when the definition carries none, exactly as
+The create half of the server's single upsert route. **The server mints an id
+only when the caller sends none** — a caller-supplied `id` is accepted only if
+it matches `^fn_[A-Za-z0-9-]{1,64}$`, else `400 invalid_function`. Wrappers
+still mint `fn_<uuid>` client-side when the definition carries none, exactly as
 §21 does.
 
 **`key` is not minted.** It is the name the Function is *called* by, so it is the

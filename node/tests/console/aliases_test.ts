@@ -17,7 +17,7 @@
  *   (`action` / `function` / `workflow` / `endpoint`) — `deno task check`
  *   fails this file if `target` is ever narrowed to fewer arms. The
  *   `endpoint` arm is legal for `AliasDef.target` only — it is a SIBLING of
- *   `Callable`, never a third `Callable` arm, and `EndpointDef.target`'s own
+ *   `CallableRef`, never a third `CallableRef` arm, and `EndpointDef.target`'s own
  *   `console.endpoints.invoke` result (`EndpointInvokeResult`) can never
  *   answer an `endpoint` kind; two `@ts-expect-error` probes pin both
  *   refusals.
@@ -28,7 +28,7 @@ import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import { ApiError } from "../../src/errors.ts";
 import type { AliasDef, AliasSummary } from "../../src/console/aliases.ts";
-import type { Callable, EndpointInvokeResult } from "../../src/console/endpoints.ts";
+import type { CallableRef, EndpointInvokeResult } from "../../src/console/endpoints.ts";
 
 /** One recorded call to the fake transport. */
 interface Call {
@@ -269,14 +269,14 @@ Deno.test(
 );
 
 Deno.test(
-  "the endpoint arm is a SIBLING of Callable, never a third Callable arm",
+  "the endpoint arm is a SIBLING of CallableRef, never a third CallableRef arm",
   () => {
-    // D-P1: EndpointRefTarget must NOT be assignable to Callable — it is a
-    // sibling member of EndpointTarget, never a third Callable arm. An
+    // D-P1: EndpointRefTarget must NOT be assignable to CallableRef — it is a
+    // sibling member of EndpointTarget, never a third CallableRef arm. An
     // unused `@ts-expect-error` is itself a `deno check` error (TS2578),
     // which is what makes this a gate and not just a comment.
-    // @ts-expect-error — "endpoint" is not a legal Callable.kind
-    const notCallable: Callable = { kind: "endpoint", endpoint: "ep_1" };
+    // @ts-expect-error — "endpoint" is not a legal CallableRef.kind
+    const notCallable: CallableRef = { kind: "endpoint", endpoint: "ep_1" };
     // EndpointInvokeResult also stays exactly three arms: an Endpoint's own
     // target can never resolve to another Endpoint (console.endpoints.invoke
     // can never answer an "endpoint" kind).

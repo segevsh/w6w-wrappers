@@ -16,11 +16,14 @@
  * `running`), never `"canceled"`. Repeating the call on a run that is already
  * marked but not yet terminal answers `202` again.
  *
- * ── The write path, and the two things the server does NOT do ──
- * 1. **It does not mint ids.** `POST /workflows` requires `id` in the body, so
- *    `create` mints one (`mintId("wf")`) when the definition has none. Every
- *    consumer that talked to this route directly had already written that
- *    themselves — studio's `newWorkflowId` is the same four lines.
+ * ── The write path, and two things worth knowing about it ──
+ * 1. **It mints an id only when the caller sends none.** A caller-supplied
+ *    `id` on create is accepted only if it matches `^wf_[A-Za-z0-9-]{1,64}$`;
+ *    anything else is `400 invalid_workflow`. `create` still mints one
+ *    client-side (`mintId("wf")`) when the definition has none, so what
+ *    reaches the server already satisfies that grammar — every consumer that
+ *    talked to this route directly had already written that themselves,
+ *    studio's `newWorkflowId` is the same four lines.
  * 2. **It does not patch.** There is ONE write route and it stores what it is
  *    given, so `update` is a full replacement. `create` and `update` are the
  *    same POST; what differs is that one mints the id and the other pins it.
