@@ -48,7 +48,7 @@
 
 import { type HttpResponse, path, type RequestOptions } from "../http.ts";
 import { unwrap } from "../types.ts";
-import type { Callable, CallableOnError, ErrorReroute, RetryPolicy } from "./endpoints.ts";
+import type { CallableOnError, CallableRef, ErrorReroute, RetryPolicy } from "./endpoints.ts";
 
 /**
  * The slice of `W6WClient` this namespace needs: the transport, and nothing
@@ -87,9 +87,9 @@ export interface FunctionActionImpl {
   outputMap?: Record<string, unknown>;
 }
 
-/** The Function / Workflow arms — {@linkcode Callable} reused verbatim, carrying the
+/** The Function / Workflow arms — {@linkcode CallableRef} reused verbatim, carrying the
  *  same two adapter maps the action arm has. */
-export type FunctionCallableImpl = Callable & {
+export type FunctionCallableImpl = CallableRef & {
   with?: Record<string, unknown>;
   outputMap?: Record<string, unknown>;
 };
