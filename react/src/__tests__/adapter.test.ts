@@ -79,6 +79,108 @@ test("listApps reaches the real console.apps.list() pass-through, spanning more 
   );
 });
 
+/**
+ * `listAppsByIds`/`listAppsPage` are OPTIONAL on `W6WApi` (an older/imported
+ * host may not implement them); `createW6WUiAdapter`'s own result always
+ * provides both, so every case below asserts that once instead of a
+ * non-null assertion per call site.
+ */
+function required<T>(fn: T | undefined): T {
+  assert.ok(fn, "createW6WUiAdapter must implement this member");
+  return fn;
+}
+
+/** A minimal, otherwise-valid `AppSummary` for a given id. */
+function appFor(id: string) {
+  return {
+    id,
+    displayName: id,
+    version: "1.0.0",
+    description: "",
+    categories: [],
+    sourceRef: "s",
+    importedAt: "t",
+  };
+}
+
+test("listAppsByIds: 150 distinct ids -> exactly 2 requests, each <= 100 ids, union of apps returned", async () => {
+  const ids = Array.from({ length: 150 }, (_, i) => `app_${i}`);
+  const fake = fakeFetch((call) => {
+    const requested = new URL(call.url).searchParams.get("ids")?.split(",") ?? [];
+    return json({ apps: requested.map(appFor) });
+  });
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  const listAppsByIds = required(adapter.listAppsByIds);
+  const apps = await listAppsByIds(ids);
+
+  assert.equal(fake.calls.length, 2, "expected exactly 2 chunked requests");
+  for (const call of fake.calls) {
+    const chunkIds = new URL(call.url).searchParams.get("ids")?.split(",") ?? [];
+    assert.ok(chunkIds.length <= 100, "each chunk must carry <= 100 ids");
+  }
+  assert.deepEqual(apps.map((a) => a.id).sort(), [...ids].sort());
+});
+
+test("listAppsByIds: duplicate ids collapse before chunking", async () => {
+  const fake = fakeFetch((call) => {
+    const requested = new URL(call.url).searchParams.get("ids")?.split(",") ?? [];
+    return json({ apps: requested.map(appFor) });
+  });
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  const listAppsByIds = required(adapter.listAppsByIds);
+  const apps = await listAppsByIds(["app_1", "app_2", "app_1", "app_2"]);
+
+  assert.equal(fake.calls.length, 1);
+  assert.equal(new URL(fake.calls[0].url).searchParams.get("ids"), "app_1,app_2");
+  assert.deepEqual(
+    apps.map((a) => a.id),
+    ["app_1", "app_2"],
+  );
+});
+
+test("listAppsByIds: [] input -> 0 requests, resolves []", async () => {
+  const fake = fakeFetch(() => json({ apps: [appFor("unexpected")] }));
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  const listAppsByIds = required(adapter.listAppsByIds);
+  const apps = await listAppsByIds([]);
+
+  assert.equal(fake.calls.length, 0, "an empty id set must issue NO request");
+  assert.deepEqual(apps, []);
+});
+
+test("listAppsPage forwards every option and returns nextCursor", async () => {
+  const fake = fakeFetch((call) => {
+    const url = new URL(call.url);
+    assert.equal(url.pathname, "/apps");
+    assert.equal(url.searchParams.get("q"), "sendgrid");
+    assert.equal(url.searchParams.get("category"), "email");
+    assert.equal(url.searchParams.get("cursor"), "c1");
+    assert.equal(url.searchParams.get("limit"), "40");
+    assert.equal(url.searchParams.get("compact"), "true");
+    return json({ apps: [appFor("app_1")], nextCursor: "c2" });
+  });
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  const listAppsPage = required(adapter.listAppsPage);
+  const page = await listAppsPage({
+    q: "sendgrid",
+    category: "email",
+    cursor: "c1",
+    limit: 40,
+    compact: true,
+  });
+
+  assert.equal(fake.calls.length, 1);
+  assert.deepEqual(
+    page.apps.map((a) => a.id),
+    ["app_1"],
+  );
+  assert.equal(page.nextCursor, "c2");
+});
+
 test("a thrown ApiError gains a `.body` alias of `.raw` (one shared helper, every member)", async () => {
   const errorBody = { error: { code: "unknown_app", message: "no such app" } };
   const fake = fakeFetch(() => json(errorBody, 404));

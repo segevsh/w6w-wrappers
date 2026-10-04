@@ -10,4 +10,4 @@
  * this file as TypeScript source and rejects inferred public types ("no slow
  * types").
  */
-export const VERSION: string = "0.8.0";
+export const VERSION: string = "0.8.1";
