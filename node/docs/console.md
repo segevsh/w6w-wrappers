@@ -314,8 +314,8 @@ wire call (method/path/body/query) is unchanged from `client.ts`.
 
 | Method                                    | Route                                                | Notes                                                                                                                                                                                                                                         |
 | ----------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list()`                                  | `GET /apps` (paginated)                              | Loops on `listPage({limit: 200, cursor})`, accumulating `apps` across pages and forwarding `nextCursor` as the next page's `cursor`; capped at 20 pages. No shape change — still resolves the full `AppSummary[]`.                            |
-| `listPage(options?)`                      | `GET /apps` (one page)                               | **Additive, T2.1.1.** One request; see the dedicated paragraph below the table.                                                                                                                                                               |
+| `list()`                                  | `GET /apps` (paginated)                              | **`@deprecated` for UI use** — prefer `listPage({ ids })` (studio's `AppsProvider` is the current consumer). CLI and one-off scripts, which genuinely want the whole catalog, keep using it. Loops on `listPage({limit: 200, cursor})`, accumulating `apps` across pages and forwarding `nextCursor` as the next page's `cursor`; capped at 20 pages. No shape change — still resolves the full `AppSummary[]`.                            |
+| `listPage(options?)`                      | `GET /apps` (one page)                               | **Additive, T2.1.1.** One request; see the dedicated paragraph below the table. Now also takes an `ids?: readonly string[]` option (CSV on the wire, no chunking here — see that paragraph).                                                 |
 | `get(id)`                                 | `GET /apps/:id`                                      | Whole body IS `AppDetail` — no envelope.                                                                                                                                                                                                      |
 | `getAuth(id)`                             | `GET /apps/:id/auths`                                | `unwrap<AuthDef[]>(res, "auths")`.                                                                                                                                                                                                            |
 | `getActions(id)`                          | `GET /apps/:id` (own call)                           | Reads `(body as AppDetail).actions ?? []` — a separate call from `get`, not a refactor onto it.                                                                                                                                               |
@@ -366,6 +366,19 @@ that server support ships a host that ignores the flag simply returns full summa
 must already tolerate. Passing an app-catalog id lookup through `listPage({q: <id>})` is a bounded
 best-effort match, not an indexed exact-id endpoint — no such endpoint exists server-side, so an
 ambiguous or unmatched result falls back to `get(id)`, never to a full unbounded `list()`.
+
+**`ids?: readonly string[]` resolves an explicit, bounded set of app ids** in one request — the CSV
+wire format `GET /apps?ids=a,b,c` (mirrors `admin/reliability.ts`'s `parseAppIds`); `cursor`/`limit`/
+`sort` are ignored server-side whenever `ids` is present. This method is a thin pass-through and does
+**not** chunk: an explicitly supplied `ids: []` still sends `ids=` (empty — never the unfiltered
+page), an omitted `ids` sends no `ids` key at all, and a caller passing more ids than the server's cap
+(100) gets the server's own `400 too_many_ids`. `@w6w/react`'s `createW6WUiAdapter.listAppsByIds` is
+the one caller that chunks (at 100, concurrently) on top of this method.
+
+**`list()` is `@deprecated` for UI use** — prefer `listPage({ ids })`. Studio's `AppsProvider` is the
+current consumer and resolves exactly the ids it needs instead of this eager full-catalog fetch; CLI
+and one-off scripts, which genuinely want the whole catalog, keep using `list()` — it is not going
+away.
 
 **`listApiCalls` is deliberately NOT covered here** — it lives under the same `client.ts` comment
 block but has no named apps-domain consumer (its only caller is reliability's drill-down page); it
