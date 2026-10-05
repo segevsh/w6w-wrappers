@@ -150,6 +150,47 @@ test("a nullish token supplier sends no request and the SDK rejects with ConfigE
     assert.equal(fake.calls.length, 0, "a nullish token must never reach the wire");
   }));
 
+test("a nullish token supplier is reported by useMe as loading, never as error, with zero requests", () =>
+  withRoot(async (root) => {
+    const fake = fakeFetch();
+
+    let captured: ReturnType<typeof useMe> | null = null;
+    function Probe() {
+      captured = useMe();
+      return null;
+    }
+
+    await act(async () => {
+      root.render(
+        createElement(
+          W6WProvider,
+          { baseUrl: "https://api.example.com", token: () => null, fetch: fake.fetch },
+          createElement(Probe),
+        ),
+      );
+      // Give useMe's effect + the rejected ConfigError promise a tick to settle.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.ok(captured);
+    const result = captured as ReturnType<typeof useMe>;
+    assert.equal(
+      result.loading,
+      true,
+      "a nullish supplier must leave the hook in loading, not settled",
+    );
+    assert.equal(
+      result.error,
+      undefined,
+      "a nullish supplier's ConfigError must never surface as error",
+    );
+    assert.equal(
+      fake.calls.length,
+      0,
+      "a nullish token must never reach the wire, even through useMe",
+    );
+  }));
+
 test("an async token supplier is awaited before the bearer is attached", () =>
   withRoot(async (root) => {
     const fake = fakeFetch();

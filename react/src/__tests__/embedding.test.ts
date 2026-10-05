@@ -161,7 +161,7 @@ test("ready=false blocks every read hook; flipping to true fetches exactly once"
 
 // ── identityKey ──────────────────────────────────────────────────────────
 
-test("identityKey switch aborts the in-flight call; data is undefined until the new identity resolves; a late resolution from the old identity never renders", () =>
+test("identityKey switch blanks A's REAL, already-committed data immediately on switch — before B's response arrives — and the final data is B's", () =>
   withRoot(async (root) => {
     const ctl = controlledFetch();
     let captured: ReturnType<typeof useMe> | null = null;
@@ -183,6 +183,16 @@ test("identityKey switch aborts the in-flight call; data is undefined until the 
     assert.equal(ctl.calls.length, 1);
     assert.equal(ctl.calls[0]?.signal?.aborted, false);
 
+    // A's fetch resolves with REAL, distinguishable data and that data is
+    // actually committed and on screen — the precondition the blanking
+    // property below has to hold against (a trivially-already-undefined
+    // `data` would pass even if the client-change reset did nothing).
+    await act(async () => {
+      ctl.resolve(0, { ...ME_BODY, tenant: "A" });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.equal(captured?.data?.tenant, "A", "A's real data must be committed before the switch");
+
     await act(async () => {
       root.render(
         createElement(
@@ -194,15 +204,16 @@ test("identityKey switch aborts the in-flight call; data is undefined until the 
       await Promise.resolve();
     });
     assert.equal(ctl.calls.length, 2, "the identity switch must issue a new request");
-    assert.equal(ctl.calls[0]?.signal?.aborted, true, "A's request must be aborted");
-    assert.equal(captured?.data, undefined, "no stale data between the switch and B's response");
-
-    // A resolves LATE — must never render.
-    await act(async () => {
-      ctl.resolve(0, { ...ME_BODY, tenant: "A" });
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    assert.equal(captured?.data, undefined, "A's late resolution must never commit");
+    assert.equal(
+      ctl.calls[0]?.signal?.aborted,
+      true,
+      "A's (already-settled) request is still aborted",
+    );
+    assert.equal(
+      captured?.data,
+      undefined,
+      "A's previously-committed, REAL data must be blanked immediately on the identity switch, before B's response arrives",
+    );
 
     await act(async () => {
       ctl.resolve(1, { ...ME_BODY, tenant: "B" });
