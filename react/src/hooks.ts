@@ -1,8 +1,8 @@
 /**
- * The hook set — one small primitive underneath (`useAsync` / a private
- * mutation primitive), every read/mutation hook a thin wrapper over
- * `useW6WClient()`. No react-query or any other data-fetching dependency
- * anywhere (`package.json` carries none — see README).
+ * The hook set — one small primitive underneath (`useAsync` for reads, a
+ * private mutation primitive for writes), every hook a thin wrapper over the
+ * provider's `W6WClient`. No react-query or any other data-fetching
+ * dependency anywhere (`package.json` carries none — see README).
  *
  * Built only over the PUBLIC, non-`console` surface (`me`, `documents`,
  * `vars`, `connections`, `workflows`, `functions`, `run`) — `console.*` is
@@ -11,10 +11,18 @@
  * surface at contract `0.5.0`, which is why hooks for them live here now
  * rather than being unreachable without `console.*`.
  *
- * Cancellation: `@w6w/sdk`'s transport has no `AbortSignal` to hook into
- * (`node/src/http.ts`), so a read hook can only IGNORE a result that resolves
- * after unmount (the `mountedRef` guard below), never truly abort the
- * in-flight request. See README.
+ * Cancellation: every read method a hook here calls takes an optional
+ * `signal` (`@w6w/sdk`'s `CallOptions`, threaded to the injected `fetch`'s own
+ * `RequestInit.signal`, `node/src/http.ts`). `useAsync` below allocates one
+ * real `AbortController` per call and aborts the PREVIOUS one — superseded by
+ * a newer call, by the `W6WClient` identity changing (an `identityKey`
+ * switch), or by unmount — so a stale request's resolution or rejection can
+ * never commit, and the server-side work a genuinely abandoned request
+ * triggers is told to stop rather than merely ignored.
+ *
+ * Every read hook also gates on `ready` (`<W6WProvider ready={...}>`,
+ * default `true`): while `false`, `useAsync` never calls the fetcher at all
+ * and reports `loading: true`.
  *
  * @module
  */
@@ -43,7 +51,7 @@ import type {
   WorkflowWriteOptions,
 } from "@w6w/sdk";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useW6WClient } from "./W6WProvider.tsx";
+import { useW6WClient, useW6WProviderContext } from "./W6WProvider.tsx";
 
 /** What every read hook returns. */
 export interface ReadResult<T> {
@@ -76,44 +84,109 @@ interface AsyncState<T> {
 }
 
 /**
- * Shared plumbing behind every read hook: fetch once on mount, expose
- * `refetch` for an imperative re-fetch, and drop a result that resolves after
- * unmount. `fetcher` must be a `useCallback`-stabilized function — each hook
- * below owns that decision by listing exactly the values its own fetch
- * depends on, so this primitive's own dependency array (`[fetcher]`) stays
- * exhaustive and needs no lint override.
+ * Shared plumbing behind every read hook: fetch on mount, on every
+ * `fetcher`/`client`/`ready` change, and on an imperative `refetch()`; drop
+ * any result that is no longer current.
+ *
+ * `fetcher` must be a `useCallback`-stabilized function taking the call's
+ * `AbortSignal` — each hook below owns that decision by listing exactly the
+ * values its own fetch depends on (including `client`), so this primitive's
+ * own dependency array stays exhaustive and needs no lint override. `client`
+ * is passed SEPARATELY (not inferred from `fetcher`'s identity) because it is
+ * the one thing that decides whether a reset is a "client change" (blank the
+ * stale data before refetching — R-7) or an ordinary same-client refetch
+ * (keep today's behaviour: loading flips true, previous data stays visible
+ * until the new result lands).
+ *
+ * Sequencing: a monotonic per-call generation number, bumped on every real
+ * fetch. Only the call whose generation is still the LATEST when it settles
+ * is allowed to commit — a superseded call (a newer one started, whether by
+ * `client` changing or by `refetch()`) can never write `state`, on resolution
+ * OR rejection. The previous call's `AbortController` is also aborted before
+ * the new one starts, and on unmount, so a genuinely abandoned request is
+ * told to stop rather than merely ignored.
+ *
+ * `ready === false` short-circuits before any of that: the fetcher is never
+ * called, any in-flight call is aborted, and state reports
+ * `{data: undefined, error: undefined, loading: true}`.
+ *
+ * A rejection named `ConfigError` (`@w6w/sdk`'s `requireToken` — no token yet,
+ * P-6) is reported as `loading: true`, not `error` — the same floor as
+ * `ready: false`, since from a caller's point of view "no credential yet" and
+ * "not ready yet" are the same state.
  */
-function useAsync<T>(fetcher: () => Promise<T>): ReadResult<T> {
+function useAsync<T>(
+  fetcher: (signal: AbortSignal) => Promise<T>,
+  client: unknown,
+  ready: boolean,
+): ReadResult<T> {
   const [state, setState] = useState<AsyncState<T>>({
     data: undefined,
     error: undefined,
     loading: true,
   });
   const mountedRef = useRef(true);
+  const generationRef = useRef(0);
+  const controllerRef = useRef<AbortController | null>(null);
+  const clientRef = useRef<unknown>(client);
+
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      controllerRef.current?.abort();
     };
   }, []);
 
-  const refetch = useCallback(() => {
-    setState((s) => ({ ...s, loading: true }));
-    fetcher().then(
+  const run = useCallback(() => {
+    const clientChanged = clientRef.current !== client;
+    clientRef.current = client;
+
+    // Abort whatever this hook had in flight — superseded by this call,
+    // whether it is a real fetch or a `ready: false` short-circuit.
+    controllerRef.current?.abort();
+    controllerRef.current = null;
+
+    if (!ready) {
+      // Bump the generation too, not just abort the controller — a rejection
+      // from the just-aborted call must never land after this point and flip
+      // `loading` back to `false` out from under the `ready: false` floor.
+      ++generationRef.current;
+      setState({ data: undefined, error: undefined, loading: true });
+      return;
+    }
+
+    const generation = ++generationRef.current;
+    const controller = new AbortController();
+    controllerRef.current = controller;
+
+    setState((s) =>
+      clientChanged
+        ? { data: undefined, error: undefined, loading: true }
+        : { ...s, loading: true },
+    );
+
+    fetcher(controller.signal).then(
       (data) => {
-        if (mountedRef.current) setState({ data, error: undefined, loading: false });
+        if (!mountedRef.current || generation !== generationRef.current) return;
+        setState({ data, error: undefined, loading: false });
       },
       (error: unknown) => {
-        if (mountedRef.current) setState({ data: undefined, error, loading: false });
+        if (!mountedRef.current || generation !== generationRef.current) return;
+        if (error instanceof Error && error.name === "ConfigError") {
+          setState({ data: undefined, error: undefined, loading: true });
+          return;
+        }
+        setState({ data: undefined, error, loading: false });
       },
     );
-  }, [fetcher]);
+  }, [fetcher, client, ready]);
 
   useEffect(() => {
-    refetch();
-  }, [refetch]);
+    run();
+  }, [run]);
 
-  return { data: state.data, error: state.error, loading: state.loading, refetch };
+  return { data: state.data, error: state.error, loading: state.loading, refetch: run };
 }
 
 /**
@@ -151,67 +224,73 @@ function useMutationResource<Args extends unknown[], T>(
 // ── reads ────────────────────────────────────────────────────────────────
 
 export function useMe(): ReadResult<Me> {
-  const client = useW6WClient();
-  const fetcher = useCallback(() => client.me(), [client]);
-  return useAsync(fetcher);
+  const { client, ready } = useW6WProviderContext();
+  const fetcher = useCallback((signal: AbortSignal) => client.me({ signal }), [client]);
+  return useAsync(fetcher, client, ready);
 }
 
 export function useDocuments(options?: DocumentOptions): ReadResult<Doc[]> {
-  const client = useW6WClient();
+  const { client, ready } = useW6WProviderContext();
   const project = options?.project;
   const fetcher = useCallback(
-    () => client.documents.list(project === undefined ? undefined : { project }),
+    (signal: AbortSignal) => client.documents.list({ project, signal }),
     [client, project],
   );
-  return useAsync(fetcher);
+  return useAsync(fetcher, client, ready);
 }
 
 export function useDocument(id: string, options?: DocumentOptions): ReadResult<Doc> {
-  const client = useW6WClient();
+  const { client, ready } = useW6WProviderContext();
   const project = options?.project;
   const fetcher = useCallback(
-    () => client.documents.get(id, project === undefined ? undefined : { project }),
+    (signal: AbortSignal) => client.documents.get(id, { project, signal }),
     [client, id, project],
   );
-  return useAsync(fetcher);
+  return useAsync(fetcher, client, ready);
 }
 
 export function useDocumentByKey(key: string, options?: DocumentOptions): ReadResult<Doc> {
-  const client = useW6WClient();
+  const { client, ready } = useW6WProviderContext();
   const project = options?.project;
   const fetcher = useCallback(
-    () => client.documents.getByKey(key, project === undefined ? undefined : { project }),
+    (signal: AbortSignal) => client.documents.getByKey(key, { project, signal }),
     [client, key, project],
   );
-  return useAsync(fetcher);
+  return useAsync(fetcher, client, ready);
 }
 
 export function useVars(): ReadResult<Var[]> {
-  const client = useW6WClient();
-  const fetcher = useCallback(() => client.vars.list(), [client]);
-  return useAsync(fetcher);
+  const { client, ready } = useW6WProviderContext();
+  const fetcher = useCallback((signal: AbortSignal) => client.vars.list({ signal }), [client]);
+  return useAsync(fetcher, client, ready);
 }
 
 export function useVar(id: string): ReadResult<Var> {
-  const client = useW6WClient();
-  const fetcher = useCallback(() => client.vars.get(id), [client, id]);
-  return useAsync(fetcher);
+  const { client, ready } = useW6WProviderContext();
+  const fetcher = useCallback(
+    (signal: AbortSignal) => client.vars.get(id, { signal }),
+    [client, id],
+  );
+  return useAsync(fetcher, client, ready);
 }
 
 export function useConnections(): ReadResult<ConnectionSummary[]> {
-  const client = useW6WClient();
-  const fetcher = useCallback(() => client.connections.list(), [client]);
-  return useAsync(fetcher);
+  const { client, ready } = useW6WProviderContext();
+  const fetcher = useCallback(
+    (signal: AbortSignal) => client.connections.list({ signal }),
+    [client],
+  );
+  return useAsync(fetcher, client, ready);
 }
 
 export function useWorkflows(options?: WorkflowListOptions): ReadResult<WorkflowSummary[]> {
-  const client = useW6WClient();
+  const { client, ready } = useW6WProviderContext();
   const project = options?.project;
   const fetcher = useCallback(
-    () => client.workflows.list(project === undefined ? undefined : { project }),
+    (signal: AbortSignal) => client.workflows.list({ project, signal }),
     [client, project],
   );
-  return useAsync(fetcher);
+  return useAsync(fetcher, client, ready);
 }
 
 /**
@@ -225,21 +304,27 @@ export function useWorkflows(options?: WorkflowListOptions): ReadResult<Workflow
  * render would keep handing itself a fresh one.
  */
 export function useWorkflow(id: string): ReadResult<WorkflowDetail> {
-  const client = useW6WClient();
-  const fetcher = useCallback(() => client.workflows.get(id), [client, id]);
-  return useAsync(fetcher);
+  const { client, ready } = useW6WProviderContext();
+  const fetcher = useCallback(
+    (signal: AbortSignal) => client.workflows.get(id, { signal }),
+    [client, id],
+  );
+  return useAsync(fetcher, client, ready);
 }
 
 export function useFunctions(): ReadResult<FunctionSummary[]> {
-  const client = useW6WClient();
-  const fetcher = useCallback(() => client.functions.list(), [client]);
-  return useAsync(fetcher);
+  const { client, ready } = useW6WProviderContext();
+  const fetcher = useCallback((signal: AbortSignal) => client.functions.list({ signal }), [client]);
+  return useAsync(fetcher, client, ready);
 }
 
 export function useFunction(id: string): ReadResult<FunctionDetail> {
-  const client = useW6WClient();
-  const fetcher = useCallback(() => client.functions.get(id), [client, id]);
-  return useAsync(fetcher);
+  const { client, ready } = useW6WProviderContext();
+  const fetcher = useCallback(
+    (signal: AbortSignal) => client.functions.get(id, { signal }),
+    [client, id],
+  );
+  return useAsync(fetcher, client, ready);
 }
 
 // ── mutations ────────────────────────────────────────────────────────────

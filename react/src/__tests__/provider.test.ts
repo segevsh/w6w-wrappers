@@ -1,7 +1,9 @@
 /**
- * `<W6WProvider>` + the C-4 token-supplier shim, plus one read hook and two
- * mutation hooks exercised end-to-end through it (A11) — every request goes
- * through a fake `fetch` injected via the `fetch` prop, mirroring the pattern
+ * `<W6WProvider>`'s native token-supplier mechanism (T2.1.1 — no placeholder,
+ * no header patching: the supplier goes straight to `@w6w/sdk`'s own
+ * per-request `token`), plus one read hook and two mutation hooks exercised
+ * end-to-end through it (A11) — every request goes through a fake `fetch`
+ * injected via the `fetch` prop, mirroring the pattern
  * `node/tests/http_test.ts`/`client_test.ts` use for the SDK's own transport
  * tests (read-only reference, transcribed here, never imported). The
  * `useRunWorkflow` case (T1.1.2) pins its `wait: true` default — and that a
@@ -113,6 +115,71 @@ test("token supplier is re-read per request, not captured at construction", () =
     assert.equal(fake.calls.length, 2, "expected exactly two requests");
     assert.equal(fake.calls[0]?.headers.get("authorization"), "Bearer token-a");
     assert.equal(fake.calls[1]?.headers.get("authorization"), "Bearer token-b");
+  }));
+
+test("a nullish token supplier sends no request and the SDK rejects with ConfigError", () =>
+  withRoot(async (root) => {
+    const fake = fakeFetch();
+
+    let captured: W6WClient | null = null;
+    function Capture() {
+      captured = useW6WClient();
+      return null;
+    }
+
+    act(() => {
+      root.render(
+        createElement(
+          W6WProvider,
+          { baseUrl: "https://api.example.com", token: () => null, fetch: fake.fetch },
+          createElement(Capture),
+        ),
+      );
+    });
+    assert.ok(captured);
+    const client = captured as W6WClient;
+
+    await assert.rejects(
+      () => client.me(),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.equal(error.name, "ConfigError");
+        return true;
+      },
+    );
+    assert.equal(fake.calls.length, 0, "a nullish token must never reach the wire");
+  }));
+
+test("an async token supplier is awaited before the bearer is attached", () =>
+  withRoot(async (root) => {
+    const fake = fakeFetch();
+
+    let captured: W6WClient | null = null;
+    function Capture() {
+      captured = useW6WClient();
+      return null;
+    }
+
+    act(() => {
+      root.render(
+        createElement(
+          W6WProvider,
+          {
+            baseUrl: "https://api.example.com",
+            token: () => Promise.resolve("t"),
+            fetch: fake.fetch,
+          },
+          createElement(Capture),
+        ),
+      );
+    });
+    assert.ok(captured);
+    const client = captured as W6WClient;
+
+    await client.me();
+
+    assert.equal(fake.calls.length, 1);
+    assert.equal(fake.calls[0]?.headers.get("authorization"), "Bearer t");
   }));
 
 test("the client is memoized across re-renders on baseUrl, not on token", () =>
