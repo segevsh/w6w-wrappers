@@ -363,10 +363,14 @@ This is not a style choice.
   - node/cli: `src/config.ts`
   - python: `w6w/_config.py`
 
-  That module resolves the effective base URL and token once, at client
-  construction, and hands back a plain config value. Every test of env-var
-  behaviour therefore has exactly one seam to exercise (§9), and no operation can
-  silently acquire a hidden dependency on ambient state.
+  That module resolves the effective base URL once, at client construction, and
+  hands back a plain config value. The token is different: `resolveConfig`
+  stores whatever shape the caller passed — string or supplier — without calling
+  it, and `request()` resolves that to an actual bearer value fresh on every
+  request (string = degenerate case; see §2 above), never once at construction.
+  Every test of env-var behaviour therefore has exactly one seam to exercise
+  (§9), and no operation can silently acquire a hidden dependency on ambient
+  state.
 - Reading env in the TypeScript wrappers uses a **capability probe**, not a
   runtime assumption, so the same file works under Deno, Node and Bun:
 
