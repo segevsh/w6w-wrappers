@@ -4,9 +4,16 @@
  * Every case here drives the adapter through a fake `fetch`, mirroring
  * `node/tests/console/apps_test.ts`'s pattern (read-only reference,
  * transcribed here, never imported).
+ *
+ * The one case below that is NOT about the adapter (`mod.ts`'s `"use
+ * client"` pin) lives here rather than in a new file: this task's own
+ * `inputs.touch` list names this file as the lane's only touchable existing
+ * test file, and `mod.ts`'s directive has no other home within that scope.
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import type { FetchLike } from "@w6w/sdk";
 import { W6WClient } from "@w6w/sdk";
 import { createW6WUiAdapter } from "../adapter.ts";
@@ -351,4 +358,177 @@ test("createSubscription forwards `input` verbatim to POST /apps/:id/triggers/:k
   });
 
   assert.equal(sub.id, "sub_1");
+});
+
+test("listWorkflows reaches the BASE GET /workflows", async () => {
+  const wf = {
+    id: "wf_1",
+    key: null,
+    name: "n",
+    displayName: "N",
+    description: "",
+    status: "active",
+    tags: [],
+    runCount: 0,
+    updatedAt: "t",
+  };
+  const fake = fakeFetch((call) => {
+    assert.equal(call.url, "https://api.example.com/workflows");
+    assert.equal(call.method, "GET");
+    return json({ workflows: [wf] });
+  });
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  const workflows = await adapter.listWorkflows();
+
+  assert.deepEqual(
+    workflows.map((w) => w.id),
+    ["wf_1"],
+  );
+});
+
+test("getWorkflow reaches GET /workflows/:id and reshapes the base definition into @w6w/ui's WorkflowDetail", async () => {
+  const fake = fakeFetch((call) => {
+    assert.equal(call.url, "https://api.example.com/workflows/wf_1");
+    assert.equal(call.method, "GET");
+    return json({
+      workflow: {
+        id: "wf_1",
+        name: "n",
+        displayName: "N",
+        description: "d",
+        steps: [
+          { id: "trigger", uses: { app: "@w6w/webhook", action: "trigger" }, with: { a: 1 } },
+        ],
+      },
+      sourceRef: null,
+      updatedAt: "2026-01-01T00:00:00Z",
+    });
+  });
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  const detail = await adapter.getWorkflow("wf_1");
+
+  assert.deepEqual(detail, {
+    id: "wf_1",
+    name: "n",
+    displayName: "N",
+    description: "d",
+    steps: [{ id: "trigger", uses: { app: "@w6w/webhook", action: "trigger" }, with: { a: 1 } }],
+  });
+});
+
+test("runWorkflow always sends ?wait=true and maps a 200 body to terminal: true", async () => {
+  const fake = fakeFetch((call) => {
+    const url = new URL(call.url);
+    assert.equal(url.pathname, "/workflows/wf_1/run");
+    assert.equal(url.searchParams.get("wait"), "true");
+    assert.equal(call.method, "POST");
+    assert.deepEqual(JSON.parse(call.body ?? "null"), { variables: { x: 1 } });
+    return json({ runId: "run_1", status: "succeeded", output: { ok: true }, steps: {} }, 200);
+  });
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  const result = await adapter.runWorkflow("wf_1", { variables: { x: 1 } });
+
+  assert.equal(result.runId, "run_1");
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.output, { ok: true });
+  assert.equal(result.terminal, true);
+});
+
+test("runWorkflow maps the server's 202 wait-timeout arm to terminal: false, carrying runId/status", async () => {
+  const fake = fakeFetch(() => json({ runId: "run_2", status: "running" }, 202));
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  const result = await adapter.runWorkflow("wf_2");
+
+  assert.equal(result.runId, "run_2");
+  assert.equal(result.status, "running");
+  assert.equal(result.terminal, false);
+});
+
+test("listFunctions reaches the BASE GET /functions", async () => {
+  const fn = {
+    id: "fn_1",
+    key: "send-email",
+    displayName: "Send email",
+    description: "",
+    updatedAt: "t",
+    valid: true,
+  };
+  const fake = fakeFetch((call) => {
+    assert.equal(call.url, "https://api.example.com/functions");
+    assert.equal(call.method, "GET");
+    return json({ functions: [fn] });
+  });
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  const fns = await adapter.listFunctions();
+
+  assert.deepEqual(
+    fns.map((f) => f.id),
+    ["fn_1"],
+  );
+});
+
+test("getFunction reaches GET /functions/:id and reshapes the base definition into @w6w/ui's FunctionDetail", async () => {
+  const fake = fakeFetch((call) => {
+    assert.equal(call.url, "https://api.example.com/functions/fn_1");
+    assert.equal(call.method, "GET");
+    return json({
+      function: {
+        manifestVersion: "1",
+        id: "fn_1",
+        key: "send-email",
+        displayName: "Send email",
+        description: "d",
+        inputs: [{ key: "to", label: "To", type: "string", required: true }],
+        impl: { kind: "action", uses: { app: "sendgrid", action: "send" } },
+      },
+      valid: true,
+    });
+  });
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  const detail = await adapter.getFunction("fn_1");
+
+  assert.deepEqual(detail, {
+    id: "fn_1",
+    key: "send-email",
+    displayName: "Send email",
+    description: "d",
+    inputs: [{ key: "to", label: "To", type: "string", required: true }],
+    valid: true,
+  });
+});
+
+test("invokeFunction POSTs /functions/:id/invoke with body {inputs} via client.functions.run(id, {payload: inputs})", async () => {
+  let capturedBody: unknown;
+  const capturing: FetchLike = (input, init) => {
+    assert.equal(input, "https://api.example.com/functions/fn_1/invoke");
+    assert.equal(init?.method, "POST");
+    capturedBody = typeof init?.body === "string" ? JSON.parse(init.body) : init?.body;
+    return Promise.resolve(json({ output: { sent: true } }));
+  };
+  const adapter = createW6WUiAdapter(testClient(capturing));
+
+  const result = await adapter.invokeFunction("fn_1", { to: "a@b.com" });
+
+  assert.deepEqual(capturedBody, { inputs: { to: "a@b.com" } });
+  assert.deepEqual(result, { sent: true });
+});
+
+test('mod.ts\'s first statement is "use client"; — above the doc comment, not below it', () => {
+  const modPath = fileURLToPath(new URL("../../mod.ts", import.meta.url));
+  const source = readFileSync(modPath, "utf8");
+  const firstStatement = source.trimStart().split("\n", 1)[0]?.trim();
+  assert.equal(
+    firstStatement,
+    '"use client";',
+    'mod.ts must open with "use client"; as its first line, so the built ' +
+      "dist/mod.js carries it as the directive prologue a bundler requires " +
+      "it to be — a doc comment (or anything else) above it would move it " +
+      "out of that position.",
+  );
 });

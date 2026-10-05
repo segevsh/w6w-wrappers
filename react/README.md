@@ -91,20 +91,54 @@ function App() {
 **`@w6w/ui` is not on npm today.** The `@w6w` scope holds only `@w6w/sdk` and
 `@w6w/cli` at the time of writing (`npm view @w6w/ui` → 404); the source itself IS a
 public GitHub repository (`w6w-io/w6w-ui`). `createW6WUiAdapter`'s `W6WApi` return
-type targets that contract *structurally* — this package names `@w6w/ui` nowhere in
-its own manifest and needs no change whenever `@w6w/ui` becomes reachable another
-way (this monorepo, a `git+https://` dependency on the public repo, or a private
-registry). This is an honest statement of today's install story, not a promise that
-`npm i @w6w/ui` resolves.
+type targets that contract *structurally* — this package needs no change whenever
+`@w6w/ui` becomes reachable another way (this monorepo, a `git+https://` dependency
+on the public repo, or a private registry). This is an honest statement of today's
+install story, not a promise that `npm i @w6w/ui` resolves.
 
-`createW6WUiAdapter` is built entirely on `@w6w/sdk/console` — the SAME namespace
-`packages/studio`'s own facade uses for these routes (`packages/ui/src/createW6WApi.ts`
-is the *other* hand-rolled client for them; this package is not a third one).
-**`client.console.*` is documented "Studio-internal… unstable" and is deliberately
-excluded from `endpoints.json`'s conformance runner** (`node/src/client.ts:114-116`).
-That means a `console.*` signature change ships with no lockstep protection for this
-bridge beyond `@w6w/sdk`'s own version — pin your `@w6w/sdk` version alongside
-`@w6w/react`'s, and re-test the bridge on an upgrade rather than assuming it.
+`createW6WUiAdapter` is built on `@w6w/sdk/console` for most members — the SAME
+namespace `packages/studio`'s own facade uses for these routes
+(`packages/ui/src/createW6WApi.ts` is the *other* hand-rolled client for them; this
+package is not a third one) — and on the BASE `client.functions.*`/
+`client.workflows.*` surface for `listFunctions`/`getFunction`/`invokeFunction`/
+`listWorkflows`/`getWorkflow`/`runWorkflow`. **`client.console.*` is documented
+"Studio-internal… unstable" and is deliberately excluded from `endpoints.json`'s
+conformance runner** (`node/src/client.ts:114-116`). That means a `console.*`
+signature change ships with no lockstep protection for this bridge beyond
+`@w6w/sdk`'s own version — pin your `@w6w/sdk` version alongside `@w6w/react`'s, and
+re-test the bridge on an upgrade rather than assuming it.
+
+### Keeping `createW6WUiAdapter` honest against the REAL `@w6w/ui`
+
+`package.json`'s `devDependencies` carries a **dev-only, type-only** edge onto
+`@w6w/ui` — `"@w6w/ui": "github:w6w-io/w6w-ui#<sha>"` — that this package never
+ships: `files: ["dist"]` means `dist/` is the only thing npm packs and publishes, so
+no installer of `@w6w/react` ever resolves or needs `@w6w/ui` at all. Its one job is
+`src/__tests__/ui-conformance.test.ts`, which runs at **dev/CI time only** (`npm
+test`, never part of `dist/`): it compiles `src/__tests__/ui-conformance.check.ts`
+against `@w6w/ui`'s real `provider.tsx` and fails, naming the member, the moment
+`createW6WUiAdapter`'s return type stops being assignable to the real `W6WApi` —
+closing the gap a hand-duplicated interface alone cannot (nothing previously caught
+this package's `W6WApi` drifting from `@w6w/ui`'s own).
+
+**Why a `github:<owner>/<repo>#<sha>` pin, and not a `link:`/workspace reference to
+a sibling checkout:** `release.yml`'s `react` step checks out **this one repo**
+(`w6w-wrappers`) with no sibling checkout and no submodules
+(building-blocks.md §1) — a relative `link:` to `../../ui` resolves only in the
+local devcontainer's incidental directory layout and fails `ENOENT` on every CI run
+and on a fresh clone of `w6w-wrappers` alone. A `github:` spec needs nothing but a
+network fetch of the one pinned commit, which is why it is the only install story
+that survives both environments unchanged. The pin targets `provider.tsx` by
+RELATIVE PATH, not the `@w6w/ui` package barrel — the barrel's own import chain
+reaches `@w6w/expr` (`packages/core`) via a `github:…#path:` subpath npm does not
+honor on a `github:` dependency, which `TS2307`s the moment anything resolves it;
+`provider.tsx`'s own closure (`theme.ts` → `types.ts` → `react`) has no such edge.
+
+**Moving the pin:** update the `#<sha>` in `package.json`'s `@w6w/ui` entry to a
+commit on `w6w-io/w6w-ui`'s `main` (`git ls-remote https://github.com/w6w-io/w6w-ui
+main`) and run `npm install` again to refresh `package-lock.json`'s resolved
+entry — no code change is required unless `@w6w/ui`'s `W6WApi` itself changed
+shape, in which case `ui-conformance.test.ts` will say so.
 
 ## Hooks catalog
 

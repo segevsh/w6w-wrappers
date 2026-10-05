@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * `@w6w/react` — the package barrel.
  *
