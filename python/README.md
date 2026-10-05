@@ -160,6 +160,54 @@ replaced by an environment variable behind your back.
 Credentials are per-client **instance state**, never module globals: two clients
 in one process can point at two servers with two tokens and not interfere.
 
+### Options beyond the two variables
+
+Both variables stay plain strings. These four constructor arguments cover the
+cases a host — a partner embedding w6w inside its own product, a backend
+juggling tenants — actually runs into, and none of them has an
+environment-variable spelling:
+
+| Argument | Meaning |
+|---|---|
+| `token` | Your API token, or a **supplier callable** called fresh on every request (see below). |
+| `refresh_on_unauthorized` | Opt in to a single recovery retry when a request fails `401` / `unauthorized`. `False` by default. |
+| `on_unauthorized` | Called with the terminal `401` `ApiError`, at most once per call. |
+| `headers` | Default headers sent with every request. |
+
+```python
+client = Client(
+    base_url="https://api.example.com",
+    token=read_tenant_token,              # called fresh on every request
+    refresh_on_unauthorized=True,         # one retry when the server answers 401
+    on_unauthorized=redirect_to_login,    # …and what to do when that did not help
+    headers={"X-W6W-Tenant": tenant_id},  # your own gateway/authorizer header
+)
+```
+
+**A token supplier is how a host mints or rotates a credential out of band.**
+`token` takes a `str` — sent verbatim on every call, exactly as before — or a
+callable returning one, which is called **fresh on every request** rather than
+resolved once at construction, so a token that changes between calls is picked
+up without rebuilding the client. It is **sync-only**: there is no `asyncio`
+anywhere in this package, so a supplier that itself needs to await something is
+yours to resolve before handing the value here. A nullish or blank result is
+treated exactly like a missing static token: a `ConfigError` naming `W6W_TOKEN`,
+never a request sent with no credential.
+
+**`refresh_on_unauthorized` opts in to one recovery.** `False` by default, and
+the behaviour before the option existed. When a request fails `401` with
+`code == "unauthorized"` and `token` is callable, the supplier is called once
+more as `token(force_refresh=True)` and, if that yields a usable value, the
+**same** request is re-sent once. Nothing else is ever retried — not a second
+time, not another status, and never a request made with `require_auth=False`.
+`on_unauthorized` receives the terminal `401` `ApiError` — after a failed
+recovery, or immediately when recovery is off or the token is a plain
+string — at most once per call, and never on success.
+
+**`headers` is the base every per-request `headers` argument builds on.** A
+per-request header with the same name wins, and neither can displace the
+`Authorization` bearer or the `Content-Type` the client sets for a JSON body.
+
 ### `W6W_BASE_URL` is an origin
 
 The API is served at the **root** of its own host — `https://api.example.com/vars`,
@@ -195,6 +243,10 @@ raises a `ConfigError` naming the variable, at construction — not a confusing
 A client with no token can still be **constructed** — the error surfaces on the
 first request instead, so offline `--help`-style uses work. A client with no
 base URL raises immediately, at construction.
+
+`W6W_TOKEN` is a plain string only. A credential that has to change between
+requests is spelled in the constructor — `token=read_tenant_token`,
+[above](#options-beyond-the-two-variables) — never in the environment.
 
 **A token is validated as a header value.** A token containing a carriage
 return, newline or other control character raises a `ConfigError` before any

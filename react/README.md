@@ -6,7 +6,7 @@ surface (`me`, `documents`, `vars`, `connections`, `workflows`, `run`), and
 `createW6WUiAdapter`, a structural bridge from a `W6WClient` to
 [`@w6w/ui`](https://github.com/w6w-io/w6w-ui)'s `W6WApi` contract.
 
-License: MIT · Version: 0.3.0
+License: MIT · Version: 0.9.0
 
 This lane implements no endpoint — it composes `@w6w/sdk`, which is already
 conformant against [`endpoints.json`](../endpoints.json). There is nothing here to
