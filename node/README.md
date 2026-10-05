@@ -133,6 +133,49 @@ const client = new W6WClient();
 const other = new W6WClient({ baseUrl: "https://api.example.com", token: "…" });
 ```
 
+### The four options a host embedding w6w needs
+
+Both variables stay plain strings. These four constructor options cover the cases a host — a partner
+embedding w6w inside its own product, a backend juggling tenants — actually runs into, and none of
+them has an environment-variable spelling:
+
+| Option                  | Meaning                                                                                            |
+| ----------------------- | -------------------------------------------------------------------------------------------------- |
+| `token`                 | A bearer token, **or a supplier function** called fresh on every request (see below).              |
+| `refreshOnUnauthorized` | Opt in to a single recovery retry when a request fails `401` / `unauthorized`. `false` by default. |
+| `onUnauthorized`        | Called with the terminal `401` `ApiError`, at most once per call.                                  |
+| `headers`               | Default headers sent with every request.                                                           |
+
+```ts
+const client = new W6WClient({
+  baseUrl: "https://api.example.com",
+  // Called (and awaited) fresh on every request — never cached from construction.
+  token: () => readTenantToken(),
+  refreshOnUnauthorized: true, // one retry when the server answers 401
+  onUnauthorized: (err) => redirectToLogin(err), // …and what to do when that did not help
+  headers: { "X-W6W-Tenant": tenantId }, // your own gateway/authorizer header
+});
+```
+
+**A token supplier is how a host mints or rotates a credential out of band.** `token` takes a
+`string` — sent verbatim on every call, exactly as before — or a `TokenProvider` function returning
+one, which is called **fresh on every request** rather than resolved once at construction, so a
+token that changes between calls is picked up without rebuilding the client. A nullish or blank
+result is treated exactly like a missing static token: a `ConfigError` naming `W6W_TOKEN`, never a
+request sent with no credential.
+
+**`refreshOnUnauthorized` opts in to one recovery.** Off by default, and the behaviour before the
+option existed. When a request fails `401` with `{code: "unauthorized"}` and `token` is a function,
+the supplier is called once more with `{forceRefresh: true}` and, if that yields a usable value, the
+**same** request is re-sent once. Nothing else is ever retried — not a second time, not another
+status, and never a `requireAuth: false` request. `onUnauthorized` receives the terminal `401` error
+— after a failed recovery, or immediately when recovery is off or the token is a plain string — at
+most once per call, and never on success.
+
+**`headers` is the base every per-request `headers` option builds on.** A per-request header with
+the same name wins, and neither can displace the `authorization` bearer or the `content-type` the
+client sets for a JSON body.
+
 ### `W6W_BASE_URL` is an origin
 
 The API is served at the **root** of its own host — `https://api.example.com/vars`, not `…/api/vars`
@@ -163,6 +206,10 @@ Sent as `Authorization: Bearer <token>` on **every** request — there are no an
 this API. A client with no token can still be constructed (so tools that only print help or a
 version work offline); the configuration error naming `W6W_TOKEN` surfaces on the first request.
 
+The variable is a plain string only. A credential that has to change between requests is spelled in
+the constructor — `token: () => …`, [above](#the-four-options-a-host-embedding-w6w-needs) — never in
+the environment.
+
 ## Errors
 
 Two error types, and the difference between them is diagnostic:
@@ -178,7 +225,9 @@ Classify by `status`, and by a **prefix** of `code` (`unknown_*`, `invalid_*`, `
 by an exhaustive list of codes, which the server extends freely. Note that a `424` means the target
 app or its upstream vendor failed, not that w6w did; it is passed through untouched.
 
-Nothing is retried, no token is refreshed, and a `401` has no side effect beyond the raised error.
+Nothing is retried, no token is refreshed, and a `401` has no side effect beyond the raised error —
+unless you opted in with `refreshOnUnauthorized`, which retries the failed request exactly once (see
+[the four options a host embedding w6w needs](#the-four-options-a-host-embedding-w6w-needs)).
 
 ## Embedding for enterprise tenants
 
