@@ -62,9 +62,60 @@ import type {
  * header. Every member's signature mirrors `provider.tsx:87-231`'s member of
  * the same name.
  */
+/**
+ * Options for {@link W6WApi.listAppsPage} — one bounded, server-paged
+ * request. Every member is optional; an omitted member is a host-defined
+ * default (usually "no filter"/"first page"), never a client-side guess.
+ * Hand-duplicated verbatim from `packages/ui/src/provider.tsx` — see this
+ * module's header.
+ */
+export interface ListAppsPageOptions {
+  /** Full-text search term, forwarded to the server verbatim. */
+  q?: string;
+  /** Server-side category filter (e.g. `"ai"`). */
+  category?: string;
+  /** Opaque pagination cursor from a prior {@link AppsPageResult.nextCursor}. */
+  cursor?: string;
+  /** Page size; a host may clamp this to its own bounds. */
+  limit?: number;
+  /** Ask the host for a bounded picker-summary projection (heavy fields like inline icons may be trimmed). */
+  compact?: boolean;
+  /** Abort this request. Local request control only; never a wire field. */
+  signal?: AbortSignal;
+}
+
+/** One page of apps, as returned by {@link W6WApi.listAppsPage}. */
+export interface AppsPageResult {
+  apps: AppSummary[];
+  /** Present unless this is the last page. */
+  nextCursor?: string;
+}
+
 export interface W6WApi {
   /** List registered apps to pick from in the connection modal. */
   listApps(): Promise<AppSummary[]>;
+
+  /**
+   * Fetch ONE bounded, server-paged slice of the app catalog — the seam every
+   * bounded picker UI (`AppPicker`'s paged mode, `StepBuilderModal`'s
+   * Apps/AI/Triggers tabs) prefers over {@link listApps} when a host
+   * implements it. OPTIONAL and ADDITIVE: an older/imported provider that
+   * only implements `listApps` still typechecks and simply keeps the
+   * eager-list behavior everywhere this member is absent.
+   */
+  listAppsPage?(options?: ListAppsPageOptions): Promise<AppsPageResult>;
+
+  /**
+   * Resolve a bounded, explicit set of app ids to their summaries — the seam
+   * behind the "Ready to use" tab's connected-app batching and
+   * `AddConnectionModal`'s `initialAppId` resolution: a caller that already
+   * knows exactly which ids it needs never has to fetch (or filter) the whole
+   * catalog to find them. OPTIONAL, like {@link listAppsPage}: absent, a
+   * caller falls back to its pre-existing `listApps`-based resolution.
+   * Missing/404 ids are simply omitted from the result, never an error for
+   * the whole batch.
+   */
+  listAppsByIds?(ids: readonly string[], options?: { signal?: AbortSignal }): Promise<AppSummary[]>;
 
   /** Load auth methods declared by an app's manifest, with availability flags. */
   getAppAuth(appId: string): Promise<AuthDef[]>;
@@ -230,10 +281,52 @@ async function withApiErrorBody<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+/**
+ * The server's own `ids` cap (`MAX_IDS_PER_QUERY`, `registry/packages/types/src/datastore.ts`) —
+ * `listAppsByIds` below chunks to this size itself since `console.apps.listPage`
+ * is a thin, non-chunking pass-through (`node/src/console/apps.ts`) and a
+ * caller passing more than this in one request gets the server's `400`.
+ */
+const MAX_IDS_PER_CHUNK = 100;
+
 /** Build a `W6WApi` implementation over an existing `W6WClient`. See this module's header. */
 export function createW6WUiAdapter(client: W6WClient): W6WApi {
   return {
     listApps: () => withApiErrorBody(() => client.console.apps.list()),
+
+    listAppsPage: (options = {}) =>
+      withApiErrorBody(async () => {
+        const page = await client.console.apps.listPage({
+          q: options.q,
+          category: options.category,
+          cursor: options.cursor,
+          limit: options.limit,
+          compact: options.compact,
+          signal: options.signal,
+        });
+        return { apps: page.apps, nextCursor: page.nextCursor };
+      }),
+
+    // Dedupe first (a caller may hand in the same id twice across tabs/pages);
+    // `[]` resolves with NO request at all — never an unfiltered page. Chunks
+    // of <= MAX_IDS_PER_CHUNK each become their own `listPage({ ids: chunk })`
+    // call, issued CONCURRENTLY (`Promise.all`), and the pages are
+    // concatenated in chunk order.
+    listAppsByIds: (ids, options) =>
+      withApiErrorBody(async () => {
+        const unique = Array.from(new Set(ids));
+        if (unique.length === 0) return [];
+        const chunks: string[][] = [];
+        for (let i = 0; i < unique.length; i += MAX_IDS_PER_CHUNK) {
+          chunks.push(unique.slice(i, i + MAX_IDS_PER_CHUNK));
+        }
+        const pages = await Promise.all(
+          chunks.map((chunk) =>
+            client.console.apps.listPage({ ids: chunk, signal: options?.signal }),
+          ),
+        );
+        return pages.flatMap((page) => page.apps);
+      }),
 
     getAppAuth: (appId) => withApiErrorBody(() => client.console.apps.getAuth(appId)),
 

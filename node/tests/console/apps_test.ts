@@ -341,6 +341,47 @@ Deno.test(
   },
 );
 
+// --- listPage({ ids }): CSV forwarding, no chunking -------------------------
+
+Deno.test("console.apps.listPage sends a supplied ids array as CSV", async () => {
+  const c = client(() => json({ apps: [] }));
+
+  await c.client.console.apps.listPage({ ids: ["app_1", "app_2"] });
+
+  const url = new URL(c.calls[0].url);
+  assertEquals(url.searchParams.get("ids"), "app_1,app_2");
+});
+
+Deno.test("console.apps.listPage with ids: [] still sends ids= (empty), never an unfiltered page", async () => {
+  const c = client(() => json({ apps: [] }));
+
+  await c.client.console.apps.listPage({ ids: [] });
+
+  const url = new URL(c.calls[0].url);
+  assertEquals(url.searchParams.has("ids"), true);
+  assertEquals(url.searchParams.get("ids"), "");
+});
+
+Deno.test("console.apps.listPage with ids OMITTED sends no ids key at all", async () => {
+  const c = client(() => json({ apps: [] }));
+
+  await c.client.console.apps.listPage();
+
+  const url = new URL(c.calls[0].url);
+  assertEquals(url.searchParams.has("ids"), false);
+});
+
+Deno.test("console.apps.listPage with 150 ids is still exactly ONE request — no chunking here", async () => {
+  const ids = Array.from({ length: 150 }, (_, i) => `app_${i}`);
+  const c = client(() => json({ apps: [] }));
+
+  await c.client.console.apps.listPage({ ids });
+
+  assertEquals(c.calls.length, 1);
+  const url = new URL(c.calls[0].url);
+  assertEquals(url.searchParams.get("ids"), ids.join(","));
+});
+
 Deno.test("console.apps.listPage with no options sends zero query params", async () => {
   const c = client(() => json({ apps: [] }));
 

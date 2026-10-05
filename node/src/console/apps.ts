@@ -507,6 +507,18 @@ export interface ListAppsOptions {
   /** Ask the server for a bounded picker-summary projection (T3.1.1 owns the projection itself). */
   compact?: boolean;
   /**
+   * An explicit, bounded set of app ids to resolve — the CSV wire format
+   * `GET /apps?ids=a,b,c` (mirrors `admin/reliability.ts`'s `parseAppIds`).
+   * `cursor`/`limit`/`sort` are ignored server-side whenever `ids` is present.
+   * This option is forwarded AS GIVEN, with no chunking in this method:
+   * `ids: []` still sends `ids=` (empty, never the unfiltered page); omitting
+   * the option sends no `ids` key at all. A caller passing more than the
+   * server's cap (100 ids) gets the server's own `400 too_many_ids` — chunking
+   * a larger set is the caller's job (`@w6w/react`'s `createW6WUiAdapter`
+   * `listAppsByIds` does exactly that).
+   */
+  ids?: readonly string[];
+  /**
    * Abort this request. Local request control only — reaches the injected
    * `fetch` through `RequestOptions.signal` and is NEVER serialized into the
    * URL or body.
@@ -546,6 +558,12 @@ export class AppsApi {
    * `AppsHost.request` call, same cursor field) rather than a parallel fetch,
    * so there is exactly one place that builds a `GET /apps` request.
    *
+   * @deprecated Prefer {@linkcode listPage} with an explicit `ids` set —
+   * studio's `AppsProvider` is the current consumer and resolves exactly the
+   * ids it needs via `listPage({ ids })` instead of this eager full-catalog
+   * fetch. CLI and one-off scripts, which genuinely want the whole catalog,
+   * keep using `list()`.
+   *
    * @returns Every app summary across all pages, in the order the server sent them.
    * @throws {ApiError} On any non-2xx.
    */
@@ -572,6 +590,12 @@ export class AppsApi {
    * `options.signal` reaches the injected `fetch` through
    * `RequestOptions.signal` and is never part of the URL or body.
    *
+   * `options.ids` is a thin pass-through, not chunked here: present (even
+   * `[]`) it is CSV-joined onto the wire as `ids=...` (an empty array still
+   * sends `ids=`, never an unfiltered page); absent, no `ids` key is sent at
+   * all. A caller with more ids than the server accepts in one request gets
+   * the server's own `400`; see {@link ListAppsOptions.ids}.
+   *
    * @param options - See {@link ListAppsOptions}. Omitted entirely, this is
    * one unfiltered, unsorted default-page-size request.
    * @returns One page: `{apps, nextCursor}}`. `nextCursor` is absent on the
@@ -595,6 +619,7 @@ export class AppsApi {
         cursor: rest.cursor,
         managed: rest.managed,
         compact: rest.compact,
+        ids: rest.ids !== undefined ? rest.ids.join(",") : undefined,
       },
       signal,
     });
