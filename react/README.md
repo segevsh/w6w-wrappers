@@ -38,11 +38,15 @@ function App() {
 }
 ```
 
-`token` accepts a literal string, or a supplier function called fresh on every
-request — pass a supplier when your token rotates (e.g. a short-lived JWT read from
-an auth SDK) and the client will pick up the new value on the very next call, with no
-teardown/rebuild of the underlying `W6WClient`. See `src/W6WProvider.tsx`'s module
-header for the exact mechanism (the C-4 shim).
+`token` accepts a literal string, or a supplier — sync or **async** — called fresh on
+every request: `() => getCurrentJwt()` or `async () => await getCurrentJwt()` both
+work, and either is awaited before the bearer is attached. Pass a supplier when your
+token rotates (e.g. a short-lived JWT read from an auth SDK, or minted on demand by
+your own backend) and the client picks up the new value on the very next call, with no
+teardown/rebuild of the underlying `W6WClient`. A nullish or blank result (from either
+form) never reaches the wire: every read hook below reports `loading: true` instead of
+sending a request with no credential. See `src/W6WProvider.tsx`'s module header for the
+exact mechanism.
 
 Then, anywhere under the provider:
 
@@ -60,6 +64,71 @@ function DocList() {
   );
 }
 ```
+
+## Embedding for enterprise tenants
+
+A host juggling more than one signed-in identity — or one that does not have a
+token/identity yet at mount time — needs more than the Quick start's one-shot
+`token` prop. `<W6WProvider>` takes five more props for exactly this:
+
+- **`ready`** (default `true`) — set it `false` until you actually have a
+  token/identity to embed with. While `false`, every read hook reports
+  `loading: true` and none of them calls the SDK at all; flipping it back to
+  `true` fetches.
+- **`identityKey`** — a string identifying WHICH signed-in identity this
+  client speaks for, e.g. `` `${subject}:${account}` ``. Changing it rebuilds
+  the underlying `W6WClient` and resets every read hook's state — the
+  supported way to switch accounts without a stale read from the previous
+  identity ever rendering under the new one.
+- **`refreshOnUnauthorized`** + **`onUnauthorized`** — opt in to a single,
+  one-shot recovery when a request 401s with `{code: "unauthorized"}`: your
+  `token` supplier is called once more with `{forceRefresh: true}`, and a
+  usable result retries the same request once. `onUnauthorized` receives the
+  terminal error — after a failed retry, or immediately when recovery is off
+  or not possible — at most once per call.
+- **`headers`** — default headers sent with every request. This is how a
+  tenant on the custom-authorizer integration path (no OIDC on your side)
+  attaches the tenant header your w6w account's authorizer webhook expects
+  (e.g. `headers={{ "X-W6W-Tenant": tenantId }}`) alongside the bearer token.
+  Compared by content, not identity — a new-but-equal object on every render
+  never rebuilds the client.
+
+```tsx
+"use client";
+
+import { W6WProvider } from "@w6w/react";
+
+export default function W6WLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <W6WProvider
+      baseUrl="https://api.example.com"
+      ready={true}
+      identityKey={`${session.subject}:${session.account}`}
+      headers={{ "X-W6W-Tenant": session.tenantId }}
+      refreshOnUnauthorized
+      onUnauthorized={() => redirectToLogin()}
+      token={async () => {
+        // Your own backend route, not w6w's — it holds whatever credential
+        // mints a w6w token for this signed-in user (a tenant exchange, a
+        // cached short-lived token, …). This is a Next.js App Router layout,
+        // so it is a Client Component ("use client" above) even though the
+        // token-minting route itself runs on your server.
+        const res = await fetch("/api/w6w-token");
+        if (!res.ok) return null;
+        const { token } = await res.json();
+        return token;
+      }}
+    >
+      {children}
+    </W6WProvider>
+  );
+}
+```
+
+For the full partner-facing walkthrough (auth paths, tenant provisioning, the
+UI-embedding guide) see `.claude/docs/usage/partner/partner-ui-embedding.md`
+in the main `w6w` repository — private to w6w staff and partners, so it is
+named here rather than linked.
 
 ## Using this package with `@w6w/ui`
 
@@ -236,7 +305,9 @@ hook (e.g. `client.console.*` directly, at your own risk per the caveat above).
   needs no further change the moment `@w6w/ui` switches its own check to one. The fix
   belongs to `@w6w/ui`, not this package, and is filed there:
   `.ai/projects/backlog/26-08-13-01-ui-error-nominal-check.md`.
-- **No `AbortSignal`/cancellation support in the hook set.** `@w6w/sdk`'s transport
-  (`node/src/http.ts`) has nothing to hook an abort into. A read hook only IGNORES a
-  result that resolves after its component unmounts (a mounted-ref guard); it cannot
-  cancel the in-flight request itself.
+- **Cancellation is per-hook, not exposed to the caller.** Every read hook aborts its
+  own superseded or unmounted calls internally (a superseded call, an `identityKey`
+  switch, or an unmount all abort the in-flight `AbortSignal` — see `src/hooks.ts`'s
+  module header) — but there is no option to pass your OWN `AbortSignal` into a hook
+  from outside it. `useW6WClient()` plus the underlying SDK method (which does take a
+  `signal`) is the escape hatch if you need that.
