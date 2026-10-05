@@ -382,3 +382,66 @@ Also deliberately absent from every wrapper, because they are browser couplings
 rather than library behaviour: ambient credential storage, a mutable module-level
 token, an auth-error callback, a redirect on `401`, retries, token refresh, and
 client-side run polling.
+
+## Server-only subpath — `@w6w/sdk/server`
+
+**Not part of the surface above.** `exchangeToken` / `exchange_token` is a
+standalone function, outside `endpoints.json`'s `operations[]`, reachable only
+through a separate entry point in each language:
+
+| | TypeScript | Python |
+|---|---|---|
+| Import | `import { exchangeToken } from "@w6w/sdk/server"` | `from w6w.server import exchange_token` |
+| On the root surface? | No — not exported from `@w6w/sdk`'s barrel (`mod.ts`), and not on `@w6w/sdk/console` either | No — not re-exported from `w6w/__init__.py`, and not listed in `w6w.__all__` |
+| Signature | `exchangeToken(options: { baseUrl, clientId, clientSecret, subject, account?, fetch? }): Promise<ExchangeTokenResult>` | `exchange_token(base_url, client_id, client_secret, subject, account=None, transport=None) -> dict` |
+
+**What it does.** Calls `POST /auth/exchange` with a tenant's client
+credentials and names one of the tenant's end-users via `subject`, minting a
+short-lived, `role: "user"` token scoped to that tenant + subject — the
+server-side half of "Path A" token exchange
+(`.claude/docs/usage/partner/partner-tenant-setup.md` §3 Path A, §11.4, a
+private doc; see also the `node` lane's `README.md` "Embedding for enterprise
+tenants").
+
+**Basic auth only — never a second credential channel.** The tenant's
+`clientId`/`clientSecret` travel in exactly one place:
+`Authorization: Basic base64(clientId:clientSecret)`, encoded as latin-1 (the
+alphabet the server's `atob`-based decode reads). The request body is
+`{"subject": subject}`, or `{"subject": subject, "account": account}` when
+`account` is given — never a `clientId`/`clientSecret` key in the body, the
+URL or a query string. Neither function requires (or sends) a bearer: both
+call the shared transport with `requireAuth: false` / `require_auth=False`, the
+same escape hatch each lane's own `console.auth.login` uses for a route that
+authenticates itself.
+
+**Validated locally, before any network call**, always as a `ConfigError` /
+local exception whose message never echoes `clientSecret`: a blank
+`clientId`/`clientSecret`/`subject`; a `clientId` containing `:` (the server
+decodes a Basic credential by splitting on the FIRST colon, so a colon inside
+`clientId` would be read as part of the secret); or a `clientId`/`clientSecret`
+containing a character outside latin-1.
+
+**The returned shape**, transcribed from the server's
+`exchangeHandler` (`packages/server/packages/api/data/exchange.ts`):
+
+```
+{
+  token: string,
+  user: { subject: string, tenant: string, role: string, account: string },
+  expiresIn: number,
+}
+```
+
+**Server errors**, surfaced as the lane's ordinary `ApiError` / `ApiError`
+exception, with the server's own code: `invalid_client` (401 — unknown or
+disabled client credentials), `invalid_body` (400 — malformed JSON),
+`invalid_subject` (400), `invalid_account` (400). None of these are retried:
+a `requireAuth: false` / `require_auth=False` request never gets the opt-in
+401 recovery either lane's transport otherwise offers.
+
+**Why this lives outside the published client-surface table above.** It is not
+an operation a `W6WClient`/`Client` instance exposes — there is no credential
+on the instance to call it with, since the whole point is minting one. It is a
+free function taking its own `baseUrl`/`base_url`, meant to run once on a
+partner's backend per end-user session, never inside a browser or a mobile
+client — the client secret it takes must never reach end-user code.

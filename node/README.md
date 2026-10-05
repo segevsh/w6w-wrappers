@@ -180,6 +180,53 @@ app or its upstream vendor failed, not that w6w did; it is passed through untouc
 
 Nothing is retried, no token is refreshed, and a `401` has no side effect beyond the raised error.
 
+## Embedding for enterprise tenants
+
+If you are a partner embedding w6w inside your OWN product, your backend mints a short-lived,
+per-user w6w token with one call — `exchangeToken`, from a **separate** entry point,
+`@w6w/sdk/server`, never from `@w6w/sdk` itself:
+
+```ts
+import { exchangeToken } from "@w6w/sdk/server";
+```
+
+This is a backend-only function: it takes your tenant's `clientId`/`clientSecret`, which must never
+reach a browser or a mobile client. A typical route on your OWN backend — never called directly from
+your frontend — looks like this:
+
+```ts
+// Your backend, e.g. POST /api/w6w-token
+app.post("/api/w6w-token", async (req, res) => {
+  const session = await readPartnerSession(req); // YOUR auth, not w6w's
+
+  // Exchange trusts whatever `account` it is given — w6w has no way to verify
+  // it against your own data, so YOU derive it from YOUR OWN membership data,
+  // never from an unauthenticated client input (a query param, a request body
+  // field a browser could set).
+  const account = await yourOwnMembershipLookup(session.userId);
+
+  const { token, expiresIn } = await exchangeToken({
+    baseUrl: process.env.W6W_BASE_URL!,
+    clientId: process.env.W6W_TENANT_CLIENT_ID!,
+    clientSecret: process.env.W6W_TENANT_CLIENT_SECRET!, // never sent to the browser
+    subject: session.userId,
+    account,
+  });
+
+  res.json({ token, expiresAt: Date.now() + expiresIn * 1000 });
+});
+```
+
+Your frontend calls `/api/w6w-token`, gets `{ token, expiresAt }`, and uses `token` as `W6W_TOKEN`/a
+bearer for the rest of the session — the tenant secret itself never leaves your backend. Credentials
+travel only as an HTTP `Authorization: Basic base64(clientId:clientSecret)` header — never in the
+request body, the URL or a query string — and every malformed input (a blank
+`clientId`/`clientSecret`/`subject`, a `clientId` containing `:`, a non-latin-1
+`clientId`/`clientSecret`) raises a local `ConfigError` before any network call. See
+[`../docs/sdk-surface.md`](../docs/sdk-surface.md) "Server-only subpath — `@w6w/sdk/server`" for the
+full contract (both languages), and `.claude/docs/usage/partner/partner-ui-embedding.md` (internal —
+private `w6w-io/w6w` — for the broader embedding picture this token feeds into).
+
 ## The surface
 
 What operations exist is not decided in this repo. It is defined by the shared machine-readable

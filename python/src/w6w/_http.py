@@ -275,6 +275,7 @@ def _request(
     query: Optional[Mapping[str, Any]] = None,
     body: Optional[Any] = None,
     headers: Optional[Mapping[str, str]] = None,
+    require_auth: bool = True,
 ) -> HttpResponse:
     """Perform one request and map its outcome.
 
@@ -326,34 +327,53 @@ def _request(
         content type is **not** re-pinned a second time, so a caller-supplied
         `Content-Type` in `headers` still wins over the body-derived one, as
         before.
+    :param require_auth: Whether this request needs a bearer. Defaults to
+        `True` — omitting it behaves exactly as it always has. Set `False` for
+        a route that is public server-side and authenticates itself some other
+        way (`w6w.server.exchange_token`'s Basic credential, mirroring the
+        `node` lane's `RequestOptions.requireAuth`): when `False`,
+        :func:`require_token <w6w._config.require_token>` is never called —
+        not skipped-but-still-attempted, never called at all — and no
+        `Authorization` is set from `config.token`, so a caller-supplied one in
+        `headers` reaches the wire untouched and is never re-pinned over.
     :returns: The status and parsed body.
-    :raises ConfigError: When no token is configured — raised *before* the
-        transport is touched.
+    :raises ConfigError: When no token is configured and `require_auth` is
+        `True` — raised *before* the transport is touched.
     :raises ApiError: On any of the three failure modes above.
     """
     url = build_url(config, url_path, query)
     # Resolved per request rather than at construction: a client with no token
-    # is constructible (so a CLI's --help works offline) and fails here instead.
-    token = require_token(config)
+    # is constructible (so a CLI's --help works offline) and fails here
+    # instead. Skipped entirely when `require_auth` is `False` — not merely
+    # left unset, but never even attempted, so a tokenless config can call a
+    # public route without `require_token` raising first.
+    token: Optional[str] = require_token(config) if require_auth else None
     # The client's own default headers are the BASE every other layer builds
     # on; the credential is pinned immediately on top of it so a stray
     # "Authorization" entry in a client default can never reach the wire in
     # place of the bearer.
     request_headers: Dict[str, str] = dict(config.headers)
-    request_headers["Authorization"] = "Bearer " + token
+    if require_auth:
+        assert token is not None
+        request_headers["Authorization"] = "Bearer " + token
     payload: Optional[bytes] = None
     if body is not None:
         request_headers["Content-Type"] = "application/json"
         payload = json.dumps(body).encode("utf-8")
     if headers:
         request_headers.update(headers)
-        # The credential is re-pinned AFTER the caller's headers, not before.
-        # `request` is a public seam (`Client.request`), so without this an
-        # `Authorization` key in the mapping — passed by mistake or by a helper
-        # that forwards whatever it was given — would silently send a different
-        # credential than the client was constructed with, and the failure
-        # would look like a server-side auth bug.
-        request_headers["Authorization"] = "Bearer " + token
+        if require_auth:
+            # The credential is re-pinned AFTER the caller's headers, not
+            # before. `request` is a public seam (`Client.request`), so
+            # without this an `Authorization` key in the mapping — passed by
+            # mistake or by a helper that forwards whatever it was given —
+            # would silently send a different credential than the client was
+            # constructed with, and the failure would look like a server-side
+            # auth bug. When `require_auth` is `False` there is no token to
+            # re-pin, so a caller's own `Authorization` (e.g. a Basic
+            # credential) stands exactly as given.
+            assert token is not None
+            request_headers["Authorization"] = "Bearer " + token
 
     request = Request(url, data=payload, headers=request_headers, method=method)
 
@@ -411,7 +431,12 @@ def _request(
 
         is_unauthorized = api_error.status == 401 and api_error.code == "unauthorized"
 
-        if config.refresh_on_unauthorized and callable(config.token) and is_unauthorized:
+        if (
+            require_auth
+            and config.refresh_on_unauthorized
+            and callable(config.token)
+            and is_unauthorized
+        ):
             try:
                 # The one and only forced refresh: never passed by ordinary
                 # resolution, passed here exactly once. Any failure to produce
@@ -439,11 +464,12 @@ def _request(
                     query=query,
                     body=body,
                     headers=headers,
+                    require_auth=require_auth,
                 )
             # No usable refreshed token: no retry — fall through and report
             # the ORIGINAL 401.
 
-        if is_unauthorized and config.on_unauthorized is not None:
+        if require_auth and is_unauthorized and config.on_unauthorized is not None:
             config.on_unauthorized(api_error)
         raise api_error
 
