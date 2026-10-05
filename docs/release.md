@@ -151,8 +151,8 @@ human again, and is not optional.
    `publish-types.yml:33-48` in the core repo.
 6. **`test`** (`needs: verify`) runs every lane's suite: `unittest` for python,
    `deno task test` for `node` and `cli`. **The conformance runners live inside
-   those suites** — `python/tests/test_surface.py`, `cli/tests/help_test.ts`, and
-   each lane's version guard — and they read `endpoints.json` and `VERSION` from
+   those suites** — `python/tests/test_surface.py`, `cli/tests/help_test.ts`,
+   `node/tests/conformance_test.ts`, and each lane's version guard — and they read `endpoints.json` and `VERSION` from
    the same checkout as siblings. So the lockstep bet is enforced here: *an
    operation added to two wrappers and forgotten in a third fails this job, and
    nothing is uploaded.* It is not a separate job because it is not separate
