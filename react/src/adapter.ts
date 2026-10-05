@@ -41,11 +41,39 @@
  * a partner on an older `@w6w/react` degrade instead of crashing, while every
  * consumer of THIS adapter gets a real implementation.
  *
+ * `listFunctions`/`getFunction`/`invokeFunction`/`listWorkflows`/`getWorkflow`/
+ * `runWorkflow` are thin calls over the BASE `client.functions.*`/
+ * `client.workflows.*` surface — never `client.console.*` — mirroring
+ * `listConnections`'s own base-over-console preference above. `getFunction`
+ * and `getWorkflow` reshape the base namespace's intentionally OPAQUE
+ * definition (`node/src/functions.ts`'s `FunctionDefinition`,
+ * `node/src/workflows.ts`'s `WorkflowDefinition` are both
+ * `Record<string, unknown>`, by design — a newer server may add fields a
+ * modelled type would reject) into `@w6w/ui`'s narrower `FunctionDetail`/
+ * `WorkflowDetail` by reading the handful of fields every stored definition
+ * carries (`id`, `key`/`name`, `displayName`, `description`, `inputs`/
+ * `steps`) — the same real wire fields `@w6w/sdk/console`'s typed
+ * `FunctionDef`/the console workflow shape name, not a guess. `getFunction`'s
+ * `inputs` picks up the SAME `ActionParam` narrowing as `getAppActions`
+ * above (6 fields vs `@w6w/ui`'s 14 richer, presentation-only ones). `runWorkflow`
+ * always sends `wait: true` and forwards `client.workflows.run`'s own
+ * `terminal` unchanged — that field is already derived from the run's
+ * `status` (`200` ⇒ terminal, the server's `202` wait-timeout ⇒ not), so
+ * re-deriving it from `httpStatus` a second time here would be a second,
+ * possibly-diverging copy of the same rule.
+ *
  * @module
  */
-import { ApiError, type ConnectionSummary, type W6WClient } from "@w6w/sdk";
+import {
+  ApiError,
+  type ConnectionSummary,
+  type FunctionSummary,
+  type W6WClient,
+  type WorkflowSummary,
+} from "@w6w/sdk";
 import type {
   ActionDef,
+  ActionParam,
   ApiCallRecord,
   AppSummary,
   AuthDef,
@@ -89,6 +117,46 @@ export interface AppsPageResult {
   apps: AppSummary[];
   /** Present unless this is the last page. */
   nextCursor?: string;
+}
+
+/**
+ * One step of a Workflow, as {@link W6WApi.getWorkflow} returns it — the
+ * minimal shape the Configure stage needs to find the entry/trigger step's
+ * own declared `with` fields. Hand-duplicated verbatim from
+ * `packages/ui/src/types.ts`'s `WorkflowStepSummary` — see this module's
+ * header.
+ */
+export interface WorkflowStepSummary {
+  id: string;
+  uses: { app: string; action: string };
+  with?: Record<string, unknown>;
+}
+
+/**
+ * A Workflow's full definition, as {@link W6WApi.getWorkflow} returns it.
+ * Hand-duplicated verbatim from `packages/ui/src/types.ts`'s
+ * `WorkflowDetail` — see this module's header.
+ */
+export interface WorkflowDetail {
+  id: string;
+  name: string;
+  displayName?: string;
+  description?: string;
+  steps: WorkflowStepSummary[];
+}
+
+/**
+ * A Function's canonical interface, as {@link W6WApi.getFunction} returns
+ * it. Hand-duplicated verbatim from `packages/ui/src/types.ts`'s
+ * `FunctionDetail` — see this module's header.
+ */
+export interface FunctionDetail {
+  id: string;
+  key: string;
+  displayName?: string;
+  description?: string;
+  inputs: ActionParam[];
+  valid: boolean;
 }
 
 export interface W6WApi {
@@ -250,6 +318,39 @@ export interface W6WApi {
     triggerKey: string,
     input: { workflowId: string; connectionId?: string | null; params?: Record<string, unknown> },
   ): Promise<Subscription>;
+
+  /** List the caller's registered Functions — drives the step builder's Functions tab. */
+  listFunctions(): Promise<FunctionSummary[]>;
+
+  /** Load one Function's canonical interface, for the Functions tab's Configure stage. */
+  getFunction(id: string): Promise<FunctionDetail>;
+
+  /** Invoke a Function directly — the Functions tab's Test stage. Returns the raw output. */
+  invokeFunction(id: string, inputs: Record<string, unknown>): Promise<unknown>;
+
+  /** List the caller's registered Workflows — drives the step builder's Workflows tab. */
+  listWorkflows(): Promise<WorkflowSummary[]>;
+
+  /** Load one Workflow's full definition, for the Workflows tab's Configure stage. */
+  getWorkflow(id: string): Promise<WorkflowDetail>;
+
+  /**
+   * Run a Workflow synchronously — the Workflows tab's Test stage. Always the
+   * SAME `?wait=true` path a saved `@w6w/call` step takes at run time, never
+   * a client-side enqueue-and-poll. `terminal` is derived from the run's own
+   * status (`200` ⇒ `true`, the server's `202` wait-timeout ⇒ `false` — a
+   * legitimate "still running" outcome, not an error).
+   */
+  runWorkflow(
+    id: string,
+    opts?: { variables?: Record<string, unknown>; input?: Record<string, unknown> },
+  ): Promise<{
+    runId: string;
+    status: string;
+    output?: unknown;
+    error?: unknown;
+    terminal: boolean;
+  }>;
 }
 
 /**
@@ -401,5 +502,71 @@ export function createW6WUiAdapter(client: W6WClient): W6WApi {
     // `input` is forwarded verbatim as the whole POST body.
     createSubscription: (appId, triggerKey, input) =>
       withApiErrorBody(() => client.console.subscriptions.create(appId, triggerKey, input)),
+
+    // The BASE `client.functions.*`/`client.workflows.*` surface from here
+    // down — never `console.*`. See this module's header.
+    listFunctions: () => withApiErrorBody(() => client.functions.list()),
+
+    getFunction: (id) =>
+      withApiErrorBody(async () => {
+        const { function: fn, valid } = await client.functions.get(id);
+        const def = fn as {
+          id: string;
+          key: string;
+          displayName?: string;
+          description?: string;
+          inputs?: ActionParam[];
+        };
+        return {
+          id: def.id,
+          key: def.key,
+          displayName: def.displayName,
+          description: def.description,
+          inputs: def.inputs ?? [],
+          valid,
+        };
+      }),
+
+    // `inputs` is forwarded as the whole `payload` — the Function's canonical
+    // inputs object, matching `client.functions.run`'s own `{payload}` shape
+    // (`node/src/functions.ts`), which POSTs `{inputs: payload}`.
+    invokeFunction: (id, inputs) =>
+      withApiErrorBody(() => client.functions.run(id, { payload: inputs })),
+
+    listWorkflows: () => withApiErrorBody(() => client.workflows.list()),
+
+    getWorkflow: (id) =>
+      withApiErrorBody(async () => {
+        const { workflow } = await client.workflows.get(id);
+        const def = workflow as {
+          id: string;
+          name: string;
+          displayName?: string;
+          description?: string;
+          steps?: WorkflowStepSummary[];
+        };
+        return {
+          id: def.id,
+          name: def.name,
+          displayName: def.displayName,
+          description: def.description,
+          steps: def.steps ?? [],
+        };
+      }),
+
+    // Always `wait: true` — see this module's header for why `terminal` is
+    // forwarded from `client.workflows.run`'s own result rather than
+    // re-derived from `httpStatus` a second time.
+    runWorkflow: (id, opts) =>
+      withApiErrorBody(async () => {
+        const result = await client.workflows.run(id, { ...opts, wait: true });
+        return {
+          runId: result.runId,
+          status: result.status,
+          output: result.output,
+          error: result.error,
+          terminal: result.terminal,
+        };
+      }),
   };
 }
