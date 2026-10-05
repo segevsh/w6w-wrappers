@@ -27,7 +27,13 @@ export {
   type ResolvedConfig,
   type W6WClientOptions,
 } from "./src/config.ts";
-export type { HttpMethod, HttpResponse, QueryParams, RequestOptions } from "./src/http.ts";
+export type {
+  CallOptions,
+  HttpMethod,
+  HttpResponse,
+  QueryParams,
+  RequestOptions,
+} from "./src/http.ts";
 // Exported because `W6WClient.request` is public: a host reaching an endpoint
 // this version does not model yet must have the same encoding-at-interpolation
 // tag the operation modules use, or it will concatenate a caller value into a

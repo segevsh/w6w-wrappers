@@ -84,6 +84,24 @@ export interface RequestOptions {
 }
 
 /**
+ * Per-call transport options shared by every read method a react hook calls
+ * (R-7): today, just an optional {@linkcode AbortSignal}. A thin, deliberately
+ * minimal bag rather than reusing {@linkcode RequestOptions} itself — the
+ * typed per-method option interfaces (`DocumentOptions`,
+ * `WorkflowListOptions`, …) extend this one, and a method with no options
+ * today takes a bare `options?: CallOptions`, so `signal` lands in exactly one
+ * place for every read operation.
+ *
+ * `signal` reaches the injected `fetch` unchanged through
+ * {@linkcode RequestOptions.signal} and is NEVER serialized into the URL or
+ * the body — see that field's own doc for the cancellation semantics.
+ */
+export interface CallOptions {
+  /** Abort this call. See {@linkcode RequestOptions.signal}. */
+  signal?: AbortSignal;
+}
+
+/**
  * A successful response: the parsed body plus the status that carried it.
  *
  * `body` is `null` for an empty body — a `204`-style response must not crash a

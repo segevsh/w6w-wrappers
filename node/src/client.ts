@@ -25,7 +25,7 @@ import { ConnectionsApi } from "./connections.ts";
 import { ConsoleApi } from "./console/mod.ts";
 import { DocumentsApi } from "./documents.ts";
 import { ConfigError } from "./errors.ts";
-import { type HttpResponse, request, type RequestOptions } from "./http.ts";
+import { type CallOptions, type HttpResponse, request, type RequestOptions } from "./http.ts";
 import { fetchMe } from "./me.ts";
 import { type RunInput, runUrn } from "./run.ts";
 import { TeamApi } from "./team.ts";
@@ -201,12 +201,13 @@ export class W6WClient {
    * `versions.wrapper`, this package's own version, which is filled in and
    * never overwrites a key the server supplied.
    *
+   * @param options - Optional per-call transport options (`signal` to abort).
    * @returns The caller's identity.
    * @throws {ConfigError} When no token is configured.
    * @throws {ApiError} On any non-2xx, e.g. a `401` when the token is rejected.
    */
-  me(): Promise<Me> {
-    return fetchMe(this);
+  me(options?: CallOptions): Promise<Me> {
+    return fetchMe(this, options);
   }
 
   /**

@@ -22,7 +22,7 @@
  * @module
  */
 
-import { type HttpResponse, path, type RequestOptions } from "./http.ts";
+import { type CallOptions, type HttpResponse, path, type RequestOptions } from "./http.ts";
 import { unwrap, type Var, type VarType } from "./types.ts";
 
 /**
@@ -95,11 +95,16 @@ export class VarsApi {
   /**
    * List the caller's variables.
    *
+   * @param options - Optional per-call transport options (`signal` to abort).
    * @returns The variables, unwrapped from the `vars` envelope.
    * @throws {ApiError} On any non-2xx.
    */
-  async list(): Promise<Var[]> {
-    const res = await this.#host.request<unknown>({ method: "GET", path: "/vars" });
+  async list(options?: CallOptions): Promise<Var[]> {
+    const res = await this.#host.request<unknown>({
+      method: "GET",
+      path: "/vars",
+      signal: options?.signal,
+    });
     return unwrap<Var[]>(res, "vars");
   }
 
@@ -107,11 +112,16 @@ export class VarsApi {
    * Fetch one variable by its server-issued id.
    *
    * @param id - The `var_…` id.
+   * @param options - Optional per-call transport options (`signal` to abort).
    * @returns The variable.
    * @throws {ApiError} `404 unknown_var` when there is no such id.
    */
-  async get(id: string): Promise<Var> {
-    const res = await this.#host.request<unknown>({ method: "GET", path: path`/vars/${id}` });
+  async get(id: string, options?: CallOptions): Promise<Var> {
+    const res = await this.#host.request<unknown>({
+      method: "GET",
+      path: path`/vars/${id}`,
+      signal: options?.signal,
+    });
     // The singular envelope key is `var` — a reserved word in TypeScript, so it
     // is read as a property and never destructured into a binding.
     return unwrap<Var>(res, "var");

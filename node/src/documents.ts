@@ -22,7 +22,7 @@
  */
 
 import type { ResolvedConfig } from "./config.ts";
-import { type HttpResponse, path, type RequestOptions } from "./http.ts";
+import { type CallOptions, type HttpResponse, path, type RequestOptions } from "./http.ts";
 import { type Doc, type DocFormat, unwrap } from "./types.ts";
 
 /**
@@ -44,8 +44,12 @@ export interface DocumentsHost {
  * `project` overrides the client's default for this one call. Omitted
  * everywhere, the server resolves the account's default project; an unknown id
  * is `400 unknown_project`.
+ *
+ * Extends {@linkcode CallOptions}, so every document read also takes an
+ * optional `signal` (R-7) — forwarded by `list`/`get`/`getByKey`; carried on
+ * the mutation methods' options by type only, with no new behaviour there.
  */
-export interface DocumentOptions {
+export interface DocumentOptions extends CallOptions {
   /** Project id to scope this call to. */
   project?: string;
 }
@@ -115,7 +119,7 @@ export class DocumentsApi {
   /**
    * List the caller's documents.
    *
-   * @param options - Optional per-call project scope.
+   * @param options - Optional per-call project scope and/or `signal` to abort.
    * @returns The documents, unwrapped from the `documents` envelope.
    * @throws {ApiError} On any non-2xx, e.g. `400 unknown_project`.
    */
@@ -124,6 +128,7 @@ export class DocumentsApi {
       method: "GET",
       path: "/documents",
       query: { project: this.#project(options) },
+      signal: options?.signal,
     });
     return unwrap<Doc[]>(res, "documents");
   }
@@ -132,7 +137,7 @@ export class DocumentsApi {
    * Fetch one document by its server-issued id.
    *
    * @param id - The `doc_…` id.
-   * @param options - Optional per-call project scope.
+   * @param options - Optional per-call project scope and/or `signal` to abort.
    * @returns The document.
    * @throws {ApiError} `404 unknown_document` when there is no such id.
    */
@@ -141,6 +146,7 @@ export class DocumentsApi {
       method: "GET",
       path: path`/documents/${id}`,
       query: { project: this.#project(options) },
+      signal: options?.signal,
     });
     return unwrap<Doc>(res, "document");
   }
@@ -160,7 +166,7 @@ export class DocumentsApi {
    * unreadable through this client.
    *
    * @param key - The document key, sent encoded and otherwise untouched.
-   * @param options - Optional per-call project scope.
+   * @param options - Optional per-call project scope and/or `signal` to abort.
    * @returns The document.
    * @throws {ApiError} `404 unknown_document` when there is no such key.
    */
@@ -169,6 +175,7 @@ export class DocumentsApi {
       method: "GET",
       path: path`/documents/by-key/${key}`,
       query: { project: this.#project(options) },
+      signal: options?.signal,
     });
     return unwrap<Doc>(res, "document");
   }
