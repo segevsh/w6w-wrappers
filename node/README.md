@@ -10,7 +10,7 @@ The package is authored as runtime-neutral TypeScript against Web standards (`fe
 `URL`, `AbortController`), so the same build runs under Node 18+, Deno and Bun.
 
 - **License:** MIT (see [LICENSE](./LICENSE)).
-- **Version:** `0.2.1`.
+- **Version:** `0.9.0`.
 
 ## Install
 
