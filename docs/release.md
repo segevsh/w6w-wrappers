@@ -127,23 +127,32 @@ human again, and is not optional.
    contract in the same checkout.
 2. **Bump `VERSION`.** It is the single source of truth and the only place a
    human types the new number.
-3. **Write that number into every manifest**, in the same commit:
-   `node/deno.json` + `node/package.json` + `node/src/version.ts`,
-   `cli/deno.json` + `cli/package.json` + `cli/src/version.ts`,
-   `python/pyproject.toml` + `python/src/w6w/_version.py`. Never hand-pick a
-   different value in a manifest; step 5 is a gate, not a writer.
+3. **Write that number into every manifest**, in the same commit — the ten
+   files step 5 checks, and no others:
+   `node/package.json` + `node/deno.json` + `node/src/version.ts`,
+   `cli/package.json` + `cli/deno.json` + `cli/mod.ts`,
+   `python/pyproject.toml` + `python/src/w6w/_version.py`,
+   `react/package.json` + `react/src/version.ts`. Never hand-pick a different
+   value in a manifest; step 5 is a gate, not a writer.
+   One version literal is **not** gated and must still move with them: the
+   `@w6w/sdk` semver range in `react/package.json`'s `dependencies`, which is
+   `^<the new VERSION>` (e.g. `^0.9.0`). `react`'s own version test pins it
+   against `VERSION`, so a lane that leaves it behind fails `test` — step 5
+   would not have caught it.
 4. **Tag** `v0.2.1`. (For a dry run, invoke `release.yml` via
    `workflow_dispatch` with an explicit `version` input — it verifies and runs
    conformance without publishing.)
-5. **`verify`** reads `VERSION` and compares it against the tag and all eight
-   version literals — three manifests and a source constant per TypeScript lane,
-   `pyproject.toml` and `_version.py` for python — echoing every value *before*
-   deciding, so a failing log already answers "which one disagreed". Fails with
-   `::error::` naming it. This mirrors `publish-types.yml:33-48` in the core repo.
+5. **`verify`** reads `VERSION` and compares it against the tag and the ten
+   version literals step 3 lists — three for `node` (two manifests and a source
+   constant), three for `cli`, `pyproject.toml` and `_version.py` for python, and
+   two for `react` (one manifest and one source constant, as it carries no
+   `deno.json`) — echoing every value *before* deciding, so a failing log already
+   answers "which one disagreed". Fails with `::error::` naming it. This mirrors
+   `publish-types.yml:33-48` in the core repo.
 6. **`test`** (`needs: verify`) runs every lane's suite: `unittest` for python,
    `deno task test` for `node` and `cli`. **The conformance runners live inside
-   those suites** — `python/tests/test_surface.py`, `cli/tests/help_test.ts`, and
-   each lane's version guard — and they read `endpoints.json` and `VERSION` from
+   those suites** — `python/tests/test_surface.py`, `cli/tests/help_test.ts`,
+   `node/tests/conformance_test.ts`, and each lane's version guard — and they read `endpoints.json` and `VERSION` from
    the same checkout as siblings. So the lockstep bet is enforced here: *an
    operation added to two wrappers and forgotten in a third fails this job, and
    nothing is uploaded.* It is not a separate job because it is not separate

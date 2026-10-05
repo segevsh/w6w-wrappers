@@ -8,13 +8,14 @@
  * possible precisely *because* there is only one seam to exercise.
  */
 
-import { assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
+import { assertEquals, assertRejects, assertStringIncludes, assertThrows } from "@std/assert";
 import {
   BASE_PATH,
   type FetchLike,
   joinBaseUrl,
   requireToken,
   resolveConfig,
+  type ResolvedConfig,
 } from "../src/config.ts";
 import { ConfigError } from "../src/errors.ts";
 import { W6WClient } from "../src/client.ts";
@@ -256,13 +257,19 @@ Deno.test("an explicit empty base URL does not fall through to the environment",
   });
 });
 
-Deno.test("a client with no token is constructible and fails only when used", () => {
+Deno.test("a client with no token is constructible and fails only when used", async () => {
+  // `config` is a plain resolved value by the time `withEnv` restores the
+  // environment, so the async assertion below can safely run after it — only
+  // the resolution itself needs the environment set.
+  let config!: ResolvedConfig;
   withEnv({ W6W_BASE_URL: "https://api.example.com", W6W_TOKEN: undefined }, () => {
-    const config = resolveConfig();
-    assertEquals(config.token, null);
-    const err = assertThrows(() => requireToken(config), ConfigError);
-    assertStringIncludes(err.message, "W6W_TOKEN");
+    config = resolveConfig();
   });
+  assertEquals(config.token, null);
+  // requireToken is async now (it may have to await a TokenProvider), so the
+  // nullish/blank-token ConfigError is a REJECTION, not a synchronous throw.
+  const err = await assertRejects(() => requireToken(config), ConfigError);
+  assertStringIncludes(err.message, "W6W_TOKEN");
 });
 
 Deno.test("the default project is instance state and defaults to null", () => {
@@ -284,10 +291,24 @@ Deno.test("two clients in one process hold different credentials and base URLs",
     const b = new W6WClient({ baseUrl: "https://b.example.com/api/", token: "tok_b" });
     const fromEnv = new W6WClient();
 
-    assertEquals(a.config, { baseUrl: "https://a.example.com", token: "tok_a", project: null });
+    assertEquals(a.config, {
+      baseUrl: "https://a.example.com",
+      token: "tok_a",
+      refreshOnUnauthorized: false,
+      onUnauthorized: null,
+      headers: {},
+      project: null,
+    });
     // `b` configured an explicit "/api/" path: the trailing slash comes off, the
     // path itself is preserved (it may be a gateway prefix).
-    assertEquals(b.config, { baseUrl: "https://b.example.com/api", token: "tok_b", project: null });
+    assertEquals(b.config, {
+      baseUrl: "https://b.example.com/api",
+      token: "tok_b",
+      refreshOnUnauthorized: false,
+      onUnauthorized: null,
+      headers: {},
+      project: null,
+    });
     assertEquals(fromEnv.config.baseUrl, "https://env.example.com");
     assertEquals(fromEnv.config.token, "tok_env");
   });

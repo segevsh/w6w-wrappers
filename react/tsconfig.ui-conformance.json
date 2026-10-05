@@ -1,0 +1,18 @@
+{
+  // Type-only CI gate: compiles ONLY `ui-conformance.check.ts` against the
+  // real `@w6w/ui` `W6WApi` pulled in by `react/package.json`'s type-only
+  // `@w6w/ui` devDependency (R-8). `ui-conformance.test.ts` runs this project
+  // via `node_modules/typescript/bin/tsc` and asserts exit 0.
+  //
+  // `extends` the published build config so this check compiles under the
+  // SAME compiler options the real build uses (jsx, module, strict, …);
+  // `include`/`exclude` below replace rather than merge with the base
+  // config's, which is what makes `noEmit`-ing just the one check file
+  // possible without also emitting (or needing) the whole `src/` tree.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["src/__tests__/ui-conformance.check.ts"],
+  "exclude": []
+}

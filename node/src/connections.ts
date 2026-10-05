@@ -20,7 +20,7 @@
  * @module
  */
 
-import type { HttpResponse, RequestOptions } from "./http.ts";
+import type { CallOptions, HttpResponse, RequestOptions } from "./http.ts";
 import { type ConnectionSummary, unwrap } from "./types.ts";
 
 /**
@@ -57,11 +57,16 @@ export class ConnectionsApi {
   /**
    * List the caller's connections.
    *
+   * @param options - Optional per-call transport options (`signal` to abort).
    * @returns The connections, unwrapped from the `connections` envelope.
    * @throws {ApiError} On any non-2xx.
    */
-  async list(): Promise<ConnectionSummary[]> {
-    const res = await this.#host.request<unknown>({ method: "GET", path: "/connections" });
+  async list(options?: CallOptions): Promise<ConnectionSummary[]> {
+    const res = await this.#host.request<unknown>({
+      method: "GET",
+      path: "/connections",
+      signal: options?.signal,
+    });
     return unwrap<ConnectionSummary[]>(res, "connections");
   }
 }

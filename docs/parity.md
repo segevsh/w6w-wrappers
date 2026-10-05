@@ -174,3 +174,111 @@ react's alone, not a precedent for a contract lane like a prospective `go/` or
 Until all three hold **for a would-be contract lane**, keep it out of the release
 workflow rather than shipping it half-joined — a derived lane like `react/` was
 never bound by this bar to begin with, so it does not apply here.
+
+## Token callback lanes
+
+Contract 0.3.0 added a per-request token supplier, an opt-in one-shot `401`
+recovery retry, an `onUnauthorized`/`on_unauthorized` callback, and client-wide
+default `headers` (`docs/implementation.md` §2–§3,
+[`sdk-surface.md` §1](./sdk-surface.md#1-construction-and-configuration)). This
+is a **new axis the conformance runner does not and should not check** — none
+of it is an *operation*, so it has no `naming` entry in `endpoints.json` and no
+row in `operations[]`. It is recorded here instead, the way §Conformance
+already separates "every operation, every lane" from everything else a lane
+legitimately differs on (§6 of `sdk-surface.md`).
+
+- **node and python both carry the callback; the CLI does not.** `W6WClient`
+  and `Client` both accept `refreshOnUnauthorized`/`refresh_on_unauthorized`,
+  `onUnauthorized`/`on_unauthorized` and a function-typed `token`. `@w6w/cli`
+  does not: `cli/src/client.ts`'s `createClient` resolves a single static
+  string token once, at startup, from a `--token`-flag-then-`W6W_TOKEN`-env
+  precedence chain with no supplier anywhere in it — there is nothing for a
+  `401` recovery attempt to call a second time, and a CLI invocation is
+  already a single short-lived process a
+  user re-runs by hand, which is a different failure-recovery story than a
+  long-lived server process holding a client across many calls. This is a
+  **deliberate, permanent exclusion**, not a gap to close later: adding it
+  would mean inventing a CLI-side token-refresh UX (a hook with nothing to
+  register it against) for a surface that has none of the host-process
+  lifetime this feature exists for.
+- **python's supplier is sync-only; node's may be sync or async.** R-1 (and
+  `sdk-surface.md` §6): there is no `asyncio` anywhere in `packages/wrappers/python`,
+  and its transport (`urllib`, blocking) has no async counterpart for a
+  supplier to straddle. node's `TokenProvider` may return a `Promise`, which
+  `request()` awaits before attaching the bearer; python's provider is called
+  and used immediately. A python host with its own async token source resolves
+  it *before* handing the value to a sync callable — that resolution is the
+  host's problem, not this package's, exactly like every other sync/async
+  boundary `urllib` already draws for this lane.
+- **`contractVersion` is unchanged, and `endpoints.json` is not touched at
+  all.** `endpoints.json`'s `contractVersion` field tracks the **wire
+  surface** — the operations, their shapes, their status — and this task
+  changed none of them: `"auth": "bearer"` is still the only auth field any
+  operation declares, and the new client options are not `operations[]`
+  entries, so they have no `naming` object to add and nothing for a would-be
+  fourth language to implement differently. A package-level `VERSION` bump for
+  this change is a separate, later step (not part of landing this feature) —
+  recorded here only to say that *this* number, the contract's own, had no
+  reason to move.
+
+## Per-call cancellation (node only)
+
+`CallOptions.signal?: AbortSignal` (R-7) is node-only, and deliberately not in
+`endpoints.json`: it is a transport option on the *client*, not a parameter the
+*server* reads, so it does not describe the wire the way every other entry in
+this contract does (the §Conformance test walks a built client and would have
+no server-side shape to check it against). Every read method `@w6w/react`'s
+read hooks call (`client.me`, `documents.list`/`get`/`getByKey`,
+`vars.list`/`get`, `connections.list`, `workflows.list`/`get`,
+`functions.list`/`get`) accepts it, forwarded to `src/http.ts`'s `request()`
+and from there straight to the injected `fetch`'s own `RequestInit.signal` —
+never serialized into a query string or a body.
+
+**Python and the CLI have no analog, and this is not an oversight.** `signal`
+mirrors a shape every JS runtime's own `fetch` already exposes (`AbortSignal`,
+`AbortController`) — it is JS-idiomatic transport plumbing, not a capability
+the *API* grants. Python's `urllib`-based transport has no equivalent
+object to thread one through, and a CLI invocation is a single short-lived
+process with nothing in-process to cancel a call for — there is no "stale
+tab-switch request" for either lane the way there is for a React hook
+re-rendering. Should a future python transport (e.g. `httpx`) or a long-running
+CLI mode want the same thing, it would need its own idiomatic mechanism
+(`httpx`'s own cancellation token, a `SIGINT` handler) rather than a literal
+`signal` kwarg — unlike the lockstep version bump (§The version is a shared
+fact), this axis is expected to stay permanently node-only, not a gap pending a
+future PR.
+
+## react's type-only edge onto `@w6w/ui`
+
+`react/`'s `createW6WUiAdapter` targets `@w6w/ui`'s `W6WApi` contract
+**structurally** — a hand-duplicated interface in `react/src/adapter.ts`, never an
+import of `@w6w/ui` itself at runtime. `react/package.json` carries one
+`devDependency` on it, `"@w6w/ui": "github:w6w-io/w6w-ui#<sha>"`, and that edge is
+**dev-only and type-only**: `react/package.json`'s `files: ["dist"]` means only
+`dist/` is ever packed and published, so no installer of `@w6w/react` resolves
+`@w6w/ui` at all. Its one consumer is
+`react/src/__tests__/ui-conformance.test.ts`, run by `npm test` at dev/CI time only,
+which compiles a type-only check file against `@w6w/ui`'s real `provider.tsx` and
+fails — naming the missing/mismatched member — the moment
+`createW6WUiAdapter`'s return type stops being assignable to the real `W6WApi`.
+
+**Why a `github:<owner>/<repo>#<sha>` pin and not a sibling `link:`:** this repo's
+`release.yml` checks out **only `w6w-wrappers`** — no sibling checkout, no
+submodules (§Conformance's own CI model is the same single-repo-checkout premise).
+A `link:../../ui` resolves only by the local devcontainer's incidental directory
+layout and fails `ENOENT` on every CI run and on a fresh standalone clone; a
+`github:` spec needs nothing but a network fetch of the one pinned commit. The pin
+targets `@w6w/ui/src/provider.tsx` by relative path rather than the package's root
+barrel, because the barrel's own import chain reaches `@w6w/expr`
+(`packages/core`) through a `github:…#path:` subpath npm does not honor on a
+`github:` dependency — `provider.tsx`'s own closure (`theme.ts` → `types.ts` →
+`react`) carries no such edge and compiles clean standalone.
+
+This is **not** a second conformance axis alongside §Conformance's `endpoints.json`
+runner above — `react/` is still a derived lane with no `naming.react` entry and no
+obligation to implement `endpoints.json` directly. It is a narrower, one-directional
+check that one derived lane's hand-duplicated bridge interface has not silently
+drifted from the one third-party contract it targets structurally; moving the pin
+(bumping the `#<sha>` to a newer `w6w-io/w6w-ui` `main` commit and re-running `npm
+install`) needs no `VERSION` bump of its own unless `W6WApi` itself changed shape,
+in which case this check is what says so.

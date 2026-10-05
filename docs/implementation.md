@@ -295,6 +295,22 @@ anonymous operations in this surface. A client constructed without a token may b
 built (so `--help` and `--version` work offline) but raises the same configuration
 error on the first request.
 
+**`token` resolves per request, not once at construction.** node and python both
+accept `token` as either a plain string or a **supplier** — `TokenProvider`
+(node), a callable `token: Union[str, Callable[..., Optional[str]], None]`
+(python) — and the supplier is called fresh on every single request, never
+cached. A plain string is the **degenerate case** of this same shape: it behaves
+exactly as if a supplier had been written that always returns it, and existing
+callers that only ever pass a string see no change at all. Nullish or blank
+(after trimming) is the same configuration error either way — the string case
+and the supplier case share one check, one message, and neither ever sends the
+request. node's supplier may return synchronously or return a `Promise`, which
+`request()` awaits before attaching the bearer; python's is **sync-only** (R-1 —
+there is no `asyncio` anywhere in this package). See
+[`sdk-surface.md` §1](./sdk-surface.md#1-construction-and-configuration) for the
+full option table and [§3](#3-error-model) below for the one case a supplier's
+return value is called a second time: the opt-in `401` recovery retry.
+
 ### Precedence
 
 **Explicit constructor arguments override the environment, always.** For the CLI
@@ -347,10 +363,14 @@ This is not a style choice.
   - node/cli: `src/config.ts`
   - python: `w6w/_config.py`
 
-  That module resolves the effective base URL and token once, at client
-  construction, and hands back a plain config value. Every test of env-var
-  behaviour therefore has exactly one seam to exercise (§9), and no operation can
-  silently acquire a hidden dependency on ambient state.
+  That module resolves the effective base URL once, at client construction, and
+  hands back a plain config value. The token is different: `resolveConfig`
+  stores whatever shape the caller passed — string or supplier — without calling
+  it, and `request()` resolves that to an actual bearer value fresh on every
+  request (string = degenerate case; see §2 above), never once at construction.
+  Every test of env-var behaviour therefore has exactly one seam to exercise
+  (§9), and no operation can silently acquire a hidden dependency on ambient
+  state.
 - Reading env in the TypeScript wrappers uses a **capability probe**, not a
   runtime assumption, so the same file works under Deno, Node and Bun:
 
@@ -471,11 +491,33 @@ with the real message stripped. A `424` passes through untouched with its JSON
 intact. **Do not "normalise" 424 into a 5xx or a generic server error** in any
 wrapper — you would be undoing the whole point.
 
-### `401` has no side effect
+### `401` — opt-in recovery, raise and stop by default
 
 The studio fires an `onAuthError` callback that redirects to `/login`. A library has nowhere to
-redirect to. Wrappers raise the `ApiError` and stop. No retry-on-401, no token
-refresh, no callback hook (§8).
+redirect to, and this spec still does not carry that redirect over (§8). What it
+does carry, as of contract 0.3.0, is a narrower, **opt-in, one-shot** mechanism
+over the plain `ApiError` — pinned identically in node and python:
+
+- **Default, unchanged**: `refreshOnUnauthorized` / `refresh_on_unauthorized` is
+  `False`. A `401` raises the `ApiError` and stops, exactly as before this
+  option existed — no retry, no refresh, no callback.
+- **Opt in**, and only when `token` is a **supplier** (a static string has
+  nothing to refresh): a `401` whose `code` is exactly `"unauthorized"` gets a
+  single recovery attempt. The supplier is called once more —
+  `token({forceRefresh: true})` / `token(force_refresh=True)` — and, if that
+  yields a usable (non-nullish, non-blank) token, the **identical** request
+  (method, path, query, body) is re-sent **once** with it. Never a second
+  retry, never for any other status or code, never for a request made with no
+  bearer at all (node's `requireAuth: false`).
+- **`onUnauthorized` / `on_unauthorized`**, when configured, receives the
+  terminal `401`/`unauthorized` `ApiError` of a bearer request — after a failed
+  retry, or immediately when recovery is off or not possible — at most once per
+  call. Never called on success, never called for a request made with no
+  bearer.
+
+This is still a world away from the studio's redirect: nothing here navigates
+anywhere, retries anything other than the one bearer-carrying request that just
+failed, or runs without the caller explicitly opting in.
 
 ---
 
@@ -728,8 +770,8 @@ appear in a library. Listed with reasons so no reviewer has to re-derive them:
 | 1 | `const BASE = import.meta.env.VITE_API_BASE ?? "/api"` | `import.meta.env` is a **Vite-only** global — it does not exist in Deno, Node or Python. And the `"/api"` fallback is a same-origin relative URL, meaningless outside a page. Base URL comes from constructor-or-env (§2). |
 | 2 | `localStorage.getItem("w6w.token")` token bootstrap | `localStorage` is a browser API. A library reads `W6W_TOKEN` or takes the token as an argument, and never reaches for ambient browser storage. |
 | 3 | Module-global mutable `token` + `setApiToken()` | A single mutable module-level credential means **two clients in one process share one token** — an outright bug for a server-side SDK juggling tenants. Credentials are instance state (§2, MECHANISM PIN). |
-| 4 | `onAuthError` callback + `setAuthErrorHandler()` | A registration hook for "session died" only makes sense where there is a session and a UI. |
-| 5 | `if (res.status === 401 && code === "unauthorized") onAuthError?.()` | A redirect-to-login side effect has no meaning in a library. Wrappers raise the `ApiError` and stop — no redirect, no refresh, no retry (§3). |
+| 4 | `onAuthError` callback + `setAuthErrorHandler()` | A **module-level** registration hook for "session died" only makes sense where there is a session and a UI. The per-call `onUnauthorized` option (§3) is not this: it is a constructor argument on one client instance, carries the `ApiError` instead of nothing, and never navigates anywhere. |
+| 5 | `if (res.status === 401 && code === "unauthorized") onAuthError?.()` | A **redirect**-to-login side effect has no meaning in a library, and nothing here adds one. What a wrapper now offers instead — an opt-in, one-shot, same-request retry plus a callback the caller writes (§3) — is a narrower mechanism than the studio's open-ended redirect, not the same thing re-added. |
 | 6 | `runWorkflow`'s **600 × 500 ms client-side poll** | The server offers `?wait=true`, which polls server-side. Re-implementing the poll in three languages means three timeout policies and three retry-storm bugs to keep in sync. Use `?wait=` and hand back the `202` handle (§4). |
 
 Positively: the closest shape to what a wrapper actually is, is the operator

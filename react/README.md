@@ -6,7 +6,7 @@ surface (`me`, `documents`, `vars`, `connections`, `workflows`, `run`), and
 `createW6WUiAdapter`, a structural bridge from a `W6WClient` to
 [`@w6w/ui`](https://github.com/w6w-io/w6w-ui)'s `W6WApi` contract.
 
-License: MIT · Version: 0.3.0
+License: MIT · Version: 0.9.0
 
 This lane implements no endpoint — it composes `@w6w/sdk`, which is already
 conformant against [`endpoints.json`](../endpoints.json). There is nothing here to
@@ -38,11 +38,15 @@ function App() {
 }
 ```
 
-`token` accepts a literal string, or a supplier function called fresh on every
-request — pass a supplier when your token rotates (e.g. a short-lived JWT read from
-an auth SDK) and the client will pick up the new value on the very next call, with no
-teardown/rebuild of the underlying `W6WClient`. See `src/W6WProvider.tsx`'s module
-header for the exact mechanism (the C-4 shim).
+`token` accepts a literal string, or a supplier — sync or **async** — called fresh on
+every request: `() => getCurrentJwt()` or `async () => await getCurrentJwt()` both
+work, and either is awaited before the bearer is attached. Pass a supplier when your
+token rotates (e.g. a short-lived JWT read from an auth SDK, or minted on demand by
+your own backend) and the client picks up the new value on the very next call, with no
+teardown/rebuild of the underlying `W6WClient`. A nullish or blank result (from either
+form) never reaches the wire: every read hook below reports `loading: true` instead of
+sending a request with no credential. See `src/W6WProvider.tsx`'s module header for the
+exact mechanism.
 
 Then, anywhere under the provider:
 
@@ -60,6 +64,71 @@ function DocList() {
   );
 }
 ```
+
+## Embedding for enterprise tenants
+
+A host juggling more than one signed-in identity — or one that does not have a
+token/identity yet at mount time — needs more than the Quick start's one-shot
+`token` prop. `<W6WProvider>` takes five more props for exactly this:
+
+- **`ready`** (default `true`) — set it `false` until you actually have a
+  token/identity to embed with. While `false`, every read hook reports
+  `loading: true` and none of them calls the SDK at all; flipping it back to
+  `true` fetches.
+- **`identityKey`** — a string identifying WHICH signed-in identity this
+  client speaks for, e.g. `` `${subject}:${account}` ``. Changing it rebuilds
+  the underlying `W6WClient` and resets every read hook's state — the
+  supported way to switch accounts without a stale read from the previous
+  identity ever rendering under the new one.
+- **`refreshOnUnauthorized`** + **`onUnauthorized`** — opt in to a single,
+  one-shot recovery when a request 401s with `{code: "unauthorized"}`: your
+  `token` supplier is called once more with `{forceRefresh: true}`, and a
+  usable result retries the same request once. `onUnauthorized` receives the
+  terminal error — after a failed retry, or immediately when recovery is off
+  or not possible — at most once per call.
+- **`headers`** — default headers sent with every request. This is how a
+  tenant on the custom-authorizer integration path (no OIDC on your side)
+  attaches the tenant header your w6w account's authorizer webhook expects
+  (e.g. `headers={{ "X-W6W-Tenant": tenantId }}`) alongside the bearer token.
+  Compared by content, not identity — a new-but-equal object on every render
+  never rebuilds the client.
+
+```tsx
+"use client";
+
+import { W6WProvider } from "@w6w/react";
+
+export default function W6WLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <W6WProvider
+      baseUrl="https://api.example.com"
+      ready={true}
+      identityKey={`${session.subject}:${session.account}`}
+      headers={{ "X-W6W-Tenant": session.tenantId }}
+      refreshOnUnauthorized
+      onUnauthorized={() => redirectToLogin()}
+      token={async () => {
+        // Your own backend route, not w6w's — it holds whatever credential
+        // mints a w6w token for this signed-in user (a tenant exchange, a
+        // cached short-lived token, …). This is a Next.js App Router layout,
+        // so it is a Client Component ("use client" above) even though the
+        // token-minting route itself runs on your server.
+        const res = await fetch("/api/w6w-token");
+        if (!res.ok) return null;
+        const { token } = await res.json();
+        return token;
+      }}
+    >
+      {children}
+    </W6WProvider>
+  );
+}
+```
+
+For the full partner-facing walkthrough (auth paths, tenant provisioning, the
+UI-embedding guide) see `.claude/docs/usage/partner/partner-ui-embedding.md`
+in the main `w6w` repository — private to w6w staff and partners, so it is
+named here rather than linked.
 
 ## Using this package with `@w6w/ui`
 
@@ -91,20 +160,54 @@ function App() {
 **`@w6w/ui` is not on npm today.** The `@w6w` scope holds only `@w6w/sdk` and
 `@w6w/cli` at the time of writing (`npm view @w6w/ui` → 404); the source itself IS a
 public GitHub repository (`w6w-io/w6w-ui`). `createW6WUiAdapter`'s `W6WApi` return
-type targets that contract *structurally* — this package names `@w6w/ui` nowhere in
-its own manifest and needs no change whenever `@w6w/ui` becomes reachable another
-way (this monorepo, a `git+https://` dependency on the public repo, or a private
-registry). This is an honest statement of today's install story, not a promise that
-`npm i @w6w/ui` resolves.
+type targets that contract *structurally* — this package needs no change whenever
+`@w6w/ui` becomes reachable another way (this monorepo, a `git+https://` dependency
+on the public repo, or a private registry). This is an honest statement of today's
+install story, not a promise that `npm i @w6w/ui` resolves.
 
-`createW6WUiAdapter` is built entirely on `@w6w/sdk/console` — the SAME namespace
-`packages/studio`'s own facade uses for these routes (`packages/ui/src/createW6WApi.ts`
-is the *other* hand-rolled client for them; this package is not a third one).
-**`client.console.*` is documented "Studio-internal… unstable" and is deliberately
-excluded from `endpoints.json`'s conformance runner** (`node/src/client.ts:114-116`).
-That means a `console.*` signature change ships with no lockstep protection for this
-bridge beyond `@w6w/sdk`'s own version — pin your `@w6w/sdk` version alongside
-`@w6w/react`'s, and re-test the bridge on an upgrade rather than assuming it.
+`createW6WUiAdapter` is built on `@w6w/sdk/console` for most members — the SAME
+namespace `packages/studio`'s own facade uses for these routes
+(`packages/ui/src/createW6WApi.ts` is the *other* hand-rolled client for them; this
+package is not a third one) — and on the BASE `client.functions.*`/
+`client.workflows.*` surface for `listFunctions`/`getFunction`/`invokeFunction`/
+`listWorkflows`/`getWorkflow`/`runWorkflow`. **`client.console.*` is documented
+"Studio-internal… unstable" and is deliberately excluded from `endpoints.json`'s
+conformance runner** (`node/src/client.ts:114-116`). That means a `console.*`
+signature change ships with no lockstep protection for this bridge beyond
+`@w6w/sdk`'s own version — pin your `@w6w/sdk` version alongside `@w6w/react`'s, and
+re-test the bridge on an upgrade rather than assuming it.
+
+### Keeping `createW6WUiAdapter` honest against the REAL `@w6w/ui`
+
+`package.json`'s `devDependencies` carries a **dev-only, type-only** edge onto
+`@w6w/ui` — `"@w6w/ui": "github:w6w-io/w6w-ui#<sha>"` — that this package never
+ships: `files: ["dist"]` means `dist/` is the only thing npm packs and publishes, so
+no installer of `@w6w/react` ever resolves or needs `@w6w/ui` at all. Its one job is
+`src/__tests__/ui-conformance.test.ts`, which runs at **dev/CI time only** (`npm
+test`, never part of `dist/`): it compiles `src/__tests__/ui-conformance.check.ts`
+against `@w6w/ui`'s real `provider.tsx` and fails, naming the member, the moment
+`createW6WUiAdapter`'s return type stops being assignable to the real `W6WApi` —
+closing the gap a hand-duplicated interface alone cannot (nothing previously caught
+this package's `W6WApi` drifting from `@w6w/ui`'s own).
+
+**Why a `github:<owner>/<repo>#<sha>` pin, and not a `link:`/workspace reference to
+a sibling checkout:** `release.yml`'s `react` step checks out **this one repo**
+(`w6w-wrappers`) with no sibling checkout and no submodules
+(building-blocks.md §1) — a relative `link:` to `../../ui` resolves only in the
+local devcontainer's incidental directory layout and fails `ENOENT` on every CI run
+and on a fresh clone of `w6w-wrappers` alone. A `github:` spec needs nothing but a
+network fetch of the one pinned commit, which is why it is the only install story
+that survives both environments unchanged. The pin targets `provider.tsx` by
+RELATIVE PATH, not the `@w6w/ui` package barrel — the barrel's own import chain
+reaches `@w6w/expr` (`packages/core`) via a `github:…#path:` subpath npm does not
+honor on a `github:` dependency, which `TS2307`s the moment anything resolves it;
+`provider.tsx`'s own closure (`theme.ts` → `types.ts` → `react`) has no such edge.
+
+**Moving the pin:** update the `#<sha>` in `package.json`'s `@w6w/ui` entry to a
+commit on `w6w-io/w6w-ui`'s `main` (`git ls-remote https://github.com/w6w-io/w6w-ui
+main`) and run `npm install` again to refresh `package-lock.json`'s resolved
+entry — no code change is required unless `@w6w/ui`'s `W6WApi` itself changed
+shape, in which case `ui-conformance.test.ts` will say so.
 
 ## Hooks catalog
 
@@ -202,7 +305,9 @@ hook (e.g. `client.console.*` directly, at your own risk per the caveat above).
   needs no further change the moment `@w6w/ui` switches its own check to one. The fix
   belongs to `@w6w/ui`, not this package, and is filed there:
   `.ai/projects/backlog/26-08-13-01-ui-error-nominal-check.md`.
-- **No `AbortSignal`/cancellation support in the hook set.** `@w6w/sdk`'s transport
-  (`node/src/http.ts`) has nothing to hook an abort into. A read hook only IGNORES a
-  result that resolves after its component unmounts (a mounted-ref guard); it cannot
-  cancel the in-flight request itself.
+- **Cancellation is per-hook, not exposed to the caller.** Every read hook aborts its
+  own superseded or unmounted calls internally (a superseded call, an `identityKey`
+  switch, or an unmount all abort the in-flight `AbortSignal` — see `src/hooks.ts`'s
+  module header) — but there is no option to pass your OWN `AbortSignal` into a hook
+  from outside it. `useW6WClient()` plus the underlying SDK method (which does take a
+  `signal`) is the escape hatch if you need that.

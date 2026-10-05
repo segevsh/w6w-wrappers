@@ -25,9 +25,12 @@ and the code disagree, **the code wins and this file is a bug**.
 
 | | TypeScript (`@w6w/sdk`) | Python (`w6w`) |
 |---|---|---|
-| Class | `new W6WClient(options?)` | `Client(base_url=None, token=None, project=None, transport=None)` |
+| Class | `new W6WClient(options?)` | `Client(base_url=None, token=None, project=None, transport=None, refresh_on_unauthorized=False, on_unauthorized=None, headers=None)` |
 | Base URL | `options.baseUrl` → `W6W_BASE_URL` | `base_url` → `W6W_BASE_URL` |
-| Credential | `options.token` → `W6W_TOKEN` | `token` → `W6W_TOKEN` |
+| Credential | `options.token: string \| TokenProvider` → `W6W_TOKEN` (string fallback only) | `token: Union[str, Callable[..., Optional[str]], None]` → `W6W_TOKEN` (string fallback only) |
+| 401 recovery (opt in) | `options.refreshOnUnauthorized?: boolean` (default `false`) | `refresh_on_unauthorized: bool` (default `False`) |
+| Terminal-401 callback | `options.onUnauthorized?: (err: ApiError) => void` | `on_unauthorized: Optional[Callable[[ApiError], None]]` |
+| Default headers | `options.headers?: Record<string, string>` | `headers: Optional[Mapping[str, str]]` |
 | Default project | `options.project` (no env var) | `project` (no env var) |
 | Transport seam | `options.fetch` (`FetchLike`) | `transport` (`Transport`, a `urllib` opener) |
 | Resolved config | `client.config: ResolvedConfig` | `client.config: ResolvedConfig` (frozen) |
@@ -42,9 +45,13 @@ transliterated only for case convention (`getByKey` / `get_by_key`).
 
 Behaviour that is the same in both, and pinned:
 
-- **Resolution happens once, at construction.** Nothing downstream re-reads the
-  environment. Exactly one module per wrapper touches it (`src/env.ts`,
-  `w6w/_env.py`).
+- **The base URL and the environment are resolved once, at construction.**
+  Nothing downstream re-reads the environment. Exactly one module per wrapper
+  touches it (`src/env.ts`, `w6w/_env.py`). **The token is the one exception**:
+  it is resolved **per request** — a plain string is the degenerate case of
+  that same resolution and behaves exactly as it always has, but a `token`
+  supplier is called fresh on every call, never cached from construction
+  onward (`docs/implementation.md` §2).
 - **Explicit argument beats environment, always.** An explicitly passed empty
   string is an *explicit value* and does not fall through — it raises the same
   configuration error. An environment variable that is **set but empty or
@@ -128,11 +135,19 @@ no retry, no refresh, no callback.
 Seventeen, identical in both SDKs. The wire detail lives in
 [`endpoints.md`](./endpoints.md); what follows is the *client* behaviour.
 
+**TS-only, every read below:** `opts?` on the eleven read methods a
+`@w6w/react` read hook calls (`client.me`, `documents.list`/`get`/`getByKey`,
+`vars.list`/`get`, `connections.list`, `workflows.list`/`get`,
+`functions.list`/`get`) also accepts an optional `signal?: AbortSignal`
+(`CallOptions`, R-7) — forwarded to the injected `fetch` unchanged and never
+serialized into the URL or body. See [parity.md](./parity.md)'s "Per-call
+cancellation (node only)" section for why Python and the CLI have no analog.
+
 ### Identity
 
 | TS | Python | Returns |
 |---|---|---|
-| `client.me()` | `client.me()` | `Me` |
+| `client.me(opts?)` | `client.me()` | `Me` |
 
 `GET /auth/me` — the server's real identity route, called directly. The body is
 **flat**; nothing is unwrapped. The one thing the client adds is
@@ -146,7 +161,7 @@ included) raises `bad_response`.
 
 | TS | Python | Returns |
 |---|---|---|
-| `client.connections.list()` | `client.connections.list()` | `ConnectionSummary[]` / `List[ConnectionSummary]` |
+| `client.connections.list(opts?)` | `client.connections.list()` | `ConnectionSummary[]` / `List[ConnectionSummary]` |
 | `client.workflows.list(opts?)` | `client.workflows.list(project=None)` | `WorkflowSummary[]` / `List[WorkflowSummary]` |
 
 Both exist so a caller can *discover* a `conn_…` / `wf_…` id to hand to `run`
@@ -195,13 +210,13 @@ Three rules both operations obey:
 
 | TS | Python | Returns |
 |---|---|---|
-| `client.workflows.get(id)` | `client.workflows.get(id)` | `WorkflowDetail` |
+| `client.workflows.get(id, opts?)` | `client.workflows.get(id)` | `WorkflowDetail` |
 | `client.workflows.create(definition, opts?)` | `client.workflows.create(definition, project=None)` | `WorkflowSaveResult` |
 | `client.workflows.update(id, definition, opts?)` | `client.workflows.update(id, definition, project=None, if_unmodified_since=None)` | `WorkflowSaveResult` |
 | `client.workflows.archive(id)` | `client.workflows.archive(id)` | the definition |
 | `client.workflows.delete(id)` | `client.workflows.delete(id)` | `void` / `None` |
-| `client.functions.list()` | `client.functions.list()` | `FunctionSummary[]` / `List[FunctionSummary]` |
-| `client.functions.get(id)` | `client.functions.get(id)` | `FunctionDetail` |
+| `client.functions.list(opts?)` | `client.functions.list()` | `FunctionSummary[]` / `List[FunctionSummary]` |
+| `client.functions.get(id, opts?)` | `client.functions.get(id)` | `FunctionDetail` |
 | `client.functions.create(definition)` | `client.functions.create(definition)` | `{id, key}` / `SaveResult` |
 | `client.functions.update(id, definition)` | `client.functions.update(id, definition)` | `{id, key}` / `SaveResult` |
 | `client.functions.delete(id)` | `client.functions.delete(id)` | `void` / `None` |
@@ -250,8 +265,8 @@ the client has a default.
 
 | TS | Python | Returns |
 |---|---|---|
-| `client.vars.list()` | `client.vars.list()` | `Var[]` |
-| `client.vars.get(id)` | `client.vars.get(id)` | `Var` |
+| `client.vars.list(opts?)` | `client.vars.list()` | `Var[]` |
+| `client.vars.get(id, opts?)` | `client.vars.get(id)` | `Var` |
 | `client.vars.getByName(name)` | `client.vars.get_by_name(name)` | `Var` |
 | `client.vars.create(input)` | `client.vars.create(name, type, value, description=None)` | `Var` |
 | `client.vars.update(id, patch)` | `client.vars.update(id, type=UNSET, value=UNSET, description=UNSET)` | `Var` |
@@ -329,6 +344,7 @@ not drift:
 | List results | `WorkflowSummary[]`, widenable to carry a cursor later | A plain `list` | A JS array is an object and can grow a property; a Python list cannot. So neither invents a container now — the day the server paginates, all three grow the same one together. |
 | Namespace host types | `DocumentsHost` / `VarsHost` interfaces | `DocumentsHost` / `WorkflowsHost` protocols, `VarsRequest` / `ConnectionsRequest` / `MeRequest` / `RunRequest` callables | Same layering: a namespace sees the transport, and sees the configuration **only** if it is project-scoped. |
 | Transport | `fetch` (injectable via `options.fetch`) | `urllib.request` (injectable via `transport`) | Zero runtime dependencies in both. Note the `urllib` trap: `urlopen` **raises** `HTTPError` for any non-2xx, and an `HTTPError` *is* a response — it is routed to the envelope mapper, never to `network_error`. |
+| Token supplier | May be **sync or async** — `TokenProvider` may return a `Promise`, which `request()` awaits | **Sync only** (R-1) — `Callable[..., Optional[str]]`, called and used immediately, never awaited | There is no `asyncio` anywhere in this package, and no sync/async split in its transport (`urllib`, blocking) for a supplier to straddle. A python host that needs to await something resolves it *before* handing the value to a sync provider function. |
 
 ## 7. The CLI (`@w6w/cli`)
 
@@ -366,3 +382,66 @@ Also deliberately absent from every wrapper, because they are browser couplings
 rather than library behaviour: ambient credential storage, a mutable module-level
 token, an auth-error callback, a redirect on `401`, retries, token refresh, and
 client-side run polling.
+
+## Server-only subpath — `@w6w/sdk/server`
+
+**Not part of the surface above.** `exchangeToken` / `exchange_token` is a
+standalone function, outside `endpoints.json`'s `operations[]`, reachable only
+through a separate entry point in each language:
+
+| | TypeScript | Python |
+|---|---|---|
+| Import | `import { exchangeToken } from "@w6w/sdk/server"` | `from w6w.server import exchange_token` |
+| On the root surface? | No — not exported from `@w6w/sdk`'s barrel (`mod.ts`), and not on `@w6w/sdk/console` either | No — not re-exported from `w6w/__init__.py`, and not listed in `w6w.__all__` |
+| Signature | `exchangeToken(options: { baseUrl, clientId, clientSecret, subject, account?, fetch? }): Promise<ExchangeTokenResult>` | `exchange_token(base_url, client_id, client_secret, subject, account=None, transport=None) -> dict` |
+
+**What it does.** Calls `POST /auth/exchange` with a tenant's client
+credentials and names one of the tenant's end-users via `subject`, minting a
+short-lived, `role: "user"` token scoped to that tenant + subject — the
+server-side half of "Path A" token exchange
+(`.claude/docs/usage/partner/partner-tenant-setup.md` §3 Path A, §11.4, a
+private doc; see also the `node` lane's `README.md` "Embedding for enterprise
+tenants").
+
+**Basic auth only — never a second credential channel.** The tenant's
+`clientId`/`clientSecret` travel in exactly one place:
+`Authorization: Basic base64(clientId:clientSecret)`, encoded as latin-1 (the
+alphabet the server's `atob`-based decode reads). The request body is
+`{"subject": subject}`, or `{"subject": subject, "account": account}` when
+`account` is given — never a `clientId`/`clientSecret` key in the body, the
+URL or a query string. Neither function requires (or sends) a bearer: both
+call the shared transport with `requireAuth: false` / `require_auth=False`, the
+same escape hatch each lane's own `console.auth.login` uses for a route that
+authenticates itself.
+
+**Validated locally, before any network call**, always as a `ConfigError` /
+local exception whose message never echoes `clientSecret`: a blank
+`clientId`/`clientSecret`/`subject`; a `clientId` containing `:` (the server
+decodes a Basic credential by splitting on the FIRST colon, so a colon inside
+`clientId` would be read as part of the secret); or a `clientId`/`clientSecret`
+containing a character outside latin-1.
+
+**The returned shape**, transcribed from the server's
+`exchangeHandler` (`packages/server/packages/api/data/exchange.ts`):
+
+```
+{
+  token: string,
+  user: { subject: string, tenant: string, role: string, account: string },
+  expiresIn: number,
+}
+```
+
+**Server errors**, surfaced as the lane's ordinary `ApiError` / `ApiError`
+exception, with the server's own code: `invalid_client` (401 — unknown or
+disabled client credentials), `invalid_body` (400 — malformed JSON),
+`invalid_subject` (400), `invalid_account` (400). None of these are retried:
+a `requireAuth: false` / `require_auth=False` request never gets the opt-in
+401 recovery either lane's transport otherwise offers.
+
+**Why this lives outside the published client-surface table above.** It is not
+an operation a `W6WClient`/`Client` instance exposes — there is no credential
+on the instance to call it with, since the whole point is minting one. It is a
+free function taking its own `baseUrl`/`base_url`, meant to run once on a
+partner's backend per end-user session, never inside a browser or a mobile
+client — the client secret it takes must never reach end-user code.
