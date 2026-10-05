@@ -23,7 +23,7 @@
  */
 
 import { ApiError } from "./errors.ts";
-import type { HttpResponse, RequestOptions } from "./http.ts";
+import type { CallOptions, HttpResponse, RequestOptions } from "./http.ts";
 import type { Me } from "./types.ts";
 import { VERSION } from "./version.ts";
 
@@ -48,14 +48,19 @@ export interface MeHost {
  * the server sent the block at all.
  *
  * @param host - The client this operation issues its request through.
+ * @param options - Optional per-call transport options (`signal` to abort).
  * @returns The caller's identity, with `versions.wrapper` filled in.
  * @throws {ApiError} On any non-2xx, e.g. `401` when the token is not accepted.
  * @throws {ApiError} `bad_response` when a 2xx body is not a plain object — an
  * array included, since `typeof [] === "object"` and a spread array yields
  * character-indexed keys rather than identity fields.
  */
-export async function fetchMe(host: MeHost): Promise<Me> {
-  const res = await host.request<Me>({ method: "GET", path: "/auth/me" });
+export async function fetchMe(host: MeHost, options?: CallOptions): Promise<Me> {
+  const res = await host.request<Me>({
+    method: "GET",
+    path: "/auth/me",
+    signal: options?.signal,
+  });
   const body = res.body;
   // A body that is not an object cannot be identity data. Raise rather than
   // spread it — the same `bad_response` class the envelope reader uses for the

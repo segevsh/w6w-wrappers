@@ -135,11 +135,19 @@ no retry, no refresh, no callback.
 Seventeen, identical in both SDKs. The wire detail lives in
 [`endpoints.md`](./endpoints.md); what follows is the *client* behaviour.
 
+**TS-only, every read below:** `opts?` on the eleven read methods a
+`@w6w/react` read hook calls (`client.me`, `documents.list`/`get`/`getByKey`,
+`vars.list`/`get`, `connections.list`, `workflows.list`/`get`,
+`functions.list`/`get`) also accepts an optional `signal?: AbortSignal`
+(`CallOptions`, R-7) — forwarded to the injected `fetch` unchanged and never
+serialized into the URL or body. See [parity.md](./parity.md)'s "Per-call
+cancellation (node only)" section for why Python and the CLI have no analog.
+
 ### Identity
 
 | TS | Python | Returns |
 |---|---|---|
-| `client.me()` | `client.me()` | `Me` |
+| `client.me(opts?)` | `client.me()` | `Me` |
 
 `GET /auth/me` — the server's real identity route, called directly. The body is
 **flat**; nothing is unwrapped. The one thing the client adds is
@@ -153,7 +161,7 @@ included) raises `bad_response`.
 
 | TS | Python | Returns |
 |---|---|---|
-| `client.connections.list()` | `client.connections.list()` | `ConnectionSummary[]` / `List[ConnectionSummary]` |
+| `client.connections.list(opts?)` | `client.connections.list()` | `ConnectionSummary[]` / `List[ConnectionSummary]` |
 | `client.workflows.list(opts?)` | `client.workflows.list(project=None)` | `WorkflowSummary[]` / `List[WorkflowSummary]` |
 
 Both exist so a caller can *discover* a `conn_…` / `wf_…` id to hand to `run`
@@ -202,13 +210,13 @@ Three rules both operations obey:
 
 | TS | Python | Returns |
 |---|---|---|
-| `client.workflows.get(id)` | `client.workflows.get(id)` | `WorkflowDetail` |
+| `client.workflows.get(id, opts?)` | `client.workflows.get(id)` | `WorkflowDetail` |
 | `client.workflows.create(definition, opts?)` | `client.workflows.create(definition, project=None)` | `WorkflowSaveResult` |
 | `client.workflows.update(id, definition, opts?)` | `client.workflows.update(id, definition, project=None, if_unmodified_since=None)` | `WorkflowSaveResult` |
 | `client.workflows.archive(id)` | `client.workflows.archive(id)` | the definition |
 | `client.workflows.delete(id)` | `client.workflows.delete(id)` | `void` / `None` |
-| `client.functions.list()` | `client.functions.list()` | `FunctionSummary[]` / `List[FunctionSummary]` |
-| `client.functions.get(id)` | `client.functions.get(id)` | `FunctionDetail` |
+| `client.functions.list(opts?)` | `client.functions.list()` | `FunctionSummary[]` / `List[FunctionSummary]` |
+| `client.functions.get(id, opts?)` | `client.functions.get(id)` | `FunctionDetail` |
 | `client.functions.create(definition)` | `client.functions.create(definition)` | `{id, key}` / `SaveResult` |
 | `client.functions.update(id, definition)` | `client.functions.update(id, definition)` | `{id, key}` / `SaveResult` |
 | `client.functions.delete(id)` | `client.functions.delete(id)` | `void` / `None` |
@@ -257,8 +265,8 @@ the client has a default.
 
 | TS | Python | Returns |
 |---|---|---|
-| `client.vars.list()` | `client.vars.list()` | `Var[]` |
-| `client.vars.get(id)` | `client.vars.get(id)` | `Var` |
+| `client.vars.list(opts?)` | `client.vars.list()` | `Var[]` |
+| `client.vars.get(id, opts?)` | `client.vars.get(id)` | `Var` |
 | `client.vars.getByName(name)` | `client.vars.get_by_name(name)` | `Var` |
 | `client.vars.create(input)` | `client.vars.create(name, type, value, description=None)` | `Var` |
 | `client.vars.update(id, patch)` | `client.vars.update(id, type=UNSET, value=UNSET, description=UNSET)` | `Var` |

@@ -72,7 +72,7 @@
 
 import type { ResolvedConfig } from "./config.ts";
 import { ApiError } from "./errors.ts";
-import { type HttpResponse, path, type RequestOptions } from "./http.ts";
+import { type CallOptions, type HttpResponse, path, type RequestOptions } from "./http.ts";
 import {
   isTerminalRunStatus,
   mintId,
@@ -109,8 +109,11 @@ export interface WorkflowsHost {
  *
  * A named interface rather than a bare `project?: string` parameter, so the
  * operation can accept a further argument later without changing its arity.
+ *
+ * Extends {@linkcode CallOptions}, so this call also takes an optional
+ * `signal` (R-7), forwarded to the transport exactly like `project` is read.
  */
-export interface WorkflowListOptions {
+export interface WorkflowListOptions extends CallOptions {
   /** Project id to scope this call to; overrides the client's default. */
   project?: string;
 }
@@ -301,7 +304,7 @@ export class WorkflowsApi {
    * `?project=`", which is how the caller asks for every project the credential
    * can see.
    *
-   * @param options - Optional per-call project scope.
+   * @param options - Optional per-call project scope and/or `signal` to abort.
    * @returns The workflows, unwrapped from the `workflows` envelope.
    * @throws {ApiError} On any non-2xx.
    */
@@ -310,6 +313,7 @@ export class WorkflowsApi {
       method: "GET",
       path: "/workflows",
       query: { project: options?.project ?? this.#host.config.project ?? undefined },
+      signal: options?.signal,
     });
     return unwrap<WorkflowSummary[]>(res, "workflows");
   }
@@ -438,13 +442,15 @@ export class WorkflowsApi {
    * someone else's is refused instead.
    *
    * @param id - The `wf_…` id, percent-encoded into the path.
+   * @param options - Optional per-call transport options (`signal` to abort).
    * @returns The definition, its source ref, and the concurrency token.
    * @throws {ApiError} `404 unknown_workflow` when there is no such id.
    */
-  async get(id: string): Promise<WorkflowDetail> {
+  async get(id: string, options?: CallOptions): Promise<WorkflowDetail> {
     const res = await this.#host.request<WorkflowDetail>({
       method: "GET",
       path: path`/workflows/${id}`,
+      signal: options?.signal,
     });
     // No envelope key to peel — this route's body IS the payload, all three
     // fields of it. `unwrap` would be wrong here, not merely unnecessary:

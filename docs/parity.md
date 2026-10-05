@@ -220,3 +220,30 @@ legitimately differs on (§6 of `sdk-surface.md`).
   this change is a separate, later step (not part of landing this feature) —
   recorded here only to say that *this* number, the contract's own, had no
   reason to move.
+
+## Per-call cancellation (node only)
+
+`CallOptions.signal?: AbortSignal` (R-7) is node-only, and deliberately not in
+`endpoints.json`: it is a transport option on the *client*, not a parameter the
+*server* reads, so it does not describe the wire the way every other entry in
+this contract does (the §Conformance test walks a built client and would have
+no server-side shape to check it against). Every read method `@w6w/react`'s
+read hooks call (`client.me`, `documents.list`/`get`/`getByKey`,
+`vars.list`/`get`, `connections.list`, `workflows.list`/`get`,
+`functions.list`/`get`) accepts it, forwarded to `src/http.ts`'s `request()`
+and from there straight to the injected `fetch`'s own `RequestInit.signal` —
+never serialized into a query string or a body.
+
+**Python and the CLI have no analog, and this is not an oversight.** `signal`
+mirrors a shape every JS runtime's own `fetch` already exposes (`AbortSignal`,
+`AbortController`) — it is JS-idiomatic transport plumbing, not a capability
+the *API* grants. Python's `urllib`-based transport has no equivalent
+object to thread one through, and a CLI invocation is a single short-lived
+process with nothing in-process to cancel a call for — there is no "stale
+tab-switch request" for either lane the way there is for a React hook
+re-rendering. Should a future python transport (e.g. `httpx`) or a long-running
+CLI mode want the same thing, it would need its own idiomatic mechanism
+(`httpx`'s own cancellation token, a `SIGINT` handler) rather than a literal
+`signal` kwarg — unlike the lockstep version bump (§The version is a shared
+fact), this axis is expected to stay permanently node-only, not a gap pending a
+future PR.

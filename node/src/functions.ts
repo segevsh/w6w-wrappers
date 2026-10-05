@@ -38,7 +38,7 @@
  */
 import type { ResolvedConfig } from "./config.ts";
 import { ApiError } from "./errors.ts";
-import { type HttpResponse, path, type RequestOptions } from "./http.ts";
+import { type CallOptions, type HttpResponse, path, type RequestOptions } from "./http.ts";
 import { type FunctionSummary, mintId, unwrap } from "./types.ts";
 
 /**
@@ -178,11 +178,16 @@ export class FunctionsApi {
    * inventing a parameter, which is the failure mode `endpoints.json` warns
    * about.
    *
+   * @param options - Optional per-call transport options (`signal` to abort).
    * @returns The Functions, unwrapped from the `functions` envelope.
    * @throws {ApiError} On any non-2xx.
    */
-  async list(): Promise<FunctionSummary[]> {
-    const res = await this.#host.request<unknown>({ method: "GET", path: "/functions" });
+  async list(options?: CallOptions): Promise<FunctionSummary[]> {
+    const res = await this.#host.request<unknown>({
+      method: "GET",
+      path: "/functions",
+      signal: options?.signal,
+    });
     return unwrap<FunctionSummary[]>(res, "functions");
   }
 
@@ -194,13 +199,15 @@ export class FunctionsApi {
    * placement matters on the way back OUT of this method.
    *
    * @param id - The `fn_…` id, or the Function's `key`. Percent-encoded into the path.
+   * @param options - Optional per-call transport options (`signal` to abort).
    * @returns The definition and the server's runnability verdict.
    * @throws {ApiError} `404 unknown_function` when there is no such Function for this caller.
    */
-  async get(id: string): Promise<FunctionDetail> {
+  async get(id: string, options?: CallOptions): Promise<FunctionDetail> {
     const res = await this.#host.request<FunctionDetail>({
       method: "GET",
       path: path`/functions/${id}`,
+      signal: options?.signal,
     });
     return res.body;
   }
