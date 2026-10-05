@@ -25,6 +25,7 @@ export {
   type FetchLike,
   joinBaseUrl,
   type ResolvedConfig,
+  type TokenProvider,
   type W6WClientOptions,
 } from "./src/config.ts";
 export type { HttpMethod, HttpResponse, QueryParams, RequestOptions } from "./src/http.ts";

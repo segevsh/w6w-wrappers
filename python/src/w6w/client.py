@@ -14,13 +14,14 @@ last. **Nothing in `src/w6w/` holds mutable module state.**
 
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Callable, Dict, Mapping, Optional, Union
 
-from ._config import ResolvedConfig, resolve_config
+from ._config import ResolvedConfig, TokenProvider, resolve_config
 from ._http import HttpResponse, Transport, _request, default_transport
 from ._vars import VarsApi
 from .connections import ConnectionsApi
 from .documents import DocumentsApi
+from .errors import ApiError
 from .me import fetch_me
 from .run import run_urn
 from .team import TeamApi
@@ -73,9 +74,12 @@ class Client:
     def __init__(
         self,
         base_url: Optional[str] = None,
-        token: Optional[str] = None,
+        token: Union[str, TokenProvider, None] = None,
         project: Optional[str] = None,
         transport: Optional[Transport] = None,
+        refresh_on_unauthorized: bool = False,
+        on_unauthorized: Optional[Callable[[ApiError], None]] = None,
+        headers: Optional[Mapping[str, str]] = None,
     ) -> None:
         """Build a client.
 
@@ -85,8 +89,13 @@ class Client:
             0.2.0); any path in the value is preserved verbatim, because it is
             indistinguishable from a real gateway prefix. Overrides
             `W6W_BASE_URL`.
-        :param token: Bearer token, sent on every request. Overrides
-            `W6W_TOKEN`.
+        :param token: Bearer token, resolved on **every** request — not just
+            once at construction. A plain `str` is sent verbatim on every
+            call, exactly as before; a :data:`TokenProvider` callable is
+            called fresh per request (with no arguments, or with
+            `force_refresh=True` on the single recovery retry below), so a
+            host can hand back a token minted or rotated after this client was
+            constructed. Overrides `W6W_TOKEN`, which stays a plain string.
         :param project: Default project id for the project-scoped operations —
             `documents.*` and `workflows.list`, which reads it too. Omitted, the
             server resolves the account's default project. There is no
@@ -94,6 +103,20 @@ class Client:
             vars are not project-scoped (`docs/implementation.md` §7).
         :param transport: Transport override, for tests and for hosts with their
             own opener. Defaults to `urllib.request.urlopen`.
+        :param refresh_on_unauthorized: Opt in to a single, one-shot recovery
+            when a request fails with `401`/`unauthorized`: `token` (which
+            must be callable for this to do anything) is called once more as
+            `token(force_refresh=True)`, and if that yields a usable value the
+            SAME request is re-sent once with it. Off (`False`) by default —
+            the behaviour before this option existed.
+        :param on_unauthorized: Called with the terminal `401`/`unauthorized`
+            :class:`ApiError` of a request — after a failed recovery retry, or
+            immediately when recovery is off or not possible (a static
+            `token`) — at most once per call, never on success.
+        :param headers: Default headers sent with every request. This is the
+            **base** every per-request `headers` argument builds on: a
+            per-request header with the same name wins, and neither can ever
+            displace the bearer this transport attaches (`Authorization`).
         :raises ConfigError: When no base URL is configured, naming
             `W6W_BASE_URL`.
         """
@@ -101,6 +124,9 @@ class Client:
             base_url=base_url,
             token=token,
             project=project,
+            refresh_on_unauthorized=refresh_on_unauthorized,
+            on_unauthorized=on_unauthorized,
+            headers=headers,
         )
         self.transport: Transport = default_transport if transport is None else transport
 
@@ -214,8 +240,10 @@ class Client:
         :param query: Query parameters; `None` values are dropped.
         :param body: Request body, serialised as JSON when not `None`.
         :param headers: Extra request headers, for the routes that take a
-            precondition. `Authorization` cannot be overridden through this
-            argument — the client's own credential is always the one sent.
+            precondition. Beats this client's own `headers` default for a
+            same-named entry; `Authorization` cannot be overridden through
+            this argument either way — the client's own credential is always
+            the one sent.
         :returns: The status and parsed body.
         :raises ConfigError: When no token is configured, naming `W6W_TOKEN`.
         :raises ApiError: On a transport failure, a non-JSON error body, or an

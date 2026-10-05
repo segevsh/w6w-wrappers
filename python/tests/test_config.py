@@ -315,6 +315,88 @@ class TokenTest(unittest.TestCase):
             require_token(config)
 
 
+class DefaultedFieldsTest(unittest.TestCase):
+    """The three new `ResolvedConfig` fields default the same way in every lane."""
+
+    def test_new_fields_default_off(self) -> None:
+        config = resolve_config(base_url="https://api.example.com", token="tok_1")
+        self.assertFalse(config.refresh_on_unauthorized)
+        self.assertIsNone(config.on_unauthorized)
+        self.assertEqual(config.headers, {})
+
+    def test_the_three_new_fields_are_carried_through(self) -> None:
+        def on_unauthorized(_err: object) -> None:
+            pass
+
+        config = resolve_config(
+            base_url="https://api.example.com",
+            token="tok_1",
+            refresh_on_unauthorized=True,
+            on_unauthorized=on_unauthorized,
+            headers={"x-tenant": "t_1"},
+        )
+        self.assertTrue(config.refresh_on_unauthorized)
+        self.assertIs(config.on_unauthorized, on_unauthorized)
+        self.assertEqual(config.headers, {"x-tenant": "t_1"})
+
+
+class TokenProviderTest(unittest.TestCase):
+    """`token` as a callable — resolved fresh, never cached, sync-only (R-1)."""
+
+    def test_a_callable_token_is_called_with_no_arguments_on_the_ordinary_path(self) -> None:
+        calls = []
+
+        def provider(**kwargs: object) -> str:
+            calls.append(kwargs)
+            return "tok_from_provider"
+
+        config = resolve_config(base_url="https://api.example.com", token=provider)
+        self.assertEqual(require_token(config), "tok_from_provider")
+        # No force_refresh kwarg on the ordinary path — a provider that does
+        # not accept the keyword must still work.
+        self.assertEqual(calls, [{}])
+
+    def test_a_callable_token_is_called_fresh_every_time_never_cached(self) -> None:
+        state = {"n": 0}
+
+        def provider(**_kwargs: object) -> str:
+            state["n"] += 1
+            return "tok_{0}".format(state["n"])
+
+        config = resolve_config(base_url="https://api.example.com", token=provider)
+        self.assertEqual(require_token(config), "tok_1")
+        self.assertEqual(require_token(config), "tok_2")
+
+    def test_force_refresh_is_forwarded_as_a_keyword_exactly_on_the_retry_seam(self) -> None:
+        seen = []
+
+        def provider(**kwargs: object) -> str:
+            seen.append(kwargs.get("force_refresh"))
+            return "tok_1"
+
+        config = resolve_config(base_url="https://api.example.com", token=provider)
+        require_token(config)
+        require_token(config, force_refresh=True)
+        self.assertEqual(seen, [None, True])
+
+    def test_a_nullish_provider_result_raises_the_same_configerror_zero_token_leaked(self) -> None:
+        config = resolve_config(base_url="https://api.example.com", token=lambda **_k: None)
+        with self.assertRaises(ConfigError) as caught:
+            require_token(config)
+        self.assertIn(ENV_TOKEN, str(caught.exception))
+
+    def test_a_blank_provider_result_is_treated_exactly_like_an_unset_one(self) -> None:
+        config = resolve_config(base_url="https://api.example.com", token=lambda **_k: "   ")
+        with self.assertRaises(ConfigError) as caught:
+            require_token(config)
+        self.assertIn(ENV_TOKEN, str(caught.exception))
+
+    def test_a_plain_string_token_is_unaffected_force_refresh_is_a_no_op(self) -> None:
+        config = resolve_config(base_url="https://api.example.com", token="tok_static")
+        self.assertEqual(require_token(config), "tok_static")
+        self.assertEqual(require_token(config, force_refresh=True), "tok_static")
+
+
 class ReadEnvTest(unittest.TestCase):
     """The one environment seam, exercised directly."""
 
