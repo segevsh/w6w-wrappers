@@ -9,12 +9,24 @@ transport; nothing downstream re-reads the environment.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
-from typing import Mapping, Optional
+from dataclasses import dataclass, field
+from typing import Callable, Mapping, Optional, Union
 from urllib.parse import urlsplit
 
 from ._env import ENV_BASE_URL, ENV_TOKEN, read_env
-from .errors import ConfigError
+from .errors import ApiError, ConfigError
+
+#: A per-request token supplier.
+#:
+#: Called **fresh on every request** — never cached, never resolved once at
+#: construction — with **no arguments** on an ordinary call and with
+#: ``force_refresh=True`` exactly once, on the single recovery retry a `401`
+#: with code `"unauthorized"` triggers (`docs/implementation.md` §3). Unlike
+#: the node lane, this is **sync-only** (R-1): there is no `asyncio` anywhere
+#: in this package, and a provider that itself needs to await something is the
+#: caller's own problem to resolve before handing the value here. A plain
+#: `str` token is the degenerate case of this shape and needs no call at all.
+TokenProvider = Callable[..., Optional[str]]
 
 #: The API's base path, from the shared contract's `basePath`
 #: (`packages/wrappers/endpoints.json`).
@@ -51,8 +63,14 @@ class ResolvedConfig:
     #: The normalized base, e.g. `https://api.example.com`. Never
     #: trailing-slashed, never relative.
     base_url: str
-    #: The bearer token, or `None` when none was configured.
-    token: Optional[str] = None
+    #: The bearer token or supplier, or `None` when none was configured.
+    token: Union[str, TokenProvider, None] = None
+    #: Opt-in one-shot 401 recovery. Defaults to `False`.
+    refresh_on_unauthorized: bool = False
+    #: Terminal-401 callback, or `None` when none was configured.
+    on_unauthorized: Optional[Callable[[ApiError], None]] = None
+    #: Default headers sent with every request. Defaults to `{}`.
+    headers: Mapping[str, str] = field(default_factory=dict)
     #: Default project id for the project-scoped operations, or `None`.
     project: Optional[str] = None
 
@@ -125,9 +143,12 @@ def join_base_url(origin: str) -> str:
 
 def resolve_config(
     base_url: Optional[str] = None,
-    token: Optional[str] = None,
+    token: Union[str, TokenProvider, None] = None,
     project: Optional[str] = None,
     environ: Optional[Mapping[str, str]] = None,
+    refresh_on_unauthorized: bool = False,
+    on_unauthorized: Optional[Callable[[ApiError], None]] = None,
+    headers: Optional[Mapping[str, str]] = None,
 ) -> ResolvedConfig:
     """Resolve explicit arguments and the environment into one config value.
 
@@ -149,11 +170,24 @@ def resolve_config(
     value a *shell* produced.
 
     :param base_url: Explicit origin; `None` consults `W6W_BASE_URL`.
-    :param token: Explicit bearer token; `None` consults `W6W_TOKEN`.
+    :param token: Explicit bearer token, or a :data:`TokenProvider` called
+        fresh on every request — a plain `str` is sent verbatim, exactly as
+        before. `None` consults `W6W_TOKEN`, which stays a plain string: there
+        is no environment-variable spelling of a supplier.
     :param project: Default project id for the `documents.*` operations. There
         is no environment variable for it, and no `vars.*` operation takes one —
         vars are not project-scoped (`docs/implementation.md` §7).
     :param environ: Environment mapping override, for tests.
+    :param refresh_on_unauthorized: Opt in to a single, one-shot recovery when
+        a request fails with `401`/`unauthorized`: the provider (which must be
+        callable for this to do anything) is called once more with
+        `force_refresh=True`, and if that yields a usable value the SAME
+        request is re-sent once with it. Off by default.
+    :param on_unauthorized: Called with the terminal `401`/`unauthorized`
+        :class:`ApiError`, at most once per call, never on success.
+    :param headers: Default headers sent with every request — the **base** any
+        per-request `headers` argument builds on; neither can displace the
+        bearer this transport attaches.
     :returns: The resolved configuration.
     :raises ConfigError: When no usable base URL was supplied, naming
         `W6W_BASE_URL`.
@@ -165,11 +199,14 @@ def resolve_config(
         # can never answer differently for the same input.
         base_url=join_base_url(raw_base_url or ""),
         token=token if token is not None else read_env(ENV_TOKEN, environ),
+        refresh_on_unauthorized=refresh_on_unauthorized,
+        on_unauthorized=on_unauthorized,
+        headers=dict(headers) if headers is not None else {},
         project=project,
     )
 
 
-def require_token(config: ResolvedConfig) -> str:
+def require_token(config: ResolvedConfig, force_refresh: bool = False) -> str:
     """Return the configured token, or raise a :class:`ConfigError` naming `W6W_TOKEN`.
 
     A client may be *constructed* without a token so that a CLI's `--help` and
@@ -177,10 +214,21 @@ def require_token(config: ResolvedConfig) -> str:
     There are no anonymous operations in this surface
     (`docs/implementation.md` §2).
 
+    **Resolved fresh every call, never cached.** When `config.token` is
+    callable (a :data:`TokenProvider`) it is called right here — a plain `str`
+    is the degenerate case that needs no call at all. The call is made with
+    **no arguments** unless `force_refresh` is `True`, in which case it is
+    called as ``token(force_refresh=True)`` — the one and only seam `_request`'s
+    recovery retry uses (`docs/implementation.md` §3). A provider that does not
+    accept that keyword simply never needs to: ordinary resolution never passes
+    it.
+
     A blank token counts as no token, for the same reason a blank base URL does:
     ``W6W_TOKEN=`` is how a shell or a Dockerfile spells "I meant to set this and
     did not", and ``Authorization: Bearer `` would turn that into an opaque 401
-    instead of the one message that explains it.
+    instead of the one message that explains it. The same rule applies to
+    whatever a provider returns: nullish or blank is treated exactly like a
+    nullish/blank static token — the error never echoes the value either way.
 
     **The token is also validated as a header value, here, by this package.**
     A token carrying CR or LF is HTTP header injection — everything after the
@@ -198,18 +246,26 @@ def require_token(config: ResolvedConfig) -> str:
     itself is never echoed**, because this message lands in logs.
 
     :param config: The resolved configuration.
+    :param force_refresh: Forwarded to a callable `token` as the
+        `force_refresh` keyword; unused for a plain `str` one.
     :returns: The configured token, verbatim.
     :raises ConfigError: When no non-blank token is configured, or when the
         token cannot be sent as a header value.
     """
-    if config.token is None or not config.token.strip():
+    token = config.token
+    if callable(token):
+        raw: Optional[str] = token(force_refresh=True) if force_refresh else token()
+    else:
+        raw = token
+
+    if raw is None or not raw.strip():
         raise ConfigError(
             "No w6w API token is configured. Pass one to the client "
             '(Client(token="...")) or set the {env} environment variable. '
             "Every w6w API operation is authenticated.".format(env=ENV_TOKEN),
         )
 
-    control = _CONTROL_CHARS_RE.search(config.token)
+    control = _CONTROL_CHARS_RE.search(raw)
     if control is not None:
         raise ConfigError(
             "The configured w6w API token contains a control character "
@@ -225,7 +281,7 @@ def require_token(config: ResolvedConfig) -> str:
     try:
         # http.client encodes header values as latin-1; anything else would
         # raise a UnicodeEncodeError from deep inside the send path.
-        config.token.encode("latin-1")
+        raw.encode("latin-1")
     except UnicodeEncodeError as err:
         raise ConfigError(
             "The configured w6w API token contains a non-latin-1 character at "
@@ -233,4 +289,4 @@ def require_token(config: ResolvedConfig) -> str:
             "Check {env}.".format(index=err.start, env=ENV_TOKEN),
         ) from None
 
-    return config.token
+    return raw

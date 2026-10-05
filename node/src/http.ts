@@ -1,12 +1,24 @@
 /**
- * The transport: one `request()`, three failure modes, no policy.
+ * The transport: one `request()`, three failure modes, and one opt-in policy.
  *
  * Everything the operation modules do goes through {@linkcode request}. It
  * attaches the bearer, serialises a JSON body, reads the response exactly once,
  * parses it guardedly, and raises one of the three failure modes pinned in
- * `docs/implementation.md` §3 — and nothing else. In particular it does **not**
- * retry, does **not** refresh a token, does **not** poll, and does **not**
- * inspect an error code to decide on a side effect. A `401` raises and stops.
+ * `docs/implementation.md` §3 — and nothing else. It does **not** poll and does
+ * **not** inspect an error code to decide on a side effect, beyond the one
+ * policy described next.
+ *
+ * **The one exception is opt-in**: when `config.refreshOnUnauthorized` is
+ * `true`, `config.token` is a function, and the request used a bearer
+ * (`requireAuth !== false`), a `401` whose `code` is exactly `"unauthorized"`
+ * is given a single recovery attempt — the provider is called once more with
+ * `{forceRefresh: true}` and, if that yields a usable token, the identical
+ * request is re-sent once with it by calling `request()` a second time (never
+ * a third). Off by default, this is exactly the old unconditional "a `401`
+ * raises and stops" behaviour. `config.onUnauthorized`, when set, receives the
+ * terminal `401`/`unauthorized` `ApiError` of a bearer request — after a failed
+ * retry, or immediately when recovery is off or impossible — at most once per
+ * call, never on success, and never for a `requireAuth: false` request.
  *
  * It also returns the **HTTP status** alongside the parsed body, because a
  * `202` is a normal outcome on this API (a queued workflow run), not an error —
@@ -50,12 +62,12 @@ export interface RequestOptions {
   /** Request body. Serialised as JSON when present; omit it for a bodiless request. */
   body?: unknown;
   /**
-   * Extra headers to send with this request. Applied as the **base** the
-   * transport builds on, never the other way around: the bearer
-   * (`authorization`) and, when a body is present, `content-type` are set
-   * *after* this base, so a caller-supplied entry with either of those names
-   * can never override what this transport sets. Any other header name passes
-   * through untouched.
+   * Extra headers to send with this request. Precedence, low to high: the
+   * client's own `headers` default < this option < the bearer
+   * (`authorization`) and, when a body is present, `content-type`, which this
+   * transport sets *after* both and which neither can ever override. A
+   * same-named entry here beats the client default; any other header name
+   * passes through untouched.
    */
   headers?: Record<string, string>;
   /**
@@ -180,6 +192,16 @@ export function buildUrl(config: ResolvedConfig, options: RequestOptions): strin
  * deliberately a 4xx so Cloudflare cannot swallow it. It is never a transport
  * error and is never normalised into a 5xx.
  *
+ * **Recovery (opt-in, this module's header).** When a `401`/`unauthorized`
+ * {@linkcode ApiError} is about to be raised and `config.refreshOnUnauthorized
+ * === true && typeof config.token === "function" && options.requireAuth !==
+ * false`, this function calls `config.token({forceRefresh: true})` once; a
+ * usable result re-enters `request()` itself — never a second mapper — with a
+ * config carrying that **string**, which is what caps the retry at one: the
+ * recursive call's `config.token` is no longer a function, so its own recovery
+ * check is false by construction. `config.onUnauthorized` is invoked with
+ * whichever `401`/`unauthorized` error turns out to be terminal.
+ *
  * @param config - Resolved configuration (base URL and credential).
  * @param fetchImpl - The transport to use; injected, never read from a module global.
  * @param options - The request.
@@ -193,18 +215,21 @@ export async function request<T>(
   options: RequestOptions,
 ): Promise<HttpResponse<T>> {
   const url = buildUrl(config, options);
-  // The caller-supplied headers are the BASE the transport builds on, never the
-  // reverse: `authorization` and `content-type` are set below, after this base,
-  // so nothing a caller passes here can shadow the bearer this transport
-  // attaches or the content-type it advertises for a JSON body.
-  const headers = new Headers(options.headers);
+  // Precedence, low to high: the client's own default `headers` < this
+  // request's `headers` < the bearer/content-type this transport re-pins
+  // below. `.set` on an already-present name overrides it, which is what lets
+  // a per-request header beat a same-named client default.
+  const headers = new Headers(config.headers);
+  for (const [name, value] of Object.entries(options.headers ?? {})) {
+    headers.set(name, value);
+  }
   // Resolved per request rather than at construction: a client with no token is
   // constructible (so a CLI's --help works offline) and fails here instead.
   // Skipped entirely when `requireAuth: false` — not just left unset, but never
   // even attempted, so a tokenless client can call a public route without
   // `requireToken` raising first.
   if (options.requireAuth !== false) {
-    headers.set("authorization", `Bearer ${requireToken(config)}`);
+    headers.set("authorization", `Bearer ${await requireToken(config)}`);
   }
 
   const hasBody = options.body !== undefined;
@@ -264,12 +289,50 @@ export async function request<T>(
 
   if (!res.ok) {
     const envelope = (data as { error?: { code?: string; message?: string } } | null)?.error ?? {};
-    throw new ApiError(
+    const apiError = new ApiError(
       res.status,
       envelope.code ?? "error",
       envelope.message ?? res.statusText,
       data,
     );
+
+    const isUnauthorized = apiError.status === 401 && apiError.code === "unauthorized";
+    const { token } = config;
+
+    if (
+      config.refreshOnUnauthorized === true &&
+      typeof token === "function" &&
+      options.requireAuth !== false &&
+      isUnauthorized
+    ) {
+      let refreshed: string | null | undefined;
+      try {
+        // The one and only forced refresh: never passed by ordinary
+        // resolution, passed here exactly once.
+        refreshed = await token({ forceRefresh: true });
+      } catch {
+        refreshed = undefined;
+      }
+
+      if (typeof refreshed === "string" && refreshed.trim().length > 0) {
+        // Re-enter request() itself — the only status→ApiError mapper in this
+        // module — rather than re-implementing it. The retried config carries
+        // the refreshed token as a plain STRING, so this recursive call's own
+        // `typeof config.token === "function"` check is false: that is what
+        // caps this at one retry, never a third attempt, AND it is why the
+        // recursive call's own terminal-error handling below (not a second
+        // copy of it here) is what calls `onUnauthorized` on a retry that
+        // still comes back 401 — calling it here too would fire it twice.
+        return await request<T>({ ...config, token: refreshed }, fetchImpl, options);
+      }
+      // No usable refreshed token (nullish, blank, or the provider threw):
+      // no retry — fall through and report the ORIGINAL 401.
+    }
+
+    if (isUnauthorized && options.requireAuth !== false) {
+      config.onUnauthorized?.(apiError);
+    }
+    throw apiError;
   }
 
   return { status: res.status, body: data as T };

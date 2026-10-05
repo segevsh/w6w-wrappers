@@ -10,7 +10,7 @@
  */
 
 import { ENV_BASE_URL, ENV_TOKEN, readEnv } from "./env.ts";
-import { ConfigError } from "./errors.ts";
+import { type ApiError, ConfigError } from "./errors.ts";
 
 /**
  * The API's base path, from the shared contract's `basePath`
@@ -37,6 +37,26 @@ export const BASE_PATH = "";
  */
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
+/**
+ * A per-request token supplier.
+ *
+ * Called **fresh on every request** — never cached, never resolved once at
+ * construction — so a host can rotate or mint a token out-of-band (a tenant
+ * exchange, a short-lived partner credential) and have the very next call pick
+ * it up. `ctx.forceRefresh` is set to `true` exactly once, on the single
+ * recovery retry a `401`/`unauthorized` triggers (`docs/implementation.md`
+ * §3); every ordinary per-request resolution omits it. A `string` `token` is
+ * the degenerate case of this shape — it behaves exactly as before.
+ *
+ * May return synchronously or return a `Promise`; either is awaited before the
+ * bearer is attached. A nullish or blank (after trimming) result is treated
+ * exactly like a nullish/blank static token — a {@linkcode ConfigError}, never
+ * a request sent with no credential.
+ */
+export type TokenProvider = (
+  ctx?: { forceRefresh?: boolean },
+) => string | null | undefined | Promise<string | null | undefined>;
+
 /** Constructor options for a client. Every field is optional. */
 export interface W6WClientOptions {
   /**
@@ -48,8 +68,40 @@ export interface W6WClientOptions {
    * Overrides `W6W_BASE_URL`.
    */
   baseUrl?: string;
-  /** Bearer token, sent on every request. Overrides `W6W_TOKEN`. */
-  token?: string;
+  /**
+   * Bearer token, resolved on **every** request — not just once at
+   * construction. A plain `string` is sent verbatim on every call, exactly as
+   * before; a {@linkcode TokenProvider} function is called (and awaited)
+   * fresh per request, so a host can hand back a token minted or rotated after
+   * this client was constructed. Overrides `W6W_TOKEN`, which stays a plain
+   * string (there is no environment-variable spelling of a supplier).
+   */
+  token?: string | TokenProvider;
+  /**
+   * Opt in to a single, one-shot recovery when a request fails with
+   * `401`/`unauthorized`: `token` (which must be a function for this to do
+   * anything) is called once more with `{forceRefresh: true}`, and if that
+   * yields a usable value the SAME request is re-sent once with it. Off
+   * (`false`) by default — the behaviour before this option existed. Never
+   * retries a second time, never retries any other status or code, and never
+   * applies to a `requireAuth: false` request.
+   */
+  refreshOnUnauthorized?: boolean;
+  /**
+   * Called with the terminal `401`/`unauthorized` {@linkcode ApiError} of a
+   * bearer request — after a failed recovery retry, or immediately when
+   * recovery is off or not possible (a static `token`) — at most once per
+   * call. Never called on success, never called twice, and never called for a
+   * `requireAuth: false` request.
+   */
+  onUnauthorized?: (error: ApiError) => void;
+  /**
+   * Default headers sent with every request. This is the **base** every
+   * per-request `headers` option builds on: a per-request header with the
+   * same name wins, and neither can ever displace the bearer this transport
+   * attaches (`authorization`) or the `content-type` it sets for a JSON body.
+   */
+  headers?: Record<string, string>;
   /**
    * Default project id for the project-scoped operations — `documents.*` and
    * `workflows.list`, which read it too.
@@ -76,8 +128,14 @@ export interface ResolvedConfig {
    * value that is not an absolute `http(s)` URL with a host.
    */
   readonly baseUrl: string;
-  /** The bearer token, or `null` when none was configured. */
-  readonly token: string | null;
+  /** The bearer token or supplier, or `null` when none was configured. */
+  readonly token: string | TokenProvider | null;
+  /** Opt-in one-shot 401 recovery. Defaults to `false`. */
+  readonly refreshOnUnauthorized: boolean;
+  /** Terminal-401 callback, or `null` when none was configured. */
+  readonly onUnauthorized: ((error: ApiError) => void) | null;
+  /** Default headers sent with every request. Defaults to `{}`. */
+  readonly headers: Record<string, string>;
   /** Default project id, or `null`. */
   readonly project: string | null;
 }
@@ -205,6 +263,9 @@ export function resolveConfig(options: W6WClientOptions = {}): ResolvedConfig {
     // never answer differently for the same input.
     baseUrl: joinBaseUrl(options.baseUrl ?? readEnv(ENV_BASE_URL) ?? ""),
     token: options.token ?? readEnv(ENV_TOKEN) ?? null,
+    refreshOnUnauthorized: options.refreshOnUnauthorized ?? false,
+    onUnauthorized: options.onUnauthorized ?? null,
+    headers: options.headers ?? {},
     project: options.project ?? null,
   };
 }
@@ -217,22 +278,36 @@ export function resolveConfig(options: W6WClientOptions = {}): ResolvedConfig {
  * There are no anonymous operations in this surface
  * (`docs/implementation.md` §2).
  *
+ * **Resolved fresh every call, never cached.** When `config.token` is a
+ * {@linkcode TokenProvider} it is called (and its result awaited) right here —
+ * a plain string is the degenerate case that needs no call at all. `ctx` is
+ * forwarded verbatim to the provider; passing `{forceRefresh: true}` is the
+ * one and only seam `request()`'s recovery retry uses (`docs/implementation.md`
+ * §3) — ordinary resolution never passes it.
+ *
  * A blank token counts as no token, for the same reason a blank base URL does:
  * `W6W_TOKEN=` is how a shell or a Dockerfile spells "I meant to set this and
  * did not", and `Authorization: Bearer ` would turn that into an opaque 401
- * instead of the one message that explains it.
+ * instead of the one message that explains it. The same rule applies to
+ * whatever a provider returns: nullish or blank is treated exactly like a
+ * nullish/blank static token — the error never echoes the value either way.
  *
  * @param config - The resolved configuration.
+ * @param ctx - Forwarded to a function-typed `token`; unused for a string one.
  * @returns The configured token, verbatim.
  * @throws {ConfigError} When no non-blank token is configured.
  */
-export function requireToken(config: ResolvedConfig): string {
-  if (config.token === null || config.token.trim().length === 0) {
+export async function requireToken(
+  config: ResolvedConfig,
+  ctx?: { forceRefresh?: boolean },
+): Promise<string> {
+  const raw = typeof config.token === "function" ? await config.token(ctx) : config.token;
+  if (raw === null || raw === undefined || raw.trim().length === 0) {
     throw new ConfigError(
       "No w6w API token is configured. Pass one to the client " +
         '(new W6WClient({ token: "…" })) or set the ' +
         `${ENV_TOKEN} environment variable. Every w6w API operation is authenticated.`,
     );
   }
-  return config.token;
+  return raw;
 }

@@ -25,9 +25,12 @@ and the code disagree, **the code wins and this file is a bug**.
 
 | | TypeScript (`@w6w/sdk`) | Python (`w6w`) |
 |---|---|---|
-| Class | `new W6WClient(options?)` | `Client(base_url=None, token=None, project=None, transport=None)` |
+| Class | `new W6WClient(options?)` | `Client(base_url=None, token=None, project=None, transport=None, refresh_on_unauthorized=False, on_unauthorized=None, headers=None)` |
 | Base URL | `options.baseUrl` → `W6W_BASE_URL` | `base_url` → `W6W_BASE_URL` |
-| Credential | `options.token` → `W6W_TOKEN` | `token` → `W6W_TOKEN` |
+| Credential | `options.token: string \| TokenProvider` → `W6W_TOKEN` (string fallback only) | `token: Union[str, Callable[..., Optional[str]], None]` → `W6W_TOKEN` (string fallback only) |
+| 401 recovery (opt in) | `options.refreshOnUnauthorized?: boolean` (default `false`) | `refresh_on_unauthorized: bool` (default `False`) |
+| Terminal-401 callback | `options.onUnauthorized?: (err: ApiError) => void` | `on_unauthorized: Optional[Callable[[ApiError], None]]` |
+| Default headers | `options.headers?: Record<string, string>` | `headers: Optional[Mapping[str, str]]` |
 | Default project | `options.project` (no env var) | `project` (no env var) |
 | Transport seam | `options.fetch` (`FetchLike`) | `transport` (`Transport`, a `urllib` opener) |
 | Resolved config | `client.config: ResolvedConfig` | `client.config: ResolvedConfig` (frozen) |
@@ -42,9 +45,13 @@ transliterated only for case convention (`getByKey` / `get_by_key`).
 
 Behaviour that is the same in both, and pinned:
 
-- **Resolution happens once, at construction.** Nothing downstream re-reads the
-  environment. Exactly one module per wrapper touches it (`src/env.ts`,
-  `w6w/_env.py`).
+- **The base URL and the environment are resolved once, at construction.**
+  Nothing downstream re-reads the environment. Exactly one module per wrapper
+  touches it (`src/env.ts`, `w6w/_env.py`). **The token is the one exception**:
+  it is resolved **per request** — a plain string is the degenerate case of
+  that same resolution and behaves exactly as it always has, but a `token`
+  supplier is called fresh on every call, never cached from construction
+  onward (`docs/implementation.md` §2).
 - **Explicit argument beats environment, always.** An explicitly passed empty
   string is an *explicit value* and does not fall through — it raises the same
   configuration error. An environment variable that is **set but empty or
@@ -329,6 +336,7 @@ not drift:
 | List results | `WorkflowSummary[]`, widenable to carry a cursor later | A plain `list` | A JS array is an object and can grow a property; a Python list cannot. So neither invents a container now — the day the server paginates, all three grow the same one together. |
 | Namespace host types | `DocumentsHost` / `VarsHost` interfaces | `DocumentsHost` / `WorkflowsHost` protocols, `VarsRequest` / `ConnectionsRequest` / `MeRequest` / `RunRequest` callables | Same layering: a namespace sees the transport, and sees the configuration **only** if it is project-scoped. |
 | Transport | `fetch` (injectable via `options.fetch`) | `urllib.request` (injectable via `transport`) | Zero runtime dependencies in both. Note the `urllib` trap: `urlopen` **raises** `HTTPError` for any non-2xx, and an `HTTPError` *is* a response — it is routed to the envelope mapper, never to `network_error`. |
+| Token supplier | May be **sync or async** — `TokenProvider` may return a `Promise`, which `request()` awaits | **Sync only** (R-1) — `Callable[..., Optional[str]]`, called and used immediately, never awaited | There is no `asyncio` anywhere in this package, and no sync/async split in its transport (`urllib`, blocking) for a supplier to straddle. A python host that needs to await something resolves it *before* handing the value to a sync provider function. |
 
 ## 7. The CLI (`@w6w/cli`)
 

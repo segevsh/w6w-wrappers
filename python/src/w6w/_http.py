@@ -1,11 +1,22 @@
-"""The transport: one :func:`_request`, three failure modes, no policy.
+"""The transport: one :func:`_request`, three failure modes, one opt-in policy.
 
 Everything the operation modules do goes through :func:`_request`. It attaches
 the bearer, serialises a JSON body, reads the response exactly once, parses it
 guardedly, and raises one of the three failure modes pinned in
-`docs/implementation.md` §3 — and nothing else. In particular it does **not**
-retry, does **not** refresh a token, does **not** poll, and does **not** inspect
-an error code to decide on a side effect. A `401` raises and stops.
+`docs/implementation.md` §3 — and nothing else. It does **not** poll and does
+**not** inspect an error code to decide on a side effect, beyond the one policy
+described next.
+
+**The one exception is opt-in**: when `config.refresh_on_unauthorized` is
+`True` and `config.token` is callable, a `401` whose code is exactly
+`"unauthorized"` is given a single recovery attempt — the provider is called
+once more as ``token(force_refresh=True)`` and, if that yields a usable token,
+the identical request is re-sent once with it by calling :func:`_request`
+again (never a third time). Off by default, this is exactly the old
+unconditional "a `401` raises and stops" behaviour. `config.on_unauthorized`,
+when set, receives the terminal `401`/`unauthorized` :class:`ApiError` — after
+a failed retry, or immediately when recovery is off or impossible — at most
+once per call, never on success.
 
 It also returns the **HTTP status** alongside the parsed body, because a `202`
 is a normal outcome on this API (a queued workflow run), not an error — a
@@ -29,6 +40,7 @@ from __future__ import annotations
 import json
 import re
 import socket
+from dataclasses import replace
 from typing import Any, Callable, Dict, List, Mapping, NamedTuple, Optional, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
@@ -308,9 +320,12 @@ def _request(
     :param body: Request body. Serialised as JSON when not `None`; a bodiless
         request sends no `Content-Type`.
     :param headers: Extra request headers, for the routes that take a
-        precondition. Applied **after** the credential and content type, but
-        `Authorization` is re-pinned afterwards so a caller cannot replace the
-        client's own credential through this seam.
+        precondition. Precedence, low to high: `config.headers` (the client's
+        own default) < this argument < the credential, which is re-pinned
+        *after* both so a caller cannot replace it through this seam —
+        content type is **not** re-pinned a second time, so a caller-supplied
+        `Content-Type` in `headers` still wins over the body-derived one, as
+        before.
     :returns: The status and parsed body.
     :raises ConfigError: When no token is configured — raised *before* the
         transport is touched.
@@ -320,7 +335,12 @@ def _request(
     # Resolved per request rather than at construction: a client with no token
     # is constructible (so a CLI's --help works offline) and fails here instead.
     token = require_token(config)
-    request_headers: Dict[str, str] = {"Authorization": "Bearer " + token}
+    # The client's own default headers are the BASE every other layer builds
+    # on; the credential is pinned immediately on top of it so a stray
+    # "Authorization" entry in a client default can never reach the wire in
+    # place of the bearer.
+    request_headers: Dict[str, str] = dict(config.headers)
+    request_headers["Authorization"] = "Bearer " + token
     payload: Optional[bytes] = None
     if body is not None:
         request_headers["Content-Type"] = "application/json"
@@ -382,11 +402,49 @@ def _request(
         envelope = data.get("error") if isinstance(data, dict) else None
         if not isinstance(envelope, dict):
             envelope = {}
-        raise ApiError(
+        api_error = ApiError(
             status,
             str(envelope.get("code") or "error"),
             str(envelope.get("message") or reason or "HTTP {0}".format(status)),
             data,
         )
+
+        is_unauthorized = api_error.status == 401 and api_error.code == "unauthorized"
+
+        if config.refresh_on_unauthorized and callable(config.token) and is_unauthorized:
+            try:
+                # The one and only forced refresh: never passed by ordinary
+                # resolution, passed here exactly once. Any failure to produce
+                # a usable token — nullish, blank, or the provider raising —
+                # is "no usable refreshed token", not re-raised here.
+                refreshed = require_token(config, force_refresh=True)
+            except Exception:
+                refreshed = None
+
+            if refreshed is not None:
+                # Re-enter _request() itself — the only status->ApiError
+                # mapper in this module — rather than re-implementing it. The
+                # retried config carries the refreshed token as a plain
+                # STRING, so this recursive call's own `callable(config.token)`
+                # check is false: that is what caps this at one retry, never a
+                # third attempt, and why the recursive call's own
+                # terminal-error handling below (not a second copy of it
+                # here) is what calls `on_unauthorized` on a retry that still
+                # comes back 401 — calling it here too would fire it twice.
+                return _request(
+                    replace(config, token=refreshed),
+                    transport,
+                    method,
+                    url_path,
+                    query=query,
+                    body=body,
+                    headers=headers,
+                )
+            # No usable refreshed token: no retry — fall through and report
+            # the ORIGINAL 401.
+
+        if is_unauthorized and config.on_unauthorized is not None:
+            config.on_unauthorized(api_error)
+        raise api_error
 
     return HttpResponse(status, data)
