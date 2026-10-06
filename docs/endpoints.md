@@ -90,14 +90,22 @@ intake keeps working at the command line.
 Every CLI command must also answer `--help` at group and command level,
 generated from `endpoints.json` — see [cli.md](./cli.md).
 
-**Status field.** All twenty-nine operations now carry `"status": "required"`.
+**Status field.** `endpoints.json` holds thirty-six operations. Thirty carry
+`"status": "required"`; the six `team.*` operations still carry `"planned"`,
+although their `/me/account/...` routes are live server-side — the marker is
+stale and flipping it regenerates the CLI's help (see [cli.md](./cli.md)). This
+catalog does not yet describe the `team.*` wire shapes; `endpoints.json`'s own
+`notes` for them are the reference until it does, with one correction: the
+server lets **any** member list open invites (`GET /me/account/invites` is
+member-readable, like the roster), not only an owner or admin as
+`team.invites.list`'s note says.
 `documents.getByKey`, `vars.getByName` and `run` were implemented server-side
 2026-07-28; `me` was fixed the same day to call the server's real `/auth/me`
 route directly rather than wait on a never-built `/me` alias. `me`'s
 `serverImplemented` stays `"partial"` — identity is fully live, but the optional
 `versions` block does not exist server-side yet, and every wrapper tolerates its
 absence. `status` records **server** readiness, not wrapper obligation — all
-twenty-nine are implemented and tested against a mocked transport in every
+thirty-six are implemented and tested against a mocked transport in every
 wrapper (see
 [implementation.md §10](./implementation.md#10-conformance-runner)).
 

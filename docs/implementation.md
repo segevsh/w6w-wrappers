@@ -736,12 +736,11 @@ The key-addressed reads are therefore a **server route** over repository methods
 that already exist — landing them is ~6 lines of route each, fenced by BLK-1 and
 scheduled as T4.4.1.
 
-Until that route lands, `documents.getByKey` / `vars.getByName` are implemented,
-typed and unit-tested against a mocked transport (they are `status: "planned"`,
-which is about the **server**, not the wrapper — §10), and they will return
-`404` against a live server. **If the fence never clears, the wrappers ship
-id-addressed only and the limitation is documented** — they do not grow a
-client-side fallback.
+Both routes landed server-side on 2026-07-28 (`GET /documents/by-key/:key`,
+`GET /vars/by-name/:name`), and `documents.getByKey` / `vars.getByName` are
+`status: "required"`. The rule they were built under still holds for the next
+key-addressed read: implement it ahead of the route as `planned`, and never grow
+a client-side list-then-filter fallback.
 
 ### The project asymmetry, stated honestly
 
@@ -810,7 +809,7 @@ process. `deno test` and `python3 -m unittest` both run the suite in-process.
 
 ### Required tests
 
-For **every operation in `endpoints.json` — all twenty-nine, `required` and
+For **every operation in `endpoints.json` — all thirty-six, `required` and
 `planned` alike**:
 
 1. **Success path.** Assert the request the wrapper _made_ (method, resolved URL
@@ -953,17 +952,19 @@ rule in the same words — "asserts the client exposes **every** operation in
 for the mechanics. The two documents agree; if they ever drift, **this one is
 the pinned spec** and `parity.md` follows it.
 
-The reason is that this project implements all twenty-nine operations **ahead of
-the server**: four are `planned` because the server work is fenced, not because
-the wrappers are unfinished. **`status` records _server_ readiness, not wrapper
+The reason is that this project implements operations **ahead of the server**:
+an operation is `planned` because the server work is fenced, not because the
+wrappers are unfinished. (As of 2026-10-06 the six `team.*` operations are the
+only `planned` ones, and their `/me/account/...` routes are in fact live — the
+marker is stale, not the wrappers.) **`status` records _server_ readiness, not wrapper
 obligation.** A wrapper that omitted `run` or `documents.getByKey` "because they
 are planned" would ship a surface that silently differs from its two siblings,
 and the drift would only be discovered when the fence clears — which is
 precisely the failure the lockstep bet exists to prevent.
 
 So: `status` tells a **user** whether calling the operation will reach a live
-route today. It tells an **implementer** nothing. Implement all twenty-nine;
-test all twenty-nine against a mocked transport; assert all twenty-nine in
+route today. It tells an **implementer** nothing. Implement all thirty-six;
+test all thirty-six against a mocked transport; assert all thirty-six in
 conformance.
 
 One more claim this section does not make: `react/` is exempt from this runner

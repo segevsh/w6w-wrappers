@@ -12,7 +12,7 @@ of them answers this one:
   means.
 
 This file is the **client-side catalog**: every symbol a wrapper publishes, what
-it is for, and how it behaves. It covers the twenty-nine operations _and_ the
+it is for, and how it behaves. It covers the contract's operations _and_ the
 things around them that are equally part of the published surface — `request`,
 `path`, `joinBaseUrl`, the error classes, the run predicates, `UNSET` — none of
 which appear in `endpoints.json`, because `endpoints.json` catalogs API
@@ -404,9 +404,9 @@ through a separate entry point in each language:
 **What it does.** Calls `POST /auth/exchange` with a tenant's client credentials
 and names one of the tenant's end-users via `subject`, minting a short-lived,
 `role: "user"` token scoped to that tenant + subject — the server-side half of
-"Path A" token exchange (`.claude/docs/usage/partner/partner-tenant-setup.md` §3
-Path A, §11.4, a private doc; see also the `node` lane's `README.md` "Embedding
-for enterprise tenants").
+"Path A" token exchange. The user-facing walkthrough is
+[docs.w6w.io/clients/node/embedding](https://docs.w6w.io/clients/node/embedding/);
+see also the `node` lane's `README.md` "Embedding for enterprise tenants".
 
 **Basic auth only — never a second credential channel.** The tenant's
 `clientId`/`clientSecret` travel in exactly one place:
