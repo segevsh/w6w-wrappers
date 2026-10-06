@@ -26,7 +26,7 @@ Everything `@w6w/sdk` exports for application code. For a walkthrough, start wit
 | Import from | What it holds |
 | --- | --- |
 | `@w6w/sdk` | `W6WClient`, `ApiError`, `ConfigError`, `path`, `VERSION`, the result guards and every type. |
-| `@w6w/sdk/server` | `exchangeToken`, for backends only. See [Embed w6w in your product](/clients/node/embedding/). |
+| `@w6w/sdk/server` | `exchangeToken`, for backends only. See [Embed w6w in your product](/guides/embed/). |
 | `@w6w/sdk/console` | The calls Studio makes. Unstable: it can change in any release. |
 
 ## `new W6WClient(options?)`

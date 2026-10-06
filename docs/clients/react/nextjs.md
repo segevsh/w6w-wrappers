@@ -172,4 +172,4 @@ server component or a route handler, use the [Node SDK](/clients/node/) directly
 ## Where to next
 
 - **[Hooks reference](/clients/react/hooks/)**: every hook and provider prop.
-- **[Embed w6w in your product](/clients/node/embedding/)**: the token exchange in more detail.
+- **[Embed w6w in your product](/guides/embed/)**: the token exchange in more detail.
