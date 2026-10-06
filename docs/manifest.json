@@ -1,4 +1,7 @@
 {
+  "roots": [
+    "README.md"
+  ],
   "docs": [
     {
       "path": "clients/overview.md",
@@ -27,13 +30,6 @@
       "section": "clients",
       "title": "Documents and vars",
       "order": 20
-    },
-    {
-      "path": "clients/node/embedding.md",
-      "slug": "node/embedding",
-      "section": "clients",
-      "title": "Embed w6w in your product",
-      "order": 30
     },
     {
       "path": "clients/node/reference.md",
@@ -71,6 +67,13 @@
       "order": 30
     },
     {
+      "path": "clients/http.md",
+      "slug": "http",
+      "section": "clients",
+      "title": "Raw HTTP",
+      "order": 35
+    },
+    {
       "path": "clients/cli/commands.md",
       "slug": "cli/commands",
       "section": "clients",
@@ -89,6 +92,27 @@
       "slug": "python/reference",
       "section": "clients",
       "title": "Python reference",
+      "order": 10
+    },
+    {
+      "path": "quickstart.md",
+      "slug": "quickstart",
+      "section": "get-started",
+      "title": "Quickstart",
+      "order": 10
+    },
+    {
+      "path": "guides/embed.md",
+      "slug": "embed",
+      "section": "guides",
+      "title": "Embed w6w in your product",
+      "order": 90
+    },
+    {
+      "path": "../README.md",
+      "slug": "wrappers",
+      "section": "reference-packages",
+      "title": "w6w wrappers",
       "order": 10
     }
   ]

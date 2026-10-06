@@ -31,6 +31,7 @@ on:
     paths:
       - "docs/**"
       - "README.md"
+      - "endpoints.json"
 
 # A superseded dispatch is harmless — the target rebuilds from scratch on the
 # next one — so cancel an in-flight run rather than letting a stale push queue
