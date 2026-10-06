@@ -3,8 +3,8 @@
 /**
  * `@w6w/react` — the package barrel.
  *
- * A thin React binding over `@w6w/sdk`: `<W6WProvider>` (the C-4
- * token-supplier shim), a small hook set, and `createW6WUiAdapter` (the
+ * A thin React binding over `@w6w/sdk`: `<W6WProvider>` (with its native token
+ * supplier), a small hook set, and `createW6WUiAdapter` (the
  * `@w6w/ui` `W6WApi` structural bridge, C-1/C-2). See `README.md` for the
  * install + wrap-your-root example, the hooks catalog, and this lane's
  * documented limitations.
