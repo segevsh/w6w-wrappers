@@ -1,3 +1,95 @@
 {
-  "docs": []
+  "docs": [
+    {
+      "path": "clients/overview.md",
+      "slug": "overview",
+      "section": "clients",
+      "title": "Clients overview",
+      "order": 0
+    },
+    {
+      "path": "clients/node/index.md",
+      "slug": "node",
+      "section": "clients",
+      "title": "Node SDK",
+      "order": 10
+    },
+    {
+      "path": "clients/node/workflows.md",
+      "slug": "node/workflows",
+      "section": "clients",
+      "title": "Workflows, Functions and Endpoints",
+      "order": 10
+    },
+    {
+      "path": "clients/node/documents-and-vars.md",
+      "slug": "node/documents-and-vars",
+      "section": "clients",
+      "title": "Documents and vars",
+      "order": 20
+    },
+    {
+      "path": "clients/node/embedding.md",
+      "slug": "node/embedding",
+      "section": "clients",
+      "title": "Embed w6w in your product",
+      "order": 30
+    },
+    {
+      "path": "clients/node/reference.md",
+      "slug": "node/reference",
+      "section": "clients",
+      "title": "Node SDK reference",
+      "order": 40
+    },
+    {
+      "path": "clients/react/index.md",
+      "slug": "react",
+      "section": "clients",
+      "title": "React",
+      "order": 20
+    },
+    {
+      "path": "clients/react/hooks.md",
+      "slug": "react/hooks",
+      "section": "clients",
+      "title": "Hooks reference",
+      "order": 10
+    },
+    {
+      "path": "clients/react/nextjs.md",
+      "slug": "react/nextjs",
+      "section": "clients",
+      "title": "Next.js and token minting",
+      "order": 20
+    },
+    {
+      "path": "clients/cli/index.md",
+      "slug": "cli",
+      "section": "clients",
+      "title": "CLI",
+      "order": 30
+    },
+    {
+      "path": "clients/cli/commands.md",
+      "slug": "cli/commands",
+      "section": "clients",
+      "title": "Command reference",
+      "order": 10
+    },
+    {
+      "path": "clients/python/index.md",
+      "slug": "python",
+      "section": "clients",
+      "title": "Python",
+      "order": 40
+    },
+    {
+      "path": "clients/python/reference.md",
+      "slug": "python/reference",
+      "section": "clients",
+      "title": "Python reference",
+      "order": 10
+    }
+  ]
 }
