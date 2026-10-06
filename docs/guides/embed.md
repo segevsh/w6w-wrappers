@@ -1,8 +1,8 @@
 ---
 id: null
-key: "node/embedding"
+key: "embed"
 title: "Embed w6w in your product"
-section: "clients"
+section: "guides"
 description: "Mint per-user w6w tokens on your backend, rotate them without rebuilding the client, and recover from an expired token automatically."
 format: "markdown"
 shared: true

@@ -260,7 +260,7 @@ client = Client(
 )
 ```
 
-The callable must be synchronous. The [Node embedding guide](/clients/node/embedding/) explains
+The callable must be synchronous. The [Node embedding guide](/guides/embed/) explains
 each option in more detail.
 
 ## Troubleshooting
