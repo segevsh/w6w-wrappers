@@ -9,16 +9,16 @@ this repo.
 > the wrappers used to be three separate repos with the contract in a private
 > monorepo. That layout is gone ([parity.md](./parity.md)), and with it went a
 > cross-repo `repository_dispatch`, a fourth "contract mirror" repo, and the one
-> long-lived token in the design. HITL-7 — *who publishes: the monorepo, each
-> wrapper repo, or a hybrid?* — is **closed, by not applying**: there is one repo,
-> it publishes itself, and the cross-wrapper gate lives in the same run.
+> long-lived token in the design. HITL-7 — _who publishes: the monorepo, each
+> wrapper repo, or a hybrid?_ — is **closed, by not applying**: there is one
+> repo, it publishes itself, and the cross-wrapper gate lives in the same run.
 
 ## The shape
 
-| Owner | Does | Does not |
-|---|---|---|
-| **this repo** (`w6w-io/w6w-wrappers`) | owns [`../VERSION`](../VERSION); verifies every manifest agrees with it; runs conformance across every lane; tags; builds and publishes all five artifacts over OIDC | hold any registry credential |
-| **the monorepo** (`segevsh/w6w`) | consumes this repo as a submodule at `packages/wrappers` and bumps its pointer after a release | decide, gate, or trigger a release |
+| Owner                                 | Does                                                                                                                                                                 | Does not                           |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| **this repo** (`w6w-io/w6w-wrappers`) | owns [`../VERSION`](../VERSION); verifies every manifest agrees with it; runs conformance across every lane; tags; builds and publishes all five artifacts over OIDC | hold any registry credential       |
+| **the monorepo** (`segevsh/w6w`)      | consumes this repo as a submodule at `packages/wrappers` and bumps its pointer after a release                                                                       | decide, gate, or trigger a release |
 
 One workflow file, `.github/workflows/release.yml`, does the whole thing. It
 triggers on a `v*` tag and on `workflow_dispatch` (for a dry run), never on a
@@ -28,10 +28,10 @@ bare `push`.
 
 Two problems forced the old design, and the layout dissolved both:
 
-**1. Trusted publishing binds to a repo *and* a workflow filename.** The
+**1. Trusted publishing binds to a repo _and_ a workflow filename.** The
 registration instructions are spelled out in
-`packages/core/.github/workflows/publish-types.yml:7-12`: *add a GitHub Actions
-publisher: org/repo, workflow filename*. When the wrappers lived in three repos,
+`packages/core/.github/workflows/publish-types.yml:7-12`: _add a GitHub Actions
+publisher: org/repo, workflow filename_. When the wrappers lived in three repos,
 a single publishing job was impossible without stored registry tokens — a job in
 one repo cannot mint a credential registered to another. Now all five artifacts
 are built in **one** repo, so all five publishers register against
@@ -43,19 +43,20 @@ without an exception.
 **2. Standalone conformance could not read the contract.** A public wrapper
 repo's CI could not read `endpoints.json` out of a private monorepo, which is
 why a public mirror repo was going to exist. The contract is now a sibling file
-in this repo — see [parity.md §Where the contract comes from in
+in this repo — see
+[parity.md §Where the contract comes from in
 CI](./parity.md#where-the-contract-comes-from-in-ci), which is the authority on
 that and records why the mirror must not come back.
 
-Lockstep needed one actor that *decides*. It turns out one repo that decides
+Lockstep needed one actor that _decides_. It turns out one repo that decides
 **and** uploads is available for free once the lanes stop being scattered.
 
 ## Before any of this can run
 
 Outward-facing, one-time, and human:
 
-1. **Register a trusted publisher for each artifact**, against `w6w-io/w6w-wrappers`
-   and workflow `release.yml`:
+1. **Register a trusted publisher for each artifact**, against
+   `w6w-io/w6w-wrappers` and workflow `release.yml`:
    - npm: `@w6w/sdk` and `@w6w/cli` already exist (published `0.1.1` from the
      archived per-language repos) — on npmjs.com, open each package → Settings →
      Trusted Publisher → add a GitHub Actions publisher for
@@ -64,12 +65,12 @@ Outward-facing, one-time, and human:
    - JSR: the `@w6w` scope already exists (`@w6w/types` is on it), and
      `@w6w/sdk` is created and linked to `w6w-io/w6w-wrappers`. **`@w6w/cli` is
      deliberately not on JSR** — the CLI is a binary (`npm i -g @w6w/cli`),
-     nothing imports it as a module, and JSR is for imported source. There is
-     no `jsr-cli` job; see the note beside `jsr-sdk` in `release.yml`. If the
-     CLI ever grows an importable surface, create the package under the scope
-     on jsr.io and link it to the repo (Settings → GitHub Actions on the
-     package) BEFORE restoring the job — unlinked, `npx jsr publish` has no
-     OIDC binding to use, and CI cannot bootstrap a package name.
+     nothing imports it as a module, and JSR is for imported source. There is no
+     `jsr-cli` job; see the note beside `jsr-sdk` in `release.yml`. If the CLI
+     ever grows an importable surface, create the package under the scope on
+     jsr.io and link it to the repo (Settings → GitHub Actions on the package)
+     BEFORE restoring the job — unlinked, `npx jsr publish` has no OIDC binding
+     to use, and CI cannot bootstrap a package name.
    - PyPI: `w6w` — as a **pending publisher**, since the project does not exist
      yet. The first upload creates it.
 2. **Create the `pypi` GitHub environment** (Settings → Environments) on
@@ -87,35 +88,34 @@ to be undone by hand.
 
 There is no reserve-first option, and a pending publisher is not one.
 [PyPI's own docs](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/):
-a pending publisher *"does **not** create a project or reserve a project's name
-**until** it is actually used to publish"*, and if someone else registers the
+a pending publisher _"does **not** create a project or reserve a project's name
+**until** it is actually used to publish"_, and if someone else registers the
 name first, the pending publisher is **invalidated**. PyPI has no scopes — `w6w`
 is a flat global name, unlike the `@w6w` npm and JSR scopes, so it is
 first-come.
 
 **Do not wait on the organization to publish it.** A `w6w` **Company**
-organization was requested on 2026-07-27 and is pending; PyPI states it *"is
-unable to specify a timeline"* for approval and reviews requests
-*"periodically"*. The org name and the project name are separate things —
+organization was requested on 2026-07-27 and is pending; PyPI states it _"is
+unable to specify a timeline"_ for approval and reviews requests
+_"periodically"_. The org name and the project name are separate things —
 approving the org neither grants nor holds `w6w` as a project.
 
 The sequence that does not depend on that queue: publish `w6w` from an
-individual account (claiming the name), then, once the organization is
-approved, use *Your organizations → Manage → Projects → Transfer existing
-project*, which exists precisely for *"pre-existing projects associated with
-[an] individual user account"*. **Re-check the trusted publisher after the
-transfer** — it is bound to a GitHub repo and workflow rather than to the PyPI
-owner, so it ought to survive a change of ownership, but that is worth
-confirming on the project page before the next release rather than discovering
-at upload time.
+individual account (claiming the name), then, once the organization is approved,
+use _Your organizations → Manage → Projects → Transfer existing project_, which
+exists precisely for _"pre-existing projects associated with [an] individual
+user account"_. **Re-check the trusted publisher after the transfer** — it is
+bound to a GitHub repo and workflow rather than to the PyPI owner, so it ought
+to survive a change of ownership, but that is worth confirming on the project
+page before the next release rather than discovering at upload time.
 
 > `@w6w/sdk@0.1.1` and `@w6w/cli@0.1.1` were already on npm, published before
 > this workflow existed. `@w6w/sdk@0.2.0` was since published manually (a
-> stopgap while the trusted publisher was being registered) — which is why
-> this release is `0.2.1`, not `0.2.0`: the first version is already taken on
-> npm and re-publishing it would be rejected. `0.2.1` is the first version
-> this workflow itself publishes, and the first that will carry a
-> `repository.directory` pointing into this repo, on every registry.
+> stopgap while the trusted publisher was being registered) — which is why this
+> release is `0.2.1`, not `0.2.0`: the first version is already taken on npm and
+> re-publishing it would be rejected. `0.2.1` is the first version this workflow
+> itself publishes, and the first that will carry a `repository.directory`
+> pointing into this repo, on every registry.
 
 ## The flow
 
@@ -127,36 +127,35 @@ human again, and is not optional.
    contract in the same checkout.
 2. **Bump `VERSION`.** It is the single source of truth and the only place a
    human types the new number.
-3. **Write that number into every manifest**, in the same commit — the ten
-   files step 5 checks, and no others:
-   `node/package.json` + `node/deno.json` + `node/src/version.ts`,
-   `cli/package.json` + `cli/deno.json` + `cli/mod.ts`,
+3. **Write that number into every manifest**, in the same commit — the ten files
+   step 5 checks, and no others: `node/package.json` + `node/deno.json` +
+   `node/src/version.ts`, `cli/package.json` + `cli/deno.json` + `cli/mod.ts`,
    `python/pyproject.toml` + `python/src/w6w/_version.py`,
    `react/package.json` + `react/src/version.ts`. Never hand-pick a different
-   value in a manifest; step 5 is a gate, not a writer.
-   One version literal is **not** gated and must still move with them: the
-   `@w6w/sdk` semver range in `react/package.json`'s `dependencies`, which is
-   `^<the new VERSION>` (e.g. `^0.9.0`). `react`'s own version test pins it
-   against `VERSION`, so a lane that leaves it behind fails `test` — step 5
-   would not have caught it.
+   value in a manifest; step 5 is a gate, not a writer. One version literal is
+   **not** gated and must still move with them: the `@w6w/sdk` semver range in
+   `react/package.json`'s `dependencies`, which is `^<the new VERSION>` (e.g.
+   `^0.9.0`). `react`'s own version test pins it against `VERSION`, so a lane
+   that leaves it behind fails `test` — step 5 would not have caught it.
 4. **Tag** `v0.2.1`. (For a dry run, invoke `release.yml` via
    `workflow_dispatch` with an explicit `version` input — it verifies and runs
    conformance without publishing.)
 5. **`verify`** reads `VERSION` and compares it against the tag and the ten
    version literals step 3 lists — three for `node` (two manifests and a source
-   constant), three for `cli`, `pyproject.toml` and `_version.py` for python, and
-   two for `react` (one manifest and one source constant, as it carries no
-   `deno.json`) — echoing every value *before* deciding, so a failing log already
-   answers "which one disagreed". Fails with `::error::` naming it. This mirrors
-   `publish-types.yml:33-48` in the core repo.
+   constant), three for `cli`, `pyproject.toml` and `_version.py` for python,
+   and two for `react` (one manifest and one source constant, as it carries no
+   `deno.json`) — echoing every value _before_ deciding, so a failing log
+   already answers "which one disagreed". Fails with `::error::` naming it. This
+   mirrors `publish-types.yml:33-48` in the core repo.
 6. **`test`** (`needs: verify`) runs every lane's suite: `unittest` for python,
    `deno task test` for `node` and `cli`. **The conformance runners live inside
    those suites** — `python/tests/test_surface.py`, `cli/tests/help_test.ts`,
-   `node/tests/conformance_test.ts`, and each lane's version guard — and they read `endpoints.json` and `VERSION` from
-   the same checkout as siblings. So the lockstep bet is enforced here: *an
-   operation added to two wrappers and forgotten in a third fails this job, and
-   nothing is uploaded.* It is not a separate job because it is not separate
-   work; a standalone `conformance` job would re-run the same assertions.
+   `node/tests/conformance_test.ts`, and each lane's version guard — and they
+   read `endpoints.json` and `VERSION` from the same checkout as siblings. So
+   the lockstep bet is enforced here: _an operation added to two wrappers and
+   forgotten in a third fails this job, and nothing is uploaded._ It is not a
+   separate job because it is not separate work; a standalone `conformance` job
+   would re-run the same assertions.
 7. **`publish`** (`needs: [verify, test]`) builds and uploads over OIDC, with
    `permissions: {id-token: write}` — the `id-token` is what replaces every
    token. The PyPI job additionally declares `environment: pypi`, which **must**
@@ -172,10 +171,10 @@ permanent inconsistency, and the only fix is burning a version number.
 ## Notes on the npm and JSR lanes
 
 Five jobs (`npm-sdk`, `npm-cli`, `npm-react`, `jsr-sdk`, `jsr-cli`), and the
-shape is copied from the house pattern — `w6w-core`'s `publish-types.yml`
-ships `@w6w/types` to npm and JSR over OIDC with no stored credential. What
-was *not* copyable is written out here, because each item is a thing that
-would otherwise be discovered at upload time:
+shape is copied from the house pattern — `w6w-core`'s `publish-types.yml` ships
+`@w6w/types` to npm and JSR over OIDC with no stored credential. What was _not_
+copyable is written out here, because each item is a thing that would otherwise
+be discovered at upload time:
 
 - **This repo is public** (verified live: `gh repo view w6w-io/w6w-wrappers` →
   `PUBLIC`), so
@@ -186,7 +185,7 @@ would otherwise be discovered at upload time:
   deferral**, not a technical blocker — see `FOLLOWUPS.md` (G-8). Turning it on
   touches the already-working `npm-sdk`/`npm-cli` jobs and is a separate
   decision from adding a new lane.
-- **`@w6w/cli` and `@w6w/react` both publish *after* `@w6w/sdk`** —
+- **`@w6w/cli` and `@w6w/react` both publish _after_ `@w6w/sdk`** —
   `needs: [verify, test, npm-sdk]`, not just the shared gate — because each
   declares a real npm dependency on it, and its `npm install` step needs that
   version already live on the registry. Otherwise there is a window in which
@@ -198,28 +197,29 @@ would otherwise be discovered at upload time:
   local gate is `npm test`), and the npm manifests exist only to build and
   publish. `dist/` is produced by `tsc -p tsconfig.build.json`/`tsconfig.json`
   (the CLI additionally runs `scripts/fix-shebang.mjs`), and the CLI's and
-  react's sources both import the bare specifier `@w6w/sdk`, which resolves
-  from `node_modules` — not through the Deno import map, which points at
-  `../node/mod.ts` and is a *development* convenience.
+  react's sources both import the bare specifier `@w6w/sdk`, which resolves from
+  `node_modules` — not through the Deno import map, which points at
+  `../node/mod.ts` and is a _development_ convenience.
 - **The `test` job builds `node/` and substitutes it into `react/`'s
-  `node_modules` before running react's own suite** (`npm install --no-save
-  ../node`, after a plain `npm install`) — react imports `@w6w/sdk/console`, a
-  subpath no published `@w6w/sdk` carried until after this lane was added, so
-  a bare registry install would fail the very first CI run. This step stays
-  even once a console-bearing `@w6w/sdk` is on the registry: every other lane
-  already tests against the sibling checkout rather than the last release, and
-  a test job that silently measures a stale published package is the failure
-  this repo's one-repo layout exists to prevent. The `npm-react` publish job
-  does **not** do this substitution — it installs from the registry like every
-  other publish job, which is correct there: a publish job must build against
-  exactly what consumers will resolve, and by the time it runs `npm-sdk` has
-  already uploaded.
+  `node_modules` before running react's own suite**
+  (`npm install --no-save
+  ../node`, after a plain `npm install`) — react
+  imports `@w6w/sdk/console`, a subpath no published `@w6w/sdk` carried until
+  after this lane was added, so a bare registry install would fail the very
+  first CI run. This step stays even once a console-bearing `@w6w/sdk` is on the
+  registry: every other lane already tests against the sibling checkout rather
+  than the last release, and a test job that silently measures a stale published
+  package is the failure this repo's one-repo layout exists to prevent. The
+  `npm-react` publish job does **not** do this substitution — it installs from
+  the registry like every other publish job, which is correct there: a publish
+  job must build against exactly what consumers will resolve, and by the time it
+  runs `npm-sdk` has already uploaded.
 - **JSR needs the `@w6w` scope to exist and each package linked to this repo**
-  before OIDC publishing works; confirmed with `deno publish --dry-run` for
-  the `node`/`cli` lanes, including the CLI's cross-package `@w6w/sdk` import.
-  The publish step itself is `npx --yes jsr publish` from the lane directory,
-  no build. There is no `jsr-react` job — react is a JSX+`react`-peer package,
-  not the `.ts`-source-verbatim shape JSR publishing here assumes.
+  before OIDC publishing works; confirmed with `deno publish --dry-run` for the
+  `node`/`cli` lanes, including the CLI's cross-package `@w6w/sdk` import. The
+  publish step itself is `npx --yes jsr publish` from the lane directory, no
+  build. There is no `jsr-react` job — react is a JSX+`react`-peer package, not
+  the `.ts`-source-verbatim shape JSR publishing here assumes.
 - **The trusted publishers for all five artifacts register against
   `w6w-io/w6w-wrappers` + `release.yml`**, exactly as PyPI's does. Registering
   them against the archived `w6w-node` / `w6w-cli` repos would have to be
@@ -229,8 +229,8 @@ would otherwise be discovered at upload time:
   `@w6w/sdk@0.1.1`/`@w6w/cli@0.1.1` were already in, above ("published before
   this workflow existed"). A human publishes `@w6w/react`'s first version
   manually from an authenticated local shell, then registers the trusted
-  publisher exactly as for the other two npm packages; every release after
-  that goes out from CI, tokenless, like its siblings.
+  publisher exactly as for the other two npm packages; every release after that
+  goes out from CI, tokenless, like its siblings.
 
 ## Partial-failure reality
 
@@ -240,7 +240,7 @@ transaction to enlist in.
 
 - **Nothing uploads unless `verify`, `conformance` and `test` all pass.** A
   version mismatch, a missing operation or a failing suite can never half-ship.
-  The dangerous window is only *inside* step 8.
+  The dangerous window is only _inside_ step 8.
 - **A transient registry error is re-runnable at the same version.** Re-run the
   workflow; the jobs that already succeeded will fail as duplicates, so prefer
   re-running the single failed job where the runner allows it.
@@ -253,8 +253,8 @@ transaction to enlist in.
   visible to anyone comparing versions across languages. Put the skipped number
   and the reason in the release notes rather than making them guess.
 
-The operator's rule of thumb: *if one upload was rejected, re-run it. If one
-package half-landed across its two registries, burn the version.*
+The operator's rule of thumb: _if one upload was rejected, re-run it. If one
+package half-landed across its two registries, burn the version._
 
 ## Prerelease
 
@@ -279,5 +279,5 @@ must not be reintroduced.** It was a consequence of the split, and the split is
 gone.
 
 `SIBLING_REPO_PAT` (`.github/workflows/server-deploy.yml:11-14` in the monorepo)
-is unrelated: the server image is assembled from several *private* repos. This
+is unrelated: the server image is assembled from several _private_ repos. This
 repo is public and self-contained.

@@ -1,8 +1,9 @@
 # CLI — the help surface
 
 `--help` is the CLI's documentation. Not a pointer to documentation — the thing
-itself. Someone evaluating w6w will type `w6w --help` before they open a browser,
-and whatever they see there is the first real impression the platform makes.
+itself. Someone evaluating w6w will type `w6w --help` before they open a
+browser, and whatever they see there is the first real impression the platform
+makes.
 
 This document specifies what help must produce. Everything else about the CLI
 (operations, naming) lives in [endpoints.md](./endpoints.md).
@@ -31,13 +32,13 @@ people type both.
 Rules that make this actually work:
 
 - **`--help` wins over everything.** It never authenticates, never reads config,
-  never makes a network call, and exits `0`. `w6w workflows run --help` must work
-  with no token set and no server reachable — the moment help needs credentials,
-  it stops being usable at the exact time people need it most.
+  never makes a network call, and exits `0`. `w6w workflows run --help` must
+  work with no token set and no server reachable — the moment help needs
+  credentials, it stops being usable at the exact time people need it most.
 - **Bare `w6w` prints root help and exits `0`.** Not an error, not a usage stub.
-- **An unknown or incomplete command prints the relevant help to stderr and exits
-  `1`.** Wrong invocations are the other main way people read help; send them
-  somewhere useful rather than printing "unknown command" alone.
+- **An unknown or incomplete command prints the relevant help to stderr and
+  exits `1`.** Wrong invocations are the other main way people read help; send
+  them somewhere useful rather than printing "unknown command" alone.
 
 ## Root help
 
@@ -84,21 +85,22 @@ ALIASES
 
 `w6w info` is an accepted **alias of `w6w me`** (D8) — same operation, second
 spelling, because "info" is what people reach for when they want to know what
-they are talking to. The operation is named `me` everywhere else (`endpoints.json`
-`naming.cli`, the SDK method); the alias exists only at the CLI, is declared as
-`cliAlias` in `endpoints.json`, and `w6w info --help` prints `w6w me`'s help.
-Aliases are not listed as separate `COMMANDS` entries — one command, one line.
+they are talking to. The operation is named `me` everywhere else
+(`endpoints.json` `naming.cli`, the SDK method); the alias exists only at the
+CLI, is declared as `cliAlias` in `endpoints.json`, and `w6w info --help` prints
+`w6w me`'s help. Aliases are not listed as separate `COMMANDS` entries — one
+command, one line.
 
 `conn`/`wf`/`docs`/`ls` are a second, narrower kind of alias: short spellings
 for the two tokens that name a command path, substituted for their canonical
 spelling before the command is even resolved — `w6w conn ls` and
-`w6w connections list` parse to the exact same command. Unlike `w6w info`,
-these are **not** declared in `endpoints.json`: they are pure CLI typing
-convenience with nothing for a node or python caller to mirror, so they are
-hand-declared in `src/args.ts` instead of generated. `conn`/`wf`/`docs` stand
-for a group name; `ls` stands for `list` and applies inside *any* group
-(`w6w vars ls`, `w6w docs ls`, …), never outside one — `w6w run ls` leaves
-`ls` as `run`'s positional argument, untouched.
+`w6w connections list` parse to the exact same command. Unlike `w6w info`, these
+are **not** declared in `endpoints.json`: they are pure CLI typing convenience
+with nothing for a node or python caller to mirror, so they are hand-declared in
+`src/args.ts` instead of generated. `conn`/`wf`/`docs` stand for a group name;
+`ls` stands for `list` and applies inside _any_ group (`w6w vars ls`,
+`w6w docs ls`, …), never outside one — `w6w run ls` leaves `ls` as `run`'s
+positional argument, untouched.
 
 ## Group help
 
@@ -157,8 +159,8 @@ EXAMPLES
 
 Every command's help shows, in this order: a one-line summary, usage, positional
 arguments, flags, and **at least one runnable example**. The example is the part
-people actually copy, so it must be complete and correct — not `<workflow-id>` in
-a position where a real id is required, without saying where to get one.
+people actually copy, so it must be complete and correct — not `<workflow-id>`
+in a position where a real id is required, without saying where to get one.
 
 ```
 w6w workflows run — trigger a workflow run
@@ -188,12 +190,13 @@ NOTES
 ```
 
 That `NOTES` block is not optional decoration. The queued/waiting/failed
-distinction ([endpoints.md §4](./endpoints.md#4-workflowsrun--trigger-a-workflow))
-is the single most confusing thing in this surface, and help is where it gets
+distinction
+([endpoints.md §4](./endpoints.md#4-workflowsrun--trigger-a-workflow)) is the
+single most confusing thing in this surface, and help is where it gets
 explained.
 
-`w6w run` earns a `NOTES` block for the same reason — it is the one command whose
-output shape changes with its argument:
+`w6w run` earns a `NOTES` block for the same reason — it is the one command
+whose output shape changes with its argument:
 
 ```
 w6w run — run anything addressable by a URN
@@ -235,20 +238,20 @@ Like the group aliases above, `--app` is **not** in `endpoints.json`: `run`'s
 wire shape is exactly `{urn, action, payload}`, and `--app` never reaches it —
 `src/commands/run.ts` resolves it to a connection's `conn_…` id itself, via
 `connections.list()`, before the request is built. It is the one hand-declared
-flag in this CLI that does not come from the generated help tree
-(`mod.ts`'s `commandFlagSpecs`), for exactly the same reason the token aliases
-are hand-declared rather than contract-driven.
+flag in this CLI that does not come from the generated help tree (`mod.ts`'s
+`commandFlagSpecs`), for exactly the same reason the token aliases are
+hand-declared rather than contract-driven.
 
 ## Exit codes
 
 Help text is a promise about behavior, so the codes are part of the contract:
 
-| Code | Meaning |
-|------|---------|
-| `0` | Success — including help, and including a *queued* or *running* workflow |
-| `1` | Usage error — unknown command, missing argument, bad flag |
-| `2` | API error — 4xx/5xx from the server, including auth failure |
-| `3` | Run failure — `--wait` returned a run with status `failed` |
+| Code | Meaning                                                                  |
+| ---- | ------------------------------------------------------------------------ |
+| `0`  | Success — including help, and including a _queued_ or _running_ workflow |
+| `1`  | Usage error — unknown command, missing argument, bad flag                |
+| `2`  | API error — 4xx/5xx from the server, including auth failure              |
+| `3`  | Run failure — `--wait` returned a run with status `failed`               |
 
 Code `3` exists so `w6w workflows run --wait` is usable in CI without parsing
 stdout. Keeping it distinct from `2` matters: a failed workflow and an
@@ -274,12 +277,12 @@ least.
 
 The CLI's conformance test additionally asserts:
 
-- `w6w --help`, `w6w <group> --help`, and `w6w <group> <cmd> --help` each exit `0`
-  and produce non-empty output, **with no token in the environment**;
-- **every** operation in `endpoints.json` — `required` and `planned` alike, since
-  `status` records server readiness rather than wrapper obligation
-  ([parity.md](./parity.md#conformance)) — appears in the help of its group, or in
-  root help for the two root-level commands;
+- `w6w --help`, `w6w <group> --help`, and `w6w <group> <cmd> --help` each exit
+  `0` and produce non-empty output, **with no token in the environment**;
+- **every** operation in `endpoints.json` — `required` and `planned` alike,
+  since `status` records server readiness rather than wrapper obligation
+  ([parity.md](./parity.md#conformance)) — appears in the help of its group, or
+  in root help for the two root-level commands;
 - `w6w --version` prints the version from `VERSION`.
 
 The no-token condition is the one that regresses. It breaks the first time
