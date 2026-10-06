@@ -37,9 +37,9 @@ export W6W_TOKEN=…                             # sent as a Bearer token on eve
 ## 4. Make your first call
 
 ```ts
-import { W6wClient, isActionRun } from "@w6w/sdk";
+import { W6WClient, isActionRun } from "@w6w/sdk";
 
-const client = new W6wClient(); // reads W6W_BASE_URL and W6W_TOKEN
+const client = new W6WClient(); // reads W6W_BASE_URL and W6W_TOKEN
 
 const me = await client.me();               // who am I, which versions am I talking to?
 const connections = await client.connections.list(); // what can I run?
