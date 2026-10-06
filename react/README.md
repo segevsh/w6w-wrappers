@@ -294,8 +294,9 @@ hook (e.g. `client.console.*` directly, at your own risk per the caveat above).
   package.** `@w6w/ui`'s `ActionTestForm` does a NOMINAL `instanceof ApiError` check
   against its OWN `ApiError` class (`packages/ui/src/createW6WApi.ts`), not a
   duck-typed one. No error object this adapter throws can ever satisfy that check
-  without importing `@w6w/ui`'s class directly, which this package's MIT/C-1
-  boundary forbids. Concretely: on a failed `invokeAction` used together with
+  without importing `@w6w/ui`'s class directly. That would make `@w6w/ui` a
+  runtime/peer dependency of this published package, but it is only a GitHub-pinned
+  devDependency here and is not available from npm. Concretely: on a failed `invokeAction` used together with
   `@w6w/ui`'s `ActionTestForm`, the 401/403 permission-hint messaging falls back to a
   generic message, and the `ApiCallsPanel` egress log renders empty instead of
   showing the outbound calls the action made — even though this adapter's thrown
