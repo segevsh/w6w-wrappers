@@ -10,7 +10,7 @@ The package is authored as runtime-neutral TypeScript against Web standards (`fe
 `URL`, `AbortController`), so the same build runs under Node 18+, Deno and Bun.
 
 - **License:** MIT (see [LICENSE](./LICENSE)).
-- **Version:** `0.9.2`.
+- **Version:** `0.9.3`.
 - **Guides:** [docs.w6w.io/clients/node](https://docs.w6w.io/clients/node/), with a
   [full reference](https://docs.w6w.io/clients/node/reference/).
 
