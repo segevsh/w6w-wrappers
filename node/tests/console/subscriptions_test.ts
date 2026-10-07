@@ -19,7 +19,11 @@ import { assertEquals, assertRejects } from "@std/assert";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import { ApiError } from "../../src/errors.ts";
-import type { Subscription, TriggerEventSummary } from "../../src/console/subscriptions.ts";
+import type {
+  Subscription,
+  SubscriptionCreateInput,
+  TriggerEventSummary,
+} from "../../src/console/subscriptions.ts";
 
 /** One recorded call to the fake transport. */
 interface Call {
@@ -280,7 +284,12 @@ Deno.test(
 Deno.test(
   "console.subscriptions.create: POSTs a body deep-equal to the input, intervalMs included",
   async () => {
-    const input = { workflowId: "wf_1", connectionId: null, params: {}, intervalMs: 420000 };
+    const input: SubscriptionCreateInput = {
+      workflowId: "wf_1",
+      connectionId: null,
+      params: {},
+      intervalMs: 420000,
+    };
     const polled: Subscription = {
       ...SUB_A,
       type: "poll",
