@@ -1,9 +1,8 @@
 /**
  * `client.team.*`, against an injected fake `fetch`.
  *
- * No case here needs a live server (`docs/implementation.md` §9) — every
- * `team.*` route is `status: "planned"` in `endpoints.json` (T1.2.1 has not
- * landed), so this suite is exactly the kind of thing `docs/implementation.md`
+ * No case here needs a live server (`docs/implementation.md` §9) — the
+ * `team.*` routes are `status: "required"` in `endpoints.json`, and this suite is exactly the kind of thing `docs/implementation.md`
  * §9 exists for. Each case asserts the request the wrapper *made* — method,
  * full resolved URL, bearer, serialised body — **and** the value it returned,
  * which is always the unwrapped payload and never the server's envelope.
@@ -276,7 +275,7 @@ Deno.test("team: a 200 missing its envelope key is bad_response, not undefined",
 });
 
 Deno.test("team: a 404 not-yet-served route reaches the caller as an ordinary ApiError", async () => {
-  // Every `team.*` route is `status: "planned"` — a server that has not
+  // A server that has not
   // shipped T1.2.1 answers 404, and this wrapper does not special-case that.
   const c = client(() => json({ error: { code: "not_found", message: "No such route." } }, 404));
 

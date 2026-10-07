@@ -91,14 +91,11 @@ Every CLI command must also answer `--help` at group and command level,
 generated from `endpoints.json` — see [cli.md](./cli.md).
 
 **Status field.** `endpoints.json` holds thirty-six operations. Thirty carry
-`"status": "required"`; the six `team.*` operations still carry `"planned"`,
-although their `/me/account/...` routes are live server-side — the marker is
-stale and flipping it regenerates the CLI's help (see [cli.md](./cli.md)). This
-catalog does not yet describe the `team.*` wire shapes; `endpoints.json`'s own
-`notes` for them are the reference until it does, with one correction: the
-server lets **any** member list open invites (`GET /me/account/invites` is
-member-readable, like the roster), not only an owner or admin as
-`team.invites.list`'s note says.
+`"status": "required"`, and so do the six `team.*` operations (their
+`/me/account/...` routes are live server-side). Changing `status` regenerates
+the CLI's help (see [cli.md](./cli.md)). This catalog does not yet describe the
+`team.*` wire shapes; `endpoints.json`'s own `notes` for them are the reference
+until it does.
 `documents.getByKey`, `vars.getByName` and `run` were implemented server-side
 2026-07-28; `me` was fixed the same day to call the server's real `/auth/me`
 route directly rather than wait on a never-built `/me` alias. `me`'s

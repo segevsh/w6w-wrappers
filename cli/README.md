@@ -7,7 +7,7 @@ auth, output formatting and exit codes. No business logic, no client-side pollin
 retries. Everything it can do, the HTTP API can do — the CLI just makes it typeable.
 
 - **License:** MIT (see [LICENSE](./LICENSE)).
-- **Version:** `0.9.1`. Needs Node.js 18 or later.
+- **Version:** `0.9.2`. Needs Node.js 18 or later.
 - **Guides:** [docs.w6w.io/clients/cli](https://docs.w6w.io/clients/cli/), with a
   [command reference](https://docs.w6w.io/clients/cli/commands/).
 
@@ -130,7 +130,6 @@ missing from a wrapper is a failing test, not a preference.
 
 An operation marked `planned` in that contract is implemented and unit-tested here ahead of its
 server route, and its help says so. The marker records **server** readiness, not CLI completeness.
-The `team` commands still carry it, but their server routes are live and they work today.
 
 ## Versioning
 
