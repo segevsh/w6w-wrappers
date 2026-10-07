@@ -28,9 +28,8 @@
  * DELETE /me/account/members/:userId              → 200 { ok: true }
  * ```
  *
- * This module implements the client half **ahead of** the server route
- * (`endpoints.json`'s `status: "planned"` on all six — `docs/parity.md`
- * §Conformance: `status` records server readiness, never wrapper obligation).
+ * This module implements the client half of the server's live
+ * `/me/account/...` routes (`endpoints.json`: `status: "required"` for each).
  * Calling any of these against a server that has not shipped T1.2.1 yet
  * answers `404`, which reaches the caller as an ordinary `ApiError`.
  *

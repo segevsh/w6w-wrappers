@@ -4,8 +4,8 @@
  * Same discipline as `cmd_documents_test.ts`: every case runs the **real**
  * command line — `main()`, the real registry, the real SDK — with the
  * environment and `fetch` substituted. No live server is involved anywhere
- * (`docs/implementation.md` §9); every `team.*` route is `status: "planned"`
- * in `endpoints.json` today, so this suite is exactly the kind of thing that
+ * (`docs/implementation.md` §9); the `team.*` routes are `status: "required"`
+ * in `endpoints.json`, and this suite is exactly the kind of thing that
  * discipline is for.
  *
  * What is being pinned, beyond "it works":
@@ -222,7 +222,7 @@ Deno.test("team: an API error exits 2, on stderr, with stdout left clean", async
 });
 
 Deno.test("team: a 404 not-yet-served route exits 2 like any other ApiError", async () => {
-  // Every `team.*` route is `status: "planned"` — a server without T1.2.1
+  // A server without T1.2.1
   // answers 404, and the CLI does not special-case that.
   const result = await w6w(
     ["team", "members"],

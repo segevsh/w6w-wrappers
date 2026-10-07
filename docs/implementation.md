@@ -954,9 +954,7 @@ the pinned spec** and `parity.md` follows it.
 
 The reason is that this project implements operations **ahead of the server**:
 an operation is `planned` because the server work is fenced, not because the
-wrappers are unfinished. (As of 2026-10-06 the six `team.*` operations are the
-only `planned` ones, and their `/me/account/...` routes are in fact live — the
-marker is stale, not the wrappers.) **`status` records _server_ readiness, not wrapper
+wrappers are unfinished. **`status` records _server_ readiness, not wrapper
 obligation.** A wrapper that omitted `run` or `documents.getByKey` "because they
 are planned" would ship a surface that silently differs from its two siblings,
 and the drift would only be discovered when the fence clears — which is

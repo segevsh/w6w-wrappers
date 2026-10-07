@@ -117,9 +117,8 @@ __all__ = [
     "RunStatus",
     "SaveResult",
     "StepError",
-    # The caller's account team (T2.1.1). Not project-scoped, and implemented
-    # ahead of the server (`endpoints.json`'s `status: "planned"` on all six —
-    # `docs/parity.md` §Conformance).
+    # The caller's account team (T2.1.1). Not project-scoped
+    # (`endpoints.json`: `status: "required"` for each).
     "TeamApi",
     "TeamHost",
     "TeamInvite",

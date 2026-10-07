@@ -1491,7 +1491,7 @@ export const HELP_TREE: HelpTree = {
           "headline": "list the caller's account team: every active member and their role",
           "usage": "w6w team members [options]",
           "naming": "w6w team members",
-          "status": "planned",
+          "status": "required",
           "params": [
             {
               "name": "json",
@@ -1504,9 +1504,7 @@ export const HELP_TREE: HelpTree = {
           "examples": [
             "w6w team members",
           ],
-          "notes": [
-            'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
-          ],
+          "notes": [],
         },
         {
           "operation": "team.invites.create",
@@ -1523,7 +1521,7 @@ export const HELP_TREE: HelpTree = {
             "invite someone to the caller's account, or mint an open, shareable invite link",
           "usage": "w6w team invite [options]",
           "naming": "w6w team invite [--email <email>] [--role <role>]",
-          "status": "planned",
+          "status": "required",
           "params": [
             {
               "name": "email",
@@ -1551,9 +1549,7 @@ export const HELP_TREE: HelpTree = {
             "w6w team invite --email new@example.com --role admin",
             "w6w team invite",
           ],
-          "notes": [
-            'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
-          ],
+          "notes": [],
         },
         {
           "operation": "team.invites.list",
@@ -1568,7 +1564,7 @@ export const HELP_TREE: HelpTree = {
           "headline": "list the caller's account's open (pending, unrevoked, unexpired) invites",
           "usage": "w6w team invites [options]",
           "naming": "w6w team invites",
-          "status": "planned",
+          "status": "required",
           "params": [
             {
               "name": "json",
@@ -1581,9 +1577,7 @@ export const HELP_TREE: HelpTree = {
           "examples": [
             "w6w team invites",
           ],
-          "notes": [
-            'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
-          ],
+          "notes": [],
         },
         {
           "operation": "team.invites.revoke",
@@ -1598,7 +1592,7 @@ export const HELP_TREE: HelpTree = {
           "headline": "revoke a pending invite before it is redeemed",
           "usage": "w6w team revoke-invite <id> [options]",
           "naming": "w6w team revoke-invite <id>",
-          "status": "planned",
+          "status": "required",
           "params": [
             {
               "name": "id",
@@ -1618,9 +1612,7 @@ export const HELP_TREE: HelpTree = {
           "examples": [
             "w6w team revoke-invite inv_01HQ8N",
           ],
-          "notes": [
-            'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
-          ],
+          "notes": [],
         },
         {
           "operation": "team.members.updateRole",
@@ -1635,7 +1627,7 @@ export const HELP_TREE: HelpTree = {
           "headline": "change a team member's role",
           "usage": "w6w team set-role <userId> --role <role> [options]",
           "naming": "w6w team set-role <userId> --role <role>",
-          "status": "planned",
+          "status": "required",
           "params": [
             {
               "name": "userId",
@@ -1662,9 +1654,7 @@ export const HELP_TREE: HelpTree = {
           "examples": [
             "w6w team set-role usr_01HQ8N --role admin",
           ],
-          "notes": [
-            'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
-          ],
+          "notes": [],
         },
         {
           "operation": "team.members.remove",
@@ -1679,7 +1669,7 @@ export const HELP_TREE: HelpTree = {
           "headline": "remove a member from the caller's account",
           "usage": "w6w team remove-member <userId> [options]",
           "naming": "w6w team remove-member <userId>",
-          "status": "planned",
+          "status": "required",
           "params": [
             {
               "name": "userId",
@@ -1699,9 +1689,7 @@ export const HELP_TREE: HelpTree = {
           "examples": [
             "w6w team remove-member usr_01HQ8N",
           ],
-          "notes": [
-            'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
-          ],
+          "notes": [],
         },
       ],
       "options": [],

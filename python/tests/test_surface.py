@@ -103,8 +103,7 @@ PUBLIC_SURFACE = {
     "FunctionsHost",
     "EndpointsApi",
     "EndpointsHost",
-    # The caller's account team (T2.1.1). Not project-scoped, and implemented
-    # ahead of the server (`status: "planned"` on all six operations).
+    # The caller's account team (T2.1.1). Not project-scoped.
     "TeamApi",
     "TeamHost",
     "TeamInvite",

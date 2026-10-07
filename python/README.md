@@ -9,7 +9,7 @@ contract lane implements one shared contract, and all four packages
 (`w6w`, `@w6w/sdk`, `@w6w/cli`, `@w6w/react`) release together, so `w6w==X`
 gives you the same operations as `@w6w/sdk@X`.
 
-- **Version:** `0.9.1`.
+- **Version:** `0.9.2`.
 - **Guides:** [docs.w6w.io/clients/python](https://docs.w6w.io/clients/python/),
   with a [full reference](https://docs.w6w.io/clients/python/reference/).
 - **Surface:** `me`, `run`, `request`, `connections.list`, the complete
@@ -405,8 +405,7 @@ has grown alone, is a failing test rather than a preference.
 
 An operation marked `planned` in that contract is implemented and unit-tested
 here ahead of its server route. The marker records **server** readiness, not
-wrapper completeness. The `team.*` operations still carry it, but their server
-routes are live and they work today.
+wrapper completeness.
 
 ## Versioning
 
