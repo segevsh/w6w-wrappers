@@ -7,7 +7,7 @@ auth, output formatting and exit codes. No business logic, no client-side pollin
 retries. Everything it can do, the HTTP API can do — the CLI just makes it typeable.
 
 - **License:** MIT (see [LICENSE](./LICENSE)).
-- **Version:** `0.9.2`. Needs Node.js 18 or later.
+- **Version:** `0.9.3`. Needs Node.js 18 or later.
 - **Guides:** [docs.w6w.io/clients/cli](https://docs.w6w.io/clients/cli/), with a
   [command reference](https://docs.w6w.io/clients/cli/commands/).
 

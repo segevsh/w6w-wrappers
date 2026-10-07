@@ -9,7 +9,7 @@ contract lane implements one shared contract, and all four packages
 (`w6w`, `@w6w/sdk`, `@w6w/cli`, `@w6w/react`) release together, so `w6w==X`
 gives you the same operations as `@w6w/sdk@X`.
 
-- **Version:** `0.9.2`.
+- **Version:** `0.9.3`.
 - **Guides:** [docs.w6w.io/clients/python](https://docs.w6w.io/clients/python/),
   with a [full reference](https://docs.w6w.io/clients/python/reference/).
 - **Surface:** `me`, `run`, `request`, `connections.list`, the complete

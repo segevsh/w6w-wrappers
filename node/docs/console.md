@@ -891,6 +891,13 @@ Seven methods, relocated from `packages/studio/src/api/client.ts:253-286`'s sing
 | `listEvents(id)`                   | `GET /subscriptions/:id/events`                        | **Dead code (HITL-4).** `unwrap<TriggerEventSummary[]>(res, "events")`. No `limit` param — the server applies its own default of 50. |
 | `requeueEvent(eventId)`            | `POST /trigger-events/:eventId/requeue`                | **Dead code (HITL-4).** Discards `{ok: true}`, resolves `void`. `404 requeue_failed` when the event doesn't exist or isn't `failed`. |
 
+**Registration and poll fields.** `Subscription` also carries `type` (`"webhook"` | `"poll"`),
+`status` (`SubscriptionStatus`: `pending` | `registered` | `failed` | `destroying`), `intervalMs`
+(`number | null`), `dependencies` (`string[]`), `nextCheckAt` (`string | null`), `lastError`
+(`{code, message} | null`) and `registeredAt` (`string | null`). `create`'s input takes an optional
+`intervalMs` (integer ms, poll triggers only), still forwarded verbatim. `TriggerEventStatus` also
+includes `"ignored"`. These are wire types only: no method was added for them.
+
 **Four of these seven methods are HITL-4 dead code** — `listForWorkflow`, `get`, `listEvents`, and
 `requeueEvent` have zero call sites anywhere in studio or `@w6w/ui` (re-confirmed this pass, see
 `plan.md`'s SP2.9 section). They are still built to full type fidelity for SDK/wrapper coverage;

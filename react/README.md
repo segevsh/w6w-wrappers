@@ -6,7 +6,7 @@ surface (`me`, `documents`, `vars`, `connections`, `workflows`, `functions`, `ru
 `createW6WUiAdapter`, a structural bridge from a `W6WClient` to
 [`@w6w/ui`](https://github.com/w6w-io/w6w-ui)'s `W6WApi` contract.
 
-License: MIT · Version: 0.9.2 · Guides: [docs.w6w.io/clients/react](https://docs.w6w.io/clients/react/)
+License: MIT · Version: 0.9.3 · Guides: [docs.w6w.io/clients/react](https://docs.w6w.io/clients/react/)
 (with a [hooks reference](https://docs.w6w.io/clients/react/hooks/) and a
 [Next.js walkthrough](https://docs.w6w.io/clients/react/nextjs/))
 
