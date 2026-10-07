@@ -62,6 +62,13 @@ const SUB_A: Subscription = {
   enabled: true,
   createdAt: "2026-08-09T12:00:00.000Z",
   updatedAt: "2026-08-09T12:00:00.000Z",
+  type: "webhook",
+  status: "registered",
+  intervalMs: null,
+  dependencies: ["wf_1"],
+  nextCheckAt: null,
+  lastError: null,
+  registeredAt: "2026-08-09T12:00:00.000Z",
 };
 
 const SUB_B: Subscription = {
@@ -267,5 +274,24 @@ Deno.test(
 
     assertEquals(err.status, 404);
     assertEquals(err.code, "requeue_failed");
+  },
+);
+
+Deno.test(
+  "console.subscriptions.create: POSTs a body deep-equal to the input, intervalMs included",
+  async () => {
+    const input = { workflowId: "wf_1", connectionId: null, params: {}, intervalMs: 420000 };
+    const polled: Subscription = {
+      ...SUB_A,
+      type: "poll",
+      intervalMs: 420000,
+      status: "pending",
+    };
+    const { client: c, calls } = client(() => json({ subscription: polled }, 201));
+    const out = await c.console.subscriptions.create("app_x", "new-message", input);
+    assertEquals(calls.length, 1);
+    assertEquals(JSON.parse(calls[0].body ?? "null"), input);
+    assertEquals(out.intervalMs, 420000);
+    assertEquals(out.status, "pending");
   },
 );
