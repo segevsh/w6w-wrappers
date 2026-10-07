@@ -1,8 +1,8 @@
 """`client.team.*`, against an **injected fake transport**.
 
 No case here needs a live server or opens a socket
-(`docs/implementation.md` §9) — every `team.*` route is `status: "planned"`
-in `endpoints.json` today, so this is exactly the kind of test that
+(`docs/implementation.md` §9) — the `team.*` routes are `status: "required"`
+in `endpoints.json`, and this is exactly the kind of test that
 discipline exists for. Each case asserts the request the wrapper *made*
 (method, full resolved URL, bearer, serialised body) **and** the value it
 returned, which is always the unwrapped payload and never the server's
@@ -396,7 +396,7 @@ class BadResponseTest(unittest.TestCase):
 
 
 class NotYetServedTest(unittest.TestCase):
-    """`status: "planned"` — a 404 today is an ordinary `ApiError`, not special-cased."""
+    """A 404 from a server without the routes is an ordinary `ApiError`, not special-cased."""
 
     def test_a_404_from_a_server_without_t1_2_1_is_an_ordinary_api_error(self) -> None:
         instance, _calls = client(

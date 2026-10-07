@@ -6,7 +6,7 @@ surface (`me`, `documents`, `vars`, `connections`, `workflows`, `functions`, `ru
 `createW6WUiAdapter`, a structural bridge from a `W6WClient` to
 [`@w6w/ui`](https://github.com/w6w-io/w6w-ui)'s `W6WApi` contract.
 
-License: MIT · Version: 0.9.1 · Guides: [docs.w6w.io/clients/react](https://docs.w6w.io/clients/react/)
+License: MIT · Version: 0.9.2 · Guides: [docs.w6w.io/clients/react](https://docs.w6w.io/clients/react/)
 (with a [hooks reference](https://docs.w6w.io/clients/react/hooks/) and a
 [Next.js walkthrough](https://docs.w6w.io/clients/react/nextjs/))
 
@@ -295,14 +295,6 @@ hook (e.g. `client.console.*` directly, at your own risk per the caveat above).
   fine — every extra field is optional — and there is no runtime data loss (the JSON
   payload is unfiltered); a caller typing a variable through this adapter's declared
   return type just gets no autocomplete for those extra fields.
-- **Use a recent `@w6w/ui` with `ActionTestForm`.** Older `@w6w/ui` commits checked
-  invoke errors with a nominal `instanceof` against `@w6w/ui`'s own `ApiError`
-  class, which no error from this adapter can satisfy: the 401/403 permission hint
-  fell back to a generic message and the `ApiCallsPanel` egress log rendered empty.
-  `w6w-io/w6w-ui` `main` (since `e705825`) matches the error by `status` + `code`
-  and reads `body ?? raw`, so both work with this adapter. It also aliases
-  `ApiError.raw` onto `.body` and sets `err.name = "ApiError"` for any other
-  duck-typing consumer.
 - **Cancellation is per-hook, not exposed to the caller.** Every read hook aborts its
   own superseded or unmounted calls internally (a superseded call, an `identityKey`
   switch, or an unmount all abort the in-flight `AbortSignal` — see `src/hooks.ts`'s

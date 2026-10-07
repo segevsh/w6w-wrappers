@@ -10,7 +10,7 @@ The package is authored as runtime-neutral TypeScript against Web standards (`fe
 `URL`, `AbortController`), so the same build runs under Node 18+, Deno and Bun.
 
 - **License:** MIT (see [LICENSE](./LICENSE)).
-- **Version:** `0.9.1`.
+- **Version:** `0.9.2`.
 - **Guides:** [docs.w6w.io/clients/node](https://docs.w6w.io/clients/node/), with a
   [full reference](https://docs.w6w.io/clients/node/reference/).
 
@@ -337,8 +337,7 @@ implements and which each one's conformance test reads directly — the same fil
 copy. An operation missing from a wrapper is a failing test, not a preference.
 
 An operation marked `planned` in that contract is implemented and unit-tested here ahead of its
-server route. The marker records **server** readiness, not wrapper completeness. The `team.*`
-operations still carry it, but their server routes are live and they work today.
+server route. The marker records **server** readiness, not wrapper completeness.
 
 ## Versioning
 
