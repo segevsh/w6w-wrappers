@@ -76,6 +76,18 @@
    `python/tests/test_version.py:1-102`, and
    `react/src/__tests__/version.test.ts:22-49`.
 
+   **verified: 2026-10-07** — Also move `react/package.json`'s `@w6w/sdk` range to exactly `^` + `VERSION`:
+   `react/src/__tests__/version.test.ts` requires it, and the `0.9.1` bump (`fce330b`) missed it, leaving the
+   react suite at 43/1 until `0.9.2` (`26-10-06-09-self-host-bundle-hygiene`) fixed it (44/0). Don't commit
+   the lockfiles a bump's `npm install` rewrites (`node/package-lock.json`) — prior bumps never did.
+
+5. **An operation's `status` is what lanes render; `serverImplemented` is read by nothing.**
+
+   **verified: 2026-10-07** — `cli/scripts/gen-help.ts` renders `status: "planned"` into
+   `cli/src/help.generated.ts`, which `cli/tests/help_test.ts` byte-checks; so flipping an op to `required`
+   means `cd cli && deno task gen:help` and committing the output. `serverImplemented` has no reader in any
+   lane. The six `team.*` operations are `required`/`serverImplemented: true` as of `VERSION` 0.9.2.
+
 ## Gate baselines
 
 - **verified: 2026-10-06** — The release test job runs Python's unittest command
