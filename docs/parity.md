@@ -40,33 +40,34 @@ symbol or a CLI command are pinned in
 [implementation.md §10](./implementation.md#10-conformance-runner); this section
 and that one must agree, and that one is the newer, pinned spec.
 
-The test asserts **existence and signature**, not behavior — it is a drift alarm,
-not a substitute for the wrapper's own unit tests. What it catches is the actual
-failure mode: an operation added to two wrappers and forgotten in the third.
+The test asserts **existence and signature**, not behavior — it is a drift
+alarm, not a substitute for the wrapper's own unit tests. What it catches is the
+actual failure mode: an operation added to two wrappers and forgotten in the
+third.
 
 Not every lane in this repo carries this test, and the split has a name. A
 **contract lane** — `node`, `cli`, `python` — implements every operation in
-`endpoints.json` directly, appears in every operation's `naming` object, and must
-have this test, green, with no exception. A **derived lane** — `react`, the first
-one — composes an existing contract lane's already-conformant published client
-instead of talking to `endpoints.json` itself, so it has no `naming` entry to
-assert and carries no conformance test of its own; it still ships at the same
-`VERSION` as everything else, because it only ever builds from a contract lane's
-release, never from the contract independently. The missing `naming.react` key is
-therefore not a gap the runner should have caught — it is the shape of the
-category, and §Adding a language says the same for anyone tempted to read it as a
-shortcut.
+`endpoints.json` directly, appears in every operation's `naming` object, and
+must have this test, green, with no exception. A **derived lane** — `react`, the
+first one — composes an existing contract lane's already-conformant published
+client instead of talking to `endpoints.json` itself, so it has no `naming`
+entry to assert and carries no conformance test of its own; it still ships at
+the same `VERSION` as everything else, because it only ever builds from a
+contract lane's release, never from the contract independently. The missing
+`naming.react` key is therefore not a gap the runner should have caught — it is
+the shape of the category, and §Adding a language says the same for anyone
+tempted to read it as a shortcut.
 
-**`status` records *server readiness*, not wrapper obligation, so the runner
-exempts nothing.** An operation is `"planned"` when its route is not live yet — a
-statement about the **server**, aimed at a *user* deciding whether a call will
-reach anything today. It tells an *implementer* nothing: this project implements
-all of the operations ahead of the server, some of them `planned` only because the
-server work is fenced. A wrapper that skipped an operation "because it is planned"
-would ship a surface that silently differs from its two siblings, and the drift
-would surface only when the fence clears — exactly the failure the lockstep bet
-exists to prevent. Implement all of them, unit-test all of them against a mocked
-transport, and assert all of them in conformance.
+**`status` records _server readiness_, not wrapper obligation, so the runner
+exempts nothing.** An operation is `"planned"` when its route is not live yet —
+a statement about the **server**, aimed at a _user_ deciding whether a call will
+reach anything today. It tells an _implementer_ nothing: this project implements
+all of the operations ahead of the server, some of them `planned` only because
+the server work is fenced. A wrapper that skipped an operation "because it is
+planned" would ship a surface that silently differs from its two siblings, and
+the drift would surface only when the fence clears — exactly the failure the
+lockstep bet exists to prevent. Implement all of them, unit-test all of them
+against a mocked transport, and assert all of them in conformance.
 
 ### Where the contract comes from in CI
 
@@ -115,7 +116,7 @@ real:
 1. **Server first — for `status`, not for the code.** The endpoint ships in the
    server, is deployed, and only then does its operation become
    `status: "required"`. That is what "wrappers never lead the API" means: no
-   operation is ever *advertised as live* before its route is, because a client
+   operation is ever _advertised as live_ before its route is, because a client
    method that silently returns 404 is worse than no method.
 
    It does **not** mean a wrapper waits. An operation whose route is not live
@@ -126,16 +127,17 @@ real:
    the server can serve today, and the **wrappers** stay in lockstep regardless.
    This project is the live example — it implements the whole surface ahead of a
    server whose work is fenced, and marks what is not reachable yet.
-2. **Contract second.** Add the operation to `endpoints.json` (`status: "required"`)
-   and document it in `docs/endpoints.md` with its wire shape and per-language
-   naming. Decide the naming *here*, once, rather than three times in three PRs.
+2. **Contract second.** Add the operation to `endpoints.json`
+   (`status: "required"`) and document it in `docs/endpoints.md` with its wire
+   shape and per-language naming. Decide the naming _here_, once, rather than
+   three times in three PRs.
 3. **Every wrapper third — in one PR.** All lanes move together, in a single
    change against this repo, and conformance runs over every one of them in the
    same CI run. It cannot half-land.
 
    This used to be "one PR per wrapper repo", three PRs that had to be
    coordinated by hand and each of which was red until the others merged. That
-   coordination *was* the drift risk this document exists to manage: a fourth
+   coordination _was_ the drift risk this document exists to manage: a fourth
    language would have made it four PRs, and the failure mode — an operation
    added to two lanes and forgotten in the third — was only ever caught after
    the fact, by a conformance run in a repo nobody was looking at. Now it is
@@ -144,16 +146,16 @@ real:
 
 ## Adding a language
 
-A new language is **a directory in this repo** — `go/`, `dart/`, beside the three
-that are here. Not a repo, not a CI bootstrap, not a new set of publish secrets:
-a directory, a lane in the existing workflow, and a conformance test.
+A new language is **a directory in this repo** — `go/`, `dart/`, beside the
+three that are here. Not a repo, not a CI bootstrap, not a new set of publish
+secrets: a directory, a lane in the existing workflow, and a conformance test.
 
 That is the whole point of the layout, and it is worth being explicit about what
-it does *not* make cheap. A wrapper is still a real commitment, because it makes
-step 3 above wider forever: every future operation now has to be written a fourth
-time, by someone who knows that language, on the same day. A wrapper that lags a
-version behind is worse for its users than no wrapper at all — they will
-reasonably assume it is current. The repo layout removes the *ceremony*, not the
+it does _not_ make cheap. A wrapper is still a real commitment, because it makes
+step 3 above wider forever: every future operation now has to be written a
+fourth time, by someone who knows that language, on the same day. A wrapper that
+lags a version behind is worse for its users than no wrapper at all — they will
+reasonably assume it is current. The repo layout removes the _ceremony_, not the
 obligation.
 
 The bar for a new wrapper joining the lockstep:
@@ -165,15 +167,14 @@ The bar for a new wrapper joining the lockstep:
   ([release.md](./release.md)).
 - Its manifest version written from `VERSION`.
 
-`react/` sits in this repo without meeting this bar because it is a
-**derived lane** (§Conformance), not a contract lane — it composes `node/`'s
-client rather than implementing `endpoints.json` directly, and that exemption is
-react's alone, not a precedent for a contract lane like a prospective `go/` or
-`dart/`.
+`react/` sits in this repo without meeting this bar because it is a **derived
+lane** (§Conformance), not a contract lane — it composes `node/`'s client rather
+than implementing `endpoints.json` directly, and that exemption is react's
+alone, not a precedent for a contract lane like a prospective `go/` or `dart/`.
 
-Until all three hold **for a would-be contract lane**, keep it out of the release
-workflow rather than shipping it half-joined — a derived lane like `react/` was
-never bound by this bar to begin with, so it does not apply here.
+Until all three hold **for a would-be contract lane**, keep it out of the
+release workflow rather than shipping it half-joined — a derived lane like
+`react/` was never bound by this bar to begin with, so it does not apply here.
 
 ## Token callback lanes
 
@@ -181,104 +182,103 @@ Contract 0.3.0 added a per-request token supplier, an opt-in one-shot `401`
 recovery retry, an `onUnauthorized`/`on_unauthorized` callback, and client-wide
 default `headers` (`docs/implementation.md` §2–§3,
 [`sdk-surface.md` §1](./sdk-surface.md#1-construction-and-configuration)). This
-is a **new axis the conformance runner does not and should not check** — none
-of it is an *operation*, so it has no `naming` entry in `endpoints.json` and no
-row in `operations[]`. It is recorded here instead, the way §Conformance
-already separates "every operation, every lane" from everything else a lane
-legitimately differs on (§6 of `sdk-surface.md`).
+is a **new axis the conformance runner does not and should not check** — none of
+it is an _operation_, so it has no `naming` entry in `endpoints.json` and no row
+in `operations[]`. It is recorded here instead, the way §Conformance already
+separates "every operation, every lane" from everything else a lane legitimately
+differs on (§6 of `sdk-surface.md`).
 
-- **node and python both carry the callback; the CLI does not.** `W6WClient`
-  and `Client` both accept `refreshOnUnauthorized`/`refresh_on_unauthorized`,
+- **node and python both carry the callback; the CLI does not.** `W6WClient` and
+  `Client` both accept `refreshOnUnauthorized`/`refresh_on_unauthorized`,
   `onUnauthorized`/`on_unauthorized` and a function-typed `token`. `@w6w/cli`
-  does not: `cli/src/client.ts`'s `createClient` resolves a single static
-  string token once, at startup, from a `--token`-flag-then-`W6W_TOKEN`-env
-  precedence chain with no supplier anywhere in it — there is nothing for a
-  `401` recovery attempt to call a second time, and a CLI invocation is
-  already a single short-lived process a
-  user re-runs by hand, which is a different failure-recovery story than a
-  long-lived server process holding a client across many calls. This is a
-  **deliberate, permanent exclusion**, not a gap to close later: adding it
-  would mean inventing a CLI-side token-refresh UX (a hook with nothing to
-  register it against) for a surface that has none of the host-process
-  lifetime this feature exists for.
+  does not: `cli/src/client.ts`'s `createClient` resolves a single static string
+  token once, at startup, from a `--token`-flag-then-`W6W_TOKEN`-env precedence
+  chain with no supplier anywhere in it — there is nothing for a `401` recovery
+  attempt to call a second time, and a CLI invocation is already a single
+  short-lived process a user re-runs by hand, which is a different
+  failure-recovery story than a long-lived server process holding a client
+  across many calls. This is a **deliberate, permanent exclusion**, not a gap to
+  close later: adding it would mean inventing a CLI-side token-refresh UX (a
+  hook with nothing to register it against) for a surface that has none of the
+  host-process lifetime this feature exists for.
 - **python's supplier is sync-only; node's may be sync or async.** R-1 (and
-  `sdk-surface.md` §6): there is no `asyncio` anywhere in `packages/wrappers/python`,
-  and its transport (`urllib`, blocking) has no async counterpart for a
-  supplier to straddle. node's `TokenProvider` may return a `Promise`, which
-  `request()` awaits before attaching the bearer; python's provider is called
-  and used immediately. A python host with its own async token source resolves
-  it *before* handing the value to a sync callable — that resolution is the
-  host's problem, not this package's, exactly like every other sync/async
-  boundary `urllib` already draws for this lane.
+  `sdk-surface.md` §6): there is no `asyncio` anywhere in
+  `packages/wrappers/python`, and its transport (`urllib`, blocking) has no
+  async counterpart for a supplier to straddle. node's `TokenProvider` may
+  return a `Promise`, which `request()` awaits before attaching the bearer;
+  python's provider is called and used immediately. A python host with its own
+  async token source resolves it _before_ handing the value to a sync callable —
+  that resolution is the host's problem, not this package's, exactly like every
+  other sync/async boundary `urllib` already draws for this lane.
 - **`contractVersion` is unchanged, and `endpoints.json` is not touched at
-  all.** `endpoints.json`'s `contractVersion` field tracks the **wire
-  surface** — the operations, their shapes, their status — and this task
-  changed none of them: `"auth": "bearer"` is still the only auth field any
-  operation declares, and the new client options are not `operations[]`
-  entries, so they have no `naming` object to add and nothing for a would-be
-  fourth language to implement differently. A package-level `VERSION` bump for
-  this change is a separate, later step (not part of landing this feature) —
-  recorded here only to say that *this* number, the contract's own, had no
-  reason to move.
+  all.** `endpoints.json`'s `contractVersion` field tracks the **wire surface**
+  — the operations, their shapes, their status — and this task changed none of
+  them: `"auth": "bearer"` is still the only auth field any operation declares,
+  and the new client options are not `operations[]` entries, so they have no
+  `naming` object to add and nothing for a would-be fourth language to implement
+  differently. A package-level `VERSION` bump for this change is a separate,
+  later step (not part of landing this feature) — recorded here only to say that
+  _this_ number, the contract's own, had no reason to move.
 
 ## Per-call cancellation (node only)
 
 `CallOptions.signal?: AbortSignal` (R-7) is node-only, and deliberately not in
-`endpoints.json`: it is a transport option on the *client*, not a parameter the
-*server* reads, so it does not describe the wire the way every other entry in
-this contract does (the §Conformance test walks a built client and would have
-no server-side shape to check it against). Every read method `@w6w/react`'s
-read hooks call (`client.me`, `documents.list`/`get`/`getByKey`,
-`vars.list`/`get`, `connections.list`, `workflows.list`/`get`,
-`functions.list`/`get`) accepts it, forwarded to `src/http.ts`'s `request()`
-and from there straight to the injected `fetch`'s own `RequestInit.signal` —
-never serialized into a query string or a body.
+`endpoints.json`: it is a transport option on the _client_, not a parameter the
+_server_ reads, so it does not describe the wire the way every other entry in
+this contract does (the §Conformance test walks a built client and would have no
+server-side shape to check it against). Every read method `@w6w/react`'s read
+hooks call (`client.me`, `documents.list`/`get`/`getByKey`, `vars.list`/`get`,
+`connections.list`, `workflows.list`/`get`, `functions.list`/`get`) accepts it,
+forwarded to `src/http.ts`'s `request()` and from there straight to the injected
+`fetch`'s own `RequestInit.signal` — never serialized into a query string or a
+body.
 
 **Python and the CLI have no analog, and this is not an oversight.** `signal`
 mirrors a shape every JS runtime's own `fetch` already exposes (`AbortSignal`,
-`AbortController`) — it is JS-idiomatic transport plumbing, not a capability
-the *API* grants. Python's `urllib`-based transport has no equivalent
-object to thread one through, and a CLI invocation is a single short-lived
-process with nothing in-process to cancel a call for — there is no "stale
-tab-switch request" for either lane the way there is for a React hook
-re-rendering. Should a future python transport (e.g. `httpx`) or a long-running
-CLI mode want the same thing, it would need its own idiomatic mechanism
-(`httpx`'s own cancellation token, a `SIGINT` handler) rather than a literal
-`signal` kwarg — unlike the lockstep version bump (§The version is a shared
-fact), this axis is expected to stay permanently node-only, not a gap pending a
-future PR.
+`AbortController`) — it is JS-idiomatic transport plumbing, not a capability the
+_API_ grants. Python's `urllib`-based transport has no equivalent object to
+thread one through, and a CLI invocation is a single short-lived process with
+nothing in-process to cancel a call for — there is no "stale tab-switch request"
+for either lane the way there is for a React hook re-rendering. Should a future
+python transport (e.g. `httpx`) or a long-running CLI mode want the same thing,
+it would need its own idiomatic mechanism (`httpx`'s own cancellation token, a
+`SIGINT` handler) rather than a literal `signal` kwarg — unlike the lockstep
+version bump (§The version is a shared fact), this axis is expected to stay
+permanently node-only, not a gap pending a future PR.
 
 ## react's type-only edge onto `@w6w/ui`
 
 `react/`'s `createW6WUiAdapter` targets `@w6w/ui`'s `W6WApi` contract
-**structurally** — a hand-duplicated interface in `react/src/adapter.ts`, never an
-import of `@w6w/ui` itself at runtime. `react/package.json` carries one
-`devDependency` on it, `"@w6w/ui": "github:w6w-io/w6w-ui#<sha>"`, and that edge is
-**dev-only and type-only**: `react/package.json`'s `files: ["dist"]` means only
-`dist/` is ever packed and published, so no installer of `@w6w/react` resolves
-`@w6w/ui` at all. Its one consumer is
-`react/src/__tests__/ui-conformance.test.ts`, run by `npm test` at dev/CI time only,
-which compiles a type-only check file against `@w6w/ui`'s real `provider.tsx` and
-fails — naming the missing/mismatched member — the moment
+**structurally** — a hand-duplicated interface in `react/src/adapter.ts`, never
+an import of `@w6w/ui` itself at runtime. `react/package.json` carries one
+`devDependency` on it, `"@w6w/ui": "github:w6w-io/w6w-ui#<sha>"`, and that edge
+is **dev-only and type-only**: `react/package.json`'s `files: ["dist"]` means
+only `dist/` is ever packed and published, so no installer of `@w6w/react`
+resolves `@w6w/ui` at all. Its one consumer is
+`react/src/__tests__/ui-conformance.test.ts`, run by `npm test` at dev/CI time
+only, which compiles a type-only check file against `@w6w/ui`'s real
+`provider.tsx` and fails — naming the missing/mismatched member — the moment
 `createW6WUiAdapter`'s return type stops being assignable to the real `W6WApi`.
 
-**Why a `github:<owner>/<repo>#<sha>` pin and not a sibling `link:`:** this repo's
-`release.yml` checks out **only `w6w-wrappers`** — no sibling checkout, no
-submodules (§Conformance's own CI model is the same single-repo-checkout premise).
-A `link:../../ui` resolves only by the local devcontainer's incidental directory
-layout and fails `ENOENT` on every CI run and on a fresh standalone clone; a
-`github:` spec needs nothing but a network fetch of the one pinned commit. The pin
-targets `@w6w/ui/src/provider.tsx` by relative path rather than the package's root
-barrel, because the barrel's own import chain reaches `@w6w/expr`
-(`packages/core`) through a `github:…#path:` subpath npm does not honor on a
-`github:` dependency — `provider.tsx`'s own closure (`theme.ts` → `types.ts` →
-`react`) carries no such edge and compiles clean standalone.
+**Why a `github:<owner>/<repo>#<sha>` pin and not a sibling `link:`:** this
+repo's `release.yml` checks out **only `w6w-wrappers`** — no sibling checkout,
+no submodules (§Conformance's own CI model is the same single-repo-checkout
+premise). A `link:../../ui` resolves only by the local devcontainer's incidental
+directory layout and fails `ENOENT` on every CI run and on a fresh standalone
+clone; a `github:` spec needs nothing but a network fetch of the one pinned
+commit. The pin targets `@w6w/ui/src/provider.tsx` by relative path rather than
+the package's root barrel, because the barrel's own import chain reaches
+`@w6w/expr` (`packages/core`) through a `github:…#path:` subpath npm does not
+honor on a `github:` dependency — `provider.tsx`'s own closure (`theme.ts` →
+`types.ts` → `react`) carries no such edge and compiles clean standalone.
 
-This is **not** a second conformance axis alongside §Conformance's `endpoints.json`
-runner above — `react/` is still a derived lane with no `naming.react` entry and no
-obligation to implement `endpoints.json` directly. It is a narrower, one-directional
-check that one derived lane's hand-duplicated bridge interface has not silently
-drifted from the one third-party contract it targets structurally; moving the pin
-(bumping the `#<sha>` to a newer `w6w-io/w6w-ui` `main` commit and re-running `npm
-install`) needs no `VERSION` bump of its own unless `W6WApi` itself changed shape,
-in which case this check is what says so.
+This is **not** a second conformance axis alongside §Conformance's
+`endpoints.json` runner above — `react/` is still a derived lane with no
+`naming.react` entry and no obligation to implement `endpoints.json` directly.
+It is a narrower, one-directional check that one derived lane's hand-duplicated
+bridge interface has not silently drifted from the one third-party contract it
+targets structurally; moving the pin (bumping the `#<sha>` to a newer
+`w6w-io/w6w-ui` `main` commit and re-running `npm
+install`) needs no `VERSION`
+bump of its own unless `W6WApi` itself changed shape, in which case this check
+is what says so.

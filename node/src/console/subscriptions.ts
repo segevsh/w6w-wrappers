@@ -55,6 +55,15 @@ export interface SubscriptionsHost {
   request<T>(options: RequestOptions): Promise<HttpResponse<T>>;
 }
 
+/** How a trigger's events arrive: pushed to a webhook, or fetched by a poll. */
+export type TriggerType = "webhook" | "poll";
+
+/**
+ * Where a subscription is in its registration lifecycle. Only `registered`
+ * subscriptions receive events.
+ */
+export type SubscriptionStatus = "pending" | "registered" | "failed" | "destroying";
+
 /**
  * A (trigger → workflow) binding. Field-for-field per
  * `packages/studio/src/api/types.ts:72-83` — this module does not redesign
@@ -72,6 +81,20 @@ export interface Subscription {
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
+  /** How events arrive. */
+  type: TriggerType;
+  /** Registration lifecycle state. */
+  status: SubscriptionStatus;
+  /** Poll interval in ms; `null` for a webhook subscription. */
+  intervalMs: number | null;
+  /** Principal ids (workflow, connection, …) this subscription depends on. */
+  dependencies: string[];
+  /** When the next poll is due; `null` when not a poll or not yet scheduled. */
+  nextCheckAt: string | null;
+  /** The last registration failure, if any; `null` otherwise. */
+  lastError: { code: string; message: string } | null;
+  /** When registration last succeeded; `null` if it never has. */
+  registeredAt: string | null;
   /** Present only for `appId === "@w6w/webhook"` — the server's own computed receive URL. */
   webhookUrl?: string;
 }
@@ -84,10 +107,12 @@ export interface SubscriptionCreateInput {
   workflowId: string;
   connectionId?: string | null;
   params?: Record<string, unknown>;
+  /** Poll interval in ms (integer). Poll triggers only — the server defaults it to its floor. */
+  intervalMs?: number;
 }
 
 /** The lifecycle a delivered trigger event can be in. */
-export type TriggerEventStatus = "received" | "dispatching" | "dispatched" | "failed";
+export type TriggerEventStatus = "received" | "dispatching" | "dispatched" | "failed" | "ignored";
 
 /**
  * Metadata-only view of a delivered trigger event. Field-for-field per

@@ -77,6 +77,8 @@ export interface ApiToken {
   updatedAt: string;
   /** ISO-8601 timestamp of revocation, or `null` while active/disabled. */
   revokedAt: string | null;
+  /** ISO-8601 timestamp of the token's last authenticated use, or `null` while unused. Optional: absent on a server build that predates this field. */
+  lastUsedAt?: string | null;
 }
 
 /**

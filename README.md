@@ -7,7 +7,7 @@ Open-source client libraries that wrap the w6w HTTP API.
 | SDK  | [`node/`](./node)     | `@w6w/sdk` (npm + JSR) | TypeScript |
 | CLI  | [`cli/`](./cli)       | `@w6w/cli` (npm), binary `w6w` | TypeScript |
 | SDK  | [`python/`](./python) | `w6w` (PyPI) | Python |
-| SDK bindings | react/ | `@w6w/react` (npm) | TypeScript (React) |
+| SDK bindings | [`react/`](./react) | `@w6w/react` (npm) | TypeScript (React) |
 
 ## Install
 
@@ -19,9 +19,14 @@ npm install @w6w/react      # composes @w6w/sdk — a derived lane, see docs/par
 ```
 
 Each install is a normal, tokenless publish from this repo's own CI, over OIDC —
-see [docs/release.md](./docs/release.md). Full client docs, per language, live
-in [`node/README.md`](./node/README.md), [`cli/README.md`](./cli/README.md) and
-[`python/README.md`](./python/README.md).
+see [docs/release.md](./docs/release.md).
+
+**Using a client?** The user guides are published at
+[docs.w6w.io/clients](https://docs.w6w.io/clients/overview/), from the pages in
+[`docs/clients/`](./docs/clients). Each lane's README —
+[`node/`](./node/README.md), [`cli/`](./cli/README.md),
+[`python/`](./python/README.md), [`react/`](./react/README.md) — is the short
+version that ships with the package.
 
 **One repo, one directory per language, one version.** The wrappers live here
 together with the contract they implement (`endpoints.json`, `VERSION`, these
@@ -67,6 +72,8 @@ w6w-wrappers/                  # ← submodule of the w6w monorepo at packages/w
 ├── VERSION            # the single version every wrapper publishes under
 ├── endpoints.json     # machine-readable surface contract (drives conformance tests)
 ├── docs/
+│   ├── clients/          # user guides, published to docs.w6w.io/clients (listed in manifest.json)
+│   ├── manifest.json     # which docs/ pages docs.w6w.io publishes — only clients/
 │   ├── endpoints.md      # the endpoint catalog — wire shapes + per-language signatures
 │   ├── sdk-surface.md    # the client catalog — every published symbol and how it behaves
 │   ├── implementation.md # the cross-language spec — types, errors, env, toolchains, tests
@@ -99,12 +106,14 @@ of places the two SDKs deliberately differ in idiom while agreeing on the wire.
 
 ## What a wrapper is
 
-A thin, typed, ergonomic client over the HTTP API. It owns transport, auth,
-retries, pagination, and error mapping.
+A thin, typed, ergonomic client over the HTTP API. It owns transport, auth and
+error mapping. It does not retry (apart from one opt-in token refresh on a
+`401`), poll, or paginate: no list route is paginated today, and a caller who
+wants a retry policy owns it.
 
 It is **not** a place for business logic. If a wrapper needs to compose two calls
 to make an operation useful, that composition probably belongs in the API. Keep
-the wrappers boring — three of them have to stay in agreement forever, and every
+the wrappers boring — the three contract lanes have to stay in agreement forever, and every
 clever thing you add is a thing that has to be re-implemented twice more, in
 languages whose idioms disagree with yours.
 

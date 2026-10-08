@@ -3,16 +3,22 @@
 Typed Python client for the w6w workflow API.
 
 It is a thin wrapper: transport, auth, error mapping. Documents, variables,
-connections, workflows and runs — the same surface the Node SDK and the `w6w`
-CLI expose, at the same version. All three wrappers implement one shared
-contract and release together, so `w6w==X` gives you the same operations as
-`@w6w/sdk@X`.
+connections, workflows, Functions, Endpoints, runs and your team — the same
+surface the Node SDK and the `w6w` CLI expose, at the same version. Every
+contract lane implements one shared contract, and all four packages
+(`w6w`, `@w6w/sdk`, `@w6w/cli`, `@w6w/react`) release together, so `w6w==X`
+gives you the same operations as `@w6w/sdk@X`.
 
-**Status: pre-release.** The full surface is in — `me`, `run`,
-`connections.list`, the complete `workflows.*` and `functions.*` lifecycle
-(list/get/create/update/delete, plus `run` and `workflows.archive`), and the
-complete `documents.*` and `vars.*` CRUD. Below `1.0.0`, breaking changes may arrive in a
-minor bump — that grace ends at `1.0.0`.
+- **Version:** `0.9.3`.
+- **Guides:** [docs.w6w.io/clients/python](https://docs.w6w.io/clients/python/),
+  with a [full reference](https://docs.w6w.io/clients/python/reference/).
+- **Surface:** `me`, `run`, `request`, `connections.list`, the complete
+  `workflows.*` lifecycle (list/run/cancel/get/create/update/archive/delete),
+  `functions.*` (run/list/get/create/update/delete), `endpoints.run`, the
+  complete `documents.*` and `vars.*` CRUD, `team.*`, and
+  `w6w.server.exchange_token` for backends.
+- Below `1.0.0`, breaking changes may arrive in a minor bump — that grace ends
+  at `1.0.0`.
 
 MIT licensed — see [LICENSE](./LICENSE).
 
@@ -34,7 +40,7 @@ Two reasons, in order of importance:
 
 1. **A client library should never join a dependency fight.** Installing this
    package cannot conflict with the versions you have already pinned.
-2. **It is the only honest choice for how this package is developed.** The
+2. **It is the only workable choice for how this package is developed.** The
    environment it is built in has no package installer available at all, so a
    third-party HTTP or test dependency would make the package untestable by the
    people writing it.
@@ -52,7 +58,7 @@ client = Client()                         # from the environment
 client = Client(base_url="https://api.example.com", token="tok_…")
 
 try:
-    identity = client.me()                # who am I, and what answered?
+    identity = client.me()                # who am I? versions["wrapper"] is this client's version
 except ApiError as err:
     print(err.status, err.code, err.message)
 
@@ -65,8 +71,9 @@ workflows = client.workflows.list()
 ### Run anything addressable by a URN
 
 `run` returns a `kind`-tagged envelope — the parsed body, exactly as it arrived.
-Discriminate it before reading a field, because the arms use different field
-names on purpose (`value` vs `output` vs `runId` + `status`):
+Discriminate it before reading a field, because the arms carry different
+fields (`output` for an action or a Function, `runId` + `status` for a
+workflow):
 
 ```python
 import w6w
@@ -78,7 +85,7 @@ env = client.run(
 )
 
 if w6w.is_action_run(env):
-    print(env["value"])                   # the action's return value
+    print(env["output"])                  # the action's return value ("value" holds the same)
 ```
 
 A `fn_…` or `ep_…` id runs the same way with no `action`; a `wf_…` id is
@@ -100,6 +107,33 @@ if run.terminal and run.status == "failed":
 elif run.terminal:
     print(run.output)
 ```
+
+Cancel a run with `client.workflows.cancel(run_id)`; the answer is the run's
+status at that moment.
+
+### Functions and Endpoints
+
+```python
+output = client.functions.run("send-welcome-email", payload={"to": "a@example.com"})
+result = client.endpoints.run("signup", payload={"email": "a@example.com"})
+```
+
+Both take a key or an id. `functions.run` returns the Function's output;
+`endpoints.run` returns the same tagged envelope as `client.run`. A Function
+must be archived before `functions.delete` accepts it (`409
+function_not_archived`).
+
+### Team
+
+```python
+members = client.team.members()
+invite = client.team.invite(email="dev@example.com", role="member")
+print(invite.redemption_link)
+```
+
+Reading the roster and open invites works for any member; `invite`,
+`revoke_invite`, `set_role` and `remove_member` need the `owner` or `admin`
+role. Team records use snake_case attributes (`user_id`, `display_name`).
 
 ### Documents and vars
 
@@ -149,8 +183,8 @@ Two environment variables, read once when a client is constructed:
 | `W6W_BASE_URL` | The **origin** of your w6w API — e.g. `https://api.example.com`. The API is served at the root of that host, so the client appends nothing. There is no default. |
 | `W6W_TOKEN` | Your API token. Sent as `Authorization: Bearer <token>` on every request. |
 
-These variables are part of the published contract and are identical across all
-three wrappers.
+These variables are part of the published contract and are identical across
+every client.
 
 **Explicit constructor arguments always win over the environment.**
 `Client(base_url=…, token=…)` overrides `W6W_BASE_URL` / `W6W_TOKEN`, and an
@@ -275,6 +309,41 @@ A `424` is an app or upstream **execute-phase** failure, not a transport fault
 and not a server error — it is a 4xx on purpose. It reaches you with its code and
 body intact.
 
+Nothing is retried except the opt-in `refresh_on_unauthorized` recovery, and
+there is **no default timeout**: the default transport is
+`urllib.request.urlopen` with none. Set one by passing a transport:
+
+```python
+import urllib.request
+
+client = Client(transport=lambda req: urllib.request.urlopen(req, timeout=30))
+```
+
+A timeout raises `ApiError` with `status=0` and `code="network_error"`.
+
+## Embedding for enterprise tenants
+
+A partner backend mints a short-lived, per-user token with
+`w6w.server.exchange_token`. It takes your tenant's client secret, so it must
+only ever run on your backend:
+
+```python
+from w6w.server import exchange_token
+
+minted = exchange_token(
+    base_url="https://api.example.com",
+    client_id=client_id,
+    client_secret=client_secret,   # never sent to a browser
+    subject=user_id,               # your user's id
+    account=account_id,            # optional; from your own records
+)
+token = minted["token"]            # also: minted["expiresIn"], minted["user"]
+```
+
+Bad credentials answer `401 invalid_client`. The
+[Python guide](https://docs.w6w.io/clients/python/#embed-w6w-in-your-product)
+shows how to feed the result to a `Client` through a token callable.
+
 ## Tests
 
 The suite runs from a source checkout with **no installation step and no test
@@ -284,7 +353,7 @@ runner to install** — `unittest` from the standard library:
 PYTHONPATH=src python3 -m unittest discover -s tests -t . -v
 ```
 
-Run it from the repository root. A single file:
+Run it from this `python/` directory. A single file:
 
 ```bash
 PYTHONPATH=src python3 -m unittest tests.test_version -v
@@ -295,7 +364,7 @@ transport seam, never a live server — conformance against a running server is 
 separate, environment-dependent step and is not part of this suite.
 
 `tests/test_surface.py` is the exception in kind rather than in method: it reads
-the shared `endpoints.json` sitting **beside** this repository and asserts that
+the shared `endpoints.json` one directory up, at the wrappers repo root, and asserts that
 every contracted operation is reachable under the symbol the contract names it —
 and that no namespace has grown one the contract does not have. It never
 vendors a copy, and it fails naming the path it looked for rather than skipping,
@@ -329,20 +398,19 @@ list above is your gate, not the number.
 ## The surface
 
 Which operations exist is not decided in this repository. It is defined by the
-shared machine-readable contract **`endpoints.json`**, which all three w6w
-wrappers implement and which each one's conformance test reads directly — the
+shared machine-readable contract **`endpoints.json`**, which every contract
+lane implements and which each one's conformance test reads directly — the
 same file, never a vendored copy. An operation missing from a wrapper, or one it
 has grown alone, is a failing test rather than a preference.
 
-Some operations may be marked `planned` in that contract: they are implemented
-and unit-tested here, but the corresponding server route is not live yet, so
-calling one against a server today returns `404`. The marker records **server**
-readiness, not wrapper completeness.
+An operation marked `planned` in that contract is implemented and unit-tested
+here ahead of its server route. The marker records **server** readiness, not
+wrapper completeness.
 
 ## Versioning
 
 The version appears in three places — `src/w6w/_version.py`, `pyproject.toml`,
-and the wrappers' shared `VERSION` contract that sits beside this repository —
+and the wrappers' shared `VERSION` file one directory up —
 and `tests/test_version.py` fails if any of them disagree. All three are
 written from the shared file at release time; none is ever bumped on its own.
 That is the mechanism behind "one surface, one version, released together".
@@ -371,5 +439,5 @@ Conventions worth knowing before the first patch:
   socket.
 - **The surface is not decided here.** Which operations exist, and what each is
   called in each language, is pinned by the shared wrapper contract. Adding an
-  operation to this client alone would break the promise the three wrappers
-  make together.
+  operation to this client alone would break the promise the wrappers make
+  together.

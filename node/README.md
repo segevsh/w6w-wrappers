@@ -10,7 +10,9 @@ The package is authored as runtime-neutral TypeScript against Web standards (`fe
 `URL`, `AbortController`), so the same build runs under Node 18+, Deno and Bun.
 
 - **License:** MIT (see [LICENSE](./LICENSE)).
-- **Version:** `0.9.0`.
+- **Version:** `0.9.3`.
+- **Guides:** [docs.w6w.io/clients/node](https://docs.w6w.io/clients/node/), with a
+  [full reference](https://docs.w6w.io/clients/node/reference/).
 
 ## Install
 
@@ -26,9 +28,9 @@ JSR (the TypeScript source, published verbatim):
 deno add jsr:@w6w/sdk
 ```
 
-Both registries publish the **same version at the same time** — `@w6w/sdk`, `@w6w/cli` and the
-Python `w6w` package share one version number and are released together. A given version means the
-same set of operations in every language.
+Both registries publish the **same version at the same time** — `@w6w/sdk`, `@w6w/cli`, `@w6w/react`
+and the Python `w6w` package share one version number and are released together. A given version
+means the same set of operations in every language.
 
 ## Quick start
 
@@ -37,7 +39,7 @@ import { isActionRun, isFunctionRun, isWorkflowRun, W6WClient } from "@w6w/sdk";
 
 const client = new W6WClient(); // reads W6W_BASE_URL and W6W_TOKEN
 
-// Who am I, and what versions am I talking to?
+// Who am I? (`me.versions.wrapper` is this SDK's version.)
 const me = await client.me();
 
 // What can I run? `run` is addressed by a `conn_…` / `fn_…` / `ep_…` / `wf_…`
@@ -50,7 +52,7 @@ const workflows = await client.workflows.list();
 
 A `conn_…` id resolves to an app action. `run` returns a `kind`-tagged envelope — narrow it with
 `isActionRun` / `isFunctionRun` / `isWorkflowRun` before reading a field, since the three arms use
-different field names on purpose (`value` vs `output` vs `runId`+`status`):
+different fields (`output` for an action or a function, `runId`+`status` for a workflow):
 
 ```ts
 const env = await client.run({
@@ -59,7 +61,7 @@ const env = await client.run({
   payload: { channel: "#general", text: "Hello from @w6w/sdk" },
 });
 
-if (isActionRun(env)) console.log(env.value); // the action's return value
+if (isActionRun(env)) console.log(env.output); // the action's return value
 ```
 
 ### Run a function or an endpoint
@@ -108,6 +110,57 @@ await client.documents.delete(doc.id);
 const v = await client.vars.create({ name: "sender_email", type: "string", value: "a@b.c" });
 await client.vars.update(v.id, { value: "c@d.e" });
 ```
+
+Documents belong to a project: pass `{ project: "prj_…" }` as the last argument, or set `project` on
+the client. Without either, your account's default project is used. Vars belong to the account.
+
+### Functions, Endpoints and workflow definitions
+
+```ts
+// Run by key or id. `functions.run` returns the Function's output directly.
+const out = await client.functions.run("send-welcome-email", { payload: { to: "a@example.com" } });
+const res = await client.endpoints.run("signup", { payload: { email: "a@example.com" } });
+
+// Cancel a run. The answer is the run's status at that moment.
+await client.workflows.cancel("run_01H…");
+
+// Read, edit and save a definition, refusing to overwrite someone else's save.
+const { workflow, updatedAt } = await client.workflows.get("wf_01H…");
+await client.workflows.update("wf_01H…", { ...workflow, description: "Sends the welcome email" }, {
+  ifUnmodifiedSince: updatedAt,
+});
+```
+
+`functions.list/get/create/update/delete` and `workflows.create/archive/delete` complete the
+lifecycle. A Function or workflow must be archived before it can be deleted
+(`409 function_not_archived` / `409 workflow_not_archived`).
+
+### Team
+
+```ts
+const members = await client.team.members();
+const { redemptionLink } = await client.team.invite({ email: "dev@example.com", role: "member" });
+```
+
+Reading the roster and open invites works for any member. `invite`, `revokeInvite`, `setRole` and
+`removeMember` need the `owner` or `admin` role.
+
+### A route the SDK doesn't wrap
+
+`client.request()` sends any request with the client's own base URL, token and headers, and raises
+the same `ApiError`. Build the path with the `path` tag, which percent-encodes each value:
+
+```ts
+import { path } from "@w6w/sdk";
+
+const { status, body } = await client.request<{ run: { status: string } }>({
+  method: "GET",
+  path: path`/runs/${runId}`,
+});
+```
+
+Every call also takes an `AbortSignal` as `signal`; an aborted call raises `ApiError` with `status`
+`0` and code `cancelled`.
 
 ## Configuration
 
@@ -271,26 +324,25 @@ bearer for the rest of the session — the tenant secret itself never leaves you
 travel only as an HTTP `Authorization: Basic base64(clientId:clientSecret)` header — never in the
 request body, the URL or a query string — and every malformed input (a blank
 `clientId`/`clientSecret`/`subject`, a `clientId` containing `:`, a non-latin-1
-`clientId`/`clientSecret`) raises a local `ConfigError` before any network call. See
-[`../docs/sdk-surface.md`](../docs/sdk-surface.md) "Server-only subpath — `@w6w/sdk/server`" for the
-full contract (both languages), and `.claude/docs/usage/partner/partner-ui-embedding.md` (internal —
-private `w6w-io/w6w` — for the broader embedding picture this token feeds into).
+`clientId`/`clientSecret`) raises a local `ConfigError` before any network call. The
+[embedding guide](https://docs.w6w.io/clients/node/embedding/) walks through token caching and
+refresh end to end; [`../docs/sdk-surface.md`](../docs/sdk-surface.md) "Server-only subpath —
+`@w6w/sdk/server`" pins the contract in both languages.
 
 ## The surface
 
 What operations exist is not decided in this repo. It is defined by the shared machine-readable
-contract **`endpoints.json`**, which all three w6w wrappers implement and which each one's
-conformance test reads directly — the same file, never a vendored copy. An operation missing from a
-wrapper is a failing test, not a preference.
+contract **`endpoints.json`**, which every contract lane (this SDK, the CLI and the Python client)
+implements and which each one's conformance test reads directly — the same file, never a vendored
+copy. An operation missing from a wrapper is a failing test, not a preference.
 
-Some operations are marked `planned` in that contract: they are implemented and unit-tested here,
-but the corresponding server route is not live yet, so calling them against a server today returns
-`404`. The marker records **server** readiness, not wrapper completeness.
+An operation marked `planned` in that contract is implemented and unit-tested here ahead of its
+server route. The marker records **server** readiness, not wrapper completeness.
 
 ## Versioning
 
-The version is a shared fact across all three wrappers, so a release may go out for this package
-even when nothing in it changed — a divergent version is far more expensive than an empty release.
+The version is a shared fact across all four packages, so a release may go out for this package even
+when nothing in it changed — a divergent version is far more expensive than an empty release.
 
 Below `1.0.0`, **breaking changes may land in a minor bump.** That grace ends at `1.0.0`; do not
 plan around it.

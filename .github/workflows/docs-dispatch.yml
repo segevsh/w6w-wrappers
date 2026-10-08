@@ -8,11 +8,12 @@ name: Docs dispatch
 # short-lived, per-call GitHub App installation token scoped to ONLY
 # w6w-io/docs, never a stored PAT and never the ambient GITHUB_TOKEN.
 #
-# `docs/manifest.json` here is MECHANISM-ONLY — it stays `{"docs": []}`. This
-# repo's `docs/` folder holds implementer-facing contract documents (cli.md,
-# endpoints.md, implementation.md, parity.md, release.md, sdk-surface.md);
-# `wrappers` contributes its README only, never `docs/` (docs-sources.ts:74-76).
-# Wiring this convention in must not promote any of them.
+# `docs/manifest.json` here lists ONLY the user guides under `docs/clients/`
+# (section `clients`), which docs.w6w.io reads because w6w-io/w6w-wrappers is
+# in its MANIFEST_REPOS (doc-sources.ts). The rest of `docs/` holds
+# implementer-facing contract documents (cli.md, endpoints.md,
+# implementation.md, parity.md, release.md, sdk-surface.md); they stay out of
+# the manifest and so stay unpublished.
 #
 # INERT UNTIL a human installs the w6w-ci-bot GitHub App on w6w-io/docs and
 # sets the APP_ID / APP_PRIVATE_KEY repository secrets on THIS repo — not yet
@@ -30,6 +31,7 @@ on:
     paths:
       - "docs/**"
       - "README.md"
+      - "endpoints.json"
 
 # A superseded dispatch is harmless — the target rebuilds from scratch on the
 # next one — so cancel an in-flight run rather than letting a stale push queue

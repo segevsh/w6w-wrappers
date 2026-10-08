@@ -2,11 +2,13 @@
 
 React bindings for [`@w6w/sdk`](../node) — a `<W6WProvider>` that holds one memoized
 `W6WClient` with per-request token freshness, a small hook set over the SDK's public
-surface (`me`, `documents`, `vars`, `connections`, `workflows`, `run`), and
+surface (`me`, `documents`, `vars`, `connections`, `workflows`, `functions`, `run`), and
 `createW6WUiAdapter`, a structural bridge from a `W6WClient` to
 [`@w6w/ui`](https://github.com/w6w-io/w6w-ui)'s `W6WApi` contract.
 
-License: MIT · Version: 0.9.0
+License: MIT · Version: 0.9.3 · Guides: [docs.w6w.io/clients/react](https://docs.w6w.io/clients/react/)
+(with a [hooks reference](https://docs.w6w.io/clients/react/hooks/) and a
+[Next.js walkthrough](https://docs.w6w.io/clients/react/nextjs/))
 
 This lane implements no endpoint — it composes `@w6w/sdk`, which is already
 conformant against [`endpoints.json`](../endpoints.json). There is nothing here to
@@ -17,6 +19,10 @@ re-verify against the wire contract; verify `@w6w/sdk` instead.
 ```bash
 npm install @w6w/react react
 ```
+
+`@w6w/sdk` comes in as a dependency. Add it to your own `package.json` too
+(`npm install @w6w/sdk`) if you import from it directly — `ApiError` for an
+`instanceof` check, or `exchangeToken` from `@w6w/sdk/server` on your backend.
 
 `react-dom` is not a dependency of this package — `<W6WProvider>`'s only JSX is a
 context wrapper (`<Ctx.Provider>`), never a DOM element of its own. Your app already
@@ -125,10 +131,9 @@ export default function W6WLayout({ children }: { children: React.ReactNode }) {
 }
 ```
 
-For the full partner-facing walkthrough (auth paths, tenant provisioning, the
-UI-embedding guide) see `.claude/docs/usage/partner/partner-ui-embedding.md`
-in the main `w6w` repository — private to w6w staff and partners, so it is
-named here rather than linked.
+The [Next.js walkthrough](https://docs.w6w.io/clients/react/nextjs/) builds the
+`/api/w6w-token` route this example fetches from, with `exchangeToken` and a
+cached, refreshable token supplier.
 
 ## Using this package with `@w6w/ui`
 
@@ -137,6 +142,7 @@ named here rather than linked.
 `@w6w/react` client with `createW6WUiAdapter`:
 
 ```tsx
+import { useMemo } from "react";
 import { createW6WUiAdapter, useW6WClient, W6WProvider } from "@w6w/react";
 import { W6WUIProvider, AppPicker } from "@w6w/ui";
 
@@ -157,13 +163,12 @@ function App() {
 }
 ```
 
-**`@w6w/ui` is not on npm today.** The `@w6w` scope holds only `@w6w/sdk` and
-`@w6w/cli` at the time of writing (`npm view @w6w/ui` → 404); the source itself IS a
-public GitHub repository (`w6w-io/w6w-ui`). `createW6WUiAdapter`'s `W6WApi` return
-type targets that contract *structurally* — this package needs no change whenever
-`@w6w/ui` becomes reachable another way (this monorepo, a `git+https://` dependency
-on the public repo, or a private registry). This is an honest statement of today's
-install story, not a promise that `npm i @w6w/ui` resolves.
+**`@w6w/ui` is not on npm today** (`npm view @w6w/ui` → 404, checked 2026-10-06);
+the source is a public GitHub repository (`w6w-io/w6w-ui`). `createW6WUiAdapter`'s
+`W6WApi` return type targets that contract *structurally* — this package needs no
+change whenever `@w6w/ui` becomes reachable another way (a `git+https://`
+dependency on the public repo, or a private registry). `npm i @w6w/ui` does not
+resolve yet.
 
 `createW6WUiAdapter` is built on `@w6w/sdk/console` for most members — the SAME
 namespace `packages/studio`'s own facade uses for these routes
@@ -177,7 +182,7 @@ signature change ships with no lockstep protection for this bridge beyond
 `@w6w/sdk`'s own version — pin your `@w6w/sdk` version alongside `@w6w/react`'s, and
 re-test the bridge on an upgrade rather than assuming it.
 
-### Keeping `createW6WUiAdapter` honest against the REAL `@w6w/ui`
+### Keeping `createW6WUiAdapter` in sync with the real `@w6w/ui`
 
 `package.json`'s `devDependencies` carries a **dev-only, type-only** edge onto
 `@w6w/ui` — `"@w6w/ui": "github:w6w-io/w6w-ui#<sha>"` — that this package never
@@ -192,8 +197,7 @@ this package's `W6WApi` drifting from `@w6w/ui`'s own).
 
 **Why a `github:<owner>/<repo>#<sha>` pin, and not a `link:`/workspace reference to
 a sibling checkout:** `release.yml`'s `react` step checks out **this one repo**
-(`w6w-wrappers`) with no sibling checkout and no submodules
-(building-blocks.md §1) — a relative `link:` to `../../ui` resolves only in the
+(`w6w-wrappers`) with no sibling checkout and no submodules — a relative `link:` to `../../ui` resolves only in the
 local devcontainer's incidental directory layout and fails `ENOENT` on every CI run
 and on a fresh clone of `w6w-wrappers` alone. A `github:` spec needs nothing but a
 network fetch of the one pinned commit, which is why it is the only install story
@@ -275,7 +279,8 @@ it still means `useW6WClient().functions.run("send-email", …)`.
 with only a `runId` and no public polling operation to follow it with —
 `console.workflows.getRun` exists, but it is the same studio-internal, unstable
 surface described above, so this hook does not reach for it. Pass `wait: false`
-explicitly if you genuinely want the queued-and-walk-away behaviour.
+explicitly if you want the queued-and-walk-away behaviour, and follow the run
+with `` useW6WClient().request({ method: "GET", path: path`/runs/${runId}` }) ``.
 
 `useW6WClient()` returns the underlying `W6WClient` for anything not covered by a
 hook (e.g. `client.console.*` directly, at your own risk per the caveat above).
@@ -290,21 +295,6 @@ hook (e.g. `client.console.*` directly, at your own risk per the caveat above).
   fine — every extra field is optional — and there is no runtime data loss (the JSON
   payload is unfiltered); a caller typing a variable through this adapter's declared
   return type just gets no autocomplete for those extra fields.
-- **`ActionTestForm.tsx:149,176`'s error handling cannot be satisfied from this
-  package.** `@w6w/ui`'s `ActionTestForm` does a NOMINAL `instanceof ApiError` check
-  against its OWN `ApiError` class (`packages/ui/src/createW6WApi.ts`), not a
-  duck-typed one. No error object this adapter throws can ever satisfy that check
-  without importing `@w6w/ui`'s class directly, which this package's MIT/C-1
-  boundary forbids. Concretely: on a failed `invokeAction` used together with
-  `@w6w/ui`'s `ActionTestForm`, the 401/403 permission-hint messaging falls back to a
-  generic message, and the `ApiCallsPanel` egress log renders empty instead of
-  showing the outbound calls the action made — even though this adapter's thrown
-  error genuinely carries that data on `.body`/`.raw`. This adapter still aliases
-  `@w6w/sdk`'s `ApiError.raw` onto `.body` (`err.body === err.raw`) and sets
-  `err.name = "ApiError"`, so it is already correct for any DUCK-TYPING consumer, and
-  needs no further change the moment `@w6w/ui` switches its own check to one. The fix
-  belongs to `@w6w/ui`, not this package, and is filed there:
-  `.ai/projects/backlog/26-08-13-01-ui-error-nominal-check.md`.
 - **Cancellation is per-hook, not exposed to the caller.** Every read hook aborts its
   own superseded or unmounted calls internally (a superseded call, an `identityKey`
   switch, or an unmount all abort the in-flight `AbortSignal` — see `src/hooks.ts`'s
