@@ -17,7 +17,6 @@
  * operation (D3). `202` on the workflow arm is **success** — the run is queued
  * and `runId` is how the caller follows it.
  *
- *
  * ── The invocation frame ──
  * Since 2026-08-20 every arm also carries the platform's own record of the
  * attempt — `invocationId` (`inv_…`), `status`, `startedAt`, `finishedAt`,

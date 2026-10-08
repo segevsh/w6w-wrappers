@@ -111,9 +111,8 @@ own API client (`packages/studio/src/api/client.ts:249-291`), with the same fiel
 it used (`packages/studio/src/api/types.ts:10-82`) — this module does not redesign them, only gives
 them a second home. `createAccount` takes a `CreateAccountInput` options object instead —
 `{companyName?, role?, usage?}`, no `name`/`slug` key; the server mints the slug from `companyName`
-when present.
-`getMe` was added first (see below); `getProfile` through `setPassword` are T1.1.4's `/me/*` family,
-added by this task.
+when present. `getMe` was added first (see below); `getProfile` through `setPassword` are T1.1.4's
+`/me/*` family, added by this task.
 
 | Method                        | Route                                   | Public/authenticated                                                                               |
 | ----------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -196,11 +195,11 @@ shaped object IS the top-level response body. `stats` returns `res.body` directl
 
 Return shape — `DashboardStats`:
 
-| Field      | Type                                                                                                        | Notes                                                                 |
-| ---------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `range`    | `{ from: string; to: string; bucket: "day" \| "week" }`                                                     | The resolved window actually applied.                                 |
-| `headline` | `{ workflowRuns: number; succeeded: number; failed: number }`                                               | Workflow runs only.                                                   |
-| `series`   | `Array<{ bucket: string; kind: string; ok: boolean \| null; count: number }>`                               | The charts-later seam — a flat payload the caller slices client-side. |
+| Field      | Type                                                                                                                                                                                                                 | Notes                                                                                                                                                                                                                                     |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `range`    | `{ from: string; to: string; bucket: "day" \| "week" }`                                                                                                                                                              | The resolved window actually applied.                                                                                                                                                                                                     |
+| `headline` | `{ workflowRuns: number; succeeded: number; failed: number }`                                                                                                                                                        | Workflow runs only.                                                                                                                                                                                                                       |
+| `series`   | `Array<{ bucket: string; kind: string; ok: boolean \| null; count: number }>`                                                                                                                                        | The charts-later seam — a flat payload the caller slices client-side.                                                                                                                                                                     |
 | `recent`   | `Array<{ id, kind, ok: boolean \| null, summary: string \| null, occurredAt, workflowId: string \| null, functionId: string \| null, durationMs: number \| null, project: string \| null, stepId: string \| null }>` | Most recent activity, `id`/`kind`/`occurredAt` always `string`; `functionId` is non-null only for `kind: "function"` rows, `stepId` is non-null only on `kind: "workflow_step"` rows, and `durationMs`/`project` are `null` when unknown. |
 
 ## `RequestOptions.requireAuth`
@@ -312,25 +311,25 @@ Method names are SHORTENED versus `client.ts`'s flat names (`listApps` → `list
 `getAuth`, …), matching `console.projects`'s/`console.schedules`'s own short-verb convention; every
 wire call (method/path/body/query) is unchanged from `client.ts`.
 
-| Method                                    | Route                                                | Notes                                                                                                                                                                                                                                         |
-| ----------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list()`                                  | `GET /apps` (paginated)                              | **`@deprecated` for UI use** — prefer `listPage({ ids })` (studio's `AppsProvider` is the current consumer). CLI and one-off scripts, which genuinely want the whole catalog, keep using it. Loops on `listPage({limit: 200, cursor})`, accumulating `apps` across pages and forwarding `nextCursor` as the next page's `cursor`; capped at 20 pages. No shape change — still resolves the full `AppSummary[]`.                            |
-| `listPage(options?)`                      | `GET /apps` (one page)                               | **Additive, T2.1.1.** One request; see the dedicated paragraph below the table. Now also takes an `ids?: readonly string[]` option (CSV on the wire, no chunking here — see that paragraph).                                                 |
-| `get(id)`                                 | `GET /apps/:id`                                      | Whole body IS `AppDetail` — no envelope.                                                                                                                                                                                                      |
-| `getAuth(id)`                             | `GET /apps/:id/auths`                                | `unwrap<AuthDef[]>(res, "auths")`.                                                                                                                                                                                                            |
-| `getActions(id)`                          | `GET /apps/:id` (own call)                           | Reads `(body as AppDetail).actions ?? []` — a separate call from `get`, not a refactor onto it.                                                                                                                                               |
-| `getTriggers(id)`                         | `GET /apps/:id/triggers`                             | `unwrap<TriggerDef[]>(res, "triggers")`.                                                                                                                                                                                                      |
-| `getHealth(id)`                           | `GET /apps/:id` (own call)                           | Reads `(body as AppDetail).health ?? []`. **Dead code (HITL-4).**                                                                                                                                                                             |
-| `getHealthStatus(id)`                     | `GET /apps/:id/health`                               | Whole body IS `AppHealthStatus` — no envelope.                                                                                                                                                                                                |
-| `listOAuthConfig(appId)`                  | `GET /apps/:id/oauth-config`                         | `unwrap<OAuthConfigSummary[]>(res, "configs")`. **Dead code (HITL-4).**                                                                                                                                                                       |
-| `upsertOAuthConfig(appId, authKey, body)` | `PUT /apps/:id/oauth-config/:authKey`                | `unwrap<OAuthConfigSummary>(res, "config")` (server answers `201`). Body forwarded verbatim. **Dead code (HITL-4).**                                                                                                                          |
-| `deleteOAuthConfig(appId, authKey)`       | `DELETE /apps/:id/oauth-config/:authKey`             | Returns nothing; discards `{ok:true}`. **Dead code (HITL-4).**                                                                                                                                                                                |
-| `startOAuthFlow(appId, authKey, body?)`   | `POST /apps/:id/oauth-config/:authKey/authorize-url` | Whole body IS `{authorizationUrl, state, expiresIn}` — no envelope. No studio-page caller, but called via `@w6w/ui`'s `W6WApi.startAppOAuthFlow` facade.                                                                                      |
-| `preview(source, opts?)`                  | `POST /apps/preview`                                 | Whole body IS the `kind`-discriminated union — no envelope.                                                                                                                                                                                   |
-| `import(source, opts?)`                   | `POST /apps/import`                                  | Whole body IS the `kind`-discriminated union — no envelope.                                                                                                                                                                                   |
-| `refresh(id, opts?)`                      | `POST /apps/:id/refresh`                             | Whole body IS `RefreshAppResponse` — no envelope.                                                                                                                                                                                             |
-| `invoke(appId, actionKey, params, opts?)` | `POST /apps/:id/actions/:key/invoke`                 | Whole body IS `{value, logs?, apiCalls?}` — no envelope. No studio-page caller, but called heavily via `@w6w/ui`'s `W6WApi.invokeAction` facade (that facade's `opts` also carries `project`/`state`, a superset this method does not model). |
-| `delete(appId)`                           | `DELETE /apps/:id`                                   | Whole body IS `{removed: number}` — **returned, not discarded to `void`**, the one deliberate asymmetry vs. `console.projects.delete`/`console.schedules.delete`.                                                                             |
+| Method                                    | Route                                                | Notes                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list()`                                  | `GET /apps` (paginated)                              | **`@deprecated` for UI use** — prefer `listPage({ ids })` (studio's `AppsProvider` is the current consumer). CLI and one-off scripts, which genuinely want the whole catalog, keep using it. Loops on `listPage({limit: 200, cursor})`, accumulating `apps` across pages and forwarding `nextCursor` as the next page's `cursor`; capped at 20 pages. No shape change — still resolves the full `AppSummary[]`. |
+| `listPage(options?)`                      | `GET /apps` (one page)                               | **Additive, T2.1.1.** One request; see the dedicated paragraph below the table. Now also takes an `ids?: readonly string[]` option (CSV on the wire, no chunking here — see that paragraph).                                                                                                                                                                                                                    |
+| `get(id)`                                 | `GET /apps/:id`                                      | Whole body IS `AppDetail` — no envelope.                                                                                                                                                                                                                                                                                                                                                                        |
+| `getAuth(id)`                             | `GET /apps/:id/auths`                                | `unwrap<AuthDef[]>(res, "auths")`.                                                                                                                                                                                                                                                                                                                                                                              |
+| `getActions(id)`                          | `GET /apps/:id` (own call)                           | Reads `(body as AppDetail).actions ?? []` — a separate call from `get`, not a refactor onto it.                                                                                                                                                                                                                                                                                                                 |
+| `getTriggers(id)`                         | `GET /apps/:id/triggers`                             | `unwrap<TriggerDef[]>(res, "triggers")`.                                                                                                                                                                                                                                                                                                                                                                        |
+| `getHealth(id)`                           | `GET /apps/:id` (own call)                           | Reads `(body as AppDetail).health ?? []`. **Dead code (HITL-4).**                                                                                                                                                                                                                                                                                                                                               |
+| `getHealthStatus(id)`                     | `GET /apps/:id/health`                               | Whole body IS `AppHealthStatus` — no envelope.                                                                                                                                                                                                                                                                                                                                                                  |
+| `listOAuthConfig(appId)`                  | `GET /apps/:id/oauth-config`                         | `unwrap<OAuthConfigSummary[]>(res, "configs")`. **Dead code (HITL-4).**                                                                                                                                                                                                                                                                                                                                         |
+| `upsertOAuthConfig(appId, authKey, body)` | `PUT /apps/:id/oauth-config/:authKey`                | `unwrap<OAuthConfigSummary>(res, "config")` (server answers `201`). Body forwarded verbatim. **Dead code (HITL-4).**                                                                                                                                                                                                                                                                                            |
+| `deleteOAuthConfig(appId, authKey)`       | `DELETE /apps/:id/oauth-config/:authKey`             | Returns nothing; discards `{ok:true}`. **Dead code (HITL-4).**                                                                                                                                                                                                                                                                                                                                                  |
+| `startOAuthFlow(appId, authKey, body?)`   | `POST /apps/:id/oauth-config/:authKey/authorize-url` | Whole body IS `{authorizationUrl, state, expiresIn}` — no envelope. No studio-page caller, but called via `@w6w/ui`'s `W6WApi.startAppOAuthFlow` facade.                                                                                                                                                                                                                                                        |
+| `preview(source, opts?)`                  | `POST /apps/preview`                                 | Whole body IS the `kind`-discriminated union — no envelope.                                                                                                                                                                                                                                                                                                                                                     |
+| `import(source, opts?)`                   | `POST /apps/import`                                  | Whole body IS the `kind`-discriminated union — no envelope.                                                                                                                                                                                                                                                                                                                                                     |
+| `refresh(id, opts?)`                      | `POST /apps/:id/refresh`                             | Whole body IS `RefreshAppResponse` — no envelope.                                                                                                                                                                                                                                                                                                                                                               |
+| `invoke(appId, actionKey, params, opts?)` | `POST /apps/:id/actions/:key/invoke`                 | Whole body IS `{value, logs?, apiCalls?}` — no envelope. No studio-page caller, but called heavily via `@w6w/ui`'s `W6WApi.invokeAction` facade (that facade's `opts` also carries `project`/`state`, a superset this method does not model).                                                                                                                                                                   |
+| `delete(appId)`                           | `DELETE /apps/:id`                                   | Whole body IS `{removed: number}` — **returned, not discarded to `void`**, the one deliberate asymmetry vs. `console.projects.delete`/`console.schedules.delete`.                                                                                                                                                                                                                                               |
 
 Relocated verbatim from `packages/studio/src/api/client.ts:235-393`, which the field-for-field
 `AppSummary`, `ActionDef`, `AuthDef`, `TriggerDef`, `HealthCheckMeta`, `AppHealthStatus`,
@@ -346,10 +345,10 @@ projected server-side by `wireOwner`, `wire-summary.ts:70-72`). `owner` is optio
 even though the server always sends it, so the type is also satisfied by a caller-written literal
 and by an older host.
 
-**`listPage(options?)` is the additive, T2.1.1 seam every picker/selector UI is meant to call instead
-of `list()`.** It sends exactly one `GET /apps` and resolves the page verbatim —
-`{apps: AppSummary[], nextCursor?: string}` — with no accumulation loop of its own; `list()` above is
-now implemented ON TOP of it (same `AppsHost.request` call), not a parallel fetch. Every
+**`listPage(options?)` is the additive, T2.1.1 seam every picker/selector UI is meant to call
+instead of `list()`.** It sends exactly one `GET /apps` and resolves the page verbatim —
+`{apps: AppSummary[], nextCursor?: string}` — with no accumulation loop of its own; `list()` above
+is now implemented ON TOP of it (same `AppsHost.request` call), not a parallel fetch. Every
 `ListAppsOptions` member (`q`, `category`, `maturity`, `visibility`, `sort`, `limit`, `cursor`,
 `managed`, `compact`) is forwarded under its own wire name only when present — an **omitted** member
 is dropped from the query string, while an **explicitly supplied `false`** (`managed: false` /
@@ -368,17 +367,18 @@ best-effort match, not an indexed exact-id endpoint — no such endpoint exists 
 ambiguous or unmatched result falls back to `get(id)`, never to a full unbounded `list()`.
 
 **`ids?: readonly string[]` resolves an explicit, bounded set of app ids** in one request — the CSV
-wire format `GET /apps?ids=a,b,c` (mirrors `admin/reliability.ts`'s `parseAppIds`); `cursor`/`limit`/
-`sort` are ignored server-side whenever `ids` is present. This method is a thin pass-through and does
-**not** chunk: an explicitly supplied `ids: []` still sends `ids=` (empty — never the unfiltered
-page), an omitted `ids` sends no `ids` key at all, and a caller passing more ids than the server's cap
-(100) gets the server's own `400 too_many_ids`. `@w6w/react`'s `createW6WUiAdapter.listAppsByIds` is
-the one caller that chunks (at 100, concurrently) on top of this method.
+wire format `GET /apps?ids=a,b,c` (mirrors `admin/reliability.ts`'s `parseAppIds`);
+`cursor`/`limit`/ `sort` are ignored server-side whenever `ids` is present. This method is a thin
+pass-through and does **not** chunk: an explicitly supplied `ids: []` still sends `ids=` (empty —
+never the unfiltered page), an omitted `ids` sends no `ids` key at all, and a caller passing more
+ids than the server's cap (100) gets the server's own `400 too_many_ids`. `@w6w/react`'s
+`createW6WUiAdapter.listAppsByIds` is the one caller that chunks (at 100, concurrently) on top of
+this method.
 
-**`list()` is `@deprecated` for UI use** — prefer `listPage({ ids })`. Studio's `AppsProvider` is the
-current consumer and resolves exactly the ids it needs instead of this eager full-catalog fetch; CLI
-and one-off scripts, which genuinely want the whole catalog, keep using `list()` — it is not going
-away.
+**`list()` is `@deprecated` for UI use** — prefer `listPage({ ids })`. Studio's `AppsProvider` is
+the current consumer and resolves exactly the ids it needs instead of this eager full-catalog fetch;
+CLI and one-off scripts, which genuinely want the whole catalog, keep using `list()` — it is not
+going away.
 
 **`listApiCalls` is deliberately NOT covered here** — it lives under the same `client.ts` comment
 block but has no named apps-domain consumer (its only caller is reliability's drill-down page); it
@@ -1072,14 +1072,14 @@ const { plan, status, canUpgrade } = await client.console.commerce.subscription(
 const invoices = await client.console.commerce.invoices();
 ```
 
-Three methods over the server's existing `commerce` edge — the checked-in plan catalog, the
-caller's own resolved subscription, and the caller's own invoice history.
+Three methods over the server's existing `commerce` edge — the checked-in plan catalog, the caller's
+own resolved subscription, and the caller's own invoice history.
 
-| Method            | Route                        | Public/authenticated                                        |
-| ----------------- | ----------------------------- | ------------------------------------------------------------ |
-| `plans()`         | `GET /commerce/plans`         | **PUBLIC** — sends no bearer (`requireAuth: false`)           |
-| `subscription()`  | `GET /commerce/subscription`  | **AUTHENTICATED** — default `requireAuth`                    |
-| `invoices()`      | `GET /commerce/invoices`      | **AUTHENTICATED** — default `requireAuth`                    |
+| Method           | Route                        | Public/authenticated                                |
+| ---------------- | ---------------------------- | --------------------------------------------------- |
+| `plans()`        | `GET /commerce/plans`        | **PUBLIC** — sends no bearer (`requireAuth: false`) |
+| `subscription()` | `GET /commerce/subscription` | **AUTHENTICATED** — default `requireAuth`           |
+| `invoices()`     | `GET /commerce/invoices`     | **AUTHENTICATED** — default `requireAuth`           |
 
 **The public/guarded split is per method, not per file, exactly like `console.auth`.** `plans()` is
 registered above the auth guard (`packages/server/packages/api/commerce/plans-route.ts`'s own doc
@@ -1126,11 +1126,11 @@ if (otp) {
 Three methods, email one-time-code sign-in — a third standalone login option beside password and
 passkey (T2.1.3). Wire pins are T2.1.1's contract §Wire pins.
 
-| Method                  | Route                     | Public/authenticated                                                                        |
-| ------------------------ | ------------------------- | --------------------------------------------------------------------------------------------- |
-| `loginProviders()`      | `GET /auth/login-providers` | **PUBLIC** — sends no bearer (`requireAuth: false`); `unwrap<LoginProviders>(res, "providers")` |
-| `requestCode(input)`    | `POST /auth/otp/request`  | **PUBLIC** — `{email}`; resolves `void`, discarding `202 {ok: true}`                          |
-| `verifyCode(input)`     | `POST /auth/otp/verify`   | **PUBLIC** — `{email, code}`; mints a session — see below                                     |
+| Method               | Route                       | Public/authenticated                                                                            |
+| -------------------- | --------------------------- | ----------------------------------------------------------------------------------------------- |
+| `loginProviders()`   | `GET /auth/login-providers` | **PUBLIC** — sends no bearer (`requireAuth: false`); `unwrap<LoginProviders>(res, "providers")` |
+| `requestCode(input)` | `POST /auth/otp/request`    | **PUBLIC** — `{email}`; resolves `void`, discarding `202 {ok: true}`                            |
+| `verifyCode(input)`  | `POST /auth/otp/verify`     | **PUBLIC** — `{email, code}`; mints a session — see below                                       |
 
 **All three are PUBLIC, `requireAuth: false` — the login screen has no token.** Mirrors
 `console.passkeys`'s login pair exactly: without it, a tokenless client (the normal case at
@@ -1140,10 +1140,10 @@ called.
 **`loginProviders()` is what `/login` reads to decide what to render** — `{password, passkey, otp}`,
 each a plain boolean naming whether that method is currently offered. It has **no refusal path** —
 T2.1.1's wire pin gives it none — so the ONLY way a caller learns "the server didn't answer" is the
-request itself throwing (network error, non-2xx). See
-`packages/studio/src/lib/login-providers.ts`'s `providerVisibility` for the one place that decides
-what to show when this call is still loading or has failed (fails OPEN for password/passkey, CLOSED
-for OTP — a network blip must never lock out a working deployment's password form).
+request itself throwing (network error, non-2xx). See `packages/studio/src/lib/login-providers.ts`'s
+`providerVisibility` for the one place that decides what to show when this call is still loading or
+has failed (fails OPEN for password/passkey, CLOSED for OTP — a network blip must never lock out a
+working deployment's password form).
 
 **`requestCode` answers `202 {ok: true}` ALWAYS, whether or not a user exists with that email**
 (T2.1.1's wire pin) — this is an anti-enumeration property of the ROUTE, not something this method
@@ -1180,10 +1180,10 @@ Two methods: a tenant administrator's own password/OTP sign-in toggles (T2.1.3).
 a parameter — mirrors `console.tenantOAuthApps` exactly: both routes are scoped by the caller's own
 bearer (the tenant claim) plus a server-side `requireTenantAdmin` check (T2.1.1's wire pin).
 
-| Method       | Route                    | Notes                                                                                          |
-| ------------ | ------------------------ | ------------------------------------------------------------------------------------------------ |
-| `get()`      | `GET /tenant/login-flags`  | Reads `res.body.flags`; never calls `unwrap()`.                                                |
-| `put(input)` | `PUT /tenant/login-flags`  | **Body built by omission — see below.** Reads `res.body.flags`; never calls `unwrap()`.        |
+| Method       | Route                     | Notes                                                                                   |
+| ------------ | ------------------------- | --------------------------------------------------------------------------------------- |
+| `get()`      | `GET /tenant/login-flags` | Reads `res.body.flags`; never calls `unwrap()`.                                         |
+| `put(input)` | `PUT /tenant/login-flags` | **Body built by omission — see below.** Reads `res.body.flags`; never calls `unwrap()`. |
 
 **`put` builds its request body by OMISSION, key by key — an omitted field never reaches the wire,**
 mirroring `console.tenantOAuthApps.put`'s discipline exactly. `SetTenantLoginFlagsInput` has two
