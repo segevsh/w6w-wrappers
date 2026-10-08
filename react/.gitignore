@@ -5,6 +5,6 @@ dist/
 node_modules/
 
 # No lockfile is committed for this lane — matches node/cli's own convention
-# (docs/release.md:178-179): npm resolves `@w6w/sdk` fresh against the pinned
-# `^0.3.0` range on every install.
+# (docs/release.md): npm resolves `@w6w/sdk` fresh against the `^<VERSION>`
+# range on every install.
 package-lock.json

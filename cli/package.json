@@ -32,7 +32,7 @@
     "build": "tsc -p tsconfig.build.json && node scripts/fix-shebang.mjs"
   },
   "dependencies": {
-    "@w6w/sdk": "^0.6.0"
+    "@w6w/sdk": "^0.9.3"
   },
   "devDependencies": {
     "typescript": "^5.7.2"
