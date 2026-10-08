@@ -132,11 +132,15 @@ human again, and is not optional.
    `node/src/version.ts`, `cli/package.json` + `cli/deno.json` + `cli/mod.ts`,
    `python/pyproject.toml` + `python/src/w6w/_version.py`,
    `react/package.json` + `react/src/version.ts`. Never hand-pick a different
-   value in a manifest; step 5 is a gate, not a writer. One version literal is
-   **not** gated and must still move with them: the `@w6w/sdk` semver range in
-   `react/package.json`'s `dependencies`, which is `^<the new VERSION>` (e.g.
-   `^0.9.0`). `react`'s own version test pins it against `VERSION`, so a lane
-   that leaves it behind fails `test` — step 5 would not have caught it.
+   value in a manifest; step 5 is a gate, not a writer. Two version literals are
+   **not** gated by step 5 and must still move with them: the `@w6w/sdk` semver
+   range in `react/package.json`'s and `cli/package.json`'s `dependencies`, each
+   `^<the new VERSION>` (e.g. `^0.9.0`). Each lane's own test pins it against
+   `VERSION` (`react/src/__tests__/version.test.ts`, `cli/tests/help_test.ts`), so
+   a lane that leaves it behind fails `test`. The CLI's Deno tasks never fetch
+   that not-yet-published version: `cli/deno.json`'s `"links": ["../node"]`
+   satisfies it from the sibling, which is why that lane runs with
+   `"nodeModulesDir": "auto"`.
 4. **Tag** `v0.2.1`. (For a dry run, invoke `release.yml` via
    `workflow_dispatch` with an explicit `version` input — it verifies and runs
    conformance without publishing.)

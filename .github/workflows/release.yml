@@ -222,9 +222,9 @@ jobs:
 
   npm-cli:
     # After npm-sdk, not just verify+test: cli declares a real npm dependency
-    # on "@w6w/sdk": "^0.2.0", so its `npm install` below needs that version
-    # already live on the registry — otherwise it resolves to nothing (there is
-    # no 0.2.0 yet) and the install fails.
+    # on "@w6w/sdk": "^<VERSION>" (cli/tests/help_test.ts pins the range), so its
+    # `npm install` below needs the version npm-sdk just published — otherwise it
+    # resolves to nothing and the install fails.
     needs: [verify, test, npm-sdk]
     if: github.event_name == 'release'
     runs-on: ubuntu-latest

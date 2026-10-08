@@ -11,3 +11,7 @@ node_modules/
 # show up as a diff; if CI (T2.2.6) wants a pinned resolution it can commit one
 # deliberately with `deno install --frozen`. Matches the node wrapper's choice.
 deno.lock
+
+# No lockfile is committed for this lane (docs/release.md): every npm job runs
+# `npm install`, and a stale committed lock only pins an old @w6w/sdk.
+package-lock.json

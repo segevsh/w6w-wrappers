@@ -316,3 +316,15 @@ Deno.test("the CLI version matches both manifests and the shared VERSION", async
   }
   assertEquals(VERSION, shared);
 });
+
+Deno.test("package.json's @w6w/sdk dependency range tracks VERSION (the ship-time bump lockstep)", async () => {
+  // npm builds the published CLI against the registry's @w6w/sdk, not the sibling, so a range
+  // left behind (it once sat at ^0.6.0 under a 0.9.x VERSION) builds against an SDK that lacks
+  // the surface the CLI imports, and `npm-cli` fails after `npm-sdk` has already shipped. Deno
+  // satisfies the same range from `../node` via deno.json's `links`, never from the registry.
+  const pkg = JSON.parse(await Deno.readTextFile(packageJsonUrl)) as {
+    dependencies?: Record<string, string>;
+  };
+  const shared = (await Deno.readTextFile(sharedVersionUrl)).trim();
+  assertEquals(pkg.dependencies?.["@w6w/sdk"], `^${shared}`);
+});
