@@ -135,7 +135,11 @@ human again, and is not optional.
    value in a manifest; step 5 is a gate, not a writer. Two version literals are
    **not** gated by step 5 and must still move with them: the `@w6w/sdk` semver
    range in `react/package.json`'s and `cli/package.json`'s `dependencies`, each
-   `^<the new VERSION>` (e.g. `^0.9.0`). Each lane's own test pins it against
+   `^<the new VERSION>` (e.g. `^0.9.0`), and the three lanes' `package-lock.json`
+   files. Regenerate the locks by running `npm install` in `node/`, then `cli/`,
+   then `react/` once the manifests are written, and commit them in the same
+   commit (`npm ci` still succeeds on a stale lock, so it is no guard). Each lane's own
+   test pins the range and the lock's `version` against
    `VERSION` (`react/src/__tests__/version.test.ts`, `cli/tests/help_test.ts`), so
    a lane that leaves it behind fails `test`. The CLI's Deno tasks never fetch
    that not-yet-published version: `cli/deno.json`'s `"links": ["../node"]`
@@ -191,19 +195,28 @@ be discovered at upload time:
   decision from adding a new lane.
 - **`@w6w/cli` and `@w6w/react` both publish _after_ `@w6w/sdk`** —
   `needs: [verify, test, npm-sdk]`, not just the shared gate — because each
-  declares a real npm dependency on it, and its `npm install` step needs that
-  version already live on the registry. Otherwise there is a window in which
-  that install resolves to nothing. (The `test` job's own react step hits the
+  declares a real npm dependency on it. The committed locks link `@w6w/sdk` to
+  `../node`, so the install no longer fetches it; the ordering still keeps the
+  published `@w6w/cli`/`@w6w/react` from existing before the SDK they name. (The `test` job's own react step hits the
   same gap earlier and for a different reason — see the note below.)
-- **All three npm jobs use `npm install`, not `npm ci`.** There is no committed
-  `package-lock.json` for any of the three lanes — dev and CI both run on the
-  Deno tasks in `deno.json` for `node`/`cli` (react has no `deno.json`; its own
-  local gate is `npm test`), and the npm manifests exist only to build and
-  publish. `dist/` is produced by `tsc -p tsconfig.build.json`/`tsconfig.json`
-  (the CLI additionally runs `scripts/fix-shebang.mjs`), and the CLI's and
-  react's sources both import the bare specifier `@w6w/sdk`, which resolves from
-  `node_modules` — not through the Deno import map, which points at
-  `../node/mod.ts` and is a _development_ convenience.
+- **`npm-sdk` and the `test` job's node build use `npm ci`; the `cli` and
+  `react` lanes keep `npm install`.** `node/`, `cli/` and `react/` each commit a
+  `package-lock.json`. node's is self-contained (only `typescript`), so `npm ci`
+  reproduces it exactly. cli's and react's record `@w6w/sdk` as a **link to
+  `../node`** (`"resolved": "../node", "link": true`), not a registry tarball,
+  because the registry's latest `@w6w/sdk` can trail `VERSION` and the
+  `^<VERSION>` range then resolves to nothing. That is also why `npm-cli` and
+  `npm-react` first build `node/` (`npm ci && npm run build`): the link needs
+  `../node/dist` to exist before cli's or react's build. Their own lane install
+  stays `npm install`, which keeps the link and leaves the lock unchanged. A
+  lock is never published, so the tarballs are unaffected. Dev and CI otherwise
+  run on the Deno tasks in `deno.json` for `node`/`cli` (react has no
+  `deno.json`; its own local gate is `npm test`). `dist/` is produced by
+  `tsc -p tsconfig.build.json`/`tsconfig.json` (the CLI additionally runs
+  `scripts/fix-shebang.mjs`), and the CLI's and react's sources both import the
+  bare specifier `@w6w/sdk`, which resolves from `node_modules` — not through
+  the Deno import map, which points at `../node/mod.ts` and is a _development_
+  convenience.
 - **The `test` job builds `node/` and substitutes it into `react/`'s
   `node_modules` before running react's own suite**
   (`npm install --no-save
@@ -214,10 +227,12 @@ be discovered at upload time:
   registry: every other lane already tests against the sibling checkout rather
   than the last release, and a test job that silently measures a stale published
   package is the failure this repo's one-repo layout exists to prevent. The
-  `npm-react` publish job does **not** do this substitution — it installs from
-  the registry like every other publish job, which is correct there: a publish
-  job must build against exactly what consumers will resolve, and by the time it
-  runs `npm-sdk` has already uploaded.
+  `npm-react` publish job does **not** do this substitution: it builds `node/`
+  first (`npm ci` there), then `npm install` in `react/`, whose committed lock links
+  `@w6w/sdk` to `../node` (the install keeps that link). The publish build therefore measures the SDK source
+  of this very release commit, not whatever the registry's latest `@w6w/sdk`
+  is (which can trail `VERSION`); it still runs after `npm-sdk`, so the version
+  react's range names has been uploaded.
 - **JSR needs the `@w6w` scope to exist and each package linked to this repo**
   before OIDC publishing works; confirmed with `deno publish --dry-run` for the
   `node`/`cli` lanes, including the CLI's cross-package `@w6w/sdk` import. The
