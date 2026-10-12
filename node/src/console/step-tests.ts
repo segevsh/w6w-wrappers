@@ -44,6 +44,7 @@
 
 import { type HttpResponse, path, type RequestOptions } from "../http.ts";
 import { unwrap } from "../types.ts";
+import type { StepMeta } from "./apps.ts";
 
 /**
  * The slice of `W6WClient` this namespace needs: the transport, and nothing
@@ -76,6 +77,8 @@ export interface StepTest {
   lastRunStatus?: string | null;
   lastRunError?: unknown;
   lastRunOutput?: unknown;
+  /** Metadata of the most recent run; omitted when none was recorded. */
+  lastRunMeta?: StepMeta | null;
 }
 
 /** The real row `recordRun` creates (mirrors the server's `StepTestRun`). */
@@ -89,6 +92,8 @@ export interface StepTestRun {
   output: unknown;
   error: unknown;
   createdAt: string;
+  /** Metadata the run reported; omitted when none was recorded. */
+  meta?: StepMeta | null;
 }
 
 /**
@@ -168,7 +173,7 @@ export class StepTestsApi {
    * @param workflowId - The `wf_…` id.
    * @param stepId - The step's id within that workflow.
    * @param body - `stepTestId` (optional), `status`, and optional
-   * `input`/`output`/`error`, forwarded verbatim.
+   * `input`/`output`/`error`/`meta` (the server sanitizes `meta`), forwarded verbatim.
    * @returns The created `StepTestRun`, unwrapped from the `run` envelope (the server answers `201`).
    * @throws {ApiError} `400 invalid_body`/`invalid_status`. No `404` — the
    * route never checks the workflow/step exist before writing.
@@ -182,6 +187,7 @@ export class StepTestsApi {
       input?: unknown;
       output?: unknown;
       error?: unknown;
+      meta?: unknown;
     },
   ): Promise<StepTestRun> {
     const res = await this.#host.request<unknown>({
