@@ -145,7 +145,7 @@ jobs:
       # one-repo layout exists to prevent.
       - name: node — build the SDK the react lane imports
         working-directory: node
-        run: npm install && npm run build
+        run: npm ci && npm run build
       - name: react — its own suite, against that build
         working-directory: react
         run: |
@@ -214,7 +214,7 @@ jobs:
       - name: Install + build
         working-directory: node
         run: |
-          npm install
+          npm ci
           npm run build
       - name: Publish @w6w/sdk
         working-directory: node
@@ -222,9 +222,9 @@ jobs:
 
   npm-cli:
     # After npm-sdk, not just verify+test: cli declares a real npm dependency
-    # on "@w6w/sdk": "^<VERSION>" (cli/tests/help_test.ts pins the range), so its
-    # `npm install` below needs the version npm-sdk just published — otherwise it
-    # resolves to nothing and the install fails.
+    # on "@w6w/sdk": "^<VERSION>" (cli/tests/help_test.ts pins the range). The lock
+    # links it to ../node (built below), but the published package must not precede
+    # the SDK version it names.
     needs: [verify, test, npm-sdk]
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
@@ -237,6 +237,13 @@ jobs:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
       - run: npm install --global npm@latest
+      # cli's committed lock records @w6w/sdk as a link to ../node (the registry's latest
+      # @w6w/sdk can trail VERSION), and its build needs ../node/dist, so build node first.
+      - name: Build node (the SDK this lane links)
+        working-directory: node
+        run: |
+          npm ci
+          npm run build
       - name: Install + build
         working-directory: cli
         run: |
@@ -256,10 +263,10 @@ jobs:
     # every `@w6w/sdk` published before this lane existed lacks the `./console`
     # subpath that `react/src/adapter.ts` is built on (`npm view @w6w/sdk@0.3.0
     # exports` returns the root export alone), so an older copy does not merely
-    # mismatch — it cannot satisfy the imports at all. Unlike the `test` job's own react step,
-    # this one does NOT substitute the sibling build: a publish job must build
-    # against exactly what consumers will resolve, and by the time this job runs
-    # `npm-sdk` has already uploaded, so the registry copy is the real, current one.
+    # mismatch — it cannot satisfy the imports at all. The committed lock links
+    # `@w6w/sdk` to ../node, which this job builds first (`npm ci`), so the build
+    # measures the SDK source of this very release commit, the same one npm-sdk
+    # has already uploaded.
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
@@ -271,6 +278,13 @@ jobs:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
       - run: npm install --global npm@latest
+      # react's committed lock records @w6w/sdk as a link to ../node (the registry's latest
+      # @w6w/sdk can trail VERSION), and its build needs ../node/dist, so build node first.
+      - name: Build node (the SDK this lane links)
+        working-directory: node
+        run: |
+          npm ci
+          npm run build
       - name: Install + build
         working-directory: react
         run: |

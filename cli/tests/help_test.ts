@@ -34,6 +34,7 @@ import type { Contract } from "../scripts/gen-help.ts";
 
 const denoJsonUrl = new URL("../deno.json", import.meta.url);
 const packageJsonUrl = new URL("../package.json", import.meta.url);
+const packageLockUrl = new URL("../package-lock.json", import.meta.url);
 /** The shared version file, beside this repo among its two sibling wrapper repos. */
 const sharedVersionUrl = new URL("../../VERSION", import.meta.url);
 
@@ -327,4 +328,15 @@ Deno.test("package.json's @w6w/sdk dependency range tracks VERSION (the ship-tim
   };
   const shared = (await Deno.readTextFile(sharedVersionUrl)).trim();
   assertEquals(pkg.dependencies?.["@w6w/sdk"], `^${shared}`);
+});
+
+Deno.test("package-lock.json's version and root @w6w/sdk range track VERSION", async () => {
+  // `npm ci` accepts a stale lock, so a bump that skips `npm install` is caught only here.
+  const lock = JSON.parse(await Deno.readTextFile(packageLockUrl)) as {
+    version?: unknown;
+    packages?: Record<string, { version?: unknown; dependencies?: Record<string, string> }>;
+  };
+  assertEquals(lock.version, VERSION);
+  assertEquals(lock.packages?.[""]?.version, VERSION);
+  assertEquals(lock.packages?.[""]?.dependencies?.["@w6w/sdk"], `^${VERSION}`);
 });

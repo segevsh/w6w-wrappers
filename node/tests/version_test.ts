@@ -18,6 +18,7 @@ import { VERSION } from "../src/version.ts";
 
 const denoJsonUrl = new URL("../deno.json", import.meta.url);
 const packageJsonUrl = new URL("../package.json", import.meta.url);
+const packageLockUrl = new URL("../package-lock.json", import.meta.url);
 /** The monorepo's shared source of truth: this repo sits at `packages/wrappers/node`. */
 const sharedVersionUrl = new URL("../../VERSION", import.meta.url);
 
@@ -69,4 +70,13 @@ Deno.test("src/version.ts matches the monorepo's packages/wrappers/VERSION", asy
 Deno.test("the barrel re-exports VERSION", async () => {
   const mod = await import("../mod.ts");
   assertEquals(mod.VERSION, VERSION);
+});
+
+Deno.test("package-lock.json's version and root entry match VERSION", async () => {
+  const lock = JSON.parse(await Deno.readTextFile(packageLockUrl)) as {
+    version?: unknown;
+    packages?: Record<string, { version?: unknown }>;
+  };
+  assertEquals(lock.version, VERSION);
+  assertEquals(lock.packages?.[""]?.version, VERSION);
 });
