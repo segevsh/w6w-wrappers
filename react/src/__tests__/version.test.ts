@@ -20,6 +20,7 @@ function readManifestVersion(path: string): string {
 }
 
 const packageJsonPath = fileURLToPath(new URL("../../package.json", import.meta.url));
+const packageLockPath = fileURLToPath(new URL("../../package-lock.json", import.meta.url));
 /** The monorepo's shared source of truth: this package sits at `packages/wrappers/react`. */
 const sharedVersionPath = fileURLToPath(new URL("../../../VERSION", import.meta.url));
 
@@ -47,4 +48,15 @@ test("package.json's @w6w/sdk dependency range tracks VERSION (the ship-time bum
   const range = pkg.dependencies?.["@w6w/sdk"];
   const sharedVersion = readFileSync(sharedVersionPath, "utf8").trim();
   assert.equal(range, `^${sharedVersion}`);
+});
+
+test("package-lock.json's version and root @w6w/sdk range track VERSION", () => {
+  // `npm ci` accepts a stale lock, so a bump that skips `npm install` is caught only here.
+  const lock = JSON.parse(readFileSync(packageLockPath, "utf8")) as {
+    version?: string;
+    packages?: Record<string, { version?: string; dependencies?: Record<string, string> }>;
+  };
+  assert.equal(lock.version, VERSION);
+  assert.equal(lock.packages?.[""]?.version, VERSION);
+  assert.equal(lock.packages?.[""]?.dependencies?.["@w6w/sdk"], `^${VERSION}`);
 });

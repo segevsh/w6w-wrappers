@@ -35,11 +35,12 @@
    workflow specifies that order at `.github/workflows/release.yml:146-161`; the
    network installs were not re-run here.
 
-   **verified: 2026-10-06** — Do not use `npm ci` in `react/`:
-   `package-lock.json` is ignored (`react/.gitignore:7-10`) and was absent in
-   this lane (`test ! -f react/package-lock.json` → success, run 2026-10-06).
-   The release guidance also says the npm jobs use `npm install`, not `npm ci`
-   (`docs/release.md:194-202`).
+   **verified: 2026-10-12** — `react/package-lock.json` is committed (as are
+   `node/`'s and `cli/`'s). In `react/` and `cli/` it records `@w6w/sdk` as a
+   link to `../node`, so a clean `npm ci` or `npm install` there needs no
+   registry copy of the SDK; `cli`'s build then needs `node/dist`, so build
+   `node/` first. The release workflow uses `npm ci` for `node/` and keeps
+   `npm install` for the `cli`/`react` lanes (`docs/release.md`, npm jobs).
 
 2. **React's Node 22 test invocation needs the strip-types flag.**
 
@@ -78,8 +79,10 @@
 
    **verified: 2026-10-07** — Also move `react/package.json`'s `@w6w/sdk` range to exactly `^` + `VERSION`:
    `react/src/__tests__/version.test.ts` requires it, and the `0.9.1` bump (`fce330b`) missed it, leaving the
-   react suite at 43/1 until `0.9.2` (`26-10-06-09-self-host-bundle-hygiene`) fixed it (44/0). Don't commit
-   the lockfiles a bump's `npm install` rewrites (`node/package-lock.json`) — prior bumps never did.
+   react suite at 43/1 until `0.9.2` (`26-10-06-09-self-host-bundle-hygiene`) fixed it (44/0). Also
+   regenerate and commit the three lockfiles: after writing the manifests run `npm install` in `node/`, then `cli/`,
+   then `react/` (`npm ci` passes on a stale lock, so the `package-lock.json` assertion in each lane's version
+   test is the guard).
 
 5. **An operation's `status` is what lanes render; `serverImplemented` is read by nothing.**
 
