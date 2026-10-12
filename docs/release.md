@@ -227,10 +227,12 @@ be discovered at upload time:
   registry: every other lane already tests against the sibling checkout rather
   than the last release, and a test job that silently measures a stale published
   package is the failure this repo's one-repo layout exists to prevent. The
-  `npm-react` publish job does **not** do this substitution — it installs from
-  the registry like every other publish job, which is correct there: a publish
-  job must build against exactly what consumers will resolve, and by the time it
-  runs `npm-sdk` has already uploaded.
+  `npm-react` publish job does **not** do this substitution: it builds `node/`
+  first (`npm ci` there), then `npm ci` in `react/`, whose committed lock links
+  `@w6w/sdk` to `../node`. The publish build therefore measures the SDK source
+  of this very release commit, not whatever the registry's latest `@w6w/sdk`
+  is (which can trail `VERSION`); it still runs after `npm-sdk`, so the version
+  react's range names has been uploaded.
 - **JSR needs the `@w6w` scope to exist and each package linked to this repo**
   before OIDC publishing works; confirmed with `deno publish --dry-run` for the
   `node`/`cli` lanes, including the CLI's cross-package `@w6w/sdk` import. The
