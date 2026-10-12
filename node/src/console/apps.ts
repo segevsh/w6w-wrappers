@@ -82,6 +82,20 @@ export interface AppsHost {
  * the shape, only gives it a second home.
  */
 /**
+ * Execution metadata for one step: which app, version and action ran, and
+ * the connection it ran with (`null` when none). Declared locally as a
+ * structural copy of the engine's step metadata shape — this SDK has zero
+ * dependencies and imports no workflow package. All four keys are always
+ * present on a reported value; an absent value is simply absent.
+ */
+export interface StepMeta {
+  app: string;
+  version: string;
+  action: string;
+  connectionId: string | null;
+}
+
+/**
  * The incoming state a single-step test is run against — what the upstream
  * steps last produced. The server projects it onto the scope roots an
  * `ExprValue` reads (`steps.<id>.output`, `trigger.event`), so a step whose
@@ -90,7 +104,7 @@ export interface AppsHost {
  * Deliberately loose about `output`: it is whatever that step returned.
  */
 export interface InvokeStartState {
-  steps?: Record<string, { output?: unknown }>;
+  steps?: Record<string, { output?: unknown; meta?: StepMeta }>;
   trigger?: { event?: unknown };
 }
 
@@ -914,7 +928,8 @@ export class AppsApi {
    *   references against; `overrides` to reach a vendor field the action's
    *   own params don't declare — merged onto the invocation envelope, never
    *   into `params`.
-   * @returns The whole response body — no envelope key to peel.
+   * @returns The whole response body — no envelope key to peel. `meta` sits
+   *   beside `value` and is present only when the host reported it.
    * @throws {ApiError} On any non-2xx, including an action's own failure (`424`).
    */
   async invoke(
@@ -922,9 +937,9 @@ export class AppsApi {
     actionKey: string,
     params: Record<string, unknown>,
     opts: InvokeOptions = {},
-  ): Promise<{ value: unknown; logs?: string[]; apiCalls?: ApiCallRecord[] }> {
+  ): Promise<{ value: unknown; logs?: string[]; apiCalls?: ApiCallRecord[]; meta?: StepMeta }> {
     const res = await this.#host.request<
-      { value: unknown; logs?: string[]; apiCalls?: ApiCallRecord[] }
+      { value: unknown; logs?: string[]; apiCalls?: ApiCallRecord[]; meta?: StepMeta }
     >(
       {
         method: "POST",

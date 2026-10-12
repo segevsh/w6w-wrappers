@@ -15,6 +15,7 @@
  */
 
 import { assertEquals, assertRejects } from "@std/assert";
+import type { AppsApi } from "../../src/console/apps.ts";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import { ApiError } from "../../src/errors.ts";
@@ -26,9 +27,11 @@ import type {
   AuthDef,
   HealthCheckMeta,
   ImportResponse,
+  InvokeStartState,
   OAuthConfigSummary,
   PreviewSourceResponse,
   RefreshAppResponse,
+  StepMeta,
   TriggerDef,
 } from "../../src/console/apps.ts";
 
@@ -870,4 +873,56 @@ Deno.test("console.apps.delete percent-encodes the id via the `path` tag", async
   await c.client.console.apps.delete("app a");
 
   assertEquals(c.calls[0].url, "https://api.example.com/apps/app%20a");
+});
+
+// --- step meta ---------------------------------------------------------------
+
+type Equals<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true
+  : false;
+type InvokeResult = Awaited<ReturnType<AppsApi["invoke"]>>;
+
+const _stepMeta: Equals<
+  StepMeta,
+  { app: string; version: string; action: string; connectionId: string | null }
+> = true;
+const _invokeMeta: Equals<InvokeResult["meta"], StepMeta | undefined> = true;
+const _invokeOptional: InvokeResult = { value: null };
+const _stateMeta: Equals<
+  NonNullable<InvokeStartState["steps"]>[string]["meta"],
+  StepMeta | undefined
+> = true;
+
+Deno.test("console.apps.invoke returns a top-level meta verbatim (meta with null connectionId)", async () => {
+  const meta: StepMeta = {
+    app: "@w6w/http",
+    version: "1.0.0",
+    action: "request",
+    connectionId: null,
+  };
+  const body = { value: { ok: true }, meta };
+  const c = client(() => json(body));
+
+  const res = await c.client.console.apps.invoke("app_1", "act", {});
+
+  assertEquals(res, body);
+  assertEquals(res.meta?.connectionId, null);
+});
+
+Deno.test("console.apps.invoke leaves meta absent when the host sent none — no filler", async () => {
+  const c = client(() => json({ value: 1 }));
+
+  const res = await c.client.console.apps.invoke("app_1", "act", {});
+
+  assertEquals("meta" in res, false);
+  assertEquals(res, { value: 1 });
+});
+
+Deno.test("console.apps.invoke posts a start-state step meta verbatim", async () => {
+  const meta: StepMeta = { app: "a", version: "1", action: "x", connectionId: "conn_1" };
+  const c = client(() => json({ value: 1 }));
+  const state: InvokeStartState = { steps: { s1: { output: { n: 1 }, meta } } };
+
+  await c.client.console.apps.invoke("app_1", "act", { p: 1 }, { state });
+
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), { params: { p: 1 }, state });
 });
