@@ -27,6 +27,7 @@ import { JSDOM } from "jsdom";
 import { StrictMode, act, createElement } from "react";
 import { type Root, createRoot } from "react-dom/client";
 import { W6WProvider, useW6WClient } from "../W6WProvider.tsx";
+import { subscribe } from "../single-flight.ts";
 import {
   useConnections,
   useCreateVar,
@@ -746,3 +747,105 @@ test("dedup: D8 one subscriber's refetch starts a new request and never aborts t
     assert.equal(held.calls.length, 2);
     assert.equal(held.calls[0]?.signal?.aborted, false);
   }));
+
+test("dedup: D9 an old flight settling after a refetch does not evict the new flight", () =>
+  withRoot(async (root) => {
+    const held = heldFetch();
+    let refetchA: (() => void) | undefined;
+    function A() {
+      refetchA = useConnections().refetch;
+      return null;
+    }
+    function C() {
+      useConnections();
+      return null;
+    }
+    const tree = (withC: boolean) =>
+      provider(
+        held.fetch,
+        "t",
+        createElement(A, { key: "a" }),
+        ...(withC ? [createElement(C, { key: "c" })] : []),
+      );
+    await act(async () => {
+      root.render(tree(false));
+    });
+    await settle();
+    assert.equal(held.calls.length, 1);
+    await act(async () => {
+      refetchA?.();
+      await macrotask();
+    });
+    assert.equal(held.calls.length, 2);
+    // F1 settles after F2 has started; F2 is still pending.
+    await act(async () => {
+      held.resolve(0, { connections: [] });
+      await macrotask();
+    });
+    await act(async () => {
+      root.render(tree(true));
+    });
+    await settle();
+    assert.equal(held.calls.length, 2);
+  }));
+
+test("dedup: D10 a mount after the last detach sends a new request even if abort is ignored", () =>
+  withRoot(async (root) => {
+    const held = heldFetch(); // never reacts to `signal`: the first promise stays pending
+    function Probe() {
+      useConnections();
+      return null;
+    }
+    await act(async () => {
+      root.render(provider(held.fetch, "t", createElement(Probe)));
+    });
+    await settle();
+    assert.equal(held.calls.length, 1);
+    await act(async () => {
+      root.render(provider(held.fetch, "t"));
+    });
+    await settle();
+    await act(async () => {
+      root.render(provider(held.fetch, "t", createElement(Probe)));
+    });
+    await settle();
+    assert.equal(held.calls.length, 2);
+  }));
+
+test("dedup: D11 keys differing only across a | boundary do not share a flight", () =>
+  withRoot(async (root) => {
+    const held = heldFetch();
+    function P1() {
+      useDocumentByKey("a|b", { project: "c" });
+      return null;
+    }
+    function P2() {
+      useDocumentByKey("a", { project: "b|c" });
+      return null;
+    }
+    await act(async () => {
+      root.render(provider(held.fetch, "t", createElement(P1), createElement(P2)));
+    });
+    await settle();
+    assert.equal(held.calls.length, 2);
+  }));
+
+test("dedup: D12 detach is idempotent: a double detach leaves the other holder's flight alive", async () => {
+  const client = {};
+  let signal: AbortSignal | undefined;
+  let release: ((v: string) => void) | undefined;
+  const start = (s: AbortSignal) => {
+    signal = s;
+    return new Promise<string>((resolve) => {
+      release = resolve;
+    });
+  };
+  const first = subscribe(client, "k", start);
+  const second = subscribe(client, "k", start);
+  first.detach();
+  first.detach();
+  await macrotask();
+  assert.equal(signal?.aborted, false);
+  release?.("value");
+  assert.equal(await second.promise, "value");
+});
