@@ -1,6 +1,6 @@
 # PLANNER.md — read this first when planning work in `w6w-wrappers`
 
-> **verified: 2026-10-13** (wrappers@b129865) — This guide records checked source locations, not a
+> **verified: 2026-10-13** (wrappers@e637745) — This guide records checked source locations, not a
 > replacement for them. When this guide and the code disagree, **code wins**;
 > correct this guide in the same change.
 
@@ -86,8 +86,8 @@
    test is the guard).
 
    **verified: 2026-10-13** — Each lane's `README.md` (`node`, `cli`, `python`, `react`) also states
-   the version (`**Version:** \`0.9.4\``, or `Version: 0.9.4` in react). No version test reads a
-   README, so update them by hand: the 0.9.4 bump (`b129865`) changed all four. `grep -ln README`
+   the version (`**Version:** \`0.9.5\``, or `Version: 0.9.5` in react). No version test reads a
+   README, so update them by hand: the 0.9.4 (`b129865`) and 0.9.5 (`e637745`) bumps changed all four. `grep -ln README`
    over the four version tests → no match.
 
 5. **An operation's `status` is what lanes render; `serverImplemented` is read by nothing.**
@@ -112,6 +112,12 @@
    runtime but not in the types (open followup F-6 of `26-10-12-00-steps-metadata`).
    When you add a console field, grep `react/src/adapter.ts` for the method too.
 
+   **verified: 2026-10-13** — `console.tenantOAuthApps` has four methods: `list`, `put`, `remove`
+   and `listCandidates` (`node/src/console/tenant-oauth-apps.ts`, `GET /tenant/oauth-apps/candidates`,
+   keyset page `{ apps, nextCursor? }`, `nextCursor` absent on the last page). `listCandidates` is
+   console-only: no `endpoints.json` row, so cli/python gained nothing but the `VERSION` bump to
+   0.9.5 (`e637745`); its doc section is in `node/docs/console.md` (`## console.tenantOAuthApps.*`).
+
 ## Gate baselines
 
 - **verified: 2026-10-06** — The release test job runs Python's unittest command
@@ -122,6 +128,9 @@
 - **verified: 2026-10-13** — node `deno task test` → `ok | 514 passed | 0 failed`
   at the T3.1.1 merge of `26-10-12-00-steps-metadata` (`84f4b1e`; its eval G2).
   The later 0.9.4 bump touches only version strings and lockfiles.
+- **verified: 2026-10-13** — node `deno task test` → `ok | 519 passed | 0 failed` at
+  wrappers@e637745 (0.9.5, `listCandidates` added); `deno task check`, `lint` (83 files) and
+  `fmt:check` (88 files) exit 0.
 - **verified: 2026-10-06** — React's CI setup builds the sibling SDK, installs
   it locally, then runs `npm test` (`.github/workflows/release.yml:146-161`).
   Use the Node 22 invocation above when reproducing it in this lane.

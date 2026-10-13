@@ -1,7 +1,7 @@
 /**
  * `client.console.tenantOAuthApps.*` — a tenant administrator's own OAuth
- * client overrides (list, upsert, remove) for the apps their tenant connects
- * to.
+ * client overrides (list, upsert, remove) and the candidate apps they can still
+ * configure (`listCandidates`), for the apps their tenant connects to.
  *
  * **Studio-internal, not the published partner contract.** This namespace
  * lives under the `console` subpath export (`@w6w/sdk/console`), excluded from
@@ -11,7 +11,7 @@
  * instance state, never globals): this class holds no state of its own beyond
  * the injected host, so two clients in one process never share a credential.
  *
- * **The tenant is never a parameter here.** These three routes are scoped by
+ * **The tenant is never a parameter here.** These four routes are scoped by
  * the caller's own credential (the tenant claim on the bearer) plus a
  * server-side tenant-admin check — unlike the operator family
  * (`GET/PUT/DELETE /tenants/:id/oauth-app…`, `api/admin/tenants.ts:307-309`),
