@@ -21,13 +21,15 @@
  * string verbatim.
  */
 
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
+import { ApiError } from "../../src/errors.ts";
 import type {
   SetTenantOAuthAppInput,
   TenantOAuthAppsResponse,
   TenantOAuthAppSummary,
+  TenantOAuthCandidatesPage,
 } from "../../src/console/tenant-oauth-apps.ts";
 
 /** One recorded call to the fake transport. */
@@ -106,12 +108,13 @@ const LIST: TenantOAuthAppsResponse = {
 };
 
 Deno.test(
-  "console.tenantOAuthApps: list/put/remove are functions on a constructed client",
+  "console.tenantOAuthApps: list/listCandidates/put/remove are functions on a constructed client",
   () => {
     // Runtime, not type-level: a namespace that silently lost a method would
     // still typecheck everywhere else in this suite.
     const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
     assertEquals(typeof c.console.tenantOAuthApps.list, "function");
+    assertEquals(typeof c.console.tenantOAuthApps.listCandidates, "function");
     assertEquals(typeof c.console.tenantOAuthApps.put, "function");
     assertEquals(typeof c.console.tenantOAuthApps.remove, "function");
   },
@@ -257,6 +260,120 @@ Deno.test("console.tenantOAuthApps percent-encodes both path segments", async ()
 });
 
 // ── Type-level: the input type must not offer what the surface does not have ──
+
+const PAGE_WITH_CURSOR: TenantOAuthCandidatesPage = {
+  apps: [{
+    id: "eventbrite",
+    displayName: "Eventbrite",
+    version: "1.2.0",
+    description: "Events",
+    categories: ["events"],
+    brandColor: "#f05537",
+    owner: { tenant: "", subject: "" },
+  }],
+  nextCursor: "eyJrIjoi",
+};
+const PAGE_LAST: TenantOAuthCandidatesPage = {
+  apps: [{
+    id: "mailchimp",
+    displayName: "Mailchimp",
+    version: "2.0.0",
+    description: "Email",
+    owner: { tenant: "", subject: "" },
+  }],
+};
+
+Deno.test(
+  "console.tenantOAuthApps.listCandidates() GETs /tenant/oauth-apps/candidates with NO query string",
+  async () => {
+    const c = client(() => json(PAGE_LAST));
+    await c.client.console.tenantOAuthApps.listCandidates();
+    assertEquals(c.calls.length, 1);
+    assertEquals(c.calls[0].method, "GET");
+    assertEquals(c.calls[0].url, "https://api.example.com/tenant/oauth-apps/candidates");
+    assertEquals(c.calls[0].body, null);
+  },
+);
+
+Deno.test(
+  "console.tenantOAuthApps.listCandidates serializes q/limit/cursor under their own wire names, percent-encoded",
+  async () => {
+    const c = client(() => json(PAGE_LAST));
+    await c.client.console.tenantOAuthApps.listCandidates({
+      q: "a b&c",
+      limit: 25,
+      cursor: "eyJ",
+    });
+    const url = new URL(c.calls[0].url);
+    assertEquals(url.pathname, "/tenant/oauth-apps/candidates");
+    assertEquals(url.searchParams.get("q"), "a b&c");
+    assertEquals(url.searchParams.get("limit"), "25");
+    assertEquals(url.searchParams.get("cursor"), "eyJ");
+    assertEquals([...url.searchParams.keys()].sort(), ["cursor", "limit", "q"]);
+    // The raw query string must keep `&` inside q encoded, not split it.
+    assertEquals(url.search.includes("q=a%20b%26c") || url.search.includes("q=a+b%26c"), true);
+  },
+);
+
+Deno.test(
+  "console.tenantOAuthApps.listCandidates: an omitted member is ABSENT from the query, never `q=` or `undefined`",
+  async () => {
+    const c = client(() => json(PAGE_LAST));
+    await c.client.console.tenantOAuthApps.listCandidates({ limit: 10 });
+    await c.client.console.tenantOAuthApps.listCandidates({ q: "x", cursor: undefined });
+    const first = new URL(c.calls[0].url);
+    assertEquals([...first.searchParams.keys()], ["limit"]);
+    const second = new URL(c.calls[1].url);
+    assertEquals([...second.searchParams.keys()], ["q"]);
+    assertEquals(c.calls[0].url.includes("undefined"), false);
+    assertEquals(c.calls[1].url.includes("undefined"), false);
+  },
+);
+
+Deno.test(
+  "console.tenantOAuthApps.listCandidates returns the body verbatim, with and without nextCursor",
+  async () => {
+    const withCursor = client(() => json(PAGE_WITH_CURSOR));
+    assertEquals(
+      await withCursor.client.console.tenantOAuthApps.listCandidates(),
+      PAGE_WITH_CURSOR,
+    );
+    const last = client(() => json(PAGE_LAST));
+    const res = await last.client.console.tenantOAuthApps.listCandidates();
+    assertEquals(res, PAGE_LAST);
+    assertEquals("nextCursor" in res, false);
+  },
+);
+
+Deno.test(
+  "console.tenantOAuthApps.listCandidates: signal rides the request, never the query; an aborted one rejects 'cancelled'",
+  async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const calls: Call[] = [];
+    const fetch: FetchLike = (input, init) => {
+      calls.push({
+        url: input,
+        method: init?.method,
+        headers: new Headers(init?.headers),
+        body: null,
+      });
+      if (init?.signal?.aborted) {
+        return Promise.reject(new DOMException("The operation was aborted.", "AbortError"));
+      }
+      return Promise.resolve(json(PAGE_LAST));
+    };
+    const c = new W6WClient({ baseUrl: "https://api.example.com", token: "tok_1", fetch });
+
+    const err = await assertRejects(
+      () => c.console.tenantOAuthApps.listCandidates({ signal: controller.signal }),
+      ApiError,
+    );
+    assertEquals(err.status, 0);
+    assertEquals(err.code, "cancelled");
+    assertEquals(new URL(calls[0].url).search, "");
+  },
+);
 
 /**
  * `redirectUri` is derived SERVER-SIDE (W3's `callbackUrl`) and `force` is an
