@@ -213,10 +213,13 @@ export { ApiCallsApi } from "./api-calls.ts";
 export type { ApiCallsFilter, ApiCallsHost } from "./api-calls.ts";
 export { TenantOAuthAppsApi } from "./tenant-oauth-apps.ts";
 export type {
+  ListTenantOAuthCandidatesOptions,
   SetTenantOAuthAppInput,
   TenantOAuthAppsHost,
   TenantOAuthAppsResponse,
   TenantOAuthAppSummary,
+  TenantOAuthCandidate,
+  TenantOAuthCandidatesPage,
 } from "./tenant-oauth-apps.ts";
 export { OtpApi } from "./otp.ts";
 export type { LoginProviders, OtpHost, OtpVerifyResponse } from "./otp.ts";
