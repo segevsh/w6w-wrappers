@@ -336,6 +336,14 @@ Relocated verbatim from `packages/studio/src/api/client.ts:235-393`, which the f
 `AppDetail`, `PreviewSourceResponse`, `ImportResponse`, `RefreshAppResponse` and
 `OAuthConfigSummary` shapes are still pinned by `packages/studio/src/api/types.ts`.
 
+**`AuthDef` types its OAuth2 block.** `oauth2` is an `OAuth2AuthConfig`: the manifest's endpoints
+pass through verbatim (index signature) plus an optional, typed `setup: OAuth2ClientSetup` with
+seven optional keys (`consoleUrl`, `instructions`, `clientIdHint`, `clientSecretHint`,
+`redirectUriHint`, `extraHint`, `extraTemplate`). `setup` is display-only and untrusted: render it
+as text. The callback URL is per oauth2 auth def: `AuthDef.callbackUrl` is a server-derived sibling
+of `oauth2`, never inside it. Likewise each `OAuthConfigSummary` row carries its own optional
+`callbackUrl`, and `UpsertOAuthConfigInput` has no `redirectUri` (the server derives it).
+
 **`AppSummary` carries two additive fields beyond that pin**, both optional:
 `supportsOAuth?: boolean` (true when the app declares an `oauth2` auth method, server-computed from
 `app.latest.auth` by `summarize`, `packages/server/packages/api/wire-summary.ts:81` — no client ever
@@ -947,8 +955,8 @@ import { W6WClient } from "@w6w/sdk";
 import "@w6w/sdk/console"; // pulls in client.console
 
 const client = new W6WClient();
-const { configs, callbackUrl } = await client.console.tenantOAuthApps.list();
-// Register `callbackUrl` with the provider — never assemble it client-side.
+const { configs } = await client.console.tenantOAuthApps.list();
+// Register each row's `callbackUrl` with the provider — never assemble it client-side.
 await client.console.tenantOAuthApps.put("sendgrid", "oauth2", { clientId: "abc" });
 await client.console.tenantOAuthApps.remove("sendgrid", "oauth2");
 ```
@@ -960,7 +968,7 @@ claim) plus a server-side tenant-admin check, unlike the operator family
 
 | Method                       | Route                                      | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | ---------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list()`                     | `GET /tenant/oauth-apps`                   | Returns the body VERBATIM — no `unwrap()`. `callbackUrl` rides beside `configs`; unwrapping just `configs` would silently drop it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `list()`                     | `GET /tenant/oauth-apps`                   | Returns the body VERBATIM — no `unwrap()`. Each row in `configs` carries its own per-app `callbackUrl`; there is no top-level one.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `listCandidates(options?)`   | `GET /tenant/oauth-apps/candidates`        | Pages the apps this tenant may still register a client for. Params `q` (trimmed, at most 200 characters), `limit` (1..200, default 50) and `cursor`, each sent under its own name; an omitted one is absent from the query, so `listCandidates()` sends none. Returns `{ apps, nextCursor? }` VERBATIM; `nextCursor` is absent on the last page. `signal` aborts (`ApiError` `code: "cancelled"`). **Cursor guarantee:** every app eligible for the whole walk, with an unchanged display name, appears exactly once; an app whose eligibility or display name changes mid-walk may be missed or repeated, so restart with no cursor after a registration or removal. |
 | `put(appId, authKey, input)` | `PUT /tenant/oauth-app/:appId/:authKey`    | **Body built by omission — see below.** No query string is ever set. Reads `res.body.config` directly (server answers `201`); never calls `unwrap()`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `remove(appId, authKey)`     | `DELETE /tenant/oauth-app/:appId/:authKey` | Resolves `void`, discarding `{ok: true}`, same convention as `console.projects.delete`/`console.schedules.delete`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
@@ -973,7 +981,8 @@ defeats the type (`as unknown as SetTenantOAuthAppInput`) and passes `redirectUr
 get either one onto the wire — neither key is ever read by the body builder. Separately, `put` sets
 **no query string at all** on the request, so `?force=true` is unreachable by construction — there
 is no code path that could add it, not merely an unwritten one. Neither `redirectUri` (the callback
-URL is derived server-side) nor `force` (the operator's affordance) is offered to a tenant admin.
+URL is derived server-side, per row) nor `force` (the operator's affordance) is offered to a tenant
+admin.
 
 **`clientSecret: ""` IS carried to the wire verbatim, and it is destructive server-side — an omitted
 `clientSecret` is not.** Measured directly against the real request body (not inferred):
@@ -988,9 +997,8 @@ secret — `toSetBody` (`src/console/tenant-oauth-apps.ts:150-157`) forwards wha
 verbatim and refuses nothing.
 
 None of `list`/`listCandidates`/`put`/`remove` calls this package's `unwrap()` helper: `list`
-returns the whole body (`callbackUrl` rides beside `configs`, so unwrapping just `configs` would
-drop it), `put` reaches one level in itself (`res.body.config`), and `remove` discards the body
-entirely.
+returns the whole body (exactly what the server sent; each row has its own `callbackUrl`), `put`
+reaches one level in itself (`res.body.config`), and `remove` discards the body entirely.
 
 ## `console.passkeys.*`
 

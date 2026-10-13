@@ -258,6 +258,40 @@ export interface AuthField {
 }
 
 /**
+ * Per-app guidance for registering an OAuth client with the provider, as the
+ * manifest's `oauth2.setup` block declares it. **Display-only and untrusted**:
+ * render it as text, never interpret it as markup, a URL to fetch, or config.
+ */
+export interface OAuth2ClientSetup {
+  /** Where the provider's developer console lives. */
+  consoleUrl?: string;
+  /** Step-by-step instructions for creating the OAuth client. */
+  instructions?: string;
+  /** Hint for the client id field. */
+  clientIdHint?: string;
+  /** Hint for the client secret field. */
+  clientSecretHint?: string;
+  /** Hint for the redirect URI the provider asks for. */
+  redirectUriHint?: string;
+  /** Hint for the provider-specific `extra` field. */
+  extraHint?: string;
+  /** A starting `extra` object to pre-fill a new row with. */
+  extraTemplate?: Record<string, unknown>;
+}
+
+/**
+ * The `oauth2` block of an {@link AuthDef}: the manifest's OAuth2 endpoints,
+ * passed through verbatim (hence the index signature), plus the typed
+ * {@link OAuth2ClientSetup} guidance. The callback URL is NOT in here; it is
+ * {@link AuthDef.callbackUrl}, a sibling of this block.
+ */
+export interface OAuth2AuthConfig {
+  /** Display-only client-registration guidance, when the manifest declares it. */
+  setup?: OAuth2ClientSetup;
+  [key: string]: unknown;
+}
+
+/**
  * Auth method declaration as exposed by an app's manifest. Field-for-field
  * per `packages/studio/src/api/types.ts:93-114`.
  */
@@ -268,8 +302,14 @@ export interface AuthDef {
   description?: string;
   connectionLabel?: string;
   fields?: AuthField[];
-  /** OAuth2 endpoints (only present when type === "oauth2"). */
-  oauth2?: Record<string, unknown>;
+  /** OAuth2 endpoints and setup guidance (only present when type === "oauth2"). */
+  oauth2?: OAuth2AuthConfig;
+  /**
+   * This app's OAuth callback URL, derived SERVER-SIDE (only present on an
+   * oauth2 entry). A sibling of `oauth2`, never inside it. Display it; never
+   * assemble it client-side.
+   */
+  callbackUrl?: string;
   /**
    * Server-side availability flag. False when the method requires per-host
    * configuration that hasn't been provided yet (e.g. an oauth2 method with
@@ -278,7 +318,7 @@ export interface AuthDef {
   available?: boolean;
   /**
    * Names of host-side config keys this method needs. Present on `oauth2`
-   * (["clientId", "clientSecret", "redirectUri"]). Empty / undefined for
+   * (["clientId", "clientSecret"]). Empty / undefined for
    * types that source everything from end-user input.
    */
   requiresHostConfig?: string[];
@@ -379,6 +419,8 @@ export interface OAuthConfigSummary {
   authKey: string;
   clientId: string;
   redirectUri: string;
+  /** This row's OAuth callback URL, derived server-side. Absent from an older server. */
+  callbackUrl?: string;
   hasClientSecret: true;
   extra: Record<string, unknown>;
   createdAt: string;
@@ -483,7 +525,6 @@ export interface TriggerDef {
 export interface UpsertOAuthConfigInput {
   clientId: string;
   clientSecret: string;
-  redirectUri: string;
   extra?: Record<string, unknown>;
 }
 

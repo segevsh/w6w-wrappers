@@ -16,6 +16,7 @@
 
 import { assertEquals, assertRejects } from "@std/assert";
 import type { AppsApi } from "../../src/console/apps.ts";
+import type { OAuth2ClientSetup } from "../../src/console/mod.ts";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import { ApiError } from "../../src/errors.ts";
@@ -33,6 +34,7 @@ import type {
   RefreshAppResponse,
   StepMeta,
   TriggerDef,
+  UpsertOAuthConfigInput,
 } from "../../src/console/apps.ts";
 
 /** One recorded call to the fake transport. */
@@ -158,7 +160,8 @@ const CONFIG_A: OAuthConfigSummary = {
   appId: "app_1",
   authKey: "oauth2",
   clientId: "client_1",
-  redirectUri: "https://app.example.com/callback",
+  redirectUri: "https://app.example.com/oauth/callback/app_1/oauth2",
+  callbackUrl: "https://app.example.com/oauth/callback/app_1/oauth2",
   hasClientSecret: true,
   extra: {},
   createdAt: "2026-07-01T00:00:00.000Z",
@@ -503,6 +506,75 @@ Deno.test("console.apps.getHealth resolves ONLY the health array, not the whole 
 
 // --- getAuth / getTriggers: envelope unwrap ---------------------------------
 
+const SETUP: OAuth2ClientSetup = {
+  consoleUrl: "https://console.example.com/apps",
+  instructions: "Create an OAuth client.",
+  clientIdHint: "Starts with cid_",
+  clientSecretHint: "Shown once",
+  redirectUriHint: "Paste the callback URL",
+  extraHint: "Scopes as JSON",
+  extraTemplate: { scopes: [] },
+};
+
+const AUTH: AuthDef = {
+  key: "oauth2",
+  type: "oauth2",
+  oauth2: { authorizationUrl: "https://provider.example.com/authorize", setup: SETUP },
+  callbackUrl: "https://app.example.com/oauth/callback/app_1/oauth2",
+};
+
+Deno.test("console.apps.getAuth round-trips an entry-level callbackUrl and typed oauth2.setup", async () => {
+  const c = client(() => json({ auths: [AUTH] }));
+
+  const [def] = await c.client.console.apps.getAuth("app_1");
+
+  assertEquals(def, AUTH);
+  const url: string | undefined = def.callbackUrl;
+  const setup: OAuth2ClientSetup | undefined = def.oauth2?.setup;
+  assertEquals(url, "https://app.example.com/oauth/callback/app_1/oauth2");
+  assertEquals(setup, SETUP);
+});
+
+// @ts-expect-error — consoleUrl is a string.
+const _badConsoleUrl: OAuth2ClientSetup = { consoleUrl: 1 };
+// @ts-expect-error — instructions is a string.
+const _badInstructions: OAuth2ClientSetup = { instructions: 1 };
+// @ts-expect-error — clientIdHint is a string.
+const _badClientIdHint: OAuth2ClientSetup = { clientIdHint: 1 };
+// @ts-expect-error — clientSecretHint is a string.
+const _badClientSecretHint: OAuth2ClientSetup = { clientSecretHint: 1 };
+// @ts-expect-error — redirectUriHint is a string.
+const _badRedirectUriHint: OAuth2ClientSetup = { redirectUriHint: 1 };
+// @ts-expect-error — extraHint is a string.
+const _badExtraHint: OAuth2ClientSetup = { extraHint: 1 };
+// @ts-expect-error — extraTemplate is an object.
+const _badExtraTemplate: OAuth2ClientSetup = { extraTemplate: "x" };
+// @ts-expect-error — callbackUrl is entry-level on AuthDef, never inside oauth2.
+const _nestedCallback: string | undefined = AUTH.oauth2?.callbackUrl;
+const _upsertWithRedirect: UpsertOAuthConfigInput = {
+  clientId: "id",
+  clientSecret: "s",
+  // @ts-expect-error — redirectUri is server-derived; the input no longer carries it.
+  redirectUri: "https://x/cb",
+};
+
+Deno.test("console.apps: type-level witnesses are referenced", () => {
+  assertEquals(
+    [
+      _badConsoleUrl,
+      _badInstructions,
+      _badClientIdHint,
+      _badClientSecretHint,
+      _badRedirectUriHint,
+      _badExtraHint,
+      _badExtraTemplate,
+      _nestedCallback,
+      _upsertWithRedirect,
+    ].length,
+    9,
+  );
+});
+
 Deno.test("console.apps.getAuth unwraps the auths envelope", async () => {
   const c = client(() => json({ auths: [AUTH_A] }));
 
@@ -679,7 +751,6 @@ Deno.test("console.apps.upsertOAuthConfig unwraps the config envelope", async ()
   const res = await c.client.console.apps.upsertOAuthConfig("app_1", "oauth2", {
     clientId: "id",
     clientSecret: "secret",
-    redirectUri: "https://x/callback",
   });
 
   assertEquals(res, CONFIG_A);
@@ -703,13 +774,11 @@ Deno.test("console.apps.upsertOAuthConfig sends the body verbatim", async () => 
   await c.client.console.apps.upsertOAuthConfig("app_1", "oauth2", {
     clientId: "id",
     clientSecret: "secret",
-    redirectUri: "https://x/callback",
   });
 
   assertEquals(JSON.parse(c.calls[0].body ?? "null"), {
     clientId: "id",
     clientSecret: "secret",
-    redirectUri: "https://x/callback",
   });
 });
 

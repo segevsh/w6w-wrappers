@@ -118,6 +118,13 @@
    console-only: no `endpoints.json` row, so cli/python gained nothing but the `VERSION` bump to
    0.9.5 (`e637745`); its doc section is in `node/docs/console.md` (`## console.tenantOAuthApps.*`).
 
+   **verified: 2026-10-13** — `26-10-13-01-oauth-client-setup` (wrappers@dac1698, `VERSION` 0.9.6
+   @ `fdeb467`): the SDK never takes or builds a callback URL. `TenantOAuthApp`/`GlobalOAuthApp` put
+   inputs have no `redirectUri`; the list response's top-level `callbackUrl` is gone and each entry
+   (and config row) carries the server-derived `callbackUrl` instead; `OAuth2ClientSetup` (the app's
+   `oauth2.setup` guidance) is exported from the `console` barrel (`node/src/console/apps.ts`,
+   `tenant-oauth-apps.ts`, `node/docs/console.md`).
+
 ## Gate baselines
 
 - **verified: 2026-10-06** — The release test job runs Python's unittest command
@@ -131,6 +138,8 @@
 - **verified: 2026-10-13** — node `deno task test` → `ok | 519 passed | 0 failed` at
   wrappers@e637745 (0.9.5, `listCandidates` added); `deno task check`, `lint` (83 files) and
   `fmt:check` (88 files) exit 0.
+- **verified: 2026-10-13** — node `deno task test` → `ok | 522 passed | 0 failed` at the
+  T3.1.1 merge of `26-10-13-01-oauth-client-setup` (`dac1698`, its G1).
 - **verified: 2026-10-06** — React's CI setup builds the sibling SDK, installs
   it locally, then runs `npm test` (`.github/workflows/release.yml:146-161`).
   Use the Node 22 invocation above when reproducing it in this lane.

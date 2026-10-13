@@ -86,7 +86,8 @@ const CONFIG_A: TenantOAuthAppSummary = {
   appId: "sendgrid",
   authKey: "oauth2",
   clientId: "cid_1",
-  redirectUri: "https://api.example.com/oauth/callback",
+  redirectUri: "https://api.example.com/oauth/callback/sendgrid/oauth2",
+  callbackUrl: "https://api.example.com/oauth/callback/sendgrid/oauth2",
   extra: { scopes: ["mail.send"] },
   hasClientSecret: true,
   disabled: false,
@@ -104,7 +105,6 @@ const CONFIG_B: TenantOAuthAppSummary = {
 
 const LIST: TenantOAuthAppsResponse = {
   configs: [CONFIG_A, CONFIG_B],
-  callbackUrl: "https://api.example.com/oauth/callback",
 };
 
 Deno.test(
@@ -121,16 +121,19 @@ Deno.test(
 );
 
 Deno.test(
-  "console.tenantOAuthApps.list GETs /tenant/oauth-apps and returns the body INCLUDING callbackUrl",
+  "console.tenantOAuthApps.list GETs /tenant/oauth-apps and returns the body verbatim, per-row callbackUrl included",
   async () => {
     const c = client(() => json(LIST));
 
     const res = await c.client.console.tenantOAuthApps.list();
 
     // An `unwrap(res, "configs")` mutant would resolve the array alone and
-    // silently drop `callbackUrl` — the one value a caller cannot compute.
+    // fail this deep-equal: the body is returned exactly as the server sent it.
     assertEquals(res, LIST);
-    assertEquals(res.callbackUrl, "https://api.example.com/oauth/callback");
+    assertEquals(
+      res.configs[0].callbackUrl,
+      "https://api.example.com/oauth/callback/sendgrid/oauth2",
+    );
     assertEquals(c.calls.length, 1);
     assertEquals(c.calls[0].method, "GET");
     assertEquals(c.calls[0].url, "https://api.example.com/tenant/oauth-apps");
@@ -376,7 +379,7 @@ Deno.test(
 );
 
 /**
- * `redirectUri` is derived SERVER-SIDE (W3's `callbackUrl`) and `force` is an
+ * `redirectUri` is derived SERVER-SIDE (each row's `callbackUrl`) and `force` is an
  * operator-only affordance (W4). Neither is on this surface, and a field the
  * SDK offers is a field a form will fill — so both must fail to COMPILE.
  * Aimed at an explicit `SetTenantOAuthAppInput` annotation rather than an
@@ -395,4 +398,14 @@ Deno.test("type-level guards above are referenced so the file cannot be dead-str
   assertEquals(typeof _withRedirectUri, "object");
   assertEquals(typeof _withForce, "object");
   assertEquals(typeof _summaryWithSecret, "object");
+});
+
+const _listWithTopLevelCallback: TenantOAuthAppsResponse = {
+  configs: [],
+  // @ts-expect-error — the callback URL is per row now; there is no top-level `callbackUrl`.
+  callbackUrl: "https://api.example.com/oauth/callback/x/oauth2",
+};
+
+Deno.test("console.tenantOAuthApps: the top-level callbackUrl witness is referenced", () => {
+  assertEquals(_listWithTopLevelCallback.configs.length, 0);
 });
