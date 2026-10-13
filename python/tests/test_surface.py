@@ -91,6 +91,7 @@ PUBLIC_SURFACE = {
     "Me",
     "ConnectionsApi",
     "ConnectionsRequest",
+    "ConnectionAppMeta",
     "ConnectionState",
     "ConnectionSummary",
     "WorkflowsApi",

@@ -299,7 +299,7 @@ Shared rules for both asset namespaces:
 ## 5. Wire types and the run types
 
 Both packages export the transcribed wire shapes: `Doc`, `DocFormat`, `Var`,
-`VarType`, `Me`, `ConnectionSummary`, `ConnectionState`, `WorkflowSummary`,
+`VarType`, `Me`, `ConnectionSummary`, `ConnectionAppMeta`, `ConnectionState`, `WorkflowSummary`,
 `WorkflowStatus`, `RunStatus`, `StepError`, `RunResult`, `WorkflowRunResult`,
 `RunEnvelope`. Field names are the **wire's, verbatim** — `createdAt`, not
 `created_at`, in Python too. Timestamps stay ISO-8601 **strings** in both; date
