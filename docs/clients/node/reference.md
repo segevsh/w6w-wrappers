@@ -34,7 +34,7 @@ Everything `@w6w/sdk` exports for application code. For a walkthrough, start wit
 | Option | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `baseUrl` | `string` | `W6W_BASE_URL` | Your API origin, such as `https://<your-host>`. Must be an absolute `http` or `https` URL. A path is kept as given. |
-| `token` | `string` or a function | `W6W_TOKEN` | A token, or a supplier called before every request with `{ forceRefresh }`. May be async. |
+| `token` | `string` or a function | `W6W_TOKEN` | A token, or a supplier called per request with `{ forceRefresh }` (concurrent requests share one call; memoize it yourself). May be async. |
 | `project` | `string` | your account's default | Default project for `documents.*`, `workflows.list`, `workflows.create` and `workflows.update`. |
 | `refreshOnUnauthorized` | `boolean` | `false` | On a `401 unauthorized`, call the token supplier with `{ forceRefresh: true }` and retry once. |
 | `onUnauthorized` | `(err: ApiError) => void` | none | Called with the final `401` error, at most once per call. |

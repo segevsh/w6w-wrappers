@@ -25,7 +25,7 @@ Everything `@w6w/react` exports. For a walkthrough, start with the [React](/clie
 | Prop | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `baseUrl` | `string` | required | Your w6w API origin, such as `https://<your-host>`. |
-| `token` | `string` or a function | required | A token, or a supplier called before every request. May be async. Called with `{ forceRefresh: true }` on a refresh retry. |
+| `token` | `string` or a function | required | A token, or a supplier called per request (concurrent requests share one call; memoize it yourself). May be async. Called with `{ forceRefresh: true }` on a refresh retry. |
 | `ready` | `boolean` | `true` | While `false`, read hooks send nothing and report `loading: true`. Set it once you have a token. |
 | `identityKey` | `string` | none | Who the client speaks for, such as `` `${userId}:${accountId}` ``. Changing it rebuilds the client and clears every hook's data, so one user's data never shows under another. |
 | `refreshOnUnauthorized` | `boolean` | `false` | On a `401 unauthorized`, ask the token supplier for a fresh token and retry the request once. |
@@ -38,6 +38,11 @@ Everything `@w6w/react` exports. For a walkthrough, start with the [React](/clie
 
 Each returns `{ data, error, loading, refetch }`. They load on mount, reload when their arguments
 or the client change, and cancel a request that's no longer needed.
+
+Hooks asking for the same thing (same hook, same arguments, same provider) while a request is in
+flight share one request, so two components, or React StrictMode's mount-unmount-mount, send a
+single fetch. A shared request is cancelled only when the last hook using it goes away. Nothing is
+kept once it finishes: a hook that mounts later sends a new request.
 
 | Hook | Loads |
 | --- | --- |

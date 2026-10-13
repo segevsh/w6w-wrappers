@@ -61,8 +61,10 @@ request is sent.
 
 ## 2. Give the client a token supplier
 
-Instead of a fixed string, pass `token` a function. The client calls it before **every** request,
-so a rotated token is picked up on the next call without rebuilding the client:
+Instead of a fixed string, pass `token` a function. The client calls it for each request that starts,
+so a rotated token is picked up on the next call without rebuilding the client. Requests in flight
+at the same time share ONE supplier call, but nothing is cached once it settles, so **memoize your
+supplier** (as below) rather than minting a token on every call:
 
 ```ts
 import { W6WClient } from "@w6w/sdk";
@@ -121,6 +123,17 @@ const client = new W6WClient({
 
 A header you pass to a single `client.request()` call overrides a default with the same name.
 Neither can replace the `Authorization` header the client sets from your token.
+
+## 5. Show connection icons without walking the app catalog
+
+Each connection the client returns can carry its app's display data inline, as `app`:
+`{ displayName, iconSvg?, iconSvgDark?, brandColor?, brandColorDark? }` (or `null`). Render names
+and icons straight from it. Do not call `apps.list()` on mount just to find icons: that walks the
+whole catalog. For the rows that come back without `app`, fetch only those apps with
+`client.console.apps.listPage({ ids })`.
+
+In React, hooks that ask for the same thing while a request is in flight share one request, so
+two components calling `useConnections()` (or StrictMode's double mount) send a single fetch.
 
 ## In the browser
 
