@@ -1,7 +1,7 @@
 /**
  * `client.console.tenantOAuthApps.*` — a tenant administrator's own OAuth
- * client overrides (list, upsert, remove) for the apps their tenant connects
- * to.
+ * client overrides (list, upsert, remove) and the candidate apps they can still
+ * configure (`listCandidates`), for the apps their tenant connects to.
  *
  * **Studio-internal, not the published partner contract.** This namespace
  * lives under the `console` subpath export (`@w6w/sdk/console`), excluded from
@@ -11,7 +11,7 @@
  * instance state, never globals): this class holds no state of its own beyond
  * the injected host, so two clients in one process never share a credential.
  *
- * **The tenant is never a parameter here.** These three routes are scoped by
+ * **The tenant is never a parameter here.** These four routes are scoped by
  * the caller's own credential (the tenant claim on the bearer) plus a
  * server-side tenant-admin check — unlike the operator family
  * (`GET/PUT/DELETE /tenants/:id/oauth-app…`, `api/admin/tenants.ts:307-309`),
@@ -161,6 +161,47 @@ function toSetBody(input: SetTenantOAuthAppInput): Record<string, unknown> {
 }
 
 /**
+ * One app a tenant administrator may register an OAuth client for — the picker
+ * subset `GET /tenant/oauth-apps/candidates` answers with. Flat; carries no
+ * OAuth configuration and no secret.
+ */
+export interface TenantOAuthCandidate {
+  id: string;
+  displayName: string;
+  version: string;
+  description: string;
+  categories?: string[];
+  /** Omitted by the server when larger than 8192 UTF-8 bytes. */
+  iconSvg?: string;
+  /** Omitted by the server when larger than 8192 UTF-8 bytes. */
+  iconSvgDark?: string;
+  brandColor?: string;
+  brandColorDark?: string;
+  owner: { tenant: string; subject: string };
+}
+
+/** One page of candidates. `nextCursor` is ABSENT (not `null`) on the last page. */
+export interface TenantOAuthCandidatesPage {
+  apps: TenantOAuthCandidate[];
+  nextCursor?: string;
+}
+
+/**
+ * Options for {@linkcode TenantOAuthAppsApi.listCandidates}. Each member is
+ * sent under its own wire name; an omitted member is absent from the request.
+ */
+export interface ListTenantOAuthCandidatesOptions {
+  /** Case-insensitive substring filter; the server trims it and rejects more than 200 characters. */
+  q?: string;
+  /** Page size, 1..200; the server defaults to 50. */
+  limit?: number;
+  /** Opaque cursor from a previous page's `nextCursor`. */
+  cursor?: string;
+  /** Aborts the request; an abort rejects with `ApiError` `code: "cancelled"`. */
+  signal?: AbortSignal;
+}
+
+/**
  * The `console.tenantOAuthApps` namespace on a `W6WClient` — the caller's own
  * tenant, never a tenant of its choosing.
  *
@@ -195,6 +236,34 @@ export class TenantOAuthAppsApi {
     const res = await this.#host.request<TenantOAuthAppsResponse>({
       method: "GET",
       path: "/tenant/oauth-apps",
+    });
+    return res.body;
+  }
+
+  /**
+   * Page through the apps this tenant could still register an OAuth client
+   * for (`GET /tenant/oauth-apps/candidates`).
+   *
+   * Returns the body VERBATIM. Every app eligible for the whole walk, with an
+   * unchanged display name, appears exactly once; an app whose eligibility or
+   * display name changes mid-walk may be missed or repeated, so restart with
+   * no cursor after a registration or removal.
+   *
+   * @param options - Optional `q`, `limit`, `cursor` and `signal`.
+   * @returns One page: `{apps, nextCursor}`; `nextCursor` is absent on the last page.
+   * @throws {ApiError} `400 invalid_query`/`invalid_cursor` on a bad parameter;
+   * `403` when the caller does not administer its tenant; `code: "cancelled"`
+   * when `options.signal` was aborted.
+   */
+  async listCandidates(
+    options: ListTenantOAuthCandidatesOptions = {},
+  ): Promise<TenantOAuthCandidatesPage> {
+    const { signal, q, limit, cursor } = options;
+    const res = await this.#host.request<TenantOAuthCandidatesPage>({
+      method: "GET",
+      path: "/tenant/oauth-apps/candidates",
+      query: { q, limit, cursor },
+      signal,
     });
     return res.body;
   }

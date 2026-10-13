@@ -1,6 +1,6 @@
 # PLANNER.md — read this first when planning work in `w6w-wrappers`
 
-> **verified: 2026-10-06** — This guide records checked source locations, not a
+> **verified: 2026-10-13** (wrappers@e637745) — This guide records checked source locations, not a
 > replacement for them. When this guide and the code disagree, **code wins**;
 > correct this guide in the same change.
 
@@ -24,8 +24,9 @@
 | how a contract name is resolved by a client or CLI runner   | `docs/implementation.md` §10                 | **verified: 2026-10-06** — `docs/implementation.md:892-945` |
 | release order, version bumps, or CI gates                   | `docs/release.md`                            | **verified: 2026-10-06** — `docs/release.md:124-158`        |
 | public docs or publication eligibility                      | `docs/README.md` and `docs/manifest.json`    | **verified: 2026-10-06** — `docs/README.md:1-6`             |
+| a `console.*` (`@w6w/sdk/console`) type or route            | `node/docs/console.md`, then trap 6 below    | **verified: 2026-10-13** — `node/src/console/mod.ts` header |
 
-## Four things that bite people who skip this
+## Things that bite people who skip this
 
 1. **React must test the sibling SDK build, in this order.**
 
@@ -84,12 +85,38 @@
    then `react/` (`npm ci` passes on a stale lock, so the `package-lock.json` assertion in each lane's version
    test is the guard).
 
+   **verified: 2026-10-13** — Each lane's `README.md` (`node`, `cli`, `python`, `react`) also states
+   the version (`**Version:** \`0.9.5\``, or `Version: 0.9.5` in react). No version test reads a
+   README, so update them by hand: the 0.9.4 (`b129865`) and 0.9.5 (`e637745`) bumps changed all four. `grep -ln README`
+   over the four version tests → no match.
+
 5. **An operation's `status` is what lanes render; `serverImplemented` is read by nothing.**
 
    **verified: 2026-10-07** — `cli/scripts/gen-help.ts` renders `status: "planned"` into
    `cli/src/help.generated.ts`, which `cli/tests/help_test.ts` byte-checks; so flipping an op to `required`
    means `cd cli && deno task gen:help` and committing the output. `serverImplemented` has no reader in any
    lane. The six `team.*` operations are `required`/`serverImplemented: true` as of `VERSION` 0.9.2.
+
+6. **`console.*` is outside the contract, and React hand-copies some of its types.**
+
+   **verified: 2026-10-13** — `@w6w/sdk/console` is kept out of `endpoints.json`'s
+   `operations[]` and out of the root barrel (`node/src/console/mod.ts` header;
+   `grep -c '"console' endpoints.json` → 0). A console field therefore needs no
+   conformance change in cli/python, but it still ships under a lockstep `VERSION`
+   bump (steps-metadata went to 0.9.4, `b129865`). It also needs a matching row in
+   `node/docs/console.md`. The trap is that `react/src/adapter.ts` declares its own
+   copy of the `invokeAction` return type and the `recordStepTestRun` body. The step
+   `meta` added to `node/src/console/apps.ts` (`StepMeta`, `invokeAction`'s
+   `meta?`) and `node/src/console/step-tests.ts` (`lastRunMeta`, run `meta`,
+   `recordRun` body) is missing from both copies. React users get the field at
+   runtime but not in the types (open followup F-6 of `26-10-12-00-steps-metadata`).
+   When you add a console field, grep `react/src/adapter.ts` for the method too.
+
+   **verified: 2026-10-13** — `console.tenantOAuthApps` has four methods: `list`, `put`, `remove`
+   and `listCandidates` (`node/src/console/tenant-oauth-apps.ts`, `GET /tenant/oauth-apps/candidates`,
+   keyset page `{ apps, nextCursor? }`, `nextCursor` absent on the last page). `listCandidates` is
+   console-only: no `endpoints.json` row, so cli/python gained nothing but the `VERSION` bump to
+   0.9.5 (`e637745`); its doc section is in `node/docs/console.md` (`## console.tenantOAuthApps.*`).
 
 ## Gate baselines
 
@@ -98,6 +125,12 @@
   test` in node and cli
   (`.github/workflows/release.yml:123-135`). Those suites include the contract
   conformance and version guards (`docs/release.md:150-158`).
+- **verified: 2026-10-13** — node `deno task test` → `ok | 514 passed | 0 failed`
+  at the T3.1.1 merge of `26-10-12-00-steps-metadata` (`84f4b1e`; its eval G2).
+  The later 0.9.4 bump touches only version strings and lockfiles.
+- **verified: 2026-10-13** — node `deno task test` → `ok | 519 passed | 0 failed` at
+  wrappers@e637745 (0.9.5, `listCandidates` added); `deno task check`, `lint` (83 files) and
+  `fmt:check` (88 files) exit 0.
 - **verified: 2026-10-06** — React's CI setup builds the sibling SDK, installs
   it locally, then runs `npm test` (`.github/workflows/release.yml:146-161`).
   Use the Node 22 invocation above when reproducing it in this lane.
@@ -107,6 +140,6 @@
 - **verified: 2026-10-06** — Re-check every cited command and `file:line` after
   changing the corresponding source; this guide is intentionally subordinate to
   code.
-- **verified: 2026-10-06** — Keep the routing table and the four traps in sync
+- **verified: 2026-10-13** — Keep the routing table and the traps in sync
   with the release workflow, `docs/parity.md`, `docs/implementation.md`, and
   `docs/release.md` named above.

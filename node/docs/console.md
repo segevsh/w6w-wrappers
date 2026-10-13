@@ -328,7 +328,7 @@ wire call (method/path/body/query) is unchanged from `client.ts`.
 | `preview(source, opts?)`                  | `POST /apps/preview`                                 | Whole body IS the `kind`-discriminated union — no envelope.                                                                                                                                                                                                                                                                                                                                                     |
 | `import(source, opts?)`                   | `POST /apps/import`                                  | Whole body IS the `kind`-discriminated union — no envelope.                                                                                                                                                                                                                                                                                                                                                     |
 | `refresh(id, opts?)`                      | `POST /apps/:id/refresh`                             | Whole body IS `RefreshAppResponse` — no envelope.                                                                                                                                                                                                                                                                                                                                                               |
-| `invoke(appId, actionKey, params, opts?)` | `POST /apps/:id/actions/:key/invoke`                 | Whole body IS `{value, logs?, apiCalls?}` — no envelope. No studio-page caller, but called heavily via `@w6w/ui`'s `W6WApi.invokeAction` facade (that facade's `opts` also carries `project`/`state`, a superset this method does not model).                                                                                                                                                                   |
+| `invoke(appId, actionKey, params, opts?)` | `POST /apps/:id/actions/:key/invoke`                 | Whole body IS `{value, logs?, apiCalls?, meta?}` — no envelope; `meta` is present only when the host reported it. No studio-page caller, but called heavily via `@w6w/ui`'s `W6WApi.invokeAction` facade (its `opts` — `InvokeOptions` — carries `connectionId`/`project`/`state`/`overrides`).                                                                                                                 |
 | `delete(appId)`                           | `DELETE /apps/:id`                                   | Whole body IS `{removed: number}` — **returned, not discarded to `void`**, the one deliberate asymmetry vs. `console.projects.delete`/`console.schedules.delete`.                                                                                                                                                                                                                                               |
 
 Relocated verbatim from `packages/studio/src/api/client.ts:235-393`, which the field-for-field
@@ -597,11 +597,11 @@ SHORTENED versus `client.ts`'s flat names (`saveStepTest` → `save`, `listStepT
 `recordStepTestRun` → `recordRun`), mirroring `console.connections.listForApp`'s/
 `console.workflows.get`'s own convention — the domain prefix already disambiguates.
 
-| Method                                | Route                                         | Notes                                                                                                           |
-| ------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `save(workflowId, stepId, body)`      | `POST /workflows/:id/steps/:stepId/tests`     | Body `{name?, input, with}` forwarded verbatim. `unwrap<StepTest>(res, "stepTest")` (`201`).                    |
-| `list(workflowId, stepId)`            | `GET /workflows/:id/steps/:stepId/tests`      | `unwrap<StepTest[]>(res, "stepTests")`.                                                                         |
-| `recordRun(workflowId, stepId, body)` | `POST /workflows/:id/steps/:stepId/test-runs` | Body `{stepTestId?, status, input?, output?, error?}` forwarded verbatim. **Returns the REAL row — see below.** |
+| Method                                | Route                                         | Notes                                                                                                                  |
+| ------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `save(workflowId, stepId, body)`      | `POST /workflows/:id/steps/:stepId/tests`     | Body `{name?, input, with}` forwarded verbatim. `unwrap<StepTest>(res, "stepTest")` (`201`).                           |
+| `list(workflowId, stepId)`            | `GET /workflows/:id/steps/:stepId/tests`      | `unwrap<StepTest[]>(res, "stepTests")`.                                                                                |
+| `recordRun(workflowId, stepId, body)` | `POST /workflows/:id/steps/:stepId/test-runs` | Body `{stepTestId?, status, input?, output?, error?, meta?}` forwarded verbatim. **Returns the REAL row — see below.** |
 
 **`recordRun` returns the real created `StepTestRun` row, unwrapped from `{run}` — it does NOT
 discard to `void`.** Same rule as `console.savedTests.recordTestRun` above: studio's own `client.ts`
@@ -953,16 +953,17 @@ await client.console.tenantOAuthApps.put("sendgrid", "oauth2", { clientId: "abc"
 await client.console.tenantOAuthApps.remove("sendgrid", "oauth2");
 ```
 
-Three methods: a tenant administrator's own OAuth client overrides for the apps their tenant
-connects to. The tenant is never a parameter — these routes are scoped by the caller's own bearer
-(the tenant claim) plus a server-side tenant-admin check, unlike the operator family
+Four methods: a tenant administrator's own OAuth client overrides for the apps their tenant connects
+to. The tenant is never a parameter — these routes are scoped by the caller's own bearer (the tenant
+claim) plus a server-side tenant-admin check, unlike the operator family
 (`GET`/`PUT`/`DELETE /tenants/:id/oauth-app…`), which takes the tenant in the path.
 
-| Method                       | Route                                      | Notes                                                                                                                                                 |
-| ---------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list()`                     | `GET /tenant/oauth-apps`                   | Returns the body VERBATIM — no `unwrap()`. `callbackUrl` rides beside `configs`; unwrapping just `configs` would silently drop it.                    |
-| `put(appId, authKey, input)` | `PUT /tenant/oauth-app/:appId/:authKey`    | **Body built by omission — see below.** No query string is ever set. Reads `res.body.config` directly (server answers `201`); never calls `unwrap()`. |
-| `remove(appId, authKey)`     | `DELETE /tenant/oauth-app/:appId/:authKey` | Resolves `void`, discarding `{ok: true}`, same convention as `console.projects.delete`/`console.schedules.delete`.                                    |
+| Method                       | Route                                      | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list()`                     | `GET /tenant/oauth-apps`                   | Returns the body VERBATIM — no `unwrap()`. `callbackUrl` rides beside `configs`; unwrapping just `configs` would silently drop it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `listCandidates(options?)`   | `GET /tenant/oauth-apps/candidates`        | Pages the apps this tenant may still register a client for. Params `q` (trimmed, at most 200 characters), `limit` (1..200, default 50) and `cursor`, each sent under its own name; an omitted one is absent from the query, so `listCandidates()` sends none. Returns `{ apps, nextCursor? }` VERBATIM; `nextCursor` is absent on the last page. `signal` aborts (`ApiError` `code: "cancelled"`). **Cursor guarantee:** every app eligible for the whole walk, with an unchanged display name, appears exactly once; an app whose eligibility or display name changes mid-walk may be missed or repeated, so restart with no cursor after a registration or removal. |
+| `put(appId, authKey, input)` | `PUT /tenant/oauth-app/:appId/:authKey`    | **Body built by omission — see below.** No query string is ever set. Reads `res.body.config` directly (server answers `201`); never calls `unwrap()`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `remove(appId, authKey)`     | `DELETE /tenant/oauth-app/:appId/:authKey` | Resolves `void`, discarding `{ok: true}`, same convention as `console.projects.delete`/`console.schedules.delete`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 **`put` builds its request body by OMISSION, key by key — an omitted field never reaches the wire.**
 `SetTenantOAuthAppInput` has four optional keys (`clientId`, `clientSecret`, `extra`, `disabled`);
@@ -986,9 +987,10 @@ caller must omit `clientSecret` rather than send `""`** when it does not intend 
 secret — `toSetBody` (`src/console/tenant-oauth-apps.ts:150-157`) forwards whatever it is given
 verbatim and refuses nothing.
 
-None of `list`/`put`/`remove` calls this package's `unwrap()` helper: `list` returns the whole body
-(`callbackUrl` rides beside `configs`, so unwrapping just `configs` would drop it), `put` reaches
-one level in itself (`res.body.config`), and `remove` discards the body entirely.
+None of `list`/`listCandidates`/`put`/`remove` calls this package's `unwrap()` helper: `list`
+returns the whole body (`callbackUrl` rides beside `configs`, so unwrapping just `configs` would
+drop it), `put` reaches one level in itself (`res.body.config`), and `remove` discards the body
+entirely.
 
 ## `console.passkeys.*`
 
