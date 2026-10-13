@@ -40,10 +40,13 @@ export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
 /**
  * A per-request token supplier.
  *
- * Called **fresh on every request** — never cached, never resolved once at
- * construction — so a host can rotate or mint a token out-of-band (a tenant
+ * Called **per request** — never cached after it settles, never resolved once
+ * at construction — so a host can rotate or mint a token out-of-band (a tenant
  * exchange, a short-lived partner credential) and have the very next call pick
- * it up. `ctx.forceRefresh` is set to `true` exactly once, on the single
+ * it up. Requests that are in flight **concurrently** on one client share ONE
+ * supplier call (and its result); a request that starts after it settled calls
+ * the supplier again. Memoize the supplier yourself if minting is expensive.
+ * `ctx.forceRefresh` is set to `true` exactly once, on the single
  * recovery retry a `401`/`unauthorized` triggers (`docs/implementation.md`
  * §3); every ordinary per-request resolution omits it. A `string` `token` is
  * the degenerate case of this shape — it behaves exactly as before.
@@ -72,7 +75,7 @@ export interface W6WClientOptions {
    * Bearer token, resolved on **every** request — not just once at
    * construction. A plain `string` is sent verbatim on every call, exactly as
    * before; a {@linkcode TokenProvider} function is called (and awaited)
-   * fresh per request, so a host can hand back a token minted or rotated after
+   * per request (concurrent requests share one in-flight call), so a host can hand back a token minted or rotated after
    * this client was constructed. Overrides `W6W_TOKEN`, which stays a plain
    * string (there is no environment-variable spelling of a supplier).
    */
@@ -278,9 +281,13 @@ export function resolveConfig(options: W6WClientOptions = {}): ResolvedConfig {
  * There are no anonymous operations in this surface
  * (`docs/implementation.md` §2).
  *
- * **Resolved fresh every call, never cached.** When `config.token` is a
- * {@linkcode TokenProvider} it is called (and its result awaited) right here —
- * a plain string is the degenerate case that needs no call at all. `ctx` is
+ * **Resolved per call, never cached after it settles.** When `config.token` is
+ * a {@linkcode TokenProvider} it is called (and its result awaited) right here —
+ * a plain string is the degenerate case that needs no call at all. Ordinary
+ * calls (`ctx?.forceRefresh` not `true`) that overlap on one `config` share ONE
+ * in-flight supplier call; the slot is dropped when it settles, on success or
+ * failure, so nothing is cached. A forced refresh neither joins nor fills that
+ * slot. `ctx` is
  * forwarded verbatim to the provider; passing `{forceRefresh: true}` is the
  * one and only seam `request()`'s recovery retry uses (`docs/implementation.md`
  * §3) — ordinary resolution never passes it.
@@ -297,7 +304,28 @@ export function resolveConfig(options: W6WClientOptions = {}): ResolvedConfig {
  * @returns The configured token, verbatim.
  * @throws {ConfigError} When no non-blank token is configured.
  */
-export async function requireToken(
+export function requireToken(
+  config: ResolvedConfig,
+  ctx?: { forceRefresh?: boolean },
+): Promise<string> {
+  if (typeof config.token !== "function" || ctx?.forceRefresh === true) {
+    return resolveToken(config, ctx);
+  }
+  const pending = inflightTokens.get(config);
+  if (pending) return pending;
+  const flight = resolveToken(config, ctx);
+  inflightTokens.set(config, flight);
+  const clear = () => {
+    if (inflightTokens.get(config) === flight) inflightTokens.delete(config);
+  };
+  flight.then(clear, clear);
+  return flight;
+}
+
+/** One in-flight ordinary supplier call per config (never a module-level slot). */
+const inflightTokens = new WeakMap<ResolvedConfig, Promise<string>>();
+
+async function resolveToken(
   config: ResolvedConfig,
   ctx?: { forceRefresh?: boolean },
 ): Promise<string> {

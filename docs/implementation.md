@@ -305,8 +305,10 @@ configuration error on the first request.
 **`token` resolves per request, not once at construction.** node and python both
 accept `token` as either a plain string or a **supplier** — `TokenProvider`
 (node), a callable `token: Union[str, Callable[..., Optional[str]], None]`
-(python) — and the supplier is called fresh on every single request, never
-cached. A plain string is the **degenerate case** of this same shape: it behaves
+(python) — and the supplier is called per request, never cached after it
+settles. In node, requests in flight **concurrently** on one client share ONE
+supplier call (a forced-refresh call never joins or is joined); python's sync
+transport has no concurrency to share, so it calls the supplier on every request. A plain string is the **degenerate case** of this same shape: it behaves
 exactly as if a supplier had been written that always returns it, and existing
 callers that only ever pass a string see no change at all. Nullish or blank
 (after trimming) is the same configuration error either way — the string case
@@ -373,7 +375,7 @@ This is not a style choice.
   That module resolves the effective base URL once, at client construction, and
   hands back a plain config value. The token is different: `resolveConfig`
   stores whatever shape the caller passed — string or supplier — without calling
-  it, and `request()` resolves that to an actual bearer value fresh on every
+  it, and `request()` resolves that to an actual bearer value per
   request (string = degenerate case; see §2 above), never once at construction.
   Every test of env-var behaviour therefore has exactly one seam to exercise
   (§9), and no operation can silently acquire a hidden dependency on ambient
