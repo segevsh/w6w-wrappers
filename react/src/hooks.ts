@@ -11,14 +11,19 @@
  * surface at contract `0.5.0`, which is why hooks for them live here now
  * rather than being unreachable without `console.*`.
  *
- * Cancellation: every read method a hook here calls takes an optional
- * `signal` (`@w6w/sdk`'s `CallOptions`, threaded to the injected `fetch`'s own
- * `RequestInit.signal`, `node/src/http.ts`). `useAsync` below allocates one
- * real `AbortController` per call and aborts the PREVIOUS one — superseded by
- * a newer call, by the `W6WClient` identity changing (an `identityKey`
- * switch), or by unmount — so a stale request's resolution or rejection can
- * never commit, and the server-side work a genuinely abandoned request
- * triggers is told to stop rather than merely ignored.
+ * Cancellation and sharing: every read method a hook here calls takes an
+ * optional `signal` (`@w6w/sdk`'s `CallOptions`, threaded to the injected
+ * `fetch`'s own `RequestInit.signal`, `node/src/http.ts`). Reads are
+ * single-flighted per client (`single-flight.ts`): hooks asking for the same
+ * thing (same hook, same arguments) while a request is in flight share ONE
+ * request and one `AbortController`, and nothing is kept once it settles. The
+ * controller is refcounted — it aborts only when the LAST subscriber has gone
+ * (unmount, `identityKey`/client switch, `ready: false`) and stayed gone past
+ * a microtask, so React StrictMode's synchronous cleanup -> remount (or a
+ * second consumer) re-attaches to the flight instead of aborting and
+ * re-firing it. A stale request's resolution or rejection can never commit
+ * into a hook that has moved on, and a genuinely abandoned request is told to
+ * stop rather than merely ignored.
  *
  * Every read hook also gates on `ready` (`<W6WProvider ready={...}>`,
  * default `true`): while `false`, `useAsync` never calls the fetcher at all
@@ -52,6 +57,7 @@ import type {
 } from "@w6w/sdk";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useW6WClient, useW6WProviderContext } from "./W6WProvider.tsx";
+import { type Subscription, subscribe } from "./single-flight.ts";
 
 /** What every read hook returns. */
 export interface ReadResult<T> {
@@ -114,8 +120,14 @@ interface AsyncState<T> {
  * P-6) is reported as `loading: true`, not `error` — the same floor as
  * `ready: false`, since from a caller's point of view "no credential yet" and
  * "not ready yet" are the same state.
+ *
+ * `key` identifies the read for sharing: `JSON.stringify([method, ...args])`
+ * over the SDK method and EVERY argument `fetcher` closes over. `refetch()`
+ * starts a fresh flight (replacing the key's slot) and never aborts a flight
+ * another subscriber still holds.
  */
 function useAsync<T>(
+  key: string,
   fetcher: (signal: AbortSignal) => Promise<T>,
   client: unknown,
   ready: boolean,
@@ -127,66 +139,72 @@ function useAsync<T>(
   });
   const mountedRef = useRef(true);
   const generationRef = useRef(0);
-  const controllerRef = useRef<AbortController | null>(null);
+  const subRef = useRef<Subscription<T> | null>(null);
   const clientRef = useRef<unknown>(client);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      controllerRef.current?.abort();
+      subRef.current?.detach();
+      subRef.current = null;
     };
   }, []);
 
-  const run = useCallback(() => {
-    const clientChanged = clientRef.current !== client;
-    clientRef.current = client;
+  const run = useCallback(
+    (fresh = false) => {
+      const clientChanged = clientRef.current !== client;
+      clientRef.current = client;
 
-    // Abort whatever this hook had in flight — superseded by this call,
-    // whether it is a real fetch or a `ready: false` short-circuit.
-    controllerRef.current?.abort();
-    controllerRef.current = null;
+      // Abort whatever this hook had in flight — superseded by this call,
+      // whether it is a real fetch or a `ready: false` short-circuit.
+      subRef.current?.detach();
+      subRef.current = null;
 
-    if (!ready) {
-      // Bump the generation too, not just abort the controller — a rejection
-      // from the just-aborted call must never land after this point and flip
-      // `loading` back to `false` out from under the `ready: false` floor.
-      ++generationRef.current;
-      setState({ data: undefined, error: undefined, loading: true });
-      return;
-    }
+      if (!ready) {
+        // Bump the generation too, not just abort the controller — a rejection
+        // from the just-aborted call must never land after this point and flip
+        // `loading` back to `false` out from under the `ready: false` floor.
+        ++generationRef.current;
+        setState({ data: undefined, error: undefined, loading: true });
+        return;
+      }
 
-    const generation = ++generationRef.current;
-    const controller = new AbortController();
-    controllerRef.current = controller;
+      const generation = ++generationRef.current;
+      const sub = subscribe<T>(client as object, key, fetcher, fresh);
+      subRef.current = sub;
 
-    setState((s) =>
-      clientChanged
-        ? { data: undefined, error: undefined, loading: true }
-        : { ...s, loading: true },
-    );
+      setState((s) =>
+        clientChanged
+          ? { data: undefined, error: undefined, loading: true }
+          : { ...s, loading: true },
+      );
 
-    fetcher(controller.signal).then(
-      (data) => {
-        if (!mountedRef.current || generation !== generationRef.current) return;
-        setState({ data, error: undefined, loading: false });
-      },
-      (error: unknown) => {
-        if (!mountedRef.current || generation !== generationRef.current) return;
-        if (error instanceof Error && error.name === "ConfigError") {
-          setState({ data: undefined, error: undefined, loading: true });
-          return;
-        }
-        setState({ data: undefined, error, loading: false });
-      },
-    );
-  }, [fetcher, client, ready]);
+      sub.promise.then(
+        (data) => {
+          if (!mountedRef.current || generation !== generationRef.current) return;
+          setState({ data, error: undefined, loading: false });
+        },
+        (error: unknown) => {
+          if (!mountedRef.current || generation !== generationRef.current) return;
+          if (error instanceof Error && error.name === "ConfigError") {
+            setState({ data: undefined, error: undefined, loading: true });
+            return;
+          }
+          setState({ data: undefined, error, loading: false });
+        },
+      );
+    },
+    [key, fetcher, client, ready],
+  );
 
   useEffect(() => {
     run();
   }, [run]);
 
-  return { data: state.data, error: state.error, loading: state.loading, refetch: run };
+  const refetch = useCallback(() => run(true), [run]);
+
+  return { data: state.data, error: state.error, loading: state.loading, refetch };
 }
 
 /**
@@ -226,7 +244,7 @@ function useMutationResource<Args extends unknown[], T>(
 export function useMe(): ReadResult<Me> {
   const { client, ready } = useW6WProviderContext();
   const fetcher = useCallback((signal: AbortSignal) => client.me({ signal }), [client]);
-  return useAsync(fetcher, client, ready);
+  return useAsync(JSON.stringify(["me"]), fetcher, client, ready);
 }
 
 export function useDocuments(options?: DocumentOptions): ReadResult<Doc[]> {
@@ -236,7 +254,7 @@ export function useDocuments(options?: DocumentOptions): ReadResult<Doc[]> {
     (signal: AbortSignal) => client.documents.list({ project, signal }),
     [client, project],
   );
-  return useAsync(fetcher, client, ready);
+  return useAsync(JSON.stringify(["documents.list", project ?? null]), fetcher, client, ready);
 }
 
 export function useDocument(id: string, options?: DocumentOptions): ReadResult<Doc> {
@@ -246,7 +264,7 @@ export function useDocument(id: string, options?: DocumentOptions): ReadResult<D
     (signal: AbortSignal) => client.documents.get(id, { project, signal }),
     [client, id, project],
   );
-  return useAsync(fetcher, client, ready);
+  return useAsync(JSON.stringify(["documents.get", id, project ?? null]), fetcher, client, ready);
 }
 
 export function useDocumentByKey(key: string, options?: DocumentOptions): ReadResult<Doc> {
@@ -256,13 +274,18 @@ export function useDocumentByKey(key: string, options?: DocumentOptions): ReadRe
     (signal: AbortSignal) => client.documents.getByKey(key, { project, signal }),
     [client, key, project],
   );
-  return useAsync(fetcher, client, ready);
+  return useAsync(
+    JSON.stringify(["documents.getByKey", key, project ?? null]),
+    fetcher,
+    client,
+    ready,
+  );
 }
 
 export function useVars(): ReadResult<Var[]> {
   const { client, ready } = useW6WProviderContext();
   const fetcher = useCallback((signal: AbortSignal) => client.vars.list({ signal }), [client]);
-  return useAsync(fetcher, client, ready);
+  return useAsync(JSON.stringify(["vars.list"]), fetcher, client, ready);
 }
 
 export function useVar(id: string): ReadResult<Var> {
@@ -271,7 +294,7 @@ export function useVar(id: string): ReadResult<Var> {
     (signal: AbortSignal) => client.vars.get(id, { signal }),
     [client, id],
   );
-  return useAsync(fetcher, client, ready);
+  return useAsync(JSON.stringify(["vars.get", id]), fetcher, client, ready);
 }
 
 export function useConnections(): ReadResult<ConnectionSummary[]> {
@@ -280,7 +303,7 @@ export function useConnections(): ReadResult<ConnectionSummary[]> {
     (signal: AbortSignal) => client.connections.list({ signal }),
     [client],
   );
-  return useAsync(fetcher, client, ready);
+  return useAsync(JSON.stringify(["connections.list"]), fetcher, client, ready);
 }
 
 export function useWorkflows(options?: WorkflowListOptions): ReadResult<WorkflowSummary[]> {
@@ -290,7 +313,7 @@ export function useWorkflows(options?: WorkflowListOptions): ReadResult<Workflow
     (signal: AbortSignal) => client.workflows.list({ project, signal }),
     [client, project],
   );
-  return useAsync(fetcher, client, ready);
+  return useAsync(JSON.stringify(["workflows.list", project ?? null]), fetcher, client, ready);
 }
 
 /**
@@ -309,13 +332,13 @@ export function useWorkflow(id: string): ReadResult<WorkflowDetail> {
     (signal: AbortSignal) => client.workflows.get(id, { signal }),
     [client, id],
   );
-  return useAsync(fetcher, client, ready);
+  return useAsync(JSON.stringify(["workflows.get", id]), fetcher, client, ready);
 }
 
 export function useFunctions(): ReadResult<FunctionSummary[]> {
   const { client, ready } = useW6WProviderContext();
   const fetcher = useCallback((signal: AbortSignal) => client.functions.list({ signal }), [client]);
-  return useAsync(fetcher, client, ready);
+  return useAsync(JSON.stringify(["functions.list"]), fetcher, client, ready);
 }
 
 export function useFunction(id: string): ReadResult<FunctionDetail> {
@@ -324,7 +347,7 @@ export function useFunction(id: string): ReadResult<FunctionDetail> {
     (signal: AbortSignal) => client.functions.get(id, { signal }),
     [client, id],
   );
-  return useAsync(fetcher, client, ready);
+  return useAsync(JSON.stringify(["functions.get", id]), fetcher, client, ready);
 }
 
 // ── mutations ────────────────────────────────────────────────────────────

@@ -24,10 +24,25 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { FetchLike, W6WClient } from "@w6w/sdk";
 import { JSDOM } from "jsdom";
-import { act, createElement } from "react";
+import { StrictMode, act, createElement } from "react";
 import { type Root, createRoot } from "react-dom/client";
 import { W6WProvider, useW6WClient } from "../W6WProvider.tsx";
-import { useCreateVar, useMe, useRunWorkflow, useUpdateWorkflow } from "../hooks.ts";
+import {
+  useConnections,
+  useCreateVar,
+  useDocument,
+  useDocumentByKey,
+  useDocuments,
+  useFunction,
+  useFunctions,
+  useMe,
+  useRunWorkflow,
+  useUpdateWorkflow,
+  useVar,
+  useVars,
+  useWorkflow,
+  useWorkflows,
+} from "../hooks.ts";
 
 // React 18.3+'s `act` warns ("not configured to support act(...)") unless this
 // flag is set — required once per process, not per test.
@@ -37,13 +52,18 @@ import { useCreateVar, useMe, useRunWorkflow, useUpdateWorkflow } from "../hooks
 interface Call {
   url: string;
   headers: Headers;
+  signal?: AbortSignal | null;
 }
 
 /** A `fetch`-shaped fake. `respond` defaults to answering `200 {}`. */
 function fakeFetch(respond?: (call: Call) => Response): { fetch: FetchLike; calls: Call[] } {
   const calls: Call[] = [];
   const fetch: FetchLike = (input, init) => {
-    const call: Call = { url: input, headers: new Headers(init?.headers) };
+    const call: Call = {
+      url: input,
+      headers: new Headers(init?.headers),
+      signal: init?.signal,
+    };
     calls.push(call);
     return Promise.resolve(
       respond
@@ -440,4 +460,289 @@ test("useUpdateWorkflow passes its options through — the precondition reaches 
     assert.equal(saved?.updatedAt, "t2");
     assert.equal(fake.calls.length, 1);
     assert.equal(fake.calls[0]?.headers.get("x-w6w-if-unmodified-since"), "t1");
+  }));
+
+// ── dedup: single-flight read hooks ──────────────────────────────────────
+
+const macrotask = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+/** Let pending microtasks, timers and React commits settle. */
+const settle = () =>
+  act(async () => {
+    await macrotask();
+  });
+
+/** A fake whose calls resolve/reject on demand (`respondWith` picks the body per call). */
+function heldFetch(): {
+  fetch: FetchLike;
+  calls: Call[];
+  resolve: (index: number, body: unknown) => void;
+  fail: (index: number, status: number) => void;
+} {
+  const calls: Call[] = [];
+  const resolvers: Array<(res: Response) => void> = [];
+  const fetch: FetchLike = (input, init) => {
+    calls.push({ url: input, headers: new Headers(init?.headers), signal: init?.signal });
+    return new Promise<Response>((resolve) => {
+      resolvers.push(resolve);
+    });
+  };
+  return {
+    fetch,
+    calls,
+    resolve: (i, body) => resolvers[i]?.(json(body)),
+    fail: (i, status) => resolvers[i]?.(json({ error: { code: "boom", message: "boom" } }, status)),
+  };
+}
+
+const BASE = "https://api.example.com";
+
+function provider(fetch: FetchLike, token: string, ...children: unknown[]) {
+  return createElement(W6WProvider, { baseUrl: BASE, token, fetch }, ...(children as never[]));
+}
+
+test("dedup: D1 two useConnections consumers under StrictMode make one fetch and abort none", () =>
+  withRoot(async (root) => {
+    const held = heldFetch();
+    const seen: unknown[] = [];
+    function Probe() {
+      seen.push(useConnections().data);
+      return null;
+    }
+    await act(async () => {
+      root.render(
+        createElement(
+          StrictMode,
+          null,
+          provider(held.fetch, "t", createElement(Probe), createElement(Probe)),
+        ),
+      );
+    });
+    await settle();
+    assert.equal(held.calls.length, 1);
+    assert.equal(held.calls[0]?.url, `${BASE}/connections`);
+    assert.equal(held.calls[0]?.signal?.aborted, false);
+    await act(async () => {
+      held.resolve(0, { connections: [{ id: "c1" }] });
+      await macrotask();
+    });
+    assert.deepEqual(seen.at(-1), [{ id: "c1" }]);
+    assert.equal(held.calls.length, 1);
+    assert.equal(held.calls.filter((c) => c.signal?.aborted).length, 0);
+  }));
+
+test("dedup: D2 two providers with the same baseUrl and different tokens do not share", () =>
+  withRoot(async (root) => {
+    const fake = fakeFetch((c) =>
+      json({ connections: [{ id: `for-${c.headers.get("authorization")}` }] }),
+    );
+    const out: Record<string, unknown> = {};
+    const probe = (name: string) =>
+      function Probe() {
+        out[name] = useConnections().data;
+        return null;
+      };
+    await act(async () => {
+      root.render(
+        createElement(
+          "div",
+          null,
+          provider(fake.fetch, "tok_a", createElement(probe("a"))),
+          provider(fake.fetch, "tok_b", createElement(probe("b"))),
+        ),
+      );
+    });
+    await settle();
+    assert.equal(fake.calls.length, 2);
+    assert.deepEqual(out.a, [{ id: "for-Bearer tok_a" }]);
+    assert.deepEqual(out.b, [{ id: "for-Bearer tok_b" }]);
+  }));
+
+test("dedup: D3 a consumer mounting after the flight settled sends a new request", () =>
+  withRoot(async (root) => {
+    const fake = fakeFetch(() => json([]));
+    function Probe() {
+      useConnections();
+      return null;
+    }
+    await act(async () => {
+      root.render(provider(fake.fetch, "t", createElement(Probe)));
+    });
+    await settle();
+    assert.equal(fake.calls.length, 1);
+    await act(async () => {
+      root.render(
+        provider(fake.fetch, "t", createElement(Probe), createElement(Probe, { key: "b" })),
+      );
+    });
+    await settle();
+    assert.equal(fake.calls.length, 2);
+  }));
+
+test("dedup: D4 all 11 read hooks, each mounted twice, make 11 requests to 11 distinct URLs", () =>
+  withRoot(async (root) => {
+    const fake = fakeFetch(() => json({}));
+    function All() {
+      useMe();
+      useDocuments();
+      useDocument("d1");
+      useDocumentByKey("k1");
+      useVars();
+      useVar("v1");
+      useConnections();
+      useWorkflows();
+      useWorkflow("w1");
+      useFunctions();
+      useFunction("f1");
+      return null;
+    }
+    await act(async () => {
+      root.render(provider(fake.fetch, "t", createElement(All), createElement(All, { key: "b" })));
+    });
+    await settle();
+    assert.equal(fake.calls.length, 11);
+    assert.equal(new Set(fake.calls.map((c) => c.url)).size, 11);
+  }));
+
+const VARIATIONS: Array<[string, () => unknown, () => unknown]> = [
+  [
+    "documents.project",
+    () => useDocuments({ project: "p1" }),
+    () => useDocuments({ project: "p2" }),
+  ],
+  [
+    "document.id",
+    () => useDocument("d1", { project: "p" }),
+    () => useDocument("d2", { project: "p" }),
+  ],
+  [
+    "document.project",
+    () => useDocument("d1", { project: "p1" }),
+    () => useDocument("d1", { project: "p2" }),
+  ],
+  [
+    "byKey.key",
+    () => useDocumentByKey("k1", { project: "p" }),
+    () => useDocumentByKey("k2", { project: "p" }),
+  ],
+  [
+    "byKey.project",
+    () => useDocumentByKey("k1", { project: "p1" }),
+    () => useDocumentByKey("k1", { project: "p2" }),
+  ],
+  ["var.id", () => useVar("v1"), () => useVar("v2")],
+  [
+    "workflows.project",
+    () => useWorkflows({ project: "p1" }),
+    () => useWorkflows({ project: "p2" }),
+  ],
+  ["workflow.id", () => useWorkflow("w1"), () => useWorkflow("w2")],
+  ["function.id", () => useFunction("f1"), () => useFunction("f2")],
+];
+
+for (const [name, a, b] of VARIATIONS) {
+  test(`dedup: D5 ${name}`, () =>
+    withRoot(async (root) => {
+      const fake = fakeFetch(() => json({}));
+      function A() {
+        a();
+        return null;
+      }
+      function B() {
+        b();
+        return null;
+      }
+      await act(async () => {
+        root.render(provider(fake.fetch, "t", createElement(A), createElement(B)));
+      });
+      await settle();
+      assert.equal(fake.calls.length, 2);
+      assert.notEqual(fake.calls[0]?.url, fake.calls[1]?.url);
+    }));
+}
+
+test("dedup: D6 abort only when the last subscriber detaches, and nothing refires", () =>
+  withRoot(async (root) => {
+    const held = heldFetch();
+    function Probe() {
+      useConnections();
+      return null;
+    }
+    const tree = (n: number) =>
+      provider(held.fetch, "t", ...[0, 1].slice(0, n).map((i) => createElement(Probe, { key: i })));
+    await act(async () => {
+      root.render(tree(2));
+    });
+    await settle();
+    assert.equal(held.calls.length, 1);
+    await act(async () => {
+      root.render(tree(1));
+    });
+    await settle();
+    assert.equal(held.calls[0]?.signal?.aborted, false);
+    await act(async () => {
+      root.render(tree(0));
+    });
+    await settle();
+    assert.equal(held.calls[0]?.signal?.aborted, true);
+    assert.equal(held.calls.length, 1);
+  }));
+
+test("dedup: D7 a shared rejection reaches every subscriber and the next mount refires", () =>
+  withRoot(async (root) => {
+    const held = heldFetch();
+    const errors: unknown[] = [];
+    function Probe() {
+      errors.push(useConnections().error);
+      return null;
+    }
+    const tree = (n: number) =>
+      provider(
+        held.fetch,
+        "t",
+        ...Array.from({ length: n }, (_, i) => createElement(Probe, { key: i })),
+      );
+    await act(async () => {
+      root.render(tree(2));
+    });
+    await settle();
+    assert.equal(held.calls.length, 1);
+    errors.length = 0;
+    await act(async () => {
+      held.fail(0, 500);
+      await macrotask();
+    });
+    assert.equal(held.calls.length, 1);
+    // Both subscribers' last render carries the (same) rejection.
+    assert.ok(errors.slice(-2).every((e) => e instanceof Error));
+    await act(async () => {
+      root.render(tree(3));
+    });
+    await settle();
+    assert.equal(held.calls.length, 2);
+  }));
+
+test("dedup: D8 one subscriber's refetch starts a new request and never aborts the held flight", () =>
+  withRoot(async (root) => {
+    const held = heldFetch();
+    let refetchA: (() => void) | undefined;
+    function A() {
+      refetchA = useConnections().refetch;
+      return null;
+    }
+    function B() {
+      useConnections();
+      return null;
+    }
+    await act(async () => {
+      root.render(provider(held.fetch, "t", createElement(A), createElement(B)));
+    });
+    await settle();
+    assert.equal(held.calls.length, 1);
+    await act(async () => {
+      refetchA?.();
+      await macrotask();
+    });
+    assert.equal(held.calls.length, 2);
+    assert.equal(held.calls[0]?.signal?.aborted, false);
   }));
