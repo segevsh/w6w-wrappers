@@ -54,8 +54,9 @@ export function App() {
 }
 ```
 
-`token` takes a string, or a function that returns one. A function can be async, and it's called
-before every request, so a rotated token is used on the next call. Until it returns a token, read
+`token` takes a string, or a function that returns one. The function may be async. It is called
+whenever a request needs a token, and concurrent requests share one in-flight call. The result is
+not cached once it settles, so a rotated token is picked up on the next request. Until it returns a token, read
 hooks stay in their loading state instead of sending a request without one.
 
 ## 3. Read data with a hook
