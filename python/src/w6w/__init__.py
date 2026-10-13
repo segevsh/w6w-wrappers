@@ -40,6 +40,7 @@ from .run import RunRequest, run_urn
 from .team import TeamApi, TeamHost, TeamInvite, TeamInviteWithLink, TeamMember
 from .types import (
     UNSET,
+    ConnectionAppMeta,
     ConnectionState,
     ConnectionSummary,
     Doc,
@@ -78,6 +79,7 @@ __all__ = [
     # Identity and discovery (T2.3.4). `connections.list` and `workflows.list`
     # are how a caller finds a URN to hand to `run` (D4); `me` is what makes a
     # bug report actionable.
+    "ConnectionAppMeta",
     "ConnectionState",
     "ConnectionSummary",
     "ConnectionsApi",

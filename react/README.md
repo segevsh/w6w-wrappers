@@ -6,7 +6,7 @@ surface (`me`, `documents`, `vars`, `connections`, `workflows`, `functions`, `ru
 `createW6WUiAdapter`, a structural bridge from a `W6WClient` to
 [`@w6w/ui`](https://github.com/w6w-io/w6w-ui)'s `W6WApi` contract.
 
-License: MIT · Version: 0.9.6 · Guides: [docs.w6w.io/clients/react](https://docs.w6w.io/clients/react/)
+License: MIT · Version: 0.9.7 · Guides: [docs.w6w.io/clients/react](https://docs.w6w.io/clients/react/)
 (with a [hooks reference](https://docs.w6w.io/clients/react/hooks/) and a
 [Next.js walkthrough](https://docs.w6w.io/clients/react/nextjs/))
 
@@ -44,8 +44,9 @@ function App() {
 }
 ```
 
-`token` accepts a literal string, or a supplier — sync or **async** — called fresh on
-every request: `() => getCurrentJwt()` or `async () => await getCurrentJwt()` both
+`token` accepts a literal string, or a supplier — sync or **async** — called per
+request (requests in flight at the same time share ONE supplier call; nothing is cached once
+it settles, so memoize an expensive supplier yourself): `() => getCurrentJwt()` or `async () => await getCurrentJwt()` both
 work, and either is awaited before the bearer is attached. Pass a supplier when your
 token rotates (e.g. a short-lived JWT read from an auth SDK, or minted on demand by
 your own backend) and the client picks up the new value on the very next call, with no
@@ -219,6 +220,11 @@ Every read hook returns `{data, error, loading, refetch}`; every mutation hook
 returns `{call, data, error, loading}`. None depends on react-query or any other
 data-fetching library.
 
+Read hooks asking for the same thing (same hook, same arguments, same provider) while a
+request is in flight share ONE request — two consumers, or React StrictMode's
+mount/unmount/mount, send a single fetch. Nothing is kept once it settles: a hook mounting
+later sends a new request, and `refetch()` starts a fresh one.
+
 | Hook | Wraps |
 |---|---|
 | `useMe()` | `client.me()` |
@@ -297,7 +303,9 @@ hook (e.g. `client.console.*` directly, at your own risk per the caveat above).
   return type just gets no autocomplete for those extra fields.
 - **Cancellation is per-hook, not exposed to the caller.** Every read hook aborts its
   own superseded or unmounted calls internally (a superseded call, an `identityKey`
-  switch, or an unmount all abort the in-flight `AbortSignal` — see `src/hooks.ts`'s
+  switch, or an unmount all abort the in-flight `AbortSignal` — but a shared request
+  aborts only when its LAST subscriber detaches, so StrictMode's remount or a second
+  consumer re-attaches instead of aborting it — see `src/hooks.ts`'s
   module header) — but there is no option to pass your OWN `AbortSignal` into a hook
   from outside it. `useW6WClient()` plus the underlying SDK method (which does take a
   `signal`) is the escape hatch if you need that.

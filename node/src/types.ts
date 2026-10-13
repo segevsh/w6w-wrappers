@@ -131,6 +131,17 @@ export interface Me {
  */
 export type ConnectionState = "pending" | "connected" | "needs_refresh" | "broken" | "revoked";
 
+/** The display metadata of a connection's app, inlined on each {@link ConnectionSummary}. */
+export interface ConnectionAppMeta {
+  displayName: string;
+  /** Light-theme icon, a `data:image/svg+xml;base64,…` URI. */
+  iconSvg?: string;
+  /** Dark-theme icon, a `data:image/svg+xml;base64,…` URI. */
+  iconSvgDark?: string;
+  brandColor?: string;
+  brandColorDark?: string;
+}
+
 /**
  * A connection, as the list route projects it.
  *
@@ -150,8 +161,10 @@ export interface ConnectionSummary {
   appId: string;
   /** Which of the app's auth methods this connection uses. */
   authKey: string;
-  /** The subject that owns the connection. */
-  owner: string;
+  /** The tenant that owns the connection. */
+  tenant: string;
+  /** The subject (the partner's user id) that owns the connection. */
+  subject: string;
   /** Human-chosen label. */
   displayName: string;
   /** Lifecycle state. */
@@ -166,6 +179,11 @@ export interface ConnectionSummary {
   createdAt: string;
   /** ISO-8601 timestamp. */
   updatedAt: string;
+  /**
+   * The connection's app, inlined so a list needs no second fetch for names and icons.
+   * `null` means the server found no app row; absent means an older server.
+   */
+  app?: ConnectionAppMeta | null;
 }
 
 /** Lifecycle state of a workflow: an editable draft, a published live one, or archived. */

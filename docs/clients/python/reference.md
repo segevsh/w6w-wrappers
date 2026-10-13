@@ -60,7 +60,7 @@ server records them. Read them with `.get()`.
 
 | Method | Returns |
 | --- | --- |
-| `list()` | `list[ConnectionSummary]`: `id`, `appId`, `displayName`, `state`, `lastTestOk`, `lastTestedAt`, and more |
+| `list()` | `list[ConnectionSummary]`: `id`, `appId`, `displayName`, `state`, `lastTestOk`, `lastTestedAt`, `tenant`, `subject`, and `app` (inline app name, icons and brand colours; `null` or absent when unknown) |
 
 ## `client.workflows`
 

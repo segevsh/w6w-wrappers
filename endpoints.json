@@ -42,7 +42,7 @@
         "python": "client.connections.list()",
         "cli": "w6w connections list"
       },
-      "notes": "`credential` and `lastRefreshedAt` are redacted server-side and must not appear in the wrapper's list type. D4 — kept in v0.1.0 even though the 07-27 intake does not name it: without it a user has no way to discover a `conn_…` URN to pass to `run`. Verified live."
+      "notes": "`credential` and `lastRefreshedAt` are redacted server-side and must not appear in the wrapper's list type. D4 — kept in v0.1.0 even though the 07-27 intake does not name it: without it a user has no way to discover a `conn_…` URN to pass to `run`. Verified live. Each row carries `tenant` + `subject` (not `owner`) and a top-level `app` object (`displayName` plus optional `iconSvg`, `iconSvgDark`, `brandColor`, `brandColorDark`) beside `appId`; `app` is `null` when the server found no app row, and absent from an older server."
     },
     {
       "name": "workflows.list",
