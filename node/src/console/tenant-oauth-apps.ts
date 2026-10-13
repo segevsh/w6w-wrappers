@@ -30,7 +30,7 @@
  * **Response shapes are flat, no envelope key to peel with `unwrap()`** —
  * mirroring `console/auth.ts:29-32` for this whole family. `list` returns the
  * whole body deliberately, so the response is exactly what the server sent
- * (each row carries its own per-app `callbackUrl`); `put` reaches one level in
+ * (each row carries the server-derived `callbackUrl`: the same URL for every app, never assembled client-side); `put` reaches one level in
  * for `body.config`, which is the shape the server answers with (W4).
  *
  * **Wire shapes are planner pins, not reverse-engineered from a merged route.**
