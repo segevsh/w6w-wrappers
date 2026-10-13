@@ -69,7 +69,7 @@ when the server records them. A `kind` the SDK doesn't recognise is returned unc
 
 | Method | Returns |
 | --- | --- |
-| `list({ signal? })` | `ConnectionSummary[]`: `id`, `appId`, `displayName`, `state`, `lastTestOk`, `lastTestedAt`, and more |
+| `list({ signal? })` | `ConnectionSummary[]`: `id`, `appId`, `displayName`, `state`, `lastTestOk`, `lastTestedAt`, `tenant`, `subject`, and `app` (inline app name, icons and brand colours; `null` or absent when unknown) |
 
 `state` is `pending`, `connected`, `needs_refresh`, `broken` or `revoked`.
 

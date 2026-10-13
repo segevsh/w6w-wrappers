@@ -562,6 +562,46 @@ ConnectionState = Literal["pending", "connected", "needs_refresh", "broken", "re
 
 
 @dataclass(frozen=True)
+class ConnectionAppMeta:
+    """The display metadata of a connection's app, inlined on each summary."""
+
+    #: The app's display name.
+    displayName: str
+    #: Light-theme icon, a `data:image/svg+xml;base64,…` URI.
+    iconSvg: Optional[str] = None
+    #: Dark-theme icon, a `data:image/svg+xml;base64,…` URI.
+    iconSvgDark: Optional[str] = None
+    #: Brand colour, e.g. `"#1A82E2"`.
+    brandColor: Optional[str] = None
+    #: Brand colour for dark themes.
+    brandColorDark: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, body: Any) -> Optional["ConnectionAppMeta"]:
+        """Build a :class:`ConnectionAppMeta`, or `None` unless `body` is an object.
+
+        An optional key that is missing or not a string reads as `None`.
+
+        :param body: The wire `app` value.
+        :returns: The metadata, or `None`.
+        """
+        if not isinstance(body, dict):
+            return None
+
+        def opt(key: str) -> Optional[str]:
+            value = body.get(key)
+            return value if isinstance(value, str) else None
+
+        return cls(
+            displayName=_text(body, "displayName"),
+            iconSvg=opt("iconSvg"),
+            iconSvgDark=opt("iconSvgDark"),
+            brandColor=opt("brandColor"),
+            brandColorDark=opt("brandColorDark"),
+        )
+
+
+@dataclass(frozen=True)
 class ConnectionSummary:
     """One connection, as the list route projects it.
 
@@ -571,11 +611,9 @@ class ConnectionSummary:
     class rather than typed as optional — declaring a field that never arrives
     invites a caller to look for it, and no response will ever carry it.
 
-    The wire additionally carries a field this class deliberately omits, and
-    that is a *tolerance* requirement rather than an oversight: the server's own
-    summary type has a `tenant` the exposed surface does not, so a reader that
-    refused unknown keys would raise on **every real response**. Unknown keys
-    are dropped here, never fatal.
+    Unknown keys are dropped here, never fatal: a reader that refused a key it
+    does not model would raise on **every real response** the day the server
+    adds its next field.
 
     Timestamps are ISO-8601 strings, exactly as they arrive; `lastTestedAt` and
     `lastTestOk` are additionally **nullable**, and their `None` means *never
@@ -588,8 +626,10 @@ class ConnectionSummary:
     appId: str
     #: Which of the app's auth methods this connection was made with.
     authKey: str
-    #: The principal that owns it. Connections are user-private.
-    owner: str
+    #: The tenant that owns it.
+    tenant: str
+    #: The subject (the partner's user id) that owns it. Connections are user-private.
+    subject: str
     #: Human-chosen label.
     displayName: str
     #: Lifecycle state.
@@ -604,6 +644,10 @@ class ConnectionSummary:
     createdAt: str
     #: ISO-8601 timestamp. A string, deliberately.
     updatedAt: str
+    #: The connection's app, inlined. `None` when the wire `app` is absent (an
+    #: older server), `null` (no app row) or not an object: Python collapses all
+    #: three, where the TypeScript wrappers keep absent and `null` apart.
+    app: Optional[ConnectionAppMeta] = None
 
     @classmethod
     def from_wire(cls, body: Any) -> "ConnectionSummary":
@@ -617,7 +661,8 @@ class ConnectionSummary:
             id=_text(body, "id"),
             appId=_text(body, "appId"),
             authKey=_text(body, "authKey"),
-            owner=_text(body, "owner"),
+            tenant=_text(body, "tenant"),
+            subject=_text(body, "subject"),
             displayName=_text(body, "displayName"),
             # An absent state reads as `pending`, the one member that asserts
             # nothing about a working credential. There is no server-side
@@ -630,6 +675,7 @@ class ConnectionSummary:
             lastTestedAt=_nullable_text(body, "lastTestedAt"),
             createdAt=_text(body, "createdAt"),
             updatedAt=_text(body, "updatedAt"),
+            app=ConnectionAppMeta.from_wire(body.get("app")) if isinstance(body, dict) else None,
         )
 
 

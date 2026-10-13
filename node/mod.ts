@@ -108,6 +108,7 @@ export { isActionRun, isFunctionRun, isTerminalRunStatus, isWorkflowRun } from "
 
 export type {
   ActionRunEnvelope,
+  ConnectionAppMeta,
   ConnectionState,
   ConnectionSummary,
   Doc,
