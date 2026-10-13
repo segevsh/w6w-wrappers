@@ -154,6 +154,7 @@ export type {
   PackPreviewInfo,
   PreviewSourceResponse,
   RefreshAppResponse,
+  StepMeta,
   TriggerDef,
   UpsertOAuthConfigInput,
 } from "./apps.ts";

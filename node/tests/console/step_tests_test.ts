@@ -12,7 +12,8 @@ import { assertEquals, assertRejects } from "@std/assert";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import { ApiError } from "../../src/errors.ts";
-import type { StepTest, StepTestRun } from "../../src/console/step-tests.ts";
+import type { StepMeta } from "../../src/console/apps.ts";
+import type { StepTest, StepTestRun, StepTestsApi } from "../../src/console/step-tests.ts";
 
 /** One recorded call to the fake transport. */
 interface Call {
@@ -220,4 +221,49 @@ Deno.test("console.stepTests.list percent-encodes workflowId and stepId via the 
     c.calls[0].url,
     "https://api.example.com/workflows/wf%201/steps/nd%201/tests",
   );
+});
+
+// --- step meta ---------------------------------------------------------------
+
+type Equals<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true
+  : false;
+
+const _lastRunMeta: Equals<StepTest["lastRunMeta"], StepMeta | null | undefined> = true;
+const _runMeta: Equals<StepTestRun["meta"], StepMeta | null | undefined> = true;
+const _bodyMeta: Equals<Parameters<StepTestsApi["recordRun"]>[2]["meta"], unknown> = true;
+
+const META: StepMeta = { app: "a", version: "1.0.0", action: "x", connectionId: null };
+
+Deno.test("console.stepTests.list returns lastRunMeta verbatim and a legacy row without it", async () => {
+  const withMeta: StepTest = { ...STEP_TEST_A, lastRunMeta: META };
+  const c = client(() => json({ stepTests: [withMeta, STEP_TEST_B] }));
+
+  const res = await c.client.console.stepTests.list("wf_1", "nd_1");
+
+  assertEquals(res[0].lastRunMeta, META);
+  assertEquals("lastRunMeta" in res[1], false);
+});
+
+Deno.test("console.stepTests.recordRun posts meta verbatim and returns the row's meta verbatim", async () => {
+  const RUN: StepTestRun = {
+    id: "steprun_1",
+    stepTestId: null,
+    workflowId: "wf_1",
+    stepId: "nd_1",
+    status: "succeeded",
+    input: null,
+    output: null,
+    error: null,
+    createdAt: "2026-01-01T00:00:00Z",
+    meta: META,
+  };
+  const c = client(() => json({ run: RUN }, 201));
+
+  const run = await c.client.console.stepTests.recordRun("wf_1", "nd_1", {
+    status: "succeeded",
+    meta: META,
+  });
+
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), { status: "succeeded", meta: META });
+  assertEquals(run.meta, META);
 });
