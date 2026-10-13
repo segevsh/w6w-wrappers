@@ -149,6 +149,8 @@ export type {
   InvokeStartState,
   ListAppsOptions,
   ListAppsSort,
+  OAuth2AuthConfig,
+  OAuth2ClientSetup,
   OAuthConfigSummary,
   PackEntryPreview,
   PackPreviewInfo,
