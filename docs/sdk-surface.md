@@ -391,22 +391,78 @@ refresh, and client-side run polling.
 
 ## Server-only subpath — `@w6w/sdk/server`
 
-**Not part of the surface above.** `exchangeToken` / `exchange_token` is a
-standalone function, outside `endpoints.json`'s `operations[]`, reachable only
-through a separate entry point in each language:
+**Not part of the surface above.** `createEmbedSessionClient` /
+`EmbedSessionClient` (the recommended path) and the lower-level
+`exchangeToken` / `exchange_token` are standalone, outside `endpoints.json`'s
+`operations[]`, reachable only through a separate entry point in each language:
 
 |                      | TypeScript                                                                                                             | Python                                                                                              |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | Import               | `import { exchangeToken } from "@w6w/sdk/server"`                                                                      | `from w6w.server import exchange_token`                                                             |
 | On the root surface? | No — not exported from `@w6w/sdk`'s barrel (`mod.ts`), and not on `@w6w/sdk/console` either                            | No — not re-exported from `w6w/__init__.py`, and not listed in `w6w.__all__`                        |
 | Signature            | `exchangeToken(options: { baseUrl, clientId, clientSecret, subject, account?, fetch? }): Promise<ExchangeTokenResult>` | `exchange_token(base_url, client_id, client_secret, subject, account=None, transport=None) -> dict` |
+| Session client import | `import { createEmbedSessionClient } from "@w6w/sdk/server"` | `from w6w.server import EmbedSessionClient` |
+| Session client on the root surface? | No — same exclusions as above | No — same exclusions as above |
+| Session client signature | `createEmbedSessionClient(options: { baseUrl, clientId, clientSecret, fetch?, now? }): EmbedSessionClient`, then `.create({ subject, accountRef }): Promise<EmbedSession>` | `EmbedSessionClient(base_url, client_id, client_secret, *, transport=None, now=None)`, then `.create(subject, account_ref) -> dict` |
 
-**What it does.** Calls `POST /auth/exchange` with a tenant's client credentials
+**What it does.** `exchangeToken` / `exchange_token` calls `POST /auth/exchange` with a tenant's client credentials
 and names one of the tenant's end-users via `subject`, minting a short-lived,
 `role: "user"` token scoped to that tenant + subject — the server-side half of
 "Path A" token exchange. The user-facing walkthrough is
 [docs.w6w.io/clients/node/embedding](https://docs.w6w.io/clients/node/embedding/);
 see also the `node` lane's `README.md` "Embedding for enterprise tenants".
+
+**The session client — the recommended embed path.** `createEmbedSessionClient`
+/ `EmbedSessionClient` holds one tenant's credentials per instance and mints one
+account-scoped session per `create()`: exactly one `POST /auth/exchange`, made
+through `exchangeToken` / `exchange_token` (still the only HTTP path). Unlike
+`exchangeToken`, the account is **required**: `accountRef` / `account_ref` is the
+host's own reference for the company the user is acting in (the account's
+external ref), because the server selects the tenant's default account when
+`account` is blank. Rules:
+
+- `baseUrl` / `base_url` is required and explicit; it never falls back to
+  `W6W_BASE_URL`. `clientId`/`clientSecret` follow the same rules as
+  `exchangeToken`'s (below).
+- `subject` is sent verbatim, never trimmed. `accountRef` is trimmed (Node: ECMAScript
+  `trim`; Python: the same whitespace set) and sent as the wire `account`. Both must be
+  non-blank strings; otherwise a local `ConfigError`, with no request made.
+- Node construction throws `ConfigError` when both `window` and `document` exist
+  (a browser-like global): a runtime check, which a bundler may or may not remove.
+  Python has no equivalent check; the class is simply not on the root surface.
+- `now` is a clock sampled before each request: epoch **milliseconds** in Node
+  (default `Date.now`), epoch **seconds** in Python (default `time.time`).
+- Python only: `base_url` must be the final `https` origin, with no redirect hop.
+  The default transport is `urllib.request.urlopen` (`_http.default_transport`), which
+  follows redirects and re-sends the request headers, so a redirect would re-send the
+  `Authorization: Basic` client credential to wherever it points. Pre-existing
+  behaviour of the default transport; point `base_url` at the origin that answers.
+
+`create()` returns exactly seven keys, all browser-safe (no `role`, no `studioUrl`,
+never the client secret):
+
+```
+{
+  token: string,       // the minted bearer token
+  expiresIn: number,   // lifetime, in seconds
+  expiresAt: string,   // ISO-8601 UTC, host clock sampled before the request + expiresIn
+  subject: string,     // the subject the server minted into the token
+  tenant: string,      // the tenant the client credentials resolved to
+  account: string,     // the server's resolved account id, acct_…
+  accountRef: string,  // the trimmed ref that was sent as the wire `account`
+}
+```
+
+(Python's dict uses the same camelCase keys.) A reply that is not the documented
+shape raises `ApiError` with status `200` and code `bad_response`. Server and transport
+errors are surfaced unwrapped, status and code intact. The step-by-step host route
+is [Embed w6w in your product](/guides/embed/).
+
+**Why there is no CLI command, and why React is unchanged.** The CLI gets no
+`session` command: it would put the tenant client secret in an end-user tool, and
+the helper is outside `endpoints.json`, which the CLI implements. `react/` is a derived
+lane wrapping `@w6w/sdk`, so it is unchanged; it only ever receives the browser-safe
+session object from the host's own route. See `parity.md` "Server-only helpers".
 
 **Basic auth only — never a second credential channel.** The tenant's
 `clientId`/`clientSecret` travel in exactly one place:
@@ -437,10 +493,17 @@ containing a character outside latin-1.
 }
 ```
 
+`user.account` is always the server's **resolved** account id (`acct_…`), never the
+raw claim you sent: a given `account` is an external reference that the server
+finds or creates, and with no `account` it is the tenant's default account.
+
 **Server errors**, surfaced as the lane's ordinary `ApiError` / `ApiError`
 exception, with the server's own code: `invalid_client` (401 — unknown or
 disabled client credentials), `invalid_body` (400 — malformed JSON),
-`invalid_subject` (400), `invalid_account` (400). None of these are retried: a
+`invalid_subject` (400), `invalid_account` (400), `tenant_disabled` (401 — the
+tenant itself is disabled) and `rate_limited` (429). A `400` can arrive before the
+credentials are verified, so a `400` does not prove the credentials are valid. None
+of these are retried: a
 `requireAuth: false` / `require_auth=False` request never gets the opt-in 401
 recovery either lane's transport otherwise offers.
 
