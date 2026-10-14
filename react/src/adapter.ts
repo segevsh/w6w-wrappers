@@ -382,14 +382,6 @@ async function withApiErrorBody<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-/**
- * The server's own `ids` cap (`MAX_IDS_PER_QUERY`, `registry/packages/types/src/datastore.ts`) —
- * `listAppsByIds` below chunks to this size itself since `console.apps.listPage`
- * is a thin, non-chunking pass-through (`node/src/console/apps.ts`) and a
- * caller passing more than this in one request gets the server's `400`.
- */
-const MAX_IDS_PER_CHUNK = 100;
-
 /** Build a `W6WApi` implementation over an existing `W6WClient`. See this module's header. */
 export function createW6WUiAdapter(client: W6WClient): W6WApi {
   return {
@@ -408,26 +400,11 @@ export function createW6WUiAdapter(client: W6WClient): W6WApi {
         return { apps: page.apps, nextCursor: page.nextCursor };
       }),
 
-    // Dedupe first (a caller may hand in the same id twice across tabs/pages);
-    // `[]` resolves with NO request at all — never an unfiltered page. Chunks
-    // of <= MAX_IDS_PER_CHUNK each become their own `listPage({ ids: chunk })`
-    // call, issued CONCURRENTLY (`Promise.all`), and the pages are
-    // concatenated in chunk order.
+    // Delegates to the public `client.apps.byIds` (R-18): it dedupes, resolves
+    // `[]` with no request, chunks to the server's 100-id cap and issues the
+    // chunks concurrently, so the adapter carries none of that logic itself.
     listAppsByIds: (ids, options) =>
-      withApiErrorBody(async () => {
-        const unique = Array.from(new Set(ids));
-        if (unique.length === 0) return [];
-        const chunks: string[][] = [];
-        for (let i = 0; i < unique.length; i += MAX_IDS_PER_CHUNK) {
-          chunks.push(unique.slice(i, i + MAX_IDS_PER_CHUNK));
-        }
-        const pages = await Promise.all(
-          chunks.map((chunk) =>
-            client.console.apps.listPage({ ids: chunk, signal: options?.signal }),
-          ),
-        );
-        return pages.flatMap((page) => page.apps);
-      }),
+      withApiErrorBody(() => client.apps.byIds(ids, { signal: options?.signal })),
 
     getAppAuth: (appId) => withApiErrorBody(() => client.console.apps.getAuth(appId)),
 

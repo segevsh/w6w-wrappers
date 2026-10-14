@@ -130,10 +130,48 @@ Each connection the client returns can carry its app's display data inline, as `
 `{ displayName, iconSvg?, iconSvgDark?, brandColor?, brandColorDark? }` (or `null`). Render names
 and icons straight from it. Do not call `apps.list()` on mount just to find icons: that walks the
 whole catalog. For the rows that come back without `app`, fetch only those apps with
-`client.console.apps.listPage({ ids })`.
+`client.apps.byIds(ids)`: it drops duplicates, sends nothing for an empty list, and splits a long
+list into requests the server accepts. Ids the catalog doesn't know are left out of the result.
+A connection with `builtIn: true` is the built-in zero-credential row. It isn't stored, so
+`connections.get` and `connections.delete` answer `404` for it: don't offer to delete it.
 
 In React, hooks that ask for the same thing while a request is in flight share one request, so
 two components calling `useConnections()` (or StrictMode's double mount) send a single fetch.
+
+## 6. Build a workflow or Function editor
+
+A visual editor needs to load a definition, save it, try it, publish it and roll it back. Every
+step is a method on `client.workflows` or `client.functions`, with the same names on both:
+
+| To | Call |
+| --- | --- |
+| Save (full replacement) | `update(id, definition, { ifUnmodifiedSince })` (workflows only take the option) |
+| Try the saved draft | `run(id, { allowUnpublished: true, wait: true })` |
+| Publish the saved draft | `publish(id)` |
+| See and read versions | `listVersions(id)`, `getVersion(id, n)` |
+| Run a published version | `runVersion(id, n, { wait: true })` |
+| Roll back | `revert(id, n)` |
+| Turn on or off | `enable(id)`, `disable(id)` |
+| Retire, then remove | `archive(id)`, then `delete(id)` |
+
+For the editor's typed shape, convert with `toFlowWorkflow` and `fromFlowWorkflow` from
+`@w6w/react` instead of casting. The same fixture the SDK's tests compile and run lives in
+`react/src/__tests__/fixtures/embed-host.ts`.
+
+Rules that bite:
+
+- **Save first.** A draft run and `publish` use the row the server has stored, never the
+  definition in your editor. Flush any pending save, then run or publish.
+- **Pass the save token on workflows.** `get` returns `updatedAt`; send it back as
+  `ifUnmodifiedSince`. A `409 workflow_stale` means someone saved in between: reload and re-apply.
+  Functions have no such token: the last write wins.
+- **Refresh `updatedAt` after `revert`.** Reverting rewrites the stored row, so the token you
+  held is stale. Call `get` again before the next save.
+- **The SDK doesn't retry.** A failed save, run or publish is thrown as an `ApiError` once. Decide
+  in your product whether to try again.
+- **A disabled workflow or Function can't run**, even as a draft run.
+- **Batch reliability lookups yourself.** `reliability.list` takes at most ten app ids per call.
+  Ask `reliability.members(project)` for the ids, then call `list` in groups of ten.
 
 ## In the browser
 

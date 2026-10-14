@@ -176,7 +176,10 @@ namespace `packages/studio`'s own facade uses for these routes
 (`packages/ui/src/createW6WApi.ts` is the *other* hand-rolled client for them; this
 package is not a third one) — and on the BASE `client.functions.*`/
 `client.workflows.*` surface for `listFunctions`/`getFunction`/`invokeFunction`/
-`listWorkflows`/`getWorkflow`/`runWorkflow`. **`client.console.*` is documented
+`listWorkflows`/`getWorkflow`/`runWorkflow`. `listAppsByIds` and `listConnections` go through
+the public `client.apps.byIds` and `client.connections.list`. **The adapter is the supported
+seam:** hand `createW6WUiAdapter(client)` to the UI as it is, and do not reach for the
+console-backed internals or patch members onto it yourself. **`client.console.*` is documented
 "Studio-internal… unstable" and is deliberately excluded from `endpoints.json`'s
 conformance runner** (`node/src/client.ts:114-116`). That means a `console.*`
 signature change ships with no lockstep protection for this bridge beyond
