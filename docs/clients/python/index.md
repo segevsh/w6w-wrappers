@@ -245,8 +245,8 @@ minted = exchange_token(
 token, expires_in = minted["token"], minted["expiresIn"]
 ```
 
-Then give the client a callable instead of a string. It's called before every request, and with
-`force_refresh=True` when a refresh is needed:
+Then give the client a callable instead of a string. It's called before every authenticated request (not cached or shared by the client — cache inside
+your callable), and with `force_refresh=True` when a refresh is needed:
 
 ```python
 def supply_token(force_refresh: bool = False) -> str:
