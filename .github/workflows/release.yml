@@ -159,6 +159,25 @@ jobs:
           npm install --no-save ../node
           npm install
           npm test
+          npm run build
+      # Dry runs must exercise every build before any registry accepts a
+      # version. Previously these only ran inside the publishing jobs.
+      - name: cli — build against the sibling SDK
+        working-directory: cli
+        run: npm install && npm run build
+      - name: npm — validate all three package tarballs
+        run: |
+          for lane in node cli react; do
+            (cd "$lane" && npm pack --dry-run)
+          done
+      - name: JSR — validate the SDK package
+        working-directory: node
+        run: deno publish --dry-run
+      - name: python — build sdist + wheel
+        working-directory: python
+        run: |
+          python -m pip install --upgrade build
+          python -m build --outdir dist
 
   # ── PyPI ───────────────────────────────────────────────────────────────────
   pypi:
