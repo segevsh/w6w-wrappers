@@ -44,7 +44,7 @@ answers with its own `acct_` id.
 be created in a browser. Put it behind an endpoint that decides **who the user is and which company
 they may act in from your own session**, never from what the browser sends.
 
-The example in the SDK repository (`node/examples/embed-host/`) is a framework-neutral
+The example in the SDK repository ([`node/examples/embed-host/`](https://github.com/w6w-io/w6w-wrappers/tree/main/node/examples/embed-host)) is a framework-neutral
 `(Request) => Promise<Response>` handler plus a Next.js App Router adapter. The handler:
 
 ```ts
@@ -109,14 +109,24 @@ import { createEmbedSessionHandler } from "./handler"; // handler.ts, the file a
 let handler: ReturnType<typeof createEmbedSessionHandler> | undefined;
 
 export function POST(req: Request) {
-  handler ??= createEmbedSessionHandler({
-    sessions: createEmbedSessionClient({
-      baseUrl: process.env.W6W_BASE_URL!,
-      clientId: process.env.W6W_TENANT_CLIENT_ID!,
-      clientSecret: process.env.W6W_TENANT_CLIENT_SECRET!, // stays on the server
-    }),
-    authenticate: yourSessionLookup, // replace with your session lookup
-  });
+  try {
+    handler ??= createEmbedSessionHandler({
+      sessions: createEmbedSessionClient({
+        baseUrl: process.env.W6W_BASE_URL!,
+        clientId: process.env.W6W_TENANT_CLIENT_ID!,
+        clientSecret: process.env.W6W_TENANT_CLIENT_SECRET!, // stays on the server
+      }),
+      authenticate: yourSessionLookup, // replace with your session lookup
+    });
+  } catch {
+    // Missing or malformed credentials: log the ConfigError on your server.
+    return Promise.resolve(
+      Response.json({ error: { code: "session_unavailable" } }, {
+        status: 502,
+        headers: { "cache-control": "no-store" },
+      }),
+    );
+  }
   return handler(req);
 }
 ```
@@ -185,11 +195,14 @@ create the client, before any request is sent.
 ### What a session token can do
 
 - It acts as one user (`subject`) inside one account.
-- Data is **account-scoped**: another account, even of the same tenant, cannot see it.
+- Most data is **account-scoped**: a session for another account, even of the same tenant, cannot
+  see it. One class is not: invocation records (the run record behind each `invocationId`,
+  including the call's inputs) belong to the `subject` and are not filtered by account, so a user
+  who holds sessions for two of your companies can read their own records from either.
 - Inside one account, the server decides **per resource class** whether a resource is shared by
   the account's users or private to the subject that created it, and you cannot configure that.
   Today, for example, workflows and functions are shared by every user of the account, while
-  variables and documents are visible only to the subject that created them (another user of the
+  variables and documents that they create are visible only to the subject that created them (another user of the
   same account gets a `404`). Do not build on this split: it can change per class.
 - There are **no fine-grained grants**: the session does not carry per-resource permissions.
 - There is **no per-user privacy promise**. Do not store anything in an account that one of its

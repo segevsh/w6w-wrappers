@@ -44,7 +44,7 @@ W6W_TENANT_CLIENT_SECRET=…
 Create `app/api/w6w-session/route.ts`. It reads your own session, checks that the company the
 browser asks for is one the user belongs to, and only then exchanges your tenant credentials for a
 session that acts as that user in that company. The tested version of this adapter and its handler
-live in the SDK repository at `node/examples/embed-host/`; the shape is:
+live in the SDK repository at [`node/examples/embed-host/`](https://github.com/w6w-io/w6w-wrappers/tree/main/node/examples/embed-host); the shape is:
 
 ```ts
 import { createEmbedSessionClient } from "@w6w/sdk/server";
@@ -78,8 +78,10 @@ export function POST(req: Request) {
 }
 ```
 
+This listing is shortened: the tested `route.ts` also wraps the first-request build in a `try/catch` and answers an opaque `502 session_unavailable` (log the `ConfigError` on your server) when the `W6W_*` values are missing, instead of a Next 500.
+
 To use the files from the SDK repository in a Next app, copy `handler.ts` and `route.ts` into the
-route folder and make two edits. In `route.ts`, import `./handler` without the `.ts` extension (a
+route folder and make two edits, plus a third: wire `authenticate` to your own session lookup (the copied stub returns `null`, so every call is `401` until you do). In `route.ts`, import `./handler` without the `.ts` extension (a
 default Next tsconfig rejects it with TS5097). In `handler.ts`, change the type import
 `../../src/server/mod.ts` to `import type { EmbedSessionClient } from "@w6w/sdk/server"`.
 
@@ -211,8 +213,8 @@ server component or a route handler, use the [Node SDK](/clients/node/) directly
 
 | Symptom | Cause | What to do |
 | --- | --- | --- |
-| `401 invalid_client` from your session route | The tenant client id or secret is wrong, or the tenant is disabled. | Check the values in `.env.local` and restart the dev server. |
-| Hooks stay loading | The session route returns an error, so the supplier returns `null`. | Call `/api/w6w-session` from the browser console and fix what it returns. |
+| `502 session_unavailable` from your session route | The exchange failed (the tenant client id or secret is wrong, or the tenant is disabled) or the `W6W_*` values are missing. The body is opaque by design. | Read the error in your server logs, check the values in `.env.local` and restart the dev server. |
+| Hooks stay loading | The session route returns an error, so the supplier returns `null`. | Call `/api/w6w-session` from the browser console and check the status (`401` not signed in, `403` company not yours, `502` see your server logs). |
 | `W6W_TENANT_CLIENT_SECRET` shows up in the browser bundle | It was given a `NEXT_PUBLIC_` prefix or imported in client code. | Rename it, and only use it in route handlers and server code. Rotate the secret. |
 | `useW6WClient must be used inside <W6WProvider>` | A component using a hook renders outside the provider. | Wrap that part of the tree in the provider. |
 
