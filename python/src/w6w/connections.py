@@ -1,12 +1,10 @@
-"""`client.connections.list()` — discovery, and only discovery.
+"""`client.connections.*` — discovery, one lookup, and delete.
 
-**One operation**, and that is the whole of this module. `connections.list`
-earns its place in a minimal surface (D4) because without it a user has no way
-to *discover* a `conn_…` URN to hand to `run`. Everything else a connection can
-do — create it, rename it, replace its secret, test it, delete it — is
-`outOfScope` in `endpoints.json`: those flows are the studio's, they involve an
-interactive auth handshake, and an SDK that grew half of one would be a worse
-version of the thing that already exists.
+**Three operations**: `list` (how a user *discovers* a `conn_…` URN to hand to
+`run`), `get` (one connection by id) and `delete`. Creating, updating, testing
+and OAuth-connecting a connection stay `outOfScope` in `endpoints.json`: those
+flows are the studio's, they involve an interactive auth handshake, and an SDK
+that grew half of one would be a worse version of the thing that already exists.
 
 ── What the server does not send ──
 The list route returns a **redacted projection**. `credential` (the encrypted
@@ -42,8 +40,8 @@ from __future__ import annotations
 
 from typing import Any, List, Mapping, Optional, Protocol
 
-from ._http import HttpResponse
-from .types import ConnectionSummary, unwrap_list
+from ._http import HttpResponse, path
+from .types import ConnectionSummary, unwrap_list, unwrap_object
 
 
 class ConnectionsRequest(Protocol):
@@ -106,3 +104,35 @@ class ConnectionsApi:
         """
         response = self._request("GET", "/connections")
         return [ConnectionSummary.from_wire(item) for item in unwrap_list(response, "connections")]
+
+    def get(self, id: str) -> ConnectionSummary:
+        """Fetch one connection by id.
+
+        Same redacted projection as :meth:`list`. Account-owned: another
+        account's id is the uniform `404 unknown_connection`, indistinguishable
+        from an id that does not exist. The built-in zero-credential row that
+        :meth:`list` can include (`built_in` is `True`, a `zerocred:` id) is
+        synthetic and is not fetchable: `404`.
+
+        :param id: The `conn_…` id. Percent-encoded into the path.
+        :returns: The connection, unwrapped from the `connection` envelope.
+        :raises ConfigError: When no token is configured.
+        :raises ApiError: `404 unknown_connection`.
+        """
+        response = self._request("GET", path("/connections/{id}", id=id))
+        return ConnectionSummary.from_wire(unwrap_object(response, "connection"))
+
+    def delete(self, id: str) -> None:
+        """Delete a connection. Returns nothing.
+
+        Keeps the server's authorization: the connection must be owned by the
+        caller's account; another account's id is the uniform
+        `404 unknown_connection` and destroys nothing, and so is a `zerocred:`
+        built-in row. Not idempotent: a second delete is `404`. The server tears
+        down every trigger subscription bound to the connection first.
+
+        :param id: The `conn_…` id.
+        :raises ConfigError: When no token is configured.
+        :raises ApiError: `404 unknown_connection`.
+        """
+        self._request("DELETE", path("/connections/{id}", id=id))

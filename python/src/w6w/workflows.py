@@ -1,7 +1,8 @@
 """`client.workflows.*` — discovery, the typed run, and the definition lifecycle.
 
-Eight operations: `list` and `run`, `cancel`, plus `get`, `create`, `update`,
-`archive` and `delete`. `list` earns its place in a minimal surface for the same
+Operations: `list`, `run` and `run_version`, `cancel`, the definition lifecycle
+(`get`, `create`, `update`, `archive`, `delete`) and the version lifecycle
+(`list_versions`, `get_version`, `publish`, `revert`, `enable`, `disable`). `list` earns its place in a minimal surface for the same
 reason `connections.list` does (D4): it is how a caller discovers a `wf_…` id to
 pass to `run`.
 
@@ -213,6 +214,7 @@ class WorkflowsApi:
         variables: Optional[Mapping[str, Any]] = None,
         trigger: Optional[str] = None,
         input: Optional[Mapping[str, Any]] = None,
+        allow_unpublished: bool = False,
     ) -> WorkflowRunResult:
         """Start a run of one workflow, optionally waiting for it to finish.
 
@@ -256,15 +258,64 @@ class WorkflowsApi:
             read downstream as `steps.<triggerId>.output.<key>` — the shape a
             trigger's declared fields actually arrive in. Not the same slot as
             `variables`.
+        :param allow_unpublished: Run the **stored** definition even though it
+            was never published — the draft run. A disabled workflow is still
+            refused. It runs the row exactly as last saved, never a definition
+            you submit here, so save first. Sent as `allowUnpublished: true` in
+            the body **only when true**; `False` is the same as omitting it.
+            Not accepted by :meth:`run_version`.
         :returns: The run handle, its status, and the result when the run has
             one.
         :raises ConfigError: When no token is configured.
         :raises ApiError: `404 unknown_workflow` when there is no such workflow.
         :raises ApiError: `bad_response` when a success body is not a run object.
         """
+        return self._enqueue(
+            path("/workflows/{id}/run", id=id),
+            wait,
+            _run_body(variables, trigger, input, allow_unpublished),
+        )
+
+    def run_version(
+        self,
+        id: str,
+        n: int,
+        wait: bool = False,
+        variables: Optional[Mapping[str, Any]] = None,
+        trigger: Optional[str] = None,
+        input: Optional[Mapping[str, Any]] = None,
+    ) -> WorkflowRunResult:
+        """Run ONE published version of a workflow instead of the live row.
+
+        Same body, `?wait=` rule and result as :meth:`run`; the run executes
+        version `n`'s definition. There is no `allow_unpublished` here — a
+        version is published by definition.
+
+        :param id: The `wf_…` id.
+        :param n: The 1-based version number.
+        :returns: The run handle, exactly as :meth:`run` returns it.
+        :raises ApiError: `404 unknown_version`, `404 unknown_workflow`,
+            `409 workflow_archived` / `workflow_disabled` /
+            `workflow_not_published`, `400 invalid_version`.
+        """
+        return self._enqueue(
+            path("/workflows/{id}/versions/{n}/run", id=id, n=n),
+            wait,
+            _run_body(variables, trigger, input),
+        )
+
+    def _enqueue(self, run_path: str, wait: bool, body: Dict[str, Any]) -> WorkflowRunResult:
+        """The one POST both :meth:`run` and :meth:`run_version` go through, so
+        the `bad_response` guard and the derived fields cannot drift apart.
+
+        :param run_path: The already-encoded path.
+        :param wait: Whether to send `?wait=true`.
+        :param body: The assembled run body.
+        :returns: The run handle and derived fields.
+        """
         response = self._host.request(
             "POST",
-            path("/workflows/{id}/run", id=id),
+            run_path,
             # `?wait=true` or no `wait` at all — never `?wait=false`, which the
             # server reads as "no wait" anyway and which would misrepresent the
             # request in a log or a proxy.
@@ -273,7 +324,7 @@ class WorkflowsApi:
             # is non-empty and defaults to `{}` otherwise, so `{}` and no body
             # are the same request — and sending the object keeps the three
             # optional fields in one place instead of behind a conditional.
-            body=_run_body(variables, trigger, input),
+            body=body,
         )
 
         # The `runId` and `status` checks are the guard, not decoration. An
@@ -464,6 +515,77 @@ class WorkflowsApi:
         response = self._host.request("POST", path("/workflows/{id}/archive", id=id))
         return unwrap_object(response, "workflow")
 
+    def list_versions(self, id: str) -> Dict[str, Any]:
+        """List a workflow's published versions (metadata only).
+
+        :param id: The `wf_…` id.
+        :returns: The whole body unchanged: `enabled`, `currentPublishedVersion`
+            (`None` before the first publish) and `versions[]`.
+        :raises ApiError: `404 unknown_workflow`.
+        """
+        response = self._host.request("GET", path("/workflows/{id}/versions", id=id))
+        return require_object(response, "a version list")
+
+    def get_version(self, id: str, n: int) -> Dict[str, Any]:
+        """Fetch one version, definition included.
+
+        :param id: The `wf_…` id.
+        :param n: The 1-based version number.
+        :returns: The `version` object, unwrapped: `versionNumber`, `createdAt`,
+            `createdBy`, `isCurrentPublished`, `definition` (opaque, redacted
+            server-side).
+        :raises ApiError: `404 unknown_version`, `404 unknown_workflow`,
+            `400 invalid_version`.
+        """
+        response = self._host.request("GET", path("/workflows/{id}/versions/{n}", id=id, n=n))
+        return unwrap_object(response, "version")
+
+    def publish(self, id: str) -> Dict[str, Any]:
+        """Publish the STORED row as a new version (flush any pending save first).
+
+        Also makes a never-published workflow active. No precondition is taken.
+
+        :param id: The `wf_…` id.
+        :returns: The whole body: `{version: {...}, currentPublishedVersion}`.
+        :raises ApiError: `404 unknown_workflow`.
+        """
+        response = self._host.request("POST", path("/workflows/{id}/publish", id=id))
+        return require_object(response, "a publish result")
+
+    def revert(self, id: str, n: int) -> Dict[str, Any]:
+        """Rewrite the live row from version `n`; it does not publish.
+
+        The row's `updatedAt` moves, so a following :meth:`update` with
+        `if_unmodified_since` needs the freshly read value.
+
+        :param id: The `wf_…` id.
+        :param n: The 1-based version number.
+        :returns: The `reverted` object, unwrapped.
+        :raises ApiError: `404 unknown_version`, `404 unknown_workflow`,
+            `400 invalid_version`.
+        """
+        response = self._host.request(
+            "POST", path("/workflows/{id}/versions/{n}/revert", id=id, n=n)
+        )
+        return unwrap_object(response, "reverted")
+
+    def enable(self, id: str) -> None:
+        """Enable a workflow. Idempotent. Returns nothing.
+
+        :param id: The `wf_…` id.
+        :raises ApiError: `404 unknown_workflow`.
+        """
+        self._host.request("POST", path("/workflows/{id}/enable", id=id))
+
+    def disable(self, id: str) -> None:
+        """Disable a workflow; every run (version and draft runs too) is then
+        refused with `workflow_disabled`. Idempotent. Returns nothing.
+
+        :param id: The `wf_…` id.
+        :raises ApiError: `404 unknown_workflow`.
+        """
+        self._host.request("POST", path("/workflows/{id}/disable", id=id))
+
     def delete(self, id: str) -> None:
         """Delete an archived workflow, and everything that hangs off it.
 
@@ -524,6 +646,7 @@ def _run_body(
     variables: Optional[Mapping[str, Any]],
     trigger: Optional[str],
     input: Optional[Mapping[str, Any]] = None,
+    allow_unpublished: bool = False,
 ) -> Dict[str, Any]:
     """Assemble the request body of a run, dropping what was not supplied.
 
@@ -536,7 +659,9 @@ def _run_body(
     :param variables: Run variables, if any.
     :param trigger: Trigger name, if any.
     :param input: Run input delivered to the entry trigger node, if any.
-    :returns: The body — `{}` when the caller supplied none of the three.
+    :param allow_unpublished: Present in the body only when `True`, like `wait`
+        on the query: the wire is read as a boolean and `False` is "absent".
+    :returns: The body — `{}` when the caller supplied none of the four.
     """
     body: Dict[str, Any] = {}
     if variables is not None:
@@ -545,4 +670,6 @@ def _run_body(
         body["trigger"] = trigger
     if input is not None:
         body["input"] = dict(input)
+    if allow_unpublished is True:
+        body["allowUnpublished"] = True
     return body

@@ -648,6 +648,11 @@ class ConnectionSummary:
     #: older server), `null` (no app row) or not an object: Python collapses all
     #: three, where the TypeScript wrappers keep absent and `null` apart.
     app: Optional[ConnectionAppMeta] = None
+    #: `True` marks the synthetic zero-credential row (a `zerocred:` id, usable
+    #: with no connection step, not stored and not deletable). `None` when the
+    #: wire `builtIn` is absent (every stored connection, or an older server);
+    #: only a wire `true` reads `True`.
+    built_in: Optional[bool] = None
 
     @classmethod
     def from_wire(cls, body: Any) -> "ConnectionSummary":
@@ -676,6 +681,8 @@ class ConnectionSummary:
             createdAt=_text(body, "createdAt"),
             updatedAt=_text(body, "updatedAt"),
             app=ConnectionAppMeta.from_wire(body.get("app")) if isinstance(body, dict) else None,
+            # Read explicitly: unknown keys are dropped, so this would otherwise vanish.
+            built_in=True if isinstance(body, dict) and body.get("builtIn") is True else None,
         )
 
 

@@ -1,6 +1,6 @@
 {
   "name": "@w6w/react",
-  "version": "0.9.10",
+  "version": "0.9.11",
   "description": "React bindings for @w6w/sdk — a <W6WProvider>, a small hook set, and a structural adapter for @w6w/ui's W6WApi contract.",
   "license": "MIT",
   "repository": {
@@ -44,12 +44,12 @@
     "react": ">=18"
   },
   "dependencies": {
-    "@w6w/sdk": "^0.9.10"
+    "@w6w/sdk": "^0.9.11"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@types/react": "^18.3.17",
-    "@w6w/ui": "github:w6w-io/w6w-ui#76c11dfbd750fe8227ccdef6600726e26ea0e268",
+    "@w6w/ui": "github:w6w-io/w6w-ui#c798bbc9e860c92bfe8c313bbd0a610c9e736765",
     "jsdom": "^30.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

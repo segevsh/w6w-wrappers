@@ -3,7 +3,7 @@ id: null
 key: "embed"
 title: "Embed w6w in your product"
 section: "guides"
-description: "Mint an account-scoped w6w session for each signed-in user on your backend, hand it to the client, and renew it before it expires."
+description: "Mint an account-scoped w6w session for each signed-in user on your backend, hand it to the client, renew it before it expires, and build workflow editors on the client."
 format: "markdown"
 shared: true
 sourceRepo: null
@@ -20,7 +20,8 @@ updatedAt: null
 
 When w6w runs inside your own product, each of your users calls it with their own short-lived
 session token instead of one shared API token. This page shows how to mint those sessions on your
-backend, hand them to the browser, and renew them before they expire.
+backend, hand them to the browser, and renew them before they expire. It also covers showing
+connection icons and building a workflow or Function editor.
 
 A session is scoped to one **account**: the w6w account that holds one of your customers'
 companies. Your backend names that account with your own company id (the `accountRef`), and w6w
@@ -297,10 +298,54 @@ Each connection the client returns can carry its app's display data inline, as `
 `{ displayName, iconSvg?, iconSvgDark?, brandColor?, brandColorDark? }` (or `null`). Render names
 and icons straight from it. Do not call `apps.list()` on mount just to find icons: that walks the
 whole catalog. For the rows that come back without `app`, fetch only those apps with
-`client.console.apps.listPage({ ids })`.
+`client.apps.byIds(ids)`: it drops duplicates, sends nothing for an empty list, and splits a long
+list into requests the server accepts. Ids the catalog doesn't know are left out of the result.
+A connection with `builtIn: true` is the built-in zero-credential row. It isn't stored, so
+`connections.get` and `connections.delete` answer `404` for it: don't offer to delete it.
 
 In React, hooks that ask for the same thing while a request is in flight share one request, so
 two components calling `useConnections()` (or StrictMode's double mount) send a single fetch.
+
+## 6. Build a workflow or Function editor
+
+A visual editor needs to load a definition, save it, try it, publish it and roll it back. Every
+step is a method on `client.workflows` or `client.functions`, with the same names on both:
+
+| To | Call |
+| --- | --- |
+| Save (full replacement) | `update(id, definition, { ifUnmodifiedSince })` (workflows only take the option) |
+| Try the saved draft | `run(id, { allowUnpublished: true, wait: true })` |
+| Publish the saved draft | `publish(id)` |
+| See and read versions | `listVersions(id)`, `getVersion(id, n)` |
+| Run a published version | `runVersion(id, n, { wait: true })` |
+| Roll back | `revert(id, n)` |
+| Turn on or off | `enable(id)`, `disable(id)` |
+| Retire, then remove | `archive(id)`, then `delete(id)` |
+
+**What a plain run executes.** Without `allowUnpublished`, `run` still executes the **stored** definition
+as last saved — publishing is a precondition (the workflow or Function must have at least one published version), not a
+selector. Edits saved after a publish are what the next plain `run` executes. To execute exactly what was
+published, call `runVersion(id, n)`.
+
+For the editor's typed shape, convert with `toFlowWorkflow` and `fromFlowWorkflow` from
+`@w6w/react` instead of casting. The same fixture the SDK's tests compile and run lives in
+`react/src/__tests__/fixtures/embed-host.ts`.
+
+Rules that bite:
+
+- **Save first.** A draft run and `publish` use the row the server has stored, never the
+  definition in your editor. Flush any pending save, then run or publish.
+- **Pass the save token on workflows.** `get` returns `updatedAt`; send it back as
+  `ifUnmodifiedSince`. A `409 workflow_stale` means someone saved in between: reload and re-apply.
+  Functions have no such token: the last write wins.
+- **Refresh `updatedAt` after `revert`.** Reverting rewrites the stored row, so the token you
+  held is stale. Call `get` again before the next save.
+- **The SDK adds no retry policy of its own.** The one exception is the single re-send after a
+  `401 unauthorized` when a token supplier is set (see section 3). Any other failed save, run or
+  publish is thrown as an `ApiError` once. Decide in your product whether to try again.
+- **A disabled workflow or Function can't run**, even as a draft run.
+- **Batch reliability lookups yourself.** `reliability.list` takes at most ten app ids per call.
+  Ask `reliability.members(project)` for the ids, then call `list` in groups of ten.
 
 ## In the browser
 

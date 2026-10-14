@@ -2,7 +2,8 @@
  * `w6w workflows …` — list definitions, start runs (D4), cancel them, and
  * edit the definitions themselves.
  *
- * Eight commands. `list` exists so a caller can find a `wf_…` id to pass to
+ * Fifteen commands: eight below plus the seven version commands from `./versions.ts`.
+ * The first eight are `list` exists so a caller can find a `wf_…` id to pass to
  * `w6w run` or to this group's own `run`; `run` is the typed path with
  * `--wait` and `--input`, kept alongside the unified `w6w run` because
  * `?wait=`, `variables`, `trigger` and `input` have no slot in that
@@ -38,6 +39,7 @@ import type {
 import type { Styles } from "../output.ts";
 import { argument, noExtraArguments, requiredFlag, table, textFlag, usageError } from "./shared.ts";
 import { exitCodeFor } from "../exit.ts";
+import { versionCommands, versionNumber } from "./versions.ts";
 
 /**
  * `--definition <json>` as the object the write routes take.
@@ -164,7 +166,32 @@ const run: CommandHandler = async (context) => {
   const id = argument(context, 0, "a workflow id (see: `w6w workflows list`)");
   noExtraArguments(context, 1);
   const wait = context.invocation.options.wait === true;
-  const result = await context.client().workflows.run(id, { wait, input: input(context) });
+  const result = await context.client().workflows.run(id, {
+    wait,
+    input: input(context),
+    // Sent only when given: `false` and absent are the same on the wire, and an
+    // absent flag must stay "run the published version".
+    ...(context.invocation.options.allowUnpublished === true ? { allowUnpublished: true } : {}),
+  });
+  context.out.emit(result, (styles) => renderRun(result, styles));
+  return exitCodeFor(result);
+};
+
+/**
+ * `w6w workflows run-version <id> <n> [--wait] [--input <json>]` — run one
+ * specific published version, honouring `--wait` and exiting 3 for a failed run
+ * exactly as `run` does. There is no `--allow-unpublished`: a version is
+ * published by definition.
+ */
+const runVersion: CommandHandler = async (context) => {
+  const id = argument(context, 0, "a workflow id (see: `w6w workflows list`)");
+  const n = versionNumber(context, 1);
+  noExtraArguments(context, 2);
+  const wait = context.invocation.options.wait === true;
+  const result = await context.client().workflows.runVersion(id, n, {
+    wait,
+    input: input(context),
+  });
   context.out.emit(result, (styles) => renderRun(result, styles));
   return exitCodeFor(result);
 };
@@ -255,4 +282,5 @@ export const WORKFLOW_COMMANDS: CommandRegistry = {
   "workflows update": update,
   "workflows archive": archive,
   "workflows delete": remove,
+  ...versionCommands("workflows", runVersion),
 };

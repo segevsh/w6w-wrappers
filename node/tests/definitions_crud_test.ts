@@ -108,9 +108,11 @@ Deno.test("workflows: all seven operations are functions on a constructed client
   }
 });
 
-Deno.test("functions: all six operations are functions on a constructed client", () => {
+Deno.test("functions: all seven operations are functions on a constructed client", () => {
   const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
-  for (const name of ["run", "list", "get", "create", "update", "delete"] as const) {
+  for (
+    const name of ["run", "list", "get", "create", "update", "archive", "delete"] as const
+  ) {
     assertEquals(typeof c.functions[name], "function", `functions.${name} is missing`);
   }
 });
@@ -231,6 +233,26 @@ Deno.test("workflows.archive unwraps the workflow envelope", async () => {
   assertEquals(await c.client.workflows.archive("wf_1"), archived);
   assertEquals(c.calls[0].method, "POST");
   assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_1/archive");
+});
+
+Deno.test("functions.archive unwraps the function envelope", async () => {
+  const archived = { id: "fn_1", key: "send-email", status: "archived" };
+  const c = client(() => json({ function: archived }));
+
+  assertEquals(await c.client.functions.archive("fn_1"), archived);
+  assertEquals(c.calls[0].method, "POST");
+  assertEquals(c.calls[0].url, "https://api.example.com/functions/fn_1/archive");
+});
+
+Deno.test("functions.delete does not archive on the caller's behalf", async () => {
+  const c = client(() =>
+    json({ error: { code: "function_not_archived", message: "Archive it first." } }, 409)
+  );
+
+  const err = await assertRejects(() => c.client.functions.delete("fn_1"), ApiError);
+  assertEquals(err.status, 409);
+  assertEquals(err.code, "function_not_archived");
+  assertEquals(c.calls.length, 1, "no archive request was issued on the caller's behalf");
 });
 
 Deno.test("workflows.delete returns nothing rather than {ok:true}", async () => {

@@ -21,12 +21,16 @@ import {
   type ResolvedConfig,
   type W6WClientOptions,
 } from "./config.ts";
+import { AppsApi } from "./apps.ts";
 import { ConnectionsApi } from "./connections.ts";
 import { ConsoleApi } from "./console/mod.ts";
+import { DashboardApi } from "./dashboard.ts";
 import { DocumentsApi } from "./documents.ts";
 import { ConfigError } from "./errors.ts";
 import { type CallOptions, type HttpResponse, request, type RequestOptions } from "./http.ts";
 import { fetchMe } from "./me.ts";
+import { ProjectsApi } from "./projects.ts";
+import { ReliabilityApi } from "./reliability.ts";
 import { type RunInput, runUrn } from "./run.ts";
 import { TeamApi } from "./team.ts";
 import type { Me, RunEnvelope } from "./types.ts";
@@ -77,11 +81,23 @@ export class W6WClient {
   readonly vars: VarsApi;
 
   /**
-   * Connections: `list` only in this version. Read-only on purpose — creating
-   * or testing a connection is an interactive, secret-handling flow that
-   * `endpoints.json` puts out of scope for v0.1.0.
+   * Connections: `list`, `get`, `delete`. Creating, updating or testing a
+   * connection (and OAuth) is an interactive, secret-handling flow that
+   * `endpoints.json` keeps out of scope — those stay on `console.connections`.
    */
   readonly connections: ConnectionsApi;
+
+  /** Apps: `byIds` only — a bounded catalog lookup (no browsing). */
+  readonly apps: AppsApi;
+
+  /** Dashboard: `stats`, the account-scoped run rollup. */
+  readonly dashboard: DashboardApi;
+
+  /** Projects: `list` only (read-only). */
+  readonly projects: ProjectsApi;
+
+  /** Reliability: `list` (the board for up to ten apps) and `members`. */
+  readonly reliability: ReliabilityApi;
 
   /**
    * Workflows: `list` and `run`. `list` is project-scoped and accepts an
@@ -184,6 +200,10 @@ export class W6WClient {
     this.documents = new DocumentsApi(this);
     this.vars = new VarsApi(this);
     this.connections = new ConnectionsApi(this);
+    this.apps = new AppsApi(this);
+    this.dashboard = new DashboardApi(this);
+    this.projects = new ProjectsApi(this);
+    this.reliability = new ReliabilityApi(this);
     this.workflows = new WorkflowsApi(this);
     this.functions = new FunctionsApi(this);
     this.endpoints = new EndpointsApi(this);

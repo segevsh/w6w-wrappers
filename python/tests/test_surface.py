@@ -89,6 +89,14 @@ PUBLIC_SURFACE = {
     "fetch_me",
     "MeRequest",
     "Me",
+    "AppsApi",
+    "AppsHost",
+    "DashboardApi",
+    "DashboardHost",
+    "ProjectsApi",
+    "ProjectsHost",
+    "ReliabilityApi",
+    "ReliabilityHost",
     "ConnectionsApi",
     "ConnectionsRequest",
     "ConnectionAppMeta",
@@ -287,20 +295,16 @@ class NoExtraOperationsTest(unittest.TestCase):
         self.assertEqual(root, {"me", "run"})
         self.assertEqual(_public_callables(_client()) - root, {"request", "transport"})
 
-    def test_no_write_operation_exists_on_connections(self) -> None:
-        # `endpoints.json` still puts every connection write out of scope: they
-        # are interactive studio flows (an OAuth round trip, a live credential
-        # test), and half of one in an SDK is worse than none.
-        #
-        # Workflows used to be named here too. They are not any more: the write
-        # half of that domain is a plain stateless POST/DELETE over an
-        # already-resolved body — nothing interactive to conduct — so it left
-        # `outOfScope` and became `workflows.create`/`update`/`archive`/`delete`
-        # in the contract. Connections did NOT come with it, and this test is
-        # what keeps that distinction from eroding by association.
+    def test_connections_has_delete_but_no_interactive_write_operation(self) -> None:
+        # `connections.delete` is contracted (R-10: a stateless DELETE over an
+        # id, nothing interactive to conduct). Create, update and test stay out
+        # of the contract (R-16): they are interactive studio flows (an OAuth
+        # round trip, a live credential test), and half of one in an SDK is
+        # worse than none. This test keeps that distinction from eroding.
         client = _client()
 
-        for name in ("create", "update", "delete", "test"):
+        self.assertTrue(callable(getattr(client.connections, "delete", None)))
+        for name in ("create", "update", "test"):
             with self.subTest(operation=name):
                 self.assertFalse(hasattr(client.connections, name))
 

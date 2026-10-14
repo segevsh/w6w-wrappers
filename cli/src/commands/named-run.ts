@@ -78,7 +78,11 @@ function renderEnvelope(envelope: Record<string, unknown>, styles: Styles): stri
 const runFunction: CommandHandler = async (context) => {
   const name = argument(context, 0, "a function key or id (see: `w6w functions list`)");
   noExtraArguments(context, 1);
-  const output = await context.client().functions.run(name, { payload: payload(context) });
+  const output = await context.client().functions.run(name, {
+    payload: payload(context),
+    // Only when given — see `workflows run`.
+    ...(context.invocation.options.allowUnpublished === true ? { allowUnpublished: true } : {}),
+  });
   context.out.emit(output, (styles) => renderOutput(output, styles));
 };
 
