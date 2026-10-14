@@ -1251,14 +1251,143 @@ server does not walk those references — they break at call time.
 
 ---
 
+## 45. `connections.get` — fetch one connection
+
+```
+GET /connections/:id
+```
+
+`status: required` · served today
+
+**Response `200`** — envelope key `connection`; the wrapper unwraps and returns
+one `ConnectionSummary` (the same redacted projection as §2, including the
+optional `app` and `builtIn`).
+
+**Account-owned.** Another account's id answers the same `404 unknown_connection`
+as an id that does not exist. The built-in zero-credential row that §2 can include
+(a `zerocred:` id, `builtIn: true`) is synthetic and not fetchable: `404`.
+
+---
+
+## 46. `connections.delete` — delete a connection
+
+```
+DELETE /connections/:id
+```
+
+`status: required` · served today
+
+The server returns `{ "ok": true }` and the wrapper unwraps it to **nothing**
+(`void` / `None` / exit code), same pin as §10. **Not idempotent**: a second
+delete is `404 unknown_connection`.
+
+Authorization is the server's existing rule, unchanged: the connection must be
+owned by the caller's account. Another account's id is the uniform `404` and
+destroys nothing; so is a `zerocred:` built-in row, which is not stored. Before
+the row is removed the server **tears down every trigger subscription** bound to
+the connection, so the vendor webhook is removed while the credential can still
+sign that call.
+
+Connection create, update, test and OAuth are **not** in the contract (see
+"Explicitly out of scope").
+
+---
+
+## 47. `apps.byIds` — resolve app ids to catalog summaries
+
+```
+GET /apps?ids=a,b,c
+```
+
+`status: required` · served today
+
+A bounded lookup, not catalog browsing. The server caps `ids` at **100** per
+request (`400 too_many_ids` beyond that), so the wrapper **chunks to 100
+client-side**: one request per chunk, issued concurrently, the `apps` of every
+page concatenated in chunk order. Duplicate ids are collapsed first; an empty set
+returns `[]` with **no request at all** — never an unfiltered page. Unknown ids
+are simply absent from the result.
+
+The inline `app` object on §2 / §45 is the **primary** icon and label source for
+a connection's app and needs no extra request; use `apps.byIds` for ids that do
+not come from a connection.
+
+---
+
+## 48. `dashboard.stats` — account-scoped run rollup
+
+```
+GET /dashboard/stats?from=&to=&bucket=
+```
+
+`status: required` · served today
+
+**Account-scoped**: the account comes from the credential, there is no `project`
+parameter, and the client's default project is never sent. No envelope key — the
+rollup (`range`, `headline`, `series`, `recent`) is the body. `from` / `to` are
+ISO-8601 instants and `bucket` is `day` or `week`; each is sent only when given.
+
+---
+
+## 49. `projects.list` — list the account's projects
+
+```
+GET /projects
+```
+
+`status: required` · served today
+
+Envelope key `projects`; the wrapper unwraps and returns the array. **Read-only**
+— project create, rename, archive and delete are not in the contract. Archived
+projects are not listed. Each row carries `isDefault`.
+
+**Side effect:** the GET ensures the account has a default project and *creates
+it when there is none*, so a first call on a fresh account returns one
+`isDefault: true` row, not `[]`.
+
+---
+
+## 50. `reliability.list` — reliability board for a set of apps
+
+```
+GET /reliability/services?project=&apps=a,b&days=&limit=
+```
+
+`status: required` · served today
+
+No envelope key — the board is the body. `project` and `apps` are required, and
+the server accepts **at most 10** app ids: zero or more than ten is
+`400 invalid_app_filter`, a missing `project` is `400 missing_project`. The
+wrapper sends exactly the ids it is given and surfaces the 400 unchanged; it has
+**no batching helper** — splitting a larger set across calls, and scheduling or
+polling them, is the host's job.
+
+---
+
+## 51. `reliability.members` — apps a project's calls touch
+
+```
+GET /reliability/services/members?project=&days=
+```
+
+`status: required` · served today
+
+Identifier-only discovery: no status probes. No envelope key; `appIds` is the list
+to feed, at most ten at a time, to §50. `project` is required.
+
+---
+
 ## Explicitly out of scope for this version
 
 Named so nobody adds them ad hoc in one language — this list is the `outOfScope`
 array in `endpoints.json`, all twelve entries:
 
-apps, endpoints, projects, vault, tokens, schedules, triggers, subscriptions,
-tenants, `runs.get`, `workflows.listRuns`, and **all write operations on
-connections**.
+the app catalog's browse, search and paging (`apps.byIds`, §47, is the one
+in-scope read), endpoints' management routes, project writes (`projects.list`,
+§49, is the one in-scope read), vault, tokens, schedules, triggers,
+subscriptions, tenants, `runs.get`, `workflows.listRuns`, and **connection
+create / update / test / OAuth** (`connections.list`, `get` and `delete` — §§2,
+45, 46 — are in scope).
 
 They all exist on the API. They are not in the wrappers until they are in
 `endpoints.json`.
@@ -1276,3 +1405,10 @@ They all exist on the API. They are not in the wrappers until they are in
 > list rather than newly excluded — the run-history surface is deliberately
 > still console-only, and naming it here is what keeps it from arriving by
 > association with the definition operations that did land.
+>
+> **At contract `0.7.0` the bare `apps` and `projects` entries narrowed, and the
+> connections entry shrank from "all write operations" to create / update / test /
+> OAuth.** `connections.delete` is a stateless authorized DELETE, not an
+> interactive flow, so it joined `get`; the connect flows still do not belong in
+> a wrapper. `apps` and `projects` keep everything but the one bounded read each
+> (§§47, 49).

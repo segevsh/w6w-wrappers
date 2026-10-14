@@ -449,14 +449,15 @@ transport, mirroring `console.projects`'s/`console.schedules`'s own host shape.
 
 **Console placement here is a resolved decision, not a default applied without thought — see
 `HITL-10` in `HITL.md` and `plan.md`'s SP2.3 section for the full investigation.**
-`endpoints.json`'s `outOfScope` entry for connections writes frames the eventual intent as a real
-partner operation, unlike `projects`/`schedules`/`apps` — but the server routes this domain wraps
-are plain, stateless handlers over an already-resolved payload for both real studio call sites,
-which makes console placement technically safe for studio's own use without by itself justifying
-promotion to the partner surface (cli/python lockstep; no partner-facing OAuth-flow counterpart
-exists yet either). Console placement is the pinned default for this round; partner-surface
-promotion is deferred to a dedicated future project. A future reader evaluating that promotion
-should start from `HITL-10`/SP2.3 rather than re-deriving the reasoning from scratch.
+`endpoints.json`'s `outOfScope` entry "connection create / update / test / OAuth" frames the
+eventual intent as a real partner operation — `connections.get`/`delete` have since been promoted to
+the root client (contract `0.7.0`) and these write flows have not — but the server routes this
+domain wraps are plain, stateless handlers over an already-resolved payload for both real studio
+call sites, which makes console placement technically safe for studio's own use without by itself
+justifying promotion to the partner surface (cli/python lockstep; no partner-facing OAuth-flow
+counterpart exists yet either). Console placement is the pinned default for this round;
+partner-surface promotion is deferred to a dedicated future project. A future reader evaluating that
+promotion should start from `HITL-10`/SP2.3 rather than re-deriving the reasoning from scratch.
 
 ## `console.workflows.*`
 
@@ -526,13 +527,14 @@ the transport, mirroring `console.projects`'s/`console.schedules`'s own host sha
 default.
 
 **Console placement here is the same precedent as `console.connections`'s `HITL-10`, not a fresh
-judgment call.** `endpoints.json`'s `outOfScope` array names "all write operations on connections
-and workflows" together, with the identical "in this version" framing HITL-10 already investigated
-for connections. The server routes here (`admin/workflows.ts`) are, like connections, plain
-stateless handlers over an already-resolved request body/precondition header — no interactive flow
-the SDK method itself would need to conduct. HITL-10's resolution transfers directly: console
-placement is safe for studio's own use; it does not by itself justify promotion to the partner
-surface (still needs cli/python parity + a documented partner story, neither of which exists today).
+judgment call.** `endpoints.json`'s `outOfScope` array once named "all write operations on
+connections and workflows" together (it now names only "connection create / update / test / OAuth"),
+with the identical "in this version" framing HITL-10 already investigated for connections. The
+server routes here (`admin/workflows.ts`) are, like connections, plain stateless handlers over an
+already-resolved request body/precondition header — no interactive flow the SDK method itself would
+need to conduct. HITL-10's resolution transfers directly: console placement is safe for studio's own
+use; it does not by itself justify promotion to the partner surface (still needs cli/python parity +
+a documented partner story, neither of which exists today).
 
 ## `console.savedTests.*`
 

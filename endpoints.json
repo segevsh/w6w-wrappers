@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable surface contract for all w6w wrappers. Source of truth for conformance tests. Keep in sync with docs/endpoints.md.",
-  "contractVersion": "0.6.0",
+  "contractVersion": "0.7.0",
   "$basePathComment": "Empty since 0.2.0: the server serves its routes at the ROOT of its own host (https://api.w6w.io/vars, not .../api/vars). Clients append nothing to the configured origin.",
   "basePath": "",
   "auth": "bearer",
@@ -42,7 +42,56 @@
         "python": "client.connections.list()",
         "cli": "w6w connections list"
       },
-      "notes": "`credential` and `lastRefreshedAt` are redacted server-side and must not appear in the wrapper's list type. D4 — kept in v0.1.0 even though the 07-27 intake does not name it: without it a user has no way to discover a `conn_…` URN to pass to `run`. Verified live. Each row carries `tenant` + `subject` (not `owner`) and a top-level `app` object (`displayName` plus optional `iconSvg`, `iconSvgDark`, `brandColor`, `brandColorDark`) beside `appId`; `app` is `null` when the server found no app row, and absent from an older server."
+      "notes": "`credential` and `lastRefreshedAt` are redacted server-side and must not appear in the wrapper's list type. D4 — kept in v0.1.0 even though the 07-27 intake does not name it: without it a user has no way to discover a `conn_…` URN to pass to `run`. Verified live. Each row carries `tenant` + `subject` (not `owner`) and a top-level `app` object (`displayName` plus optional `iconSvg`, `iconSvgDark`, `brandColor`, `brandColorDark`) beside `appId`; `app` is `null` when the server found no app row, and absent from an older server. `builtIn` is an optional boolean: `true` marks the synthetic zero-credential row (a `zerocred:` id, usable with no connection step, not stored and not deletable); it is absent on stored connections and on an older server that does not emit it."
+    },
+    {
+      "name": "connections.get",
+      "summary": "Fetch one connection (credentials redacted).",
+      "method": "GET",
+      "path": "/connections/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "ConnectionSummary",
+      "naming": {
+        "ts": "client.connections.get(id)",
+        "python": "client.connections.get(id)",
+        "cli": "w6w connections get <id>"
+      },
+      "notes": "Server wraps the body as `{ connection: ConnectionSummary }`; the wrapper unwraps it. Same redacted projection as `connections.list`. Account-owned: another account's id is the uniform `404 unknown_connection`, indistinguishable from an id that does not exist. The built-in zero-credential row that `connections.list` can include (a `zerocred:` id, `builtIn: true`) is synthetic and is not fetchable: `404`."
+    },
+    {
+      "name": "connections.delete",
+      "summary": "Delete a connection.",
+      "method": "DELETE",
+      "path": "/connections/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "void",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.connections.delete(id)",
+        "python": "client.connections.delete(id)",
+        "cli": "w6w connections delete <id>"
+      },
+      "notes": "The server returns `{ok: true}` and the wrapper unwraps it to NOTHING (`void` / `None` / exit code), same pin as `documents.delete`. Keeps the server's authorization: the connection must be owned by the caller's account; another account's id is the uniform `404 unknown_connection` and destroys nothing, and so is a `zerocred:` built-in row (it is not stored). Not idempotent: a second delete is `404`. Before the row is removed the server tears down every trigger subscription bound to the connection (the vendor webhook is removed while the credential can still sign the call). Creating, updating, testing and OAuth-connecting a connection are NOT in this contract."
     },
     {
       "name": "workflows.list",
@@ -1015,6 +1064,160 @@
       "notes": "The server returns `{ok: true}` and the wrapper unwraps it to NOTHING (`void` / `None` / exit code), same pin as `documents.delete`. This TOMBSTONES the membership rather than deleting the row (D-R3) — a removed member's `userId` may still appear in historical records — but that is a server-side implementation detail the wrapper contract does not surface. Requires `canManageMembers` (`403 forbidden` otherwise). The account's owner cannot be removed (`403 cannot_remove_owner`), and removing the account's last active member is refused (`409 last_member`) rather than leaving an ownerless, memberless account. `404 member_not_found` for an unknown `userId`."
     },
     {
+      "name": "apps.byIds",
+      "summary": "Resolve a set of app ids to their catalog summaries.",
+      "method": "GET",
+      "path": "/apps",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "ids",
+          "in": "query",
+          "type": "string",
+          "required": true,
+          "$comment": "The wire value is a comma-separated list (`ids=a,b`). The wrapper takes an array."
+        }
+      ],
+      "returns": "AppSummary[]",
+      "naming": {
+        "ts": "client.apps.byIds(ids, opts?)",
+        "python": "client.apps.by_ids(ids)",
+        "cli": "w6w apps by-ids <ids>"
+      },
+      "notes": "Bounded lookup, not catalog browsing: the server caps `ids` at 100 per request and answers `400 too_many_ids` beyond that, so the wrapper CHUNKS to 100 client-side (one `GET /apps?ids=a,b,...` per chunk, issued concurrently, results concatenated in chunk order) and the cap never reaches a caller. Duplicate ids are collapsed first. An empty set returns `[]` with NO request at all (never an unfiltered page). The server unwraps the page envelope `{apps, nextCursor}`; the wrapper returns the `apps` of every chunk. Unknown ids are simply absent. Where the app belongs to a connection, the inline `app` object on `connections.list` / `connections.get` is the PRIMARY icon and label source and needs no extra request; use `apps.byIds` for ids that do not come from a connection. Catalog browse / search / paging is out of scope."
+    },
+    {
+      "name": "dashboard.stats",
+      "summary": "Account-scoped dashboard rollup over the run ledger.",
+      "method": "GET",
+      "path": "/dashboard/stats",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "from",
+          "in": "query",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "to",
+          "in": "query",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "bucket",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "knownValues": [
+            "day",
+            "week"
+          ],
+          "closedEnum": false
+        }
+      ],
+      "returns": "DashboardStats",
+      "naming": {
+        "ts": "client.dashboard.stats(opts?)",
+        "python": "client.dashboard.stats(from_=None, to=None, bucket=None)",
+        "cli": "w6w dashboard stats [--from <iso>] [--to <iso>] [--bucket day|week]"
+      },
+      "notes": "Account-scoped: the account comes from the credential, there is NO `project` parameter and the client's default project is never sent. The response has no envelope key; the rollup (`range`, `headline`, `series`, `recent`) IS the body. `from` / `to` are ISO-8601 instants and `bucket` is `day` or `week`; each is sent only when given and the server applies its own defaults otherwise. `knownValues` on `bucket` is documentation, not a constraint."
+    },
+    {
+      "name": "projects.list",
+      "summary": "List the account's active projects.",
+      "method": "GET",
+      "path": "/projects",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [],
+      "returns": "Project[]",
+      "naming": {
+        "ts": "client.projects.list(opts?)",
+        "python": "client.projects.list()",
+        "cli": "w6w projects list"
+      },
+      "notes": "Server wraps the body as `{ projects: Project[] }`; the wrapper unwraps and returns the array. READ-ONLY: project create, rename, archive and delete are not in this contract. Archived projects are not listed. Each row carries `isDefault`. SIDE EFFECT: the GET ensures the account's default project exists and creates it when there is none, so a first call on a fresh account returns one `isDefault: true` row, not `[]`."
+    },
+    {
+      "name": "reliability.list",
+      "summary": "Reliability board for a project and an explicit set of apps.",
+      "method": "GET",
+      "path": "/reliability/services",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "apps",
+          "in": "query",
+          "type": "string",
+          "required": true,
+          "$comment": "Comma-separated app ids on the wire; the wrapper takes an array of at most 10."
+        },
+        {
+          "name": "days",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "$comment": "A positive integer number of days; sent as a query string."
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "$comment": "A positive integer cap; sent as a query string."
+        }
+      ],
+      "returns": "ReliabilityServices",
+      "naming": {
+        "ts": "client.reliability.list(project, appIds, opts?)",
+        "python": "client.reliability.list(project, app_ids, days=None, limit=None)",
+        "cli": "w6w reliability list --project <id> --apps <ids> [--days <n>] [--limit <n>]"
+      },
+      "notes": "The response has no envelope key: the board IS the body. The server accepts AT MOST 10 app ids (`apps` is required and must hold 1 to 10 ids); anything else is `400 invalid_app_filter`, and a missing `project` is `400 missing_project`. The wrapper sends exactly the ids it is given and surfaces the server's 400 as `ApiError` unchanged; it has NO batching helper, so splitting a larger set (via `reliability.members`) across calls, and scheduling or polling them, is the host's job. Services are ordered most-urgent first, then by last call; `limit` caps after that ordering. `days` and `limit` are sent only when given."
+    },
+    {
+      "name": "reliability.members",
+      "summary": "List the app ids a project's calls touch.",
+      "method": "GET",
+      "path": "/reliability/services/members",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "days",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "$comment": "A positive integer number of days; sent as a query string."
+        }
+      ],
+      "returns": "ReliabilityServiceMembers",
+      "naming": {
+        "ts": "client.reliability.members(project, opts?)",
+        "python": "client.reliability.members(project, days=None)",
+        "cli": "w6w reliability members --project <id> [--days <n>]"
+      },
+      "notes": "Identifier-only membership discovery: no status probes are made. The response has no envelope key; `appIds` is the list to feed, at most 10 at a time, to `reliability.list`. `project` is required (`400 missing_project` otherwise). `days` is sent only when given."
+    },
+    {
       "name": "run",
       "summary": "Run anything addressable by URN — a connection action, a function, an endpoint or a workflow.",
       "method": "POST",
@@ -1114,9 +1317,9 @@
     }
   },
   "outOfScope": [
-    "apps",
+    "apps (catalog browse, search and paging; `apps.byIds` is the one in-scope read)",
     "endpoints",
-    "projects",
+    "projects (create, rename, archive, delete; `projects.list` is the one in-scope read)",
     "vault",
     "tokens",
     "schedules",
@@ -1125,6 +1328,6 @@
     "tenants",
     "runs.get",
     "workflows.listRuns",
-    "all write operations on connections"
+    "connection create / update / test / OAuth (`connections.list`, `get` and `delete` are in scope)"
   ]
 }

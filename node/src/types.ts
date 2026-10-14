@@ -184,6 +184,13 @@ export interface ConnectionSummary {
    * `null` means the server found no app row; absent means an older server.
    */
   app?: ConnectionAppMeta | null;
+  /**
+   * `true` on the synthetic zero-credential row the list can include (a
+   * `zerocred:…` id — usable with no connection step, not stored, not
+   * deletable). Absent on a stored connection, and on an older server that does
+   * not emit the marker.
+   */
+  builtIn?: boolean;
 }
 
 /** Lifecycle state of a workflow: an editable draft, a published live one, or archived. */

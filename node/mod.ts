@@ -64,6 +64,34 @@ export { fetchMe } from "./src/me.ts";
 export type { MeHost } from "./src/me.ts";
 export { ConnectionsApi } from "./src/connections.ts";
 export type { ConnectionsHost } from "./src/connections.ts";
+// Integration reads (embed-sdk-coverage): a bounded app lookup, the account
+// dashboard rollup, the project list, and the reliability board.
+export { AppsApi } from "./src/apps.ts";
+export type { AppsHost, AppSummary } from "./src/apps.ts";
+export { DashboardApi } from "./src/dashboard.ts";
+export type {
+  DashboardHost,
+  DashboardStats,
+  DashboardStatsOptions,
+  DashboardStatsParams,
+} from "./src/dashboard.ts";
+export { ProjectsApi } from "./src/projects.ts";
+export type { Project, ProjectsHost } from "./src/projects.ts";
+export { ReliabilityApi } from "./src/reliability.ts";
+export type {
+  ReliabilityComponentReport,
+  ReliabilityErrorMix,
+  ReliabilityHost,
+  ReliabilityListOptions,
+  ReliabilityMembersOptions,
+  ReliabilityService,
+  ReliabilityServiceMembers,
+  ReliabilityServices,
+  ReliabilityState,
+  ReliabilityTimelineEntry,
+  ReliabilityUptimeDay,
+  ReliabilityVendorStatus,
+} from "./src/reliability.ts";
 export { WorkflowsApi } from "./src/workflows.ts";
 export { FunctionsApi } from "./src/functions.ts";
 export type {

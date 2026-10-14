@@ -67,11 +67,24 @@ when the server records them. A `kind` the SDK doesn't recognise is returned unc
 
 ## `client.connections`
 
-| Method | Returns |
-| --- | --- |
-| `list({ signal? })` | `ConnectionSummary[]`: `id`, `appId`, `displayName`, `state`, `lastTestOk`, `lastTestedAt`, `tenant`, `subject`, and `app` (inline app name, icons and brand colours; `null` or absent when unknown) |
+| Method | Returns | Notes |
+| --- | --- | --- |
+| `list({ signal? })` | `ConnectionSummary[]`: `id`, `appId`, `displayName`, `state`, `lastTestOk`, `lastTestedAt`, `tenant`, `subject`, and `app` (inline app name, icons and brand colours; `null` or absent when unknown) | |
+| `get(id, { signal? })` | `ConnectionSummary` | `404 unknown_connection` for an unknown or another account's id, and for a built-in `zerocred:` row |
+| `delete(id, { signal? })` | nothing | Account-owned; also tears down the connection's trigger subscriptions. Same `404` rules. |
 
-`state` is `pending`, `connected`, `needs_refresh`, `broken` or `revoked`.
+`state` is `pending`, `connected`, `needs_refresh`, `broken` or `revoked`. `builtIn` is `true` only on
+the synthetic zero-credential row in a list (optional; absent on older servers).
+
+## `client.apps`, `client.dashboard`, `client.projects`, `client.reliability`
+
+| Method | Returns | Notes |
+| --- | --- | --- |
+| `apps.byIds(ids, { signal? })` | `AppSummary[]` | Chunks to the server's 100-id cap; `[]` makes no request; duplicates collapsed. For a connection's app prefer its inline `app`. |
+| `dashboard.stats({ from?, to?, bucket?, signal? })` | `DashboardStats` | Account-scoped; no project. |
+| `projects.list({ signal? })` | `Project[]` | Read-only; includes `isDefault`. The first call on a new account creates the default project. |
+| `reliability.list(project, appIds, { days?, limit?, signal? })` | `ReliabilityServices` | At most 10 app ids; the server's `400` is raised as `ApiError`. No batching helper. |
+| `reliability.members(project, { days?, signal? })` | `ReliabilityServiceMembers` | `appIds` of the apps the project's calls touch. |
 
 ## `client.workflows`
 
