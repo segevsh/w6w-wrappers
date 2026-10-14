@@ -151,9 +151,9 @@ class SurfaceTest(unittest.TestCase):
             with self.subTest(operation=name):
                 self.assertTrue(callable(getattr(instance.workflows, name)))
 
-    def test_functions_exposes_all_six_operations(self) -> None:
+    def test_functions_exposes_all_seven_operations(self) -> None:
         instance, _ = client(responding({}))
-        for name in ("run", "list", "get", "create", "update", "delete"):
+        for name in ("run", "list", "get", "create", "update", "archive", "delete"):
             with self.subTest(operation=name):
                 self.assertTrue(callable(getattr(instance.functions, name)))
 
@@ -350,6 +350,30 @@ class FunctionReadTest(unittest.TestCase):
 
         self.assertFalse(detail.valid)
         self.assertNotIn("valid", detail.function)
+
+
+class FunctionArchiveTest(unittest.TestCase):
+    """`functions.archive` mirrors `workflows.archive`."""
+
+    def test_archive_posts_and_unwraps_the_function_envelope(self) -> None:
+        archived = {"id": "fn_1", "key": "send-email", "status": "archived"}
+        instance, calls = client(responding({"function": archived}))
+
+        self.assertEqual(instance.functions.archive("fn_1"), archived)
+        self.assertEqual(calls[0].full_url, "https://api.example.com/functions/fn_1/archive")
+        self.assertEqual(calls[0].get_method(), "POST")
+        self.assertIsNone(calls[0].data)
+
+    def test_archive_raises_the_server_error_intact(self) -> None:
+        instance, _ = client(
+            raising(http_error(404, {"error": {"code": "unknown_function", "message": "No."}}))
+        )
+
+        with self.assertRaises(ApiError) as caught:
+            instance.functions.archive("fn_x")
+
+        self.assertEqual(caught.exception.status, 404)
+        self.assertEqual(caught.exception.code, "unknown_function")
 
 
 class FunctionWriteTest(unittest.TestCase):

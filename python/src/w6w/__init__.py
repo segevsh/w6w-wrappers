@@ -31,11 +31,15 @@ from ._config import BASE_PATH, ResolvedConfig, join_base_url
 from ._http import HttpResponse, Transport, path
 from ._vars import VarsApi, VarsRequest
 from ._version import __version__
+from .apps import AppsApi, AppsHost
 from .client import Client
 from .connections import ConnectionsApi, ConnectionsRequest
+from .dashboard import DashboardApi, DashboardHost
 from .documents import DocumentsApi, DocumentsHost
 from .errors import ApiError, ConfigError
 from .me import MeRequest, fetch_me
+from .projects import ProjectsApi, ProjectsHost
+from .reliability import ReliabilityApi, ReliabilityHost
 from .run import RunRequest, run_urn
 from .team import TeamApi, TeamHost, TeamInvite, TeamInviteWithLink, TeamMember
 from .types import (
@@ -73,6 +77,8 @@ from .workflows import WorkflowsApi, WorkflowsHost
 
 __all__ = [
     "ApiError",
+    "AppsApi",
+    "AppsHost",
     "BASE_PATH",
     "Client",
     "ConfigError",
@@ -88,6 +94,8 @@ __all__ = [
     # their wire types and host protocols because a host that types a helper
     # around `client.documents` needs to name them; they are reached through a
     # client, never constructed directly.
+    "DashboardApi",
+    "DashboardHost",
     "Doc",
     "DocFormat",
     "DocumentsApi",
@@ -108,6 +116,10 @@ __all__ = [
     "Me",
     "MeRequest",
     "PatchableStr",
+    "ProjectsApi",
+    "ProjectsHost",
+    "ReliabilityApi",
+    "ReliabilityHost",
     "ResolvedConfig",
     # Execution (T2.3.5). `run` dispatches on a URN and hands back the
     # kind-tagged envelope as it arrived — a plain dict, so a `kind` this

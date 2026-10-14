@@ -60,14 +60,26 @@ server records them. Read them with `.get()`.
 
 | Method | Returns |
 | --- | --- |
-| `list()` | `list[ConnectionSummary]`: `id`, `appId`, `displayName`, `state`, `lastTestOk`, `lastTestedAt`, `tenant`, `subject`, and `app` (inline app name, icons and brand colours; `null` or absent when unknown) |
+| `list()` | `list[ConnectionSummary]`: `id`, `appId`, `displayName`, `state`, `lastTestOk`, `lastTestedAt`, `tenant`, `subject`, `app` (inline app name, icons and brand colours; `null` or absent when unknown), and `built_in` |
+| `get(id)` | `ConnectionSummary`. `404 unknown_connection` for another account's id and for a `zerocred:` built-in row. |
+| `delete(id)` | `None`. Same ownership rule (another account's id is `404`); not idempotent. The server removes the connection's trigger subscriptions first. |
+
+`built_in` is `True` for the synthetic zero-credential row (a `zerocred:` id, usable with no
+connection step, not stored, not deletable) and `None` otherwise, including against an older server.
+Creating, updating, testing and OAuth-connecting a connection are not in the Python client.
 
 ## `client.workflows`
 
 | Method | Returns | Notes |
 | --- | --- | --- |
 | `list(project=None)` | `list[WorkflowSummary]` | `id`, `key`, `name`, `displayName`, `status`, `tags`, `runCount`, `updatedAt` |
-| `run(id, wait=False, variables=None, trigger=None, input=None)` | `WorkflowRunResult` | `runId`, `status`, `terminal`, `output`, `error`, `stepErrors`, `steps`, `httpStatus`. `id` may be the workflow's key. |
+| `run(id, wait=False, variables=None, trigger=None, input=None, allow_unpublished=False)` | `WorkflowRunResult` | `runId`, `status`, `terminal`, `output`, `error`, `stepErrors`, `steps`, `httpStatus`. `id` may be the workflow's key. `allow_unpublished=True` runs the stored draft (save first; a disabled workflow is still refused) and is sent in the body only when `True`. |
+| `run_version(id, n, wait=False, variables=None, trigger=None, input=None)` | `WorkflowRunResult` | Runs published version `n` instead of the live row. No `allow_unpublished`. |
+| `list_versions(id)` | `dict` | `enabled`, `currentPublishedVersion` (`None` before the first publish), `versions` (metadata only). |
+| `get_version(id, n)` | `dict` | `versionNumber`, `createdAt`, `createdBy`, `isCurrentPublished`, `definition`. |
+| `publish(id)` | `dict` | `version`, `currentPublishedVersion`. Snapshots the stored row, so save first. |
+| `revert(id, n)` | `dict` | `kind`, `callableId`, `versionNumber`. Rewrites the live row; does not publish. A following `update` with `if_unmodified_since` needs the fresh `updatedAt`. |
+| `enable(id)` / `disable(id)` | `None` | A disabled workflow refuses every run, version and draft runs included. |
 | `cancel(id)` | `dict` | `id`, `status` (the status at that moment), `cancelRequestedAt`. `id` is the run id. |
 | `get(id)` | `WorkflowDetail` | `workflow` (the definition), `sourceRef`, `updatedAt` |
 | `create(definition, project=None)` | `WorkflowSaveResult` | `id`, `name`, `scheduled`, `updatedAt`. Assigns a `wf_…` id if the definition has none. |
@@ -79,12 +91,40 @@ server records them. Read them with `.get()`.
 
 | Method | Returns | Notes |
 | --- | --- | --- |
-| `run(name, payload=None)` | the Function's output | `name` is the key or `fn_…` id. |
+| `run(name, payload=None, allow_unpublished=False)` | the Function's output | `name` is the key or `fn_…` id. `allow_unpublished=True` runs the stored draft (body field, only when `True`). |
+| `run_version(id, n, payload=None)` | the Function's output | Runs published version `n` (wire verb `invoke`). No `allow_unpublished`. |
+| `list_versions(id)`, `get_version(id, n)`, `publish(id)`, `revert(id, n)`, `enable(id)`, `disable(id)` | as on `client.workflows` | Same shapes; Functions have no concurrency precondition. |
+| `archive(id)` | `dict` | Required before `delete`. Idempotent; one-way. |
 | `list()` | `list[FunctionSummary]` | `id`, `key`, `displayName`, `description`, `updatedAt`, `valid` |
 | `get(id)` | `FunctionDetail` | `function` (the definition), `valid` |
 | `create(definition)` | `SaveResult` | `id`, `key`. Assigns a `fn_…` id if the definition has none. |
 | `update(id, definition)` | `SaveResult` | Replaces the whole definition. |
-| `delete(id)` | `None` | The Function must be archived first. Archive it with `client.request("POST", w6w.path("/functions/{id}/archive", id=fn_id))`. |
+| `delete(id)` | `None` | `409 function_not_archived` unless the Function was archived first (`archive(id)`). |
+
+## `client.apps`
+
+| Method | Returns | Notes |
+| --- | --- | --- |
+| `by_ids(ids)` | `list[dict]` | Catalog summaries for the given app ids. Duplicates collapse; `[]` returns `[]` with no request; the client sends chunks of at most 100 ids (sequentially). Unknown ids are absent. Prefer the inline `app` on a connection when you have one. |
+
+## `client.dashboard`
+
+| Method | Returns | Notes |
+| --- | --- | --- |
+| `stats(from_=None, to=None, bucket=None)` | `dict` | `range`, `headline`, `series`, `recent`. Account-scoped: no project is sent. `bucket` is `"day"` or `"week"`. Each argument is sent only when given. |
+
+## `client.projects`
+
+| Method | Returns | Notes |
+| --- | --- | --- |
+| `list()` | `list[dict]` | Active projects, each with `isDefault`. Read-only. The GET creates the account's default project if there is none. |
+
+## `client.reliability`
+
+| Method | Returns | Notes |
+| --- | --- | --- |
+| `list(project, app_ids, days=None, limit=None)` | `dict` | The reliability board. The server accepts 1 to 10 ids; anything else is `400 invalid_app_filter`, raised as `ApiError` unchanged. No batching helper: splitting and polling are yours. |
+| `members(project, days=None)` | `dict` | `appIds`: the ids to feed, at most 10 at a time, to `list`. No status probes. |
 
 ## `client.endpoints`
 
