@@ -42,8 +42,8 @@ gh run list --repo w6w-io/w6w-wrappers --workflow release.yml --limit 5
 gh run watch <dry-run-id> --repo w6w-io/w6w-wrappers --exit-status
 
 # Publish a GitHub Release at the exact commit that passed the dry run.
-gh release create v0.9.8 --repo w6w-io/w6w-wrappers \
-  --target <validated-commit-sha> --title v0.9.8 --generate-notes
+gh release create v0.9.9 --repo w6w-io/w6w-wrappers \
+  --target <validated-commit-sha> --title v0.9.9 --generate-notes
 
 gh run list --repo w6w-io/w6w-wrappers --workflow release.yml --limit 5
 gh run watch <release-run-id> --repo w6w-io/w6w-wrappers --exit-status
@@ -288,7 +288,19 @@ be discovered at upload time:
   publisher exactly as for the other two npm packages; every release after that
   goes out from CI, tokenless, like its siblings.
 
+The test gate and all npm publishing jobs install the same pinned npm version
+(`NPM_VERSION` in the workflow). Update it in one place and run the full dry
+run before releasing. Do not replace it with `npm@latest`: npm 12 rejects the
+React lane's pinned Git development dependency by default, whereas npm 11
+accepts it.
+
 ## Partial-failure reality
+
+`0.9.8` was partially published on 2026-10-14: npm SDK/CLI, JSR SDK, and PyPI
+succeeded, but npm React failed during install because its publishing job
+upgraded to npm 12 while the test gate used npm 11. `0.9.9` is the replacement
+lockstep release with the same pinned npm in testing and publishing.
+
 
 The gate is atomic. **The upload is not, and no design makes it so** — five
 registry uploads are five ways to fail, and registries have no cross-registry
