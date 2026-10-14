@@ -59,19 +59,29 @@ expect a JSON value in one shell argument. Wrap it in single quotes, or read it 
 | Command | What it does |
 | --- | --- |
 | `w6w connections list` | List your connections: id, app, state and name. |
+| `w6w connections get <id>` | Print one connection. |
+| `w6w connections delete <id>` | Delete a connection. There is no confirmation prompt. Another account's id answers 404 (exit `2`). |
+
+Creating, testing and reconnecting a connection are not in the CLI.
 
 ## Workflows
 
 | Command | What it does |
 | --- | --- |
 | `w6w workflows list [--project <id>]` | List workflows. |
-| `w6w workflows run <id-or-key> [--wait] [--input <json>]` | Start a run. `--wait` waits for it to finish, up to the server's limit. Exits `3` if the run failed. |
+| `w6w workflows run <id-or-key> [--wait] [--input <json>] [--allow-unpublished]` | Start a run. `--wait` waits for it to finish, up to the server's limit. Exits `3` if the run failed. `--allow-unpublished` runs the saved draft even if it was never published; it runs the row as last saved, so save first, and it is sent only when you pass it. |
 | `w6w workflows cancel <run-id>` | Ask for a run to be cancelled. It reports the run's status at that moment. |
 | `w6w workflows get <id>` | Print a workflow's full definition and its `updatedAt`. |
 | `w6w workflows create --definition <json> [--project <id>]` | Create a workflow from a definition. A new `wf_…` id is assigned if it has none. |
 | `w6w workflows update <id> --definition <json> [--project <id>]` | Replace a workflow's definition. Send the whole definition: fields you leave out are removed. |
 | `w6w workflows archive <id>` | Archive a workflow. Required before deleting it. |
 | `w6w workflows delete <id>` | Delete an archived workflow. |
+| `w6w workflows versions <id>` | List a workflow's published versions and whether it is enabled. |
+| `w6w workflows version <id> <n>` | Print version `n`, with its definition. |
+| `w6w workflows publish <id>` | Publish the workflow as saved, as a new numbered version. Save any pending edit first. |
+| `w6w workflows revert <id> <n>` | Make version `n` the current one. |
+| `w6w workflows enable <id>` / `disable <id>` | Turn the workflow on or off. |
+| `w6w workflows run-version <id> <n> [--wait] [--input <json>]` | Run the published version `n`, never the draft. Exits `3` if the run failed. |
 
 `w6w workflows run` also lists `--var` and `--trigger`, and `update` lists
 `--if-unmodified-since`, but these aren't applied yet. See
@@ -81,18 +91,50 @@ expect a JSON value in one shell argument. Wrap it in single quotes, or read it 
 
 | Command | What it does |
 | --- | --- |
-| `w6w functions run <key-or-id>` | Run a Function and print its output. Pass the key as an argument. To send inputs, use `w6w run fn:<key> --payload <json>` instead. |
+| `w6w functions run <key-or-id> [--payload <json>] [--allow-unpublished]` | Run a Function and print its output. `--allow-unpublished` runs the saved draft even if it was never published; it is sent only when you pass it. |
 | `w6w functions list` | List your Functions, and whether each can run. |
 | `w6w functions get <id>` | Print a Function's definition. |
 | `w6w functions create --definition <json>` | Create a Function. A new `fn_…` id is assigned if it has none. |
 | `w6w functions update <id> --definition <json>` | Replace a Function's definition. |
-| `w6w functions delete <id>` | Delete a Function. It must be archived first, which the CLI can't do yet. Archive it in Studio or from an SDK. |
+| `w6w functions archive <id>` | Archive a Function. Required before deleting it. |
+| `w6w functions delete <id>` | Delete an archived Function. |
+| `w6w functions versions <id>` | List a Function's published versions and whether it is enabled. |
+| `w6w functions version <id> <n>` | Print version `n`, with its definition. |
+| `w6w functions publish <id>` | Publish the Function as saved, as a new numbered version. Save any pending edit first. |
+| `w6w functions revert <id> <n>` | Make version `n` the current one. |
+| `w6w functions enable <id>` / `disable <id>` | Turn the Function on or off. |
+| `w6w functions run-version <id> <n> [--payload <json>]` | Run the published version `n` and print its output. |
 
 ## Endpoints
 
 | Command | What it does |
 | --- | --- |
 | `w6w endpoints run <key-or-id>` | Run an Endpoint and print its result. To send input, use `w6w run ep:<key> --payload <json>` instead. |
+
+## Apps
+
+| Command | What it does |
+| --- | --- |
+| `w6w apps by-ids <ids>` | Look up apps by id. `<ids>` is one comma-separated argument, for example `sendgrid,slack`. Unknown ids are left out. |
+
+## Dashboard
+
+| Command | What it does |
+| --- | --- |
+| `w6w dashboard stats [--from <iso>] [--to <iso>] [--bucket day\|week]` | Roll up your account's runs over a window. It covers the whole account, so there is no `--project`. Each flag is sent only when you pass it. |
+
+## Projects
+
+| Command | What it does |
+| --- | --- |
+| `w6w projects list` | List your projects: id, name, status and which is the default. If you have none, the server creates the default project first. |
+
+## Reliability
+
+| Command | What it does |
+| --- | --- |
+| `w6w reliability list --project <id> --apps <ids> [--days <n>] [--limit <n>]` | Health and performance for up to 10 apps (comma-separated ids). The server rejects more, and its error is shown as-is. |
+| `w6w reliability members --project <id> [--days <n>]` | List the apps that count toward the project's reliability view. |
 
 ## Documents
 
