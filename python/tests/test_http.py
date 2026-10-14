@@ -625,14 +625,16 @@ class RedirectingHandler(BaseHandler):
 
 class NoRedirectTransportTest(unittest.TestCase):
     def test_every_redirect_status_raises_http_error_and_never_opens_the_location(self) -> None:
-        for status in (301, 302, 303, 307, 308):
-            with self.subTest(status=status):
+        # GET as well as POST: urllib only follows 307/308 for GET/HEAD, so a POST-only
+        # run would pass those two statuses even with redirects enabled.
+        for status, verb in [(s, v) for s in (301, 302, 303, 307, 308) for v in ("GET", "POST")]:
+            with self.subTest(status=status, method=verb):
                 handler = RedirectingHandler(status)
                 opener = build_no_redirect_opener(handler)
                 req = Request(
                     "https://api.example.com/auth/exchange",
-                    data=b"{}",
-                    method="POST",
+                    data=b"{}" if verb == "POST" else None,
+                    method=verb,
                     headers={"Authorization": "Basic c2VjcmV0"},
                 )
                 with self.assertRaises(HTTPError) as caught:
