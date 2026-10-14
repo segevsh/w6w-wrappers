@@ -25,6 +25,12 @@ triggers on **a published GitHub Release** (`release: types: [published]`)
 and on `workflow_dispatch` (for a dry run). **Merging a version bump, pushing a
 `v*` tag, or manually dispatching the workflow does not publish packages.**
 
+**PR CI.** A second workflow, `.github/workflows/ci.yml`, runs on every pull
+request and every push to `main`: the lockstep version check plus the `python`,
+`node`, `cli` and `react` lane gates (and `deno publish --dry-run`, `npm pack
+--dry-run`). It holds `contents: read` only — no secret, no `id-token`, no
+publish step — so it is safe on forks. Publishing stays in `release.yml`.
+
 The source version can therefore be ahead of the registries: `0.9.8` was on
 `main` while the last GitHub Release and all registries were still at `0.6.0`.
 The `v0.6.0` run's red status was an obsolete `jsr-cli` job; its npm, JSR SDK,
@@ -155,7 +161,7 @@ page before the next release rather than discovering at upload time.
 Steps 1–4 are human or ordinary-merge work. Steps 5–8 are machine. Step 9 is
 human again, and is not optional.
 
-1. **Land the change** — every lane, in one PR against this repo's `main`. CI
+1. **Land the change** — every lane, in one PR against this repo's `main`. [`ci.yml`](../.github/workflows/ci.yml)
    has already run every lane's unit suite and conformance test against the
    contract in the same checkout.
 2. **Bump `VERSION`.** It is the single source of truth and the only place a
