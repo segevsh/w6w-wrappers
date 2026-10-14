@@ -127,6 +127,11 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+      # Check publication before npm installs can update sibling lockfiles:
+      # Deno's clean-tree check covers the entire Git repository.
+      - name: JSR — validate the SDK package
+        working-directory: node
+        run: deno publish --dry-run
       - name: node — deno test
         working-directory: node
         run: deno task test
@@ -170,9 +175,6 @@ jobs:
           for lane in node cli react; do
             (cd "$lane" && npm pack --dry-run)
           done
-      - name: JSR — validate the SDK package
-        working-directory: node
-        run: deno publish --dry-run
       - name: python — build sdist + wheel
         working-directory: python
         run: |
