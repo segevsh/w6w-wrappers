@@ -19,10 +19,14 @@ from typing import Any, Callable, Dict, Mapping, Optional, Union
 from ._config import ResolvedConfig, TokenProvider, resolve_config
 from ._http import HttpResponse, Transport, _request, default_transport
 from ._vars import VarsApi
+from .apps import AppsApi
 from .connections import ConnectionsApi
+from .dashboard import DashboardApi
 from .documents import DocumentsApi
 from .errors import ApiError
 from .me import fetch_me
+from .projects import ProjectsApi
+from .reliability import ReliabilityApi
 from .run import run_urn
 from .team import TeamApi
 from .types import Me, RunEnvelope
@@ -154,6 +158,14 @@ class Client:
         #: protocol), rather than the bare-callable shape ``vars``/
         #: ``connections`` use, per this task's contract (A8).
         self.team: TeamApi = TeamApi(self)
+        #: Bounded app lookup: ``apps.by_ids(["sendgrid"])``.
+        self.apps: AppsApi = AppsApi(self)
+        #: The account's activity rollup: ``dashboard.stats()``.
+        self.dashboard: DashboardApi = DashboardApi(self)
+        #: The account's projects, read-only: ``projects.list()``.
+        self.projects: ProjectsApi = ProjectsApi(self)
+        #: Reliability board and membership: ``reliability.list(...)``.
+        self.reliability: ReliabilityApi = ReliabilityApi(self)
 
     def me(self) -> Me:
         """Fetch the caller's identity, plus the versions that answered.
