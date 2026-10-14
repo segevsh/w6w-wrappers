@@ -253,39 +253,18 @@ permanently node-only, not a gap pending a future PR.
 ## react's type-only edge onto `@w6w/ui`
 
 `react/`'s `createW6WUiAdapter` targets `@w6w/ui`'s `W6WApi` contract
-**structurally** — a hand-duplicated interface in `react/src/adapter.ts`, never
-an import of `@w6w/ui` itself at runtime. `react/package.json` carries one
-`devDependency` on it, `"@w6w/ui": "github:w6w-io/w6w-ui#<sha>"`, and that edge
-is **dev-only and type-only**: `react/package.json`'s `files: ["dist"]` means
-only `dist/` is ever packed and published, so no installer of `@w6w/react`
-resolves `@w6w/ui` at all. Its one consumer is
-`react/src/__tests__/ui-conformance.test.ts`, run by `npm test` at dev/CI time
-only, which compiles a type-only check file against `@w6w/ui`'s real
-`provider.tsx` and fails — naming the missing/mismatched member — the moment
-`createW6WUiAdapter`'s return type stops being assignable to the real `W6WApi`.
+structurally, with no runtime import of the UI package. Its dev dependency pins
+the published `@w6w/ui@0.1.0`, so a standalone checkout and CI install the same
+contract without relying on a sibling repository.
 
-**Why a `github:<owner>/<repo>#<sha>` pin and not a sibling `link:`:** this
-repo's `release.yml` checks out **only `w6w-wrappers`** — no sibling checkout,
-no submodules (§Conformance's own CI model is the same single-repo-checkout
-premise). A `link:../../ui` resolves only by the local devcontainer's incidental
-directory layout and fails `ENOENT` on every CI run and on a fresh standalone
-clone; a `github:` spec needs nothing but a network fetch of the one pinned
-commit. The pin targets `@w6w/ui/src/provider.tsx` by relative path rather than
-the package's root barrel, because the barrel's own import chain reaches
-`@w6w/expr` (`packages/core`) through a `github:…#path:` subpath npm does not
-honor on a `github:` dependency — `provider.tsx`'s own closure (`theme.ts` →
-`types.ts` → `react`) carries no such edge and compiles clean standalone.
+`ui-conformance.test.ts` compiles the adapter and workflow converter against the
+UI package's public type exports. `adapter-conformance.test.ts` reads member names
+from the installed `dist/provider.d.ts`, then checks that every adapter member
+exists and forwards requests and errors correctly. Neither check ships in `dist/`.
 
-This is **not** a second conformance axis alongside §Conformance's
-`endpoints.json` runner above — `react/` is still a derived lane with no
-`naming.react` entry and no obligation to implement `endpoints.json` directly.
-It is a narrower, one-directional check that one derived lane's hand-duplicated
-bridge interface has not silently drifted from the one third-party contract it
-targets structurally; moving the pin (bumping the `#<sha>` to a newer
-`w6w-io/w6w-ui` `main` commit and re-running `npm
-install`) needs no `VERSION`
-bump of its own unless `W6WApi` itself changed shape, in which case this check
-is what says so.
+React remains a derived lane, exempt from the `endpoints.json` naming contract.
+To update its UI contract, change the pinned npm version, refresh the lockfile,
+and run the React tests and build.
 
 ## Server-only helpers
 

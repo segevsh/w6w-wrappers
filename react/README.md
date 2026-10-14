@@ -164,12 +164,9 @@ function App() {
 }
 ```
 
-**`@w6w/ui` is not on npm today** (`npm view @w6w/ui` → 404, checked 2026-10-06);
-the source is a public GitHub repository (`w6w-io/w6w-ui`). `createW6WUiAdapter`'s
-`W6WApi` return type targets that contract *structurally* — this package needs no
-change whenever `@w6w/ui` becomes reachable another way (a `git+https://`
-dependency on the public repo, or a private registry). `npm i @w6w/ui` does not
-resolve yet.
+`@w6w/ui@0.1.0` is available on npm. Install it with `npm i @w6w/ui`.
+`createW6WUiAdapter` targets its `W6WApi` contract structurally and has no runtime
+dependency on the UI package.
 
 `createW6WUiAdapter` is built on `@w6w/sdk/console` for most members — the SAME
 namespace `packages/studio`'s own facade uses for these routes
@@ -188,43 +185,24 @@ re-test the bridge on an upgrade rather than assuming it.
 
 ### Keeping `createW6WUiAdapter` in sync with the real `@w6w/ui`
 
-`package.json`'s `devDependencies` carries a **dev-only** edge onto
-`@w6w/ui` — `"@w6w/ui": "github:w6w-io/w6w-ui#<sha>"` — that this package never
-ships: `files: ["dist"]` means `dist/` is the only thing npm packs and publishes, so
-no installer of `@w6w/react` ever resolves or needs `@w6w/ui` at all. It is used two
-ways, both at **dev/CI time only** (`npm test`, never part of `dist/`), and nothing is
-imported from it at run time. `src/__tests__/ui-conformance.test.ts` compiles
-`src/__tests__/ui-conformance.check.ts` against `@w6w/ui`'s real `provider.tsx` and
-`flow-types.ts`, and fails, naming the member, the moment
-`createW6WUiAdapter`'s return type stops being assignable to the real `W6WApi` (or the
-`FlowWorkflow` mirror drifts from the real type), and
-`src/__tests__/adapter-conformance.test.ts` reads the installed `provider.tsx` as text
-(see "Runtime conformance" below) —
-closing the gap a hand-duplicated interface alone cannot (nothing previously caught
-this package's `W6WApi` drifting from `@w6w/ui`'s own).
+`package.json` pins `@w6w/ui` to npm version `0.1.0` as a dev dependency.
+Consumers of `@w6w/react` do not install that dependency automatically; it is used
+only by the conformance checks. The release workflow can install it in a clean
+checkout without sibling repositories.
 
-**Why a `github:<owner>/<repo>#<sha>` pin, and not a `link:`/workspace reference to
-a sibling checkout:** `release.yml`'s `react` step checks out **this one repo**
-(`w6w-wrappers`) with no sibling checkout and no submodules — a relative `link:` to `../../ui` resolves only in the
-local devcontainer's incidental directory layout and fails `ENOENT` on every CI run
-and on a fresh clone of `w6w-wrappers` alone. A `github:` spec needs nothing but a
-network fetch of the one pinned commit, which is why it is the only install story
-that survives both environments unchanged. The pin targets `provider.tsx` by
-RELATIVE PATH, not the `@w6w/ui` package barrel — the barrel's own import chain
-reaches `@w6w/expr` (`packages/core`) via a `github:…#path:` subpath npm does not
-honor on a `github:` dependency, which `TS2307`s the moment anything resolves it;
-`provider.tsx`'s own closure (`theme.ts` → `types.ts` → `react`) has no such edge.
+`src/__tests__/ui-conformance.check.ts` imports `W6WApi` and `FlowWorkflow` from
+the UI package's public exports. It checks the adapter's return type and the
+workflow converter in both directions. The runtime suite reads the installed
+`dist/provider.d.ts` declaration to enumerate the real interface members.
 
-**Moving the pin:** update the `#<sha>` in `package.json`'s `@w6w/ui` entry to a
-commit on `w6w-io/w6w-ui`'s `main` (`git ls-remote https://github.com/w6w-io/w6w-ui
-main`) and run `npm install` again to refresh `package-lock.json`'s resolved
-entry — no code change is required unless `@w6w/ui`'s `W6WApi` itself changed
-shape, in which case `ui-conformance.test.ts` will say so.
+To update the pin, change the npm version in `package.json`, refresh
+`package-lock.json`, and run `npm test` and `npm run build`. These checks report
+any incompatible UI contract changes.
 
 **Runtime conformance.** Assignability is checked at compile time only, so it cannot
 see a member that is typed but missing or mis-wired at run time.
 `src/__tests__/adapter-conformance.test.ts` closes that gap. It reads the member names
-(21 required, 8 optional) from the installed `@w6w/ui` `provider.tsx` source — not from
+(21 required, 8 optional) from the installed `@w6w/ui` `provider.d.ts` declaration — not from
 this package's hand-copied interface — and asserts each is a function on
 `createW6WUiAdapter(client)`. It then drives every member with sentinel arguments
 through a stub transport and asserts the exact wire request produced (forwarding), and
