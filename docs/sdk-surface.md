@@ -170,12 +170,32 @@ included) raises `bad_response`.
 
 Both exist so a caller can _discover_ a `conn_…` / `wf_…` id to hand to `run`
 (D4). Both unwrap their envelope key and return the payload array. Connections
-are read-only in this version: every write is an interactive, secret-handling
-studio flow and is out of scope. `connections.list` sends **no** `?project=`
+can be listed, fetched and deleted in this version; creating, updating, testing
+and OAuth-connecting one are interactive, secret-handling studio flows and are out
+of scope. `connections.list` sends **no** `?project=`
 even when the client has a default; `workflows.list` does.
 
 Neither is paginated today and neither pretends otherwise — no cursor argument,
 no client-side paging loop.
+
+`connections.get(id)` and `connections.delete(id)` address one such id: `get`
+returns one `ConnectionSummary`, `delete` returns nothing, and both answer a
+uniform `404` for another account's id or a built-in `zerocred:` row. The list can
+include that built-in row, flagged `builtIn: true` (optional — an older server
+omits it); it is never fetchable or deletable.
+
+### Integration reads
+
+| TS                                                       | Notes                                                                                      |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `client.apps.byIds(ids, opts?)`                          | Chunks to the server's 100-id cap; `[]` makes no request; duplicates collapsed            |
+| `client.dashboard.stats(opts?)`                          | Account-scoped (no project); `from` / `to` / `bucket`                                      |
+| `client.projects.list(opts?)`                            | Read-only; first call may create the default project                                       |
+| `client.reliability.list(project, appIds, opts?)`        | At most 10 app ids (server `400` otherwise, surfaced unchanged); no batching helper        |
+| `client.reliability.members(project, opts?)`             | Which apps the project's calls touch; feed up to ten at a time to `list`                   |
+
+For a connection's own icon and label use the inline `app` on `ConnectionSummary`
+— it is the primary source and costs no extra request.
 
 ### Execution
 
@@ -377,11 +397,19 @@ See [`cli.md`](./cli.md) for the help text itself.
 
 ## 8. What is not here
 
-Out of scope for this version, in every wrapper, and named so nobody adds them
-in one language: apps, functions, endpoints, projects, vault, tokens, schedules,
-triggers, subscriptions, tenants, `runs.get`, and **all write operations on
-connections and workflows**. They exist on the API. They are not in the wrappers
-until they are in `endpoints.json` — see
+In scope since the contract's `0.5.0`–`0.7.0` lines: the full definition lifecycle
+of workflows and Functions (create / update / archive / delete, plus publish,
+version and draft-run operations), and, for integrations, `connections.get` and
+`connections.delete`, `apps.byIds`, `dashboard.stats`, `projects.list`, and
+`reliability.list` / `reliability.members`.
+
+Out of scope for this version, in every wrapper, and named so nobody adds them in
+one language: connection create / update / test / OAuth (interactive,
+secret-handling flows), the app catalog's browse / search / paging (only the
+bounded `apps.byIds` lookup is in), project writes, endpoint management, vault,
+tokens, schedules, triggers, subscriptions, tenants, `runs.get` and
+`workflows.listRuns`. They exist on the API. They are not in the wrappers until
+they are in `endpoints.json` — see
 [`parity.md` §Adding an operation](./parity.md#adding-an-operation).
 
 Also deliberately absent from every wrapper, because they are browser couplings

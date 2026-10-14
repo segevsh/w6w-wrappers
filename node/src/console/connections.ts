@@ -14,15 +14,16 @@
  *
  * **Console placement is a resolved HITL, not a default applied without
  * thought — see `HITL-10` in `HITL.md` and `plan.md`'s SP2.3 section for the
- * full investigation.** `endpoints.json`'s `outOfScope` entry for connections
- * writes frames the eventual intent as a real partner operation, unlike
- * `projects`/`schedules`/`apps`; the server routes this file wraps are plain,
- * stateless handlers over an already-resolved payload for both real studio
- * call sites, which makes console placement technically safe for studio's own
- * use — it does not by itself justify promoting straight to the partner
- * surface (cli/python lockstep; no partner-facing OAuth-flow counterpart
- * exists yet either). Console placement is the pinned default here; partner
- * promotion is deferred to a dedicated future project.
+ * full investigation.** `endpoints.json`'s `outOfScope` entry "connection
+ * create / update / test / OAuth" frames the eventual intent as a real partner
+ * operation; the server routes this file wraps are plain, stateless handlers
+ * over an already-resolved payload for both real studio call sites, which makes
+ * console placement technically safe for studio's own use — it does not by
+ * itself justify promoting the connect flows to the partner surface (cli/python
+ * lockstep; no partner-facing OAuth-flow counterpart exists yet either). Contract
+ * `0.7.0` promoted `get` and `delete` to the root client
+ * (`client.connections.get/delete`); they remain here unchanged for the studio.
+ * Console placement is the pinned default for the rest.
  *
  * **`listConnections` (base `client.connections.list()`,
  * `../connections.ts:47-64`) is deliberately NOT relocated here** — it is the
