@@ -227,8 +227,8 @@ tenant's identity-provider setup.
 
 In a React app, hand `<W6WProvider>` one callback, `getSession`, that calls your endpoint from
 section 1 and returns the session JSON. The provider calls it lazily, never more than once at a
-time, keeps the session until shortly before it expires, and asks again when a hidden tab becomes
-visible. You write no cache, timer or tab-resume code. This needs `@w6w/react` and `@w6w/sdk`
+time, keeps the session until shortly before it expires, and re-checks when a hidden tab becomes
+visible (renewing only if the session is expired or inside the renew window). You write no cache, timer or tab-resume code. This needs `@w6w/react` and `@w6w/sdk`
 0.9.13 or later.
 
 ```tsx
@@ -261,7 +261,8 @@ export function W6W({ userId, children }: { userId: string; children: ReactNode 
 `getSession` must resolve to `{ token, expiresAt, expiresIn? }`, which is what your endpoint
 returns. If it rejects, or resolves with a blank `token` or an `expiresAt` that is not a date, the
 failure shows up as `error` on `useW6WSession()` (below) and the request that needed the session
-fails with it. Pass `getSession` or `token`, not both, and not neither: the provider throws.
+fails with it, unless the previous session is still valid, in which case the request is sent with
+that held token. Pass `getSession` or `token`, not both, and not neither: the provider throws.
 
 **`identityKey` must change whenever the user or account behind `getSession` changes**, for example
 `` `${userId}:${companyId}` ``. A change throws away the cached session and the client, so the
@@ -321,8 +322,9 @@ Turn on `refreshOnUnauthorized` to retry once when a token turns out to be expir
 fails with `401 unauthorized`, the client calls your supplier again with `{ forceRefresh: true }`
 and resends the same request with the new token. For an embedded session that means calling your
 host endpoint again (see [Renewal](#renewal)). With `getSession`, the provider joins any
-renewal already running, otherwise starts one, and hands the SDK the new token. Use `onUnauthorized` to react when that doesn't
-help:
+renewal already running, otherwise starts one, and hands the SDK the new token. Use
+`onUnauthorized` to react when that doesn't help. The snippet below is for Node or any non-React
+caller, where `supplier` is your own token function (in React, `getSession` replaces it):
 
 ```ts
 const client = new W6WClient({
@@ -338,8 +340,8 @@ const client = new W6WClient({
 
 The retry happens at most once per call, and only for `401` with code `unauthorized`. Nothing else
 is retried. It applies to any HTTP method, `POST` included, so a write that the server rejected
-with `401` is sent a second time with the new token. `<W6WProvider>` adds no retry of its own. `onUnauthorized` runs at most once per call: after a failed retry, or straight away
-when the token is a plain string or `refreshOnUnauthorized` is off.
+with `401` is sent a second time with the new token. `<W6WProvider>` adds no retry of its own. `onUnauthorized` runs at most once per call: after a
+failed retry, or straight away when the token is a plain string or `refreshOnUnauthorized` is off.
 
 ## 4. Send extra headers on every request
 
@@ -415,8 +417,8 @@ Rules that bite:
 ## In the browser
 
 Keep the session client and the client secret on your backend. In a React app, use
-[`@w6w/react`](/clients/react/): its provider takes the same token supplier, and your supplier
-fetches a session from your backend endpoint. See [Next.js and token minting](/clients/react/nextjs/).
+[`@w6w/react`](/clients/react/): its provider takes a `getSession` callback that
+fetches a session from your backend endpoint (section 2). See [Next.js and token minting](/clients/react/nextjs/).
 
 ## Troubleshooting
 

@@ -212,7 +212,7 @@ server component or a route handler, use the [Node SDK](/clients/node/) directly
 | Symptom | Cause | What to do |
 | --- | --- | --- |
 | `502 session_unavailable` from your session route | The exchange failed (the tenant client id or secret is wrong, or the tenant is disabled) or the `W6W_*` values are missing. The body is opaque by design. | Read the error in your server logs, check the values in `.env.local` and restart the dev server. |
-| Hooks stay loading, or `useW6WSession()` reports `error` | The session route returns an error, so `getSession` throws. | Call `/api/w6w-session` from the browser console and check the status (`401` not signed in, `403` company not yours, `502` see your server logs). |
+| Hooks report `error` (with the thrown message), and `useW6WSession()` reports `error` | The session route returns an error, so `getSession` throws. A `getSession` that throws is an error, not a wait: hooks stay `loading` only when a plain `token` supplier returns `null` or a blank string. | Call `/api/w6w-session` from the browser console and check the status (`401` not signed in, `403` company not yours, `502` see your server logs). |
 | `W6W_TENANT_CLIENT_SECRET` shows up in the browser bundle | It was given a `NEXT_PUBLIC_` prefix or imported in client code. | Rename it, and only use it in route handlers and server code. Rotate the secret. |
 | `useW6WClient must be used inside <W6WProvider>` | A component using a hook renders outside the provider. | Wrap that part of the tree in the provider. |
 
