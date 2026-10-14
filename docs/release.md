@@ -21,8 +21,41 @@ this repo.
 | **the monorepo** (`segevsh/w6w`)      | consumes this repo as a submodule at `packages/wrappers` and bumps its pointer after a release                                                                       | decide, gate, or trigger a release |
 
 One workflow file, `.github/workflows/release.yml`, does the whole thing. It
-triggers on a `v*` tag and on `workflow_dispatch` (for a dry run), never on a
-bare `push`.
+triggers on **a published GitHub Release** (`release: types: [published]`)
+and on `workflow_dispatch` (for a dry run). **Merging a version bump, pushing a
+`v*` tag, or manually dispatching the workflow does not publish packages.**
+
+The source version can therefore be ahead of the registries: `0.9.8` was on
+`main` while the last GitHub Release and all registries were still at `0.6.0`.
+The `v0.6.0` run's red status was an obsolete `jsr-cli` job; its npm, JSR SDK,
+and PyPI uploads all succeeded. That CLI job has since been removed.
+
+### Release commands
+
+Run these from an authenticated checkout after merging the release commit into
+`w6w-io/w6w-wrappers`'s `main`:
+
+```sh
+# First run the gates, including every package build, without uploading.
+gh workflow run release.yml --repo w6w-io/w6w-wrappers --ref main
+gh run list --repo w6w-io/w6w-wrappers --workflow release.yml --limit 5
+gh run watch <dry-run-id> --repo w6w-io/w6w-wrappers --exit-status
+
+# Publish a GitHub Release at the exact commit that passed the dry run.
+gh release create v0.9.9 --repo w6w-io/w6w-wrappers \
+  --target <validated-commit-sha> --title v0.9.9 --generate-notes
+
+gh run list --repo w6w-io/w6w-wrappers --workflow release.yml --limit 5
+gh run watch <release-run-id> --repo w6w-io/w6w-wrappers --exit-status
+npm view @w6w/sdk version
+npm view @w6w/cli version
+npm view @w6w/react version
+curl -fsSL https://jsr.io/@w6w/sdk/meta.json
+```
+
+Use the current `VERSION` in the release tag and title. Match each run to its
+event and commit before watching it. No registry token is required locally:
+GitHub Actions performs the uploads through its registered trusted publishers.
 
 ## Why this is the simple version
 
@@ -142,12 +175,14 @@ human again, and is not optional.
    test pins the range and the lock's `version` against
    `VERSION` (`react/src/__tests__/version.test.ts`, `cli/tests/help_test.ts`), so
    a lane that leaves it behind fails `test`. The CLI's Deno tasks never fetch
-   that not-yet-published version: `cli/deno.json`'s `"links": ["../node"]`
-   satisfies it from the sibling, which is why that lane runs with
-   `"nodeModulesDir": "auto"`.
-4. **Tag** `v0.2.1`. (For a dry run, invoke `release.yml` via
-   `workflow_dispatch` with an explicit `version` input — it verifies and runs
-   conformance without publishing.)
+   that not-yet-published version: `cli/deno.json`'s import map resolves
+   `@w6w/sdk` to `../node/mod.ts`. `"nodeModulesDir": "manual"` prevents Deno
+   from eagerly installing the npm dependency. With Deno 2.9.7, `"auto"` tries
+   to fetch that range even with `"links": ["../node"]`, blocking a fresh release.
+4. **Publish a GitHub Release** tagged `v<VERSION>` at the validated commit.
+   A tag alone does not trigger this workflow. For a dry run, invoke
+   `release.yml` via `workflow_dispatch` on the intended ref; it has no inputs
+   and reads `VERSION` from that checkout.
 5. **`verify`** reads `VERSION` and compares it against the tag and the ten
    version literals step 3 lists — three for `node` (two manifests and a source
    constant), three for `cli`, `pyproject.toml` and `_version.py` for python,
@@ -172,13 +207,15 @@ human again, and is not optional.
 8. **Confirm every artifact landed**, then bump the monorepo's submodule pointer
    in a `chore(wrappers): bump submodule` commit.
 
-Build before uploading. npm, JSR and PyPI releases cannot be unpublished in any
+The `test` gate builds all three npm packages and the Python sdist/wheel, checks
+the npm tarball contents, and runs a JSR publishing dry run before any upload.
+These checks also run on `workflow_dispatch`. npm, JSR and PyPI releases cannot be unpublished in any
 way that helps — a version that exists on npm but failed to build for PyPI is a
 permanent inconsistency, and the only fix is burning a version number.
 
 ## Notes on the npm and JSR lanes
 
-Five jobs (`npm-sdk`, `npm-cli`, `npm-react`, `jsr-sdk`, `jsr-cli`), and the
+Four JavaScript publishing jobs (`npm-sdk`, `npm-cli`, `npm-react`, `jsr-sdk`), and the
 shape is copied from the house pattern — `w6w-core`'s `publish-types.yml` ships
 `@w6w/types` to npm and JSR over OIDC with no stored credential. What was _not_
 copyable is written out here, because each item is a thing that would otherwise
@@ -251,13 +288,25 @@ be discovered at upload time:
   publisher exactly as for the other two npm packages; every release after that
   goes out from CI, tokenless, like its siblings.
 
+The test gate and all npm publishing jobs install the same pinned npm version
+(`NPM_VERSION` in the workflow). Update it in one place and run the full dry
+run before releasing. Do not replace it with `npm@latest`: npm 12 rejects the
+React lane's pinned Git development dependency by default, whereas npm 11
+accepts it.
+
 ## Partial-failure reality
+
+`0.9.8` was partially published on 2026-10-14: npm SDK/CLI, JSR SDK, and PyPI
+succeeded, but npm React failed during install because its publishing job
+upgraded to npm 12 while the test gate used npm 11. `0.9.9` is the replacement
+lockstep release with the same pinned npm in testing and publishing.
+
 
 The gate is atomic. **The upload is not, and no design makes it so** — five
 registry uploads are five ways to fail, and registries have no cross-registry
 transaction to enlist in.
 
-- **Nothing uploads unless `verify`, `conformance` and `test` all pass.** A
+- **Nothing uploads unless `verify` and `test` (including conformance) pass.** A
   version mismatch, a missing operation or a failing suite can never half-ship.
   The dangerous window is only _inside_ step 8.
 - **A transient registry error is re-runnable at the same version.** Re-run the
