@@ -25,20 +25,32 @@ same shape applies here.
 from __future__ import annotations
 
 import base64
-from typing import Any, Dict, Optional
+import time
+from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, Optional
 
 from ._config import resolve_config
 from ._http import Transport, _request, default_transport
-from .errors import ConfigError
+from .errors import ApiError, ConfigError
 
 
-def _required(value: str, field: str) -> None:
-    """Raise unless `value` is non-blank after stripping."""
+def _required(value: str, field: str, who: str = "exchange_token") -> None:
+    """Raise unless `value` is non-blank after stripping. `who` prefixes the
+    message (the raw path keeps ``exchange_token``)."""
     if not value.strip():
-        raise ConfigError("exchange_token: `{field}` must not be blank.".format(field=field))
+        raise ConfigError("{who}: `{field}` must not be blank.".format(who=who, field=field))
 
 
-def _basic_auth_header(client_id: str, client_secret: str) -> str:
+def _required_text(value: Any, field: str, who: str) -> None:
+    """:func:`_required`, but a non-string is a :class:`ConfigError` too."""
+    if not isinstance(value, str):
+        raise ConfigError(
+            "{who}: `{field}` must be a non-blank string.".format(who=who, field=field)
+        )
+    _required(value, field, who)
+
+
+def _basic_auth_header(client_id: str, client_secret: str, who: str = "exchange_token") -> str:
     """Base64-encode ``client_id:client_secret`` the way the server decodes it:
     latin-1 (the alphabet `atob` reads), via ``str.encode("latin-1")``.
 
@@ -52,7 +64,7 @@ def _basic_auth_header(client_id: str, client_secret: str) -> str:
     """
     if ":" in client_id:
         raise ConfigError(
-            "exchange_token: `client_id` must not contain \":\" — the server "
+            who + ": `client_id` must not contain \":\" — the server "
             "splits a decoded Basic credential on the FIRST colon, so a colon "
             "in `client_id` would be read as part of the secret instead."
         )
@@ -60,7 +72,7 @@ def _basic_auth_header(client_id: str, client_secret: str) -> str:
         raw = "{0}:{1}".format(client_id, client_secret).encode("latin-1")
     except UnicodeEncodeError:
         raise ConfigError(
-            "exchange_token: `client_id`/`client_secret` must be "
+            who + ": `client_id`/`client_secret` must be "
             "representable as latin-1 (ISO-8859-1) — the server decodes the "
             "Basic header with `atob`, which cannot represent a wider "
             "character set."
@@ -138,3 +150,117 @@ def exchange_token(
         require_auth=False,
     )
     return res.body
+
+
+_SESSION = "EmbedSessionClient"
+_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
+def _iso_utc_ms(epoch_ms: int) -> str:
+    """``YYYY-MM-DDTHH:MM:SS.mmmZ`` — the format JS ``toISOString`` produces."""
+    moment = _EPOCH + timedelta(milliseconds=epoch_ms)
+    return moment.strftime("%Y-%m-%dT%H:%M:%S") + ".{0:03d}Z".format(moment.microsecond // 1000)
+
+
+class EmbedSessionClient:
+    """An account-scoped session minter bound to one set of tenant credentials.
+
+    Holds the credentials per instance and mints one account-scoped token per
+    :meth:`create`. A thin layer over :func:`exchange_token`, which stays the
+    only HTTP path. Backend-only, like :func:`exchange_token`; not re-exported
+    from ``w6w/__init__.py``.
+
+    :param base_url: The w6w server's origin. Required and explicit: unlike
+        :func:`exchange_token` this never falls back to ``W6W_BASE_URL``.
+    :param client_id: The tenant's client id (no `:`, latin-1 only).
+    :param client_secret: The tenant's client secret. Never returned or put in a
+        message.
+    :param transport: Transport override, passed through to
+        :func:`exchange_token`.
+    :param now: Epoch-SECONDS clock, sampled before each request. Defaults to
+        :func:`time.time`.
+    :raises ConfigError: A missing/blank `base_url` (even when ``W6W_BASE_URL``
+        is set), blank/non-string credentials, a `client_id` containing `:`, or
+        non-latin-1 credentials.
+    """
+
+    def __init__(
+        self,
+        base_url: str,
+        client_id: str,
+        client_secret: str,
+        *,
+        transport: Optional[Transport] = None,
+        now: Optional[Callable[[], float]] = None,
+    ) -> None:
+        _required_text(base_url, "base_url", _SESSION)
+        _required_text(client_id, "client_id", _SESSION)
+        _required_text(client_secret, "client_secret", _SESSION)
+        _basic_auth_header(client_id, client_secret, _SESSION)
+        resolve_config(base_url=base_url)
+        self._base_url = base_url
+        self._client_id = client_id
+        self._client_secret = client_secret
+        self._transport = transport
+        self._now = now if now is not None else time.time
+
+    def __repr__(self) -> str:
+        return "EmbedSessionClient(base_url={0!r})".format(self._base_url)
+
+    def create(self, subject: str, account_ref: str) -> Dict[str, Any]:
+        """Mint one account-scoped session: exactly one ``POST /auth/exchange``.
+
+        `subject` is sent verbatim (never trimmed); `account_ref` is trimmed and
+        sent as the wire ``account``. Both must be non-blank strings.
+
+        :returns: ``{"token", "expiresIn", "expiresAt", "subject", "tenant",
+            "account", "accountRef"}`` — exactly those seven keys (camelCase, like
+            :func:`exchange_token`'s body). `account` is the server's resolved
+            ``acct_…`` id; `accountRef` the trimmed ref that was sent.
+        :raises ConfigError: A non-string or blank `subject` / `account_ref`
+            (no request is made).
+        :raises ApiError: Any server or transport failure, unwrapped.
+        """
+        _required_text(subject, "subject", _SESSION)
+        _required_text(account_ref, "account_ref", _SESSION)
+        account = account_ref.strip()
+
+        t0 = self._now()
+        res = exchange_token(
+            self._base_url,
+            self._client_id,
+            self._client_secret,
+            subject,
+            account=account,
+            transport=self._transport,
+        )
+
+        user = res.get("user") if isinstance(res, dict) else None
+        expires_in = res.get("expiresIn") if isinstance(res, dict) else None
+        try:
+            if isinstance(expires_in, bool) or not isinstance(expires_in, (int, float)):
+                raise ValueError
+            expires_at = _iso_utc_ms(int(round(t0 * 1000 + expires_in * 1000)))
+            if (
+                not isinstance(res.get("token"), str)
+                or not isinstance(user, dict)
+                or not isinstance(user.get("subject"), str)
+                or not isinstance(user.get("tenant"), str)
+                or not isinstance(user.get("account"), str)
+            ):
+                raise ValueError
+        except (ValueError, OverflowError):
+            raise ApiError(
+                200,
+                "bad_response",
+                _SESSION + ": the exchange response was not the documented shape.",
+            ) from None
+        return {
+            "token": res["token"],
+            "expiresIn": expires_in,
+            "expiresAt": expires_at,
+            "subject": user["subject"],
+            "tenant": user["tenant"],
+            "account": user["account"],
+            "accountRef": account,
+        }
