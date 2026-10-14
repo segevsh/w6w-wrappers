@@ -1,26 +1,25 @@
 /**
- * `client.connections.list()` — discovery, and nothing more.
+ * `client.connections.*` — discover, inspect and remove connections.
  *
- * One operation in v0.1.0. It exists because without it a caller has no way to
- * **discover** a `conn_…` id to pass to `run` (D4): the intake's surface is
- * `run` plus the assets it needs, and an id nobody can enumerate is an id
- * nobody can use.
+ * Three operations: `list`, `get`, `delete`. `list` exists because without it a
+ * caller has no way to **discover** a `conn_…` id to pass to `run` (D4); `get`
+ * and `delete` address one such id.
  *
- * Everything else about connections — creating one, testing one, replacing its
- * secret — is `outOfScope` in `endpoints.json` for this version. That is a
- * deliberate line, not an omission: connecting an app is an interactive,
- * secret-handling flow, and half of one in a v0.1.0 wrapper is worse than none.
- * This namespace is therefore read-only and stays that way until the contract
- * says otherwise.
+ * Creating, updating, testing and OAuth-connecting a connection stay out of the
+ * partner contract (`endpoints.json` `outOfScope`: "connection create / update /
+ * test / OAuth"). That is a deliberate line, not an omission: connecting an app
+ * is an interactive, secret-handling flow, and half of one in an SDK is worse
+ * than none. Those flows live on `client.console.connections` (studio-internal)
+ * and behind the React adapter.
  *
- * The list the server returns is a **redacted projection** — the stored secret
+ * The rows the server returns are a **redacted projection** — the stored secret
  * and its refresh timestamp never leave the host — so
  * {@linkcode ConnectionSummary} does not declare them.
  *
  * @module
  */
 
-import type { CallOptions, HttpResponse, RequestOptions } from "./http.ts";
+import { type CallOptions, type HttpResponse, path, type RequestOptions } from "./http.ts";
 import { type ConnectionSummary, unwrap } from "./types.ts";
 
 /**
@@ -68,5 +67,49 @@ export class ConnectionsApi {
       signal: options?.signal,
     });
     return unwrap<ConnectionSummary[]>(res, "connections");
+  }
+
+  /**
+   * Fetch one connection.
+   *
+   * Account-owned: another account's id answers the same uniform `404` as an
+   * id that does not exist. The built-in zero-credential row `list` can include
+   * (a `zerocred:…` id, flagged `builtIn: true`) is synthetic and is not
+   * fetchable here — it answers `404` too.
+   *
+   * @param id - The `conn_…` id.
+   * @param options - Optional per-call transport options (`signal` to abort).
+   * @returns The connection, unwrapped from the `connection` envelope.
+   * @throws {ApiError} `404 unknown_connection` for an unknown, foreign or built-in id.
+   */
+  async get(id: string, options?: CallOptions): Promise<ConnectionSummary> {
+    const res = await this.#host.request<unknown>({
+      method: "GET",
+      path: path`/connections/${id}`,
+      signal: options?.signal,
+    });
+    return unwrap<ConnectionSummary>(res, "connection");
+  }
+
+  /**
+   * Delete a connection.
+   *
+   * Returns nothing: the server's `{ok: true}` carries no information a caller
+   * can use. Not idempotent — a second delete is `404`. Before the row goes, the
+   * server tears down every trigger subscription bound to the connection (the
+   * vendor webhook is removed while the credential can still sign the call).
+   * Ownership is checked first: another account's id, or a built-in `zerocred:…`
+   * row, answers `404` and destroys nothing.
+   *
+   * @param id - The `conn_…` id.
+   * @param options - Optional per-call transport options (`signal` to abort).
+   * @throws {ApiError} `404 unknown_connection` for an unknown, foreign or built-in id.
+   */
+  async delete(id: string, options?: CallOptions): Promise<void> {
+    await this.#host.request<unknown>({
+      method: "DELETE",
+      path: path`/connections/${id}`,
+      signal: options?.signal,
+    });
   }
 }

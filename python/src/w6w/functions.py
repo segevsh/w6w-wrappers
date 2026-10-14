@@ -16,9 +16,9 @@ namespace already shaped this way — so all three runnable kinds read alike.
 
 ── The rest of the namespace ──
 `list`, `get`, `create`, `update` and `delete` complete the definition lifecycle,
-mirroring `client.workflows.*` op for op with two differences the server
-dictates, not this package: there is no `?project=` anywhere on this domain, and
-there is no archive step before `delete`.
+mirroring `client.workflows.*` op for op with one difference the server
+dictates, not this package: there is no `?project=` anywhere on this domain.
+`archive` comes before `delete`, exactly as for workflows.
 
 The server has ONE write route (`POST /functions`, an upsert), so `create` and
 `update` are the same request shaped differently — `create` mints the required
@@ -100,6 +100,7 @@ class FunctionsApi:
         self,
         name: str,
         payload: Optional[Mapping[str, Any]] = None,
+        allow_unpublished: bool = False,
     ) -> Any:
         """Run one Function and return its output.
 
@@ -114,6 +115,12 @@ class FunctionsApi:
             omitted rather than left out — the server's parameter schemas are
             written against an object, and ``{}`` says "no input" where an
             absent key says "I forgot".
+        :param allow_unpublished: Run the **stored** definition even though it
+            was never published — the draft run. A disabled Function is still
+            refused. It runs the row exactly as last saved, never a definition
+            you submit here, so save first. Sent as `allowUnpublished: true` in
+            the body **only when true**; `False` is the same as omitting it.
+            Not accepted by :meth:`run_version`.
         :returns: The Function's output, verbatim.
         :raises ConfigError: When no token is configured.
         :raises ApiError: ``404 unknown_function`` when no Function of that name
@@ -123,11 +130,48 @@ class FunctionsApi:
         :raises ApiError: ``bad_response`` when a `2xx` body carries no
             ``output`` key at all.
         """
-        response = self._host.request(
-            "POST",
-            path("/functions/{name}/invoke", name=name),
-            body={"inputs": dict(payload) if payload is not None else {}},
-        )
+        return self._invoke(path("/functions/{name}/invoke", name=name), payload, allow_unpublished)
+
+    def run_version(
+        self,
+        id: str,
+        n: int,
+        payload: Optional[Mapping[str, Any]] = None,
+    ) -> Any:
+        """Run ONE published version of a Function instead of the live row.
+
+        Same body and output unwrapping as :meth:`run`. The wire verb is
+        `invoke`: `POST /functions/{id}/versions/{n}/invoke`. There is no
+        `allow_unpublished` — a version is published by definition.
+
+        :param id: The `fn_…` id.
+        :param n: The 1-based version number.
+        :param payload: The Function's canonical inputs; `{}` when omitted.
+        :returns: The Function's output, verbatim.
+        :raises ApiError: `404 unknown_version`, `404 unknown_function`,
+            `422 function_incomplete` / `function_disabled` /
+            `function_not_published`, `400 invalid_version`.
+        """
+        return self._invoke(path("/functions/{id}/versions/{n}/invoke", id=id, n=n), payload, False)
+
+    def _invoke(
+        self,
+        invoke_path: str,
+        payload: Optional[Mapping[str, Any]],
+        allow_unpublished: bool,
+    ) -> Any:
+        """The one POST both :meth:`run` and :meth:`run_version` go through, so
+        the output guard cannot drift between them.
+
+        :param invoke_path: The already-encoded path.
+        :param payload: The canonical inputs, if any.
+        :param allow_unpublished: Sent only when `True`.
+        :returns: The Function's output.
+        """
+        body: Dict[str, Any] = {"inputs": dict(payload) if payload is not None else {}}
+        if allow_unpublished is True:
+            body["allowUnpublished"] = True
+        response = self._host.request("POST", invoke_path, body=body)
 
         # Deliberately NOT the shared `unwrap` helper. That treats `None` as
         # "the server did not send what it promised" — correct for a `documents`
@@ -252,6 +296,92 @@ class FunctionsApi:
         body = dict(definition)
         body["id"] = id
         return self._save(body)
+
+    def archive(self, id: str) -> Dict[str, Any]:
+        """Archive a Function.
+
+        One-way: there is no unarchive route. Idempotent — archiving an
+        already-archived Function re-returns it unchanged. This is a required
+        step: :meth:`delete` of a Function that is not archived is
+        `409 function_not_archived`.
+
+        :param id: The `fn_…` id, or the Function's `key`.
+        :returns: The archived definition, unwrapped from the `function` envelope.
+        :raises ApiError: `404 unknown_function`.
+        """
+        response = self._host.request("POST", path("/functions/{id}/archive", id=id))
+        return unwrap_object(response, "function")
+
+    def list_versions(self, id: str) -> Dict[str, Any]:
+        """List a Function's published versions (metadata only).
+
+        :param id: The `fn_…` id.
+        :returns: The whole body unchanged: `enabled`, `currentPublishedVersion`
+            (`None` before the first publish) and `versions[]`.
+        :raises ApiError: `404 unknown_function`.
+        """
+        response = self._host.request("GET", path("/functions/{id}/versions", id=id))
+        return require_object(response, "a version list")
+
+    def get_version(self, id: str, n: int) -> Dict[str, Any]:
+        """Fetch one version, definition included.
+
+        :param id: The `fn_…` id.
+        :param n: The 1-based version number.
+        :returns: The `version` object, unwrapped: `versionNumber`, `createdAt`,
+            `createdBy`, `isCurrentPublished`, `definition` (opaque, redacted
+            server-side).
+        :raises ApiError: `404 unknown_version`, `404 unknown_function`,
+            `400 invalid_version`.
+        """
+        response = self._host.request("GET", path("/functions/{id}/versions/{n}", id=id, n=n))
+        return unwrap_object(response, "version")
+
+    def publish(self, id: str) -> Dict[str, Any]:
+        """Publish the STORED row as a new version (flush any pending save first).
+
+        Also makes a never-published Function active. No precondition is taken.
+
+        :param id: The `fn_…` id.
+        :returns: The whole body: `{version: {...}, currentPublishedVersion}`.
+        :raises ApiError: `404 unknown_function`.
+        """
+        response = self._host.request("POST", path("/functions/{id}/publish", id=id))
+        return require_object(response, "a publish result")
+
+    def revert(self, id: str, n: int) -> Dict[str, Any]:
+        """Rewrite the live row from version `n`; it does not publish.
+
+        Functions have no concurrency precondition, so a following
+        :meth:`update` is last-write-wins.
+
+        :param id: The `fn_…` id.
+        :param n: The 1-based version number.
+        :returns: The `reverted` object, unwrapped.
+        :raises ApiError: `404 unknown_version`, `404 unknown_function`,
+            `400 invalid_version`.
+        """
+        response = self._host.request(
+            "POST", path("/functions/{id}/versions/{n}/revert", id=id, n=n)
+        )
+        return unwrap_object(response, "reverted")
+
+    def enable(self, id: str) -> None:
+        """Enable a Function. Idempotent. Returns nothing.
+
+        :param id: The `fn_…` id.
+        :raises ApiError: `404 unknown_function`.
+        """
+        self._host.request("POST", path("/functions/{id}/enable", id=id))
+
+    def disable(self, id: str) -> None:
+        """Disable a Function; every run (version and draft runs too) is then
+        refused with `function_disabled`. Idempotent. Returns nothing.
+
+        :param id: The `fn_…` id.
+        :raises ApiError: `404 unknown_function`.
+        """
+        self._host.request("POST", path("/functions/{id}/disable", id=id))
 
     def delete(self, id: str) -> None:
         """Delete a Function.

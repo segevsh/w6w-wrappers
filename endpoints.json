@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable surface contract for all w6w wrappers. Source of truth for conformance tests. Keep in sync with docs/endpoints.md.",
-  "contractVersion": "0.6.0",
+  "contractVersion": "0.7.0",
   "$basePathComment": "Empty since 0.2.0: the server serves its routes at the ROOT of its own host (https://api.w6w.io/vars, not .../api/vars). Clients append nothing to the configured origin.",
   "basePath": "",
   "auth": "bearer",
@@ -42,7 +42,56 @@
         "python": "client.connections.list()",
         "cli": "w6w connections list"
       },
-      "notes": "`credential` and `lastRefreshedAt` are redacted server-side and must not appear in the wrapper's list type. D4 — kept in v0.1.0 even though the 07-27 intake does not name it: without it a user has no way to discover a `conn_…` URN to pass to `run`. Verified live. Each row carries `tenant` + `subject` (not `owner`) and a top-level `app` object (`displayName` plus optional `iconSvg`, `iconSvgDark`, `brandColor`, `brandColorDark`) beside `appId`; `app` is `null` when the server found no app row, and absent from an older server."
+      "notes": "`credential` and `lastRefreshedAt` are redacted server-side and must not appear in the wrapper's list type. D4 — kept in v0.1.0 even though the 07-27 intake does not name it: without it a user has no way to discover a `conn_…` URN to pass to `run`. Verified live. Each row carries `tenant` + `subject` (not `owner`) and a top-level `app` object (`displayName` plus optional `iconSvg`, `iconSvgDark`, `brandColor`, `brandColorDark`) beside `appId`; `app` is `null` when the server found no app row, and absent from an older server. `builtIn` is an optional boolean: `true` marks the synthetic zero-credential row (a `zerocred:` id, usable with no connection step, not stored and not deletable); it is absent on stored connections and on an older server that does not emit it."
+    },
+    {
+      "name": "connections.get",
+      "summary": "Fetch one connection (credentials redacted).",
+      "method": "GET",
+      "path": "/connections/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "ConnectionSummary",
+      "naming": {
+        "ts": "client.connections.get(id)",
+        "python": "client.connections.get(id)",
+        "cli": "w6w connections get <id>"
+      },
+      "notes": "Server wraps the body as `{ connection: ConnectionSummary }`; the wrapper unwraps it. Same redacted projection as `connections.list`. Account-owned: another account's id is the uniform `404 unknown_connection`, indistinguishable from an id that does not exist. The built-in zero-credential row that `connections.list` can include (a `zerocred:` id, `builtIn: true`) is synthetic and is not fetchable: `404`."
+    },
+    {
+      "name": "connections.delete",
+      "summary": "Delete a connection.",
+      "method": "DELETE",
+      "path": "/connections/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "void",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.connections.delete(id)",
+        "python": "client.connections.delete(id)",
+        "cli": "w6w connections delete <id>"
+      },
+      "notes": "The server returns `{ok: true}` and the wrapper unwraps it to NOTHING (`void` / `None` / exit code), same pin as `documents.delete`. Keeps the server's authorization: the connection must be owned by the caller's account; another account's id is the uniform `404 unknown_connection` and destroys nothing, and so is a `zerocred:` built-in row (it is not stored). Not idempotent: a second delete is `404`. Before the row is removed the server tears down every trigger subscription bound to the connection (the vendor webhook is removed while the credential can still sign the call). Creating, updating, testing and OAuth-connecting a connection are NOT in this contract."
     },
     {
       "name": "workflows.list",
@@ -113,6 +162,12 @@
           "in": "body",
           "type": "object",
           "required": false
+        },
+        {
+          "name": "allowUnpublished",
+          "in": "body",
+          "type": "boolean",
+          "required": false
         }
       ],
       "returns": "RunResult",
@@ -125,7 +180,7 @@
         "python": "client.workflows.run(id, wait=False, variables=None, trigger=None, input=None)",
         "cli": "w6w workflows run <id> [--wait] [--input <json>]"
       },
-      "notes": "202 is a normal outcome, not an error: the run is still queued/running. A failed run returns 200 with status 'failed' and must NOT raise. `trigger` is a STRING, not an object: the server reads it as a `RunTrigger` (`\"manual\" | \"schedule\" | \"webhook\" | \"event\" | \"replay\"` today), and it defaults to 'manual' server-side when omitted. The five values are recorded in `knownValues` as documentation only — every wrapper types the param as an open string (`trigger?: string` / `trigger: str | None`) and passes it through unvalidated, so a sixth server value needs no wrapper release. `variables` and `input` are NOT interchangeable: `variables` seeds the run's variable scope, read downstream as `vars.*`; `input` is delivered to the entry trigger node's own recorded output, read downstream as `steps.<triggerId>.output.<key>` — the shape a trigger's declared fields actually arrive in. D4 — kept alongside the unified `run`, which is deliberately narrower: `?wait=`, `variables`, `trigger` and `input` have no slot in the three-field `{urn, action, payload}` shape. Verified live."
+      "notes": "202 is a normal outcome, not an error: the run is still queued/running. A failed run returns 200 with status 'failed' and must NOT raise. `trigger` is a STRING, not an object: the server reads it as a `RunTrigger` (`\"manual\" | \"schedule\" | \"webhook\" | \"event\" | \"replay\"` today), and it defaults to 'manual' server-side when omitted. The five values are recorded in `knownValues` as documentation only — every wrapper types the param as an open string (`trigger?: string` / `trigger: str | None`) and passes it through unvalidated, so a sixth server value needs no wrapper release. `variables` and `input` are NOT interchangeable: `variables` seeds the run's variable scope, read downstream as `vars.*`; `input` is delivered to the entry trigger node's own recorded output, read downstream as `steps.<triggerId>.output.<key>` — the shape a trigger's declared fields actually arrive in. D4 — kept alongside the unified `run`, which is deliberately narrower: `?wait=`, `variables`, `trigger` and `input` have no slot in the three-field `{urn, action, payload}` shape. Verified live. `allowUnpublished` (body, optional boolean) runs the STORED definition even if it was never published — the draft run (a disabled one is still refused). It is sent only when `true` (never `false`) and runs the stored row exactly as last saved, never a body the caller submits, so a caller must save first. Without it the run needs a published workflow (409 `workflow_not_published`); a disabled workflow is refused either way (409 `workflow_disabled`). Without allowUnpublished the call still executes the STORED row as last saved: a published version is a precondition, not what runs; use runVersion to execute a published snapshot."
     },
     {
       "name": "workflows.cancel",
@@ -297,6 +352,213 @@
         "cli": "w6w workflows delete <id>"
       },
       "notes": "Addressed by the `wf_…` id. The server returns `{ok: true}` and the wrapper unwraps it to NOTHING — declared return is `void` (`Promise<void>` in TS, `None` in Python, no stdout payload in the CLI beyond an exit code), the same pin `documents.delete` carries; `Ok` is not a public wrapper type. The workflow's runs, schedules and subscriptions cascade-delete server-side. **ARCHIVE FIRST**: a workflow that is not `archived` yet is `409 workflow_not_archived`, and a wrapper must NOT catch that and archive on the caller's behalf — a two-step destructive path completed silently is how a caller deletes something they only meant to look at. Deleting an unknown id is `404 unknown_workflow`, not a silent success."
+    },
+    {
+      "name": "workflows.listVersions",
+      "summary": "List a workflow's published versions.",
+      "method": "GET",
+      "path": "/workflows/{id}/versions",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "VersionList",
+      "naming": {
+        "ts": "client.workflows.listVersions(id)",
+        "python": "client.workflows.list_versions(id)",
+        "cli": "w6w workflows versions <id>"
+      },
+      "notes": "Returns the WHOLE body unchanged: `enabled`, `currentPublishedVersion` (`null` before the first publish) and `versions[]` (`versionNumber`, `createdAt`, `createdBy` — `null` when unknown — and `isCurrentPublished`). Metadata only: no `definition`; fetch one with `workflows.getVersion`. Missing id is `404 unknown_workflow`."
+    },
+    {
+      "name": "workflows.getVersion",
+      "summary": "Read one published version of a workflow, with its definition.",
+      "method": "GET",
+      "path": "/workflows/{id}/versions/{n}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "n",
+          "in": "path",
+          "type": "integer",
+          "required": true
+        }
+      ],
+      "returns": "VersionDetail",
+      "naming": {
+        "ts": "client.workflows.getVersion(id, n)",
+        "python": "client.workflows.get_version(id, n)",
+        "cli": "w6w workflows version <id> <n>"
+      },
+      "notes": "The server answers `{version: {versionNumber, createdAt, createdBy, isCurrentPublished, definition}}` and the wrapper UNWRAPS the `version` key. `definition` is opaque and redacted server-side (a sealed secret envelope is never returned). `n` is the 1-based version number. Errors: `404 unknown_version`, `404 unknown_workflow`, `400 invalid_version` when `n` is not a positive integer."
+    },
+    {
+      "name": "workflows.publish",
+      "summary": "Publish the workflow's stored definition as a new immutable version.",
+      "method": "POST",
+      "path": "/workflows/{id}/publish",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "PublishResult",
+      "naming": {
+        "ts": "client.workflows.publish(id)",
+        "python": "client.workflows.publish(id)",
+        "cli": "w6w workflows publish <id>"
+      },
+      "notes": "Returns the WHOLE body: `{version: {kind, callableId, versionNumber, createdAt, createdBy}, currentPublishedVersion}`. Publish snapshots the STORED row, not whatever an editor holds in memory, so a caller must flush any pending save first. Publishing a workflow also makes it active (it flips a never-published workflow to `active`). No precondition is taken: nothing checks that the row changed since the last publish. Errors: `404 unknown_workflow`."
+    },
+    {
+      "name": "workflows.revert",
+      "summary": "Rewrite the live workflow from a published version.",
+      "method": "POST",
+      "path": "/workflows/{id}/versions/{n}/revert",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "n",
+          "in": "path",
+          "type": "integer",
+          "required": true
+        }
+      ],
+      "returns": "RevertResult",
+      "naming": {
+        "ts": "client.workflows.revert(id, n)",
+        "python": "client.workflows.revert(id, n)",
+        "cli": "w6w workflows revert <id> <n>"
+      },
+      "notes": "The server answers `{reverted: {kind, callableId, versionNumber}}` and the wrapper UNWRAPS the `reverted` key. Revert REWRITES the live row from the chosen version, so its `updatedAt` moves: a following `workflows.update` that passes `ifUnmodifiedSince` needs the freshly read `updatedAt` (`workflows.get`), not the one from before the revert, or it is `409 workflow_stale`. It does not publish: the live row becomes a draft that matches version `n` until `workflows.publish` is called. Errors: `404 unknown_version`, `404 unknown_workflow`, `400 invalid_version`."
+    },
+    {
+      "name": "workflows.enable",
+      "summary": "Enable the workflow's invocability.",
+      "method": "POST",
+      "path": "/workflows/{id}/enable",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "void",
+      "naming": {
+        "ts": "client.workflows.enable(id)",
+        "python": "client.workflows.enable(id)",
+        "cli": "w6w workflows enable <id>"
+      },
+      "notes": "The server returns `{enabled: true}` and the wrapper unwraps it to NOTHING (`void` / `None` / exit code). Idempotent. A disabled workflow is refused by every run, version runs and `allowUnpublished` draft runs included (`workflow_disabled`). Missing id is `404 unknown_workflow`."
+    },
+    {
+      "name": "workflows.disable",
+      "summary": "Disable the workflow's invocability.",
+      "method": "POST",
+      "path": "/workflows/{id}/disable",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "void",
+      "naming": {
+        "ts": "client.workflows.disable(id)",
+        "python": "client.workflows.disable(id)",
+        "cli": "w6w workflows disable <id>"
+      },
+      "notes": "The server returns `{enabled: false}` and the wrapper unwraps it to NOTHING (`void` / `None` / exit code). Idempotent. A disabled workflow is refused by every run, version runs and `allowUnpublished` draft runs included (`workflow_disabled`). Missing id is `404 unknown_workflow`."
+    },
+    {
+      "name": "workflows.runVersion",
+      "summary": "Run one published version of a workflow.",
+      "method": "POST",
+      "path": "/workflows/{id}/versions/{n}/run",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "n",
+          "in": "path",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "wait",
+          "in": "query",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "name": "variables",
+          "in": "body",
+          "type": "object",
+          "required": false
+        },
+        {
+          "name": "trigger",
+          "in": "body",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "input",
+          "in": "body",
+          "type": "object",
+          "required": false
+        }
+      ],
+      "returns": "RunResult",
+      "successStatuses": [
+        200,
+        202
+      ],
+      "naming": {
+        "ts": "client.workflows.runVersion(id, n, opts?)",
+        "python": "client.workflows.run_version(id, n, wait=False, variables=None, trigger=None, input=None)",
+        "cli": "w6w workflows run-version <id> <n> [--wait] [--input <json>]"
+      },
+      "notes": "Same body and `?wait=` as `workflows.run`, against ONE published version instead of the live row: the run executes that version's definition. Returns the same `RunResult` shape `workflows.run` does (200 terminal, 202 queued/running; a failed run is 200 with status 'failed' and must NOT raise). `wait` is sent as `?wait=true` only when `true`. There is no `allowUnpublished` here — a version is published by definition. Errors: `404 unknown_version`, `404 unknown_workflow`, `409 workflow_archived`, `409 workflow_disabled`, `409 workflow_not_published`, `400 invalid_version`."
     },
     {
       "name": "documents.list",
@@ -694,6 +956,12 @@
           "in": "body",
           "type": "object",
           "required": false
+        },
+        {
+          "name": "allowUnpublished",
+          "in": "body",
+          "type": "boolean",
+          "required": false
         }
       ],
       "returns": "unknown",
@@ -705,7 +973,7 @@
         "python": "client.functions.run(name, payload=None)",
         "cli": "w6w functions run <name> [--payload <json>]"
       },
-      "notes": "The NAME IS THE FIRST ARGUMENT in every lane, matching `workflows.run(id, opts?)`, so all three runnable kinds read alike; it is not a field inside an options object. Wrappers expose the body field as `payload` even though the wire spells it `inputs` — one word across every runnable kind, and reconciling that inconsistency is precisely the wrapper's job (the Endpoint operation below spells the same concept `input`). Returns the Function's OUTPUT, not a kind-discriminated envelope: the kind is settled by the operation name, so a discriminant would be a field the caller unwraps to learn nothing. A `null` output is a SUCCESSFUL run, not a malformed body — a Function's output is an opaque pass-through and an action that returns nothing yields `{\"output\": null}` — so a wrapper must guard on PRESENCE of the `output` key rather than on its truthiness. 422 `function_incomplete` when the Function has no runnable `impl`. The `{idOrKey}` path segment takes EITHER the resource's host-issued id or the key the user gave it, with no prefix, flag or tag to say which — the two shapes cannot collide, because an id carries a kind prefix and therefore an underscore while a key is a kebab-slug that forbids one. Resolution is id-first (a pure prefix test, no query), so this path cannot be used to probe whether a key exists by supplying something id-shaped. Two unknown KEYS answer identically and neither is echoed back — a key is short, human-chosen and guessable, so echoing it would make this an enumeration oracle; an unknown id may still be echoed, since nobody guesses a uuid. The key is unique per ACCOUNT, so within the scope a credential carries it names exactly one resource. INVOCATION FRAME (server, 2026-08-20): the 200 body is now `{kind:\"function\", output, invocationId, status, startedAt, finishedAt, durationMs}`. `output` keeps its name, its position and its opaque-pass-through meaning, so the \"guard on PRESENCE of `output`\" rule above is unchanged and a wrapper that unwraps `output` needs no change at all. The added fields are the attempt's own record: `invocationId` resolves through `GET /invocations/{id}` to the stored inputs, output and timing, and a FAILED call's 4xx body carries the same fields beside its `error`."
+      "notes": "The NAME IS THE FIRST ARGUMENT in every lane, matching `workflows.run(id, opts?)`, so all three runnable kinds read alike; it is not a field inside an options object. Wrappers expose the body field as `payload` even though the wire spells it `inputs` — one word across every runnable kind, and reconciling that inconsistency is precisely the wrapper's job (the Endpoint operation below spells the same concept `input`). Returns the Function's OUTPUT, not a kind-discriminated envelope: the kind is settled by the operation name, so a discriminant would be a field the caller unwraps to learn nothing. A `null` output is a SUCCESSFUL run, not a malformed body — a Function's output is an opaque pass-through and an action that returns nothing yields `{\"output\": null}` — so a wrapper must guard on PRESENCE of the `output` key rather than on its truthiness. 422 `function_incomplete` when the Function has no runnable `impl`. The `{idOrKey}` path segment takes EITHER the resource's host-issued id or the key the user gave it, with no prefix, flag or tag to say which — the two shapes cannot collide, because an id carries a kind prefix and therefore an underscore while a key is a kebab-slug that forbids one. Resolution is id-first (a pure prefix test, no query), so this path cannot be used to probe whether a key exists by supplying something id-shaped. Two unknown KEYS answer identically and neither is echoed back — a key is short, human-chosen and guessable, so echoing it would make this an enumeration oracle; an unknown id may still be echoed, since nobody guesses a uuid. The key is unique per ACCOUNT, so within the scope a credential carries it names exactly one resource. INVOCATION FRAME (server, 2026-08-20): the 200 body is now `{kind:\"function\", output, invocationId, status, startedAt, finishedAt, durationMs}`. `output` keeps its name, its position and its opaque-pass-through meaning, so the \"guard on PRESENCE of `output`\" rule above is unchanged and a wrapper that unwraps `output` needs no change at all. The added fields are the attempt's own record: `invocationId` resolves through `GET /invocations/{id}` to the stored inputs, output and timing, and a FAILED call's 4xx body carries the same fields beside its `error`. `allowUnpublished` (body, optional boolean) invokes the STORED definition even if it was never published — the draft run (a disabled one is still refused). It is sent only when `true` (never `false`) and runs the row exactly as last saved, never a body the caller submits, so a caller must save first. Without it the call needs a published Function (422 `function_not_published`); a disabled Function is refused either way (422 `function_disabled`). Without allowUnpublished the call still executes the STORED row as last saved: a published version is a precondition, not what runs; use runVersion to execute a published snapshot."
     },
     {
       "name": "functions.list",
@@ -825,7 +1093,218 @@
         "python": "client.functions.delete(id)",
         "cli": "w6w functions delete <id>"
       },
-      "notes": "Takes an `fn_…` id or a `key`. The server returns `{ok: true}` and the wrapper unwraps it to NOTHING (`void` / `None` / exit code), same pin as `documents.delete`. NOT idempotent: deleting an id that is not there is `404 unknown_function`, and wrappers must not pretend otherwise. There is NO archive step on this domain — unlike a workflow, a Function deletes in one call. **Nothing checks for callers first**: a Function may be referenced by an Endpoint, by a Workflow step, or by another Function's `impl` (D-8), and the server does not walk those references — they break at call time."
+      "notes": "Takes an `fn_…` id or a `key`. The server returns `{ok: true}` and the wrapper unwraps it to NOTHING (`void` / `None` / exit code), same pin as `documents.delete`. NOT idempotent: deleting an id that is not there is `404 unknown_function`, and wrappers must not pretend otherwise. **ARCHIVE FIRST**, exactly like a workflow: a Function that is not `archived` yet is `409 function_not_archived` (see `functions.archive`), and a wrapper must NOT catch that and archive on the caller's behalf. **Nothing checks for callers first**: a Function may be referenced by an Endpoint, by a Workflow step, or by another Function's `impl` (D-8), and the server does not walk those references — they break at call time."
+    },
+    {
+      "name": "functions.archive",
+      "summary": "Archive a Function — the required step before deleting it.",
+      "method": "POST",
+      "path": "/functions/{id}/archive",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "FunctionDefinition",
+      "naming": {
+        "ts": "client.functions.archive(id)",
+        "python": "client.functions.archive(id)",
+        "cli": "w6w functions archive <id>"
+      },
+      "notes": "One-way: there is no unarchive route on this domain. Idempotent — archiving an already-archived Function re-returns it unchanged rather than erroring. Returns the definition under a `function` envelope and the wrapper UNWRAPS it. This is a PRECONDITION of `functions.delete`, not a convenience: deleting a Function that is not archived is `409 function_not_archived`. Missing id is `404 unknown_function`."
+    },
+    {
+      "name": "functions.listVersions",
+      "summary": "List a function's published versions.",
+      "method": "GET",
+      "path": "/functions/{id}/versions",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "VersionList",
+      "naming": {
+        "ts": "client.functions.listVersions(id)",
+        "python": "client.functions.list_versions(id)",
+        "cli": "w6w functions versions <id>"
+      },
+      "notes": "Returns the WHOLE body unchanged: `enabled`, `currentPublishedVersion` (`null` before the first publish) and `versions[]` (`versionNumber`, `createdAt`, `createdBy` — `null` when unknown — and `isCurrentPublished`). Metadata only: no `definition`; fetch one with `functions.getVersion`. Missing id is `404 unknown_function`."
+    },
+    {
+      "name": "functions.getVersion",
+      "summary": "Read one published version of a function, with its definition.",
+      "method": "GET",
+      "path": "/functions/{id}/versions/{n}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "n",
+          "in": "path",
+          "type": "integer",
+          "required": true
+        }
+      ],
+      "returns": "VersionDetail",
+      "naming": {
+        "ts": "client.functions.getVersion(id, n)",
+        "python": "client.functions.get_version(id, n)",
+        "cli": "w6w functions version <id> <n>"
+      },
+      "notes": "The server answers `{version: {versionNumber, createdAt, createdBy, isCurrentPublished, definition}}` and the wrapper UNWRAPS the `version` key. `definition` is opaque and redacted server-side (a sealed secret envelope is never returned). `n` is the 1-based version number. Errors: `404 unknown_version`, `404 unknown_function`, `400 invalid_version` when `n` is not a positive integer."
+    },
+    {
+      "name": "functions.publish",
+      "summary": "Publish the function's stored definition as a new immutable version.",
+      "method": "POST",
+      "path": "/functions/{id}/publish",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "PublishResult",
+      "naming": {
+        "ts": "client.functions.publish(id)",
+        "python": "client.functions.publish(id)",
+        "cli": "w6w functions publish <id>"
+      },
+      "notes": "Returns the WHOLE body: `{version: {kind, callableId, versionNumber, createdAt, createdBy}, currentPublishedVersion}`. Publish snapshots the STORED row, not whatever an editor holds in memory, so a caller must flush any pending save first. No precondition is taken: nothing checks that the row changed since the last publish. Errors: `404 unknown_function`."
+    },
+    {
+      "name": "functions.revert",
+      "summary": "Rewrite the live function from a published version.",
+      "method": "POST",
+      "path": "/functions/{id}/versions/{n}/revert",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "n",
+          "in": "path",
+          "type": "integer",
+          "required": true
+        }
+      ],
+      "returns": "RevertResult",
+      "naming": {
+        "ts": "client.functions.revert(id, n)",
+        "python": "client.functions.revert(id, n)",
+        "cli": "w6w functions revert <id> <n>"
+      },
+      "notes": "The server answers `{reverted: {kind, callableId, versionNumber}}` and the wrapper UNWRAPS the `reverted` key. Functions have no concurrency precondition, so a save after a revert is last-write-wins as ever. It does not publish: the live row becomes a draft that matches version `n` until `functions.publish` is called. Errors: `404 unknown_version`, `404 unknown_function`, `400 invalid_version`."
+    },
+    {
+      "name": "functions.enable",
+      "summary": "Enable the function's invocability.",
+      "method": "POST",
+      "path": "/functions/{id}/enable",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "void",
+      "naming": {
+        "ts": "client.functions.enable(id)",
+        "python": "client.functions.enable(id)",
+        "cli": "w6w functions enable <id>"
+      },
+      "notes": "The server returns `{enabled: true}` and the wrapper unwraps it to NOTHING (`void` / `None` / exit code). Idempotent. A disabled function is refused by every run, version runs and `allowUnpublished` draft runs included (`function_disabled`). Missing id is `404 unknown_function`."
+    },
+    {
+      "name": "functions.disable",
+      "summary": "Disable the function's invocability.",
+      "method": "POST",
+      "path": "/functions/{id}/disable",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "void",
+      "naming": {
+        "ts": "client.functions.disable(id)",
+        "python": "client.functions.disable(id)",
+        "cli": "w6w functions disable <id>"
+      },
+      "notes": "The server returns `{enabled: false}` and the wrapper unwraps it to NOTHING (`void` / `None` / exit code). Idempotent. A disabled function is refused by every run, version runs and `allowUnpublished` draft runs included (`function_disabled`). Missing id is `404 unknown_function`."
+    },
+    {
+      "name": "functions.runVersion",
+      "summary": "Run one published version of a Function and return its output.",
+      "method": "POST",
+      "path": "/functions/{id}/versions/{n}/invoke",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "n",
+          "in": "path",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "inputs",
+          "in": "body",
+          "type": "object",
+          "required": false
+        }
+      ],
+      "returns": "unknown",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.functions.runVersion(id, n, opts?)",
+        "python": "client.functions.run_version(id, n, payload=None)",
+        "cli": "w6w functions run-version <id> <n> [--payload <json>]"
+      },
+      "notes": "Same body as `functions.run`, against ONE published version instead of the live row. The wire verb is `invoke` (not `run`): `POST /functions/{id}/versions/{n}/invoke`. Returns the Function's OUTPUT unwrapped from the `output` envelope, exactly as `functions.run` does (guard on PRESENCE of the key, a `null` output is a successful run); wrappers expose the body field as `payload` and send it as `inputs`. Errors: `404 unknown_version`, `404 unknown_function`, `422 function_incomplete`, `422 function_disabled`, `422 function_not_published`, `400 invalid_version`."
     },
     {
       "name": "endpoints.run",
@@ -1015,6 +1494,160 @@
       "notes": "The server returns `{ok: true}` and the wrapper unwraps it to NOTHING (`void` / `None` / exit code), same pin as `documents.delete`. This TOMBSTONES the membership rather than deleting the row (D-R3) — a removed member's `userId` may still appear in historical records — but that is a server-side implementation detail the wrapper contract does not surface. Requires `canManageMembers` (`403 forbidden` otherwise). The account's owner cannot be removed (`403 cannot_remove_owner`), and removing the account's last active member is refused (`409 last_member`) rather than leaving an ownerless, memberless account. `404 member_not_found` for an unknown `userId`."
     },
     {
+      "name": "apps.byIds",
+      "summary": "Resolve a set of app ids to their catalog summaries.",
+      "method": "GET",
+      "path": "/apps",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "ids",
+          "in": "query",
+          "type": "string",
+          "required": true,
+          "$comment": "The wire value is a comma-separated list (`ids=a,b`). The wrapper takes an array."
+        }
+      ],
+      "returns": "AppSummary[]",
+      "naming": {
+        "ts": "client.apps.byIds(ids, opts?)",
+        "python": "client.apps.by_ids(ids)",
+        "cli": "w6w apps by-ids <ids>"
+      },
+      "notes": "Bounded lookup, not catalog browsing: the server caps `ids` at 100 per request and answers `400 too_many_ids` beyond that, so the wrapper CHUNKS to 100 client-side (one `GET /apps?ids=a,b,...` per chunk, issued concurrently, results concatenated in chunk order) and the cap never reaches a caller. Duplicate ids are collapsed first. An empty set returns `[]` with NO request at all (never an unfiltered page). The server unwraps the page envelope `{apps, nextCursor}`; the wrapper returns the `apps` of every chunk. Unknown ids are simply absent. Where the app belongs to a connection, the inline `app` object on `connections.list` / `connections.get` is the PRIMARY icon and label source and needs no extra request; use `apps.byIds` for ids that do not come from a connection. Catalog browse / search / paging is out of scope."
+    },
+    {
+      "name": "dashboard.stats",
+      "summary": "Account-scoped dashboard rollup over the run ledger.",
+      "method": "GET",
+      "path": "/dashboard/stats",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "from",
+          "in": "query",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "to",
+          "in": "query",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "bucket",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "knownValues": [
+            "day",
+            "week"
+          ],
+          "closedEnum": false
+        }
+      ],
+      "returns": "DashboardStats",
+      "naming": {
+        "ts": "client.dashboard.stats(opts?)",
+        "python": "client.dashboard.stats(from_=None, to=None, bucket=None)",
+        "cli": "w6w dashboard stats [--from <iso>] [--to <iso>] [--bucket day|week]"
+      },
+      "notes": "Account-scoped: the account comes from the credential, there is NO `project` parameter and the client's default project is never sent. The response has no envelope key; the rollup (`range`, `headline`, `series`, `recent`) IS the body. `from` / `to` are ISO-8601 instants and `bucket` is `day` or `week`; each is sent only when given and the server applies its own defaults otherwise. `knownValues` on `bucket` is documentation, not a constraint."
+    },
+    {
+      "name": "projects.list",
+      "summary": "List the account's active projects.",
+      "method": "GET",
+      "path": "/projects",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [],
+      "returns": "Project[]",
+      "naming": {
+        "ts": "client.projects.list(opts?)",
+        "python": "client.projects.list()",
+        "cli": "w6w projects list"
+      },
+      "notes": "Server wraps the body as `{ projects: Project[] }`; the wrapper unwraps and returns the array. READ-ONLY: project create, rename, archive and delete are not in this contract. Archived projects are not listed. Each row carries `isDefault`. SIDE EFFECT: the GET ensures the account's default project exists and creates it when there is none, so a first call on a fresh account returns one `isDefault: true` row, not `[]`."
+    },
+    {
+      "name": "reliability.list",
+      "summary": "Reliability board for a project and an explicit set of apps.",
+      "method": "GET",
+      "path": "/reliability/services",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "apps",
+          "in": "query",
+          "type": "string",
+          "required": true,
+          "$comment": "Comma-separated app ids on the wire; the wrapper takes an array of at most 10."
+        },
+        {
+          "name": "days",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "$comment": "A positive integer number of days; sent as a query string."
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "$comment": "A positive integer cap; sent as a query string."
+        }
+      ],
+      "returns": "ReliabilityServices",
+      "naming": {
+        "ts": "client.reliability.list(project, appIds, opts?)",
+        "python": "client.reliability.list(project, app_ids, days=None, limit=None)",
+        "cli": "w6w reliability list --project <id> --apps <ids> [--days <n>] [--limit <n>]"
+      },
+      "notes": "The response has no envelope key: the board IS the body. The server accepts AT MOST 10 app ids (`apps` is required and must hold 1 to 10 ids); anything else is `400 invalid_app_filter`, and a missing `project` is `400 missing_project`. The wrapper sends exactly the ids it is given and surfaces the server's 400 as `ApiError` unchanged; it has NO batching helper, so splitting a larger set (via `reliability.members`) across calls, and scheduling or polling them, is the host's job. Services are ordered most-urgent first, then by last call; `limit` caps after that ordering. `days` and `limit` are sent only when given."
+    },
+    {
+      "name": "reliability.members",
+      "summary": "List the app ids a project's calls touch.",
+      "method": "GET",
+      "path": "/reliability/services/members",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "days",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "$comment": "A positive integer number of days; sent as a query string."
+        }
+      ],
+      "returns": "ReliabilityServiceMembers",
+      "naming": {
+        "ts": "client.reliability.members(project, opts?)",
+        "python": "client.reliability.members(project, days=None)",
+        "cli": "w6w reliability members --project <id> [--days <n>]"
+      },
+      "notes": "Identifier-only membership discovery: no status probes are made. The response has no envelope key; `appIds` is the list to feed, at most 10 at a time, to `reliability.list`. `project` is required (`400 missing_project` otherwise). `days` is sent only when given."
+    },
+    {
       "name": "run",
       "summary": "Run anything addressable by URN — a connection action, a function, an endpoint or a workflow.",
       "method": "POST",
@@ -1114,9 +1747,9 @@
     }
   },
   "outOfScope": [
-    "apps",
+    "apps (catalog browse, search and paging; `apps.byIds` is the one in-scope read)",
     "endpoints",
-    "projects",
+    "projects (create, rename, archive, delete; `projects.list` is the one in-scope read)",
     "vault",
     "tokens",
     "schedules",
@@ -1125,6 +1758,6 @@
     "tenants",
     "runs.get",
     "workflows.listRuns",
-    "all write operations on connections"
+    "connection create / update / test / OAuth (`connections.list`, `get` and `delete` are in scope)"
   ]
 }

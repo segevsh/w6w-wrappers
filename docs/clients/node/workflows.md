@@ -216,18 +216,45 @@ console.log(id, key);
 - `update` replaces the whole definition, like workflows do.
 - `create` assigns a `fn_…` id when the definition has none, and returns the id and key.
 
-Like workflows, a Function must be archived before it can be deleted. The SDK has no
-`functions.archive` method yet, so archive it with `client.request()`:
+Like workflows, a Function must be archived before it can be deleted:
 
 ```ts
-import { path } from "@w6w/sdk";
-
-const fnId = "fn_01H…";
-await client.request({ method: "POST", path: path`/functions/${fnId}/archive` });
-await client.functions.delete(fnId);
+await client.functions.archive("fn_01H…");
+await client.functions.delete("fn_01H…");
 ```
 
 Deleting a Function that isn't archived raises `409 function_not_archived`.
+
+## Versions and draft runs
+
+Workflows and Functions share one set of version methods: `listVersions(id)`, `getVersion(id, n)`,
+`publish(id)`, `revert(id, n)`, `enable(id)`, `disable(id)` and `runVersion(id, n, options)`.
+
+```ts
+await client.workflows.update("wf_01H…", definition); // save first
+const { version } = await client.workflows.publish("wf_01H…"); // snapshots the SAVED definition
+const { currentPublishedVersion, versions } = await client.workflows.listVersions("wf_01H…");
+
+const run = await client.workflows.runVersion("wf_01H…", currentPublishedVersion!, { wait: true });
+await client.functions.runVersion("fn_01H…", 1, { payload: { to: "ada@example.com" } });
+```
+
+- `publish` snapshots what is **saved**, not what your editor holds. Flush any pending save first.
+- `getVersion` returns the version itself and `revert` returns what was reverted, both unwrapped
+  from their envelope. `enable` and `disable` return nothing.
+- `revert` rewrites the live definition and does not publish it. After a workflow revert, read
+  `updatedAt` again with `get` before saving with `ifUnmodifiedSince`, or you get `409 workflow_stale`.
+  Functions have no such check; saves stay last-write-wins.
+- `runVersion` takes the same options as `run` (`wait`, `variables`, `trigger`, `input` for a
+  workflow; `payload` for a Function).
+
+To try a definition that was never published, pass `allowUnpublished: true` to `run`. It runs the
+**saved** definition, never one you pass in, so save first:
+
+```ts
+await client.workflows.update("wf_01H…", definition);
+const draft = await client.workflows.run("wf_01H…", { allowUnpublished: true, wait: true });
+```
 
 ## Troubleshooting
 
@@ -239,7 +266,8 @@ Deleting a Function that isn't archived raises `409 function_not_archived`.
 | `409 workflow_not_archived` | You tried to delete an active workflow. | Call `archive` first. |
 | `400 invalid_workflow` | The definition is missing `name` or `steps`, or is malformed. | Start from `workflows.get()` output rather than writing one from scratch. |
 | `422 function_incomplete` | The Function has no implementation yet. | Open it in Studio and finish it. |
-| `409 function_not_archived` | You tried to delete an active Function. | Archive it first, as shown above. |
+| `409 function_not_archived` | You tried to delete an active Function. | Call `functions.archive` first. |
+| `409 workflow_not_published` / `422 function_not_published` | A run needs a published version and there is none. | `publish` it, or pass `allowUnpublished: true` to `run` to use the saved definition. |
 | `404 unknown_function` from `functions.get` with a key | `get`, `update` and `delete` look Functions up by id. | Use the `fn_…` id from `client.functions.list()`. |
 
 ## Where to next

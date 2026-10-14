@@ -1,0 +1,14 @@
+{
+  // Type-only gate for the embedding host fixture (R-19): compiles ONLY
+  // `src/__tests__/fixtures/embed-host.ts`, which may use nothing but the
+  // public `@w6w/sdk` surface, `createW6WUiAdapter` and the flow converter.
+  // `tsconfig.json` excludes `src/__tests__`, so `embed-fixture.test.ts` runs
+  // this project through the pinned `tsc`, exactly as `ui-conformance.test.ts`
+  // runs `tsconfig.ui-conformance.json`, and asserts exit 0.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["src/__tests__/fixtures/embed-host.ts"],
+  "exclude": []
+}

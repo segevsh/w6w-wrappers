@@ -1,20 +1,23 @@
 /**
  * `w6w functions …` — the Function definition lifecycle at the command line.
  *
- * Five commands, **one SDK call each**. `functions run` is deliberately NOT
+ * Thirteen commands (five definition commands, `archive`, and the seven version
+ * commands from `./versions.ts`), **one SDK call each**. `functions run` is deliberately NOT
  * here: it lives in `src/commands/named-run.ts` beside `endpoints run`, because
  * the two share their whole shape (a name, a JSON input, an unwrapped output)
  * and splitting them by domain would put one of a matched pair in each file.
  * The registry is keyed by command path, so a caller sees one `w6w functions`
  * group either way.
  *
- * This group mirrors `w6w workflows` op for op, minus two things the server
+ * This group mirrors `w6w workflows` op for op, minus one thing the server
  * does not have on this domain:
  *
  * - **No `--project`.** `GET /functions` reads no `?project=` at all, so a flag
  *   here would be one the server ignores — the same reason `w6w vars` refuses
  *   it while `w6w documents` takes it.
- * - **No archive step.** A Function deletes in one call.
+ * It does have `archive`, mirroring `workflows archive`: the server's
+ * `DELETE /functions/{id}` requires the Function to be archived first, so
+ * `archive` then `delete` is the sequence — the CLI never does both for you.
  *
  * `create` and `update` are the same upsert route: `create` mints the required
  * `fn_…` id, `update` pins the one you addressed, and `update` is therefore a
@@ -27,7 +30,8 @@
 import type { CommandContext, CommandHandler, CommandRegistry } from "../../mod.ts";
 import type { FunctionDefinition, FunctionDetail, FunctionSummary } from "@w6w/sdk";
 import type { Styles } from "../output.ts";
-import { argument, noExtraArguments, requiredFlag, table, usageError } from "./shared.ts";
+import { argument, noExtraArguments, requiredFlag, table, textFlag, usageError } from "./shared.ts";
+import { versionCommands, versionNumber } from "./versions.ts";
 
 /**
  * `--definition <json>` as the object the write routes take.
@@ -106,6 +110,42 @@ const update: CommandHandler = async (context) => {
   context.out.emit(saved, (styles) => renderSave("Updated", saved, styles));
 };
 
+const archive: CommandHandler = async (context) => {
+  const id = argument(context, 0, "a function id or key (see: `w6w functions list`)");
+  noExtraArguments(context, 1);
+  const fn = await context.client().functions.archive(id);
+  context.out.emit(fn, (styles) => styles.dim(`Archived ${id}.`));
+};
+
+/**
+ * `w6w functions run-version <id> <n> [--payload <json>]` — run one published
+ * version and emit its OUTPUT, as `functions run` does. No `--allow-unpublished`.
+ */
+const runVersion: CommandHandler = async (context) => {
+  const id = argument(context, 0, "a function id or key (see: `w6w functions list`)");
+  const n = versionNumber(context, 1);
+  noExtraArguments(context, 2);
+  const text = textFlag(context, "payload");
+  let payload: Record<string, unknown> | undefined;
+  if (text !== undefined) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw usageError(context, "`--payload` must be valid JSON.");
+    }
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      throw usageError(context, "`--payload` must be a JSON object.");
+    }
+    payload = parsed as Record<string, unknown>;
+  }
+  const output = await context.client().functions.runVersion(id, n, { payload });
+  context.out.emit(output, (styles) => {
+    if (output === null || output === undefined) return styles.dim("(no output)");
+    return typeof output === "string" ? output : JSON.stringify(output, null, 2);
+  });
+};
+
 /**
  * `w6w functions delete <id>` — one call, no confirmation prompt.
  *
@@ -129,5 +169,7 @@ export const FUNCTION_COMMANDS: CommandRegistry = {
   "functions get": get,
   "functions create": create,
   "functions update": update,
+  "functions archive": archive,
   "functions delete": remove,
+  ...versionCommands("functions", runVersion),
 };

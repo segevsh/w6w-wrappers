@@ -297,6 +297,42 @@ class BodyTest(unittest.TestCase):
         )
 
 
+class AllowUnpublishedTest(unittest.TestCase):
+    """`allow_unpublished` is a body field, present only when `True`."""
+
+    QUEUED = {"runId": "run_01HQ", "status": "queued"}
+
+    def test_true_sends_allow_unpublished_in_the_body(self) -> None:
+        instance, calls = client(responding(self.QUEUED, 202))
+
+        instance.workflows.run("wf_01HQ", allow_unpublished=True)
+
+        self.assertEqual(sent_body(calls[0]), {"allowUnpublished": True})
+        self.assertEqual(calls[0].full_url, RUN_URL)
+
+    def test_default_and_false_leave_the_field_out(self) -> None:
+        instance, calls = client(responding(self.QUEUED, 202))
+
+        instance.workflows.run("wf_01HQ")
+        instance.workflows.run("wf_01HQ", allow_unpublished=False)
+
+        self.assertEqual(sent_body(calls[0]), {})
+        self.assertEqual(sent_body(calls[1]), {})
+
+    def test_it_composes_with_the_other_body_fields(self) -> None:
+        instance, calls = client(responding(self.QUEUED, 202))
+
+        instance.workflows.run("wf_01HQ", trigger="manual", allow_unpublished=True)
+
+        self.assertEqual(sent_body(calls[0]), {"trigger": "manual", "allowUnpublished": True})
+
+    def test_run_version_has_no_allow_unpublished_argument(self) -> None:
+        instance, _ = client(responding(self.QUEUED, 202))
+
+        with self.assertRaises(TypeError):
+            instance.workflows.run_version("wf_01HQ", 1, allow_unpublished=True)  # type: ignore[call-arg]
+
+
 class FailureTest(unittest.TestCase):
     """The server answering no, and the server answering nonsense."""
 
