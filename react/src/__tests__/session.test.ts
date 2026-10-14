@@ -696,14 +696,17 @@ test("a store detached for longer than one task is revived by attach()", async (
     () => Promise.resolve({ token: "tok", expiresAt: soon() }),
     () => 1000,
   );
-  store.attach();
-  assert.equal(await store.supplier(), "tok");
-  store.detach();
-  await new Promise((r) => setImmediate(r));
-  await assert.rejects(store.supplier(), /disposed/);
-  store.attach();
-  assert.equal(await store.supplier(), "tok");
-  store.detach();
+  try {
+    store.attach();
+    assert.equal(await store.supplier(), "tok");
+    store.detach();
+    await new Promise((r) => setImmediate(r));
+    await assert.rejects(store.supplier(), /disposed/);
+    store.attach();
+    assert.equal(await store.supplier(), "tok");
+  } finally {
+    store.detach(); // clears the renewal timer so a failed assertion cannot hang the run
+  }
   await new Promise((r) => setImmediate(r));
 });
 
