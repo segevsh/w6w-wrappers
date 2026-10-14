@@ -120,6 +120,10 @@ class CreateRefusalTest(SecretHygiene):
             ("account_ref='   '", "u1", "   "),
             ("account_ref=7", "u1", 7),
             ("account_ref={}", "u1", {}),
+            ("account_ref=BOM", "u1", "\ufeff"),
+            ("account_ref=sp+BOM+sp", "u1", " \ufeff "),
+            ("account_ref=U+2028/U+3000/NBSP", "u1", "\u2028\u3000\u00a0"),
+            ("subject=BOM", "\ufeff", "co-9"),
             ("subject=''", "", "co-9"),
             ("subject='  '", "  ", "co-9"),
             ("subject=None", None, "co-9"),
@@ -170,6 +174,26 @@ class WireAndShapeTest(unittest.TestCase):
         self.assertEqual(
             json.loads(transport.calls[0].data), {"subject": " u1 ", "account": "co-9"}
         )
+
+    def test_account_ref_trim_uses_the_ecmascript_set_not_str_strip(self) -> None:
+        # BOM is stripped (JS trim strips it; str.strip() would not)
+        transport = responding(SUCCESS_BODY)
+        session = make(transport).create("u1", " \ufeffco-9\ufeff ")
+        self.assertEqual(json.loads(transport.calls[0].data)["account"], "co-9")
+        self.assertEqual(session["accountRef"], "co-9")
+        # U+0085 / U+001C-U+001F are NOT JS whitespace: sent verbatim, not stripped
+        for ch in ["\u0085", "\x1c", "\x1d", "\x1e", "\x1f"]:
+            with self.subTest(hex(ord(ch))):
+                transport = responding(SUCCESS_BODY)
+                ref = ch + "co-9" + ch
+                make(transport).create("u1", ref)
+                self.assertEqual(json.loads(transport.calls[0].data)["account"], ref)
+
+    def test_js_ws_is_exactly_the_ecmascript_trim_set(self) -> None:
+        expected = {0x9, 0xA, 0xB, 0xC, 0xD, 0x20, 0xA0, 0x1680, 0x2028, 0x2029, 0x202F,
+                    0x205F, 0x3000, 0xFEFF, *range(0x2000, 0x200B)}
+        self.assertEqual({ord(c) for c in w6w.server.JS_WS}, expected)
+        self.assertEqual(len(w6w.server.JS_WS), len(expected))
 
     def test_clock_is_sampled_before_the_request(self) -> None:
         clock = [1_700_000_000.0]

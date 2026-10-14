@@ -34,20 +34,35 @@ from ._http import Transport, _request, default_transport
 from .errors import ApiError, ConfigError
 
 
-def _required(value: str, field: str, who: str = "exchange_token") -> None:
+# ECMAScript `String.prototype.trim()` whitespace set (WhiteSpace + LineTerminator):
+# TAB LF VT FF CR SP, NBSP, U+1680, U+2000-U+200A, U+2028, U+2029, U+202F, U+205F,
+# U+3000, U+FEFF. The server trims `account` with JS `trim()`, so the session client
+# must blank-check and trim with the SAME set, not Python's `str.strip()` (which
+# strips U+0085 / U+001C-U+001F that JS keeps, and keeps U+FEFF that JS strips).
+JS_WS = (
+    "\t\n\v\f\r \u00a0\u1680"
+    + "".join(chr(c) for c in range(0x2000, 0x200B))
+    + "\u2028\u2029\u202f\u205f\u3000\ufeff"
+)
+
+
+def _required(
+    value: str, field: str, who: str = "exchange_token", ws: Optional[str] = None
+) -> None:
     """Raise unless `value` is non-blank after stripping. `who` prefixes the
-    message (the raw path keeps ``exchange_token``)."""
-    if not value.strip():
+    message (the raw path keeps ``exchange_token``). `ws` is an explicit
+    strip-character set (default: Python's `str.strip()` whitespace)."""
+    if not value.strip(ws):
         raise ConfigError("{who}: `{field}` must not be blank.".format(who=who, field=field))
 
 
-def _required_text(value: Any, field: str, who: str) -> None:
+def _required_text(value: Any, field: str, who: str, ws: Optional[str] = None) -> None:
     """:func:`_required`, but a non-string is a :class:`ConfigError` too."""
     if not isinstance(value, str):
         raise ConfigError(
             "{who}: `{field}` must be a non-blank string.".format(who=who, field=field)
         )
-    _required(value, field, who)
+    _required(value, field, who, ws)
 
 
 def _basic_auth_header(client_id: str, client_secret: str, who: str = "exchange_token") -> str:
@@ -221,9 +236,9 @@ class EmbedSessionClient:
             (no request is made).
         :raises ApiError: Any server or transport failure, unwrapped.
         """
-        _required_text(subject, "subject", _SESSION)
-        _required_text(account_ref, "account_ref", _SESSION)
-        account = account_ref.strip()
+        _required_text(subject, "subject", _SESSION, JS_WS)
+        _required_text(account_ref, "account_ref", _SESSION, JS_WS)
+        account = account_ref.strip(JS_WS)
 
         t0 = self._now()
         res = exchange_token(
