@@ -85,6 +85,19 @@
    `currentPublishedVersion === null`). Only `runVersion(id, n)` executes a published snapshot —
    proven against a real server by `server/e2e/embed_sdk_e2e_test.ts`.
 
+   **verified: 2026-10-14** — the account-scoped session minter is server-only and lives beside
+   `exchangeToken`: Node `createEmbedSessionClient` (`node/src/server/mod.ts`, `./server` subpath,
+   deliberately NOT in the root/console barrels) and Python `EmbedSessionClient`
+   (`python/src/w6w/server.py`). Both require a non-blank `accountRef` (no silent default-account
+   fallback; raw `exchangeToken` keeps its optional `account`). Python's blank check MUST use the
+   ECMAScript `trim()` set (`JS_WS` in `server.py`), not `str.strip()` — `str.strip()` keeps
+   U+FEFF, the server trims it, and a BOM-only ref silently lands on the default account.
+   The tested host recipe is `node/examples/embed-host/{handler.ts,route.ts}`, exercised by
+   `node/tests/embed_host_example_test.ts` (examples are outside `deno task check`'s inputs; the
+   test file is what type-checks them). The exchange route (`POST /auth/exchange`) is NOT in
+   `endpoints.json`, so the CLI lane has no command for it by design (`docs/parity.md`
+   `## Server-only helpers`).
+
 4. **`VERSION` moves as a lockstep release fact.**
 
    **verified: 2026-10-06** — Update node and cli `package.json` + `deno.json`,
@@ -176,6 +189,10 @@
   contract 0.7.0): node `deno task test` → `ok | 562 passed | 0 failed`; cli 161 passed / 0 failed;
   react `NODE_OPTIONS=--experimental-strip-types npm test` 144 pass / 0 fail; python unittest
   `Ran 332 tests … OK`.
+- **verified: 2026-10-14** — at the 26-10-14-02-embed-sessions integration tip (0.9.12): node
+  `deno task test` → `ok | 618 passed | 0 failed`; cli 161 passed / 0 failed; python unittest
+  `Ran 349 tests … OK`. `deno task --cwd cli check` fails with `npm:@types/node` missing in a tree
+  with no `node_modules` (also on main) — run `npm ci` in `cli/` first.
 - **verified: 2026-10-06** — React's CI setup builds the sibling SDK, installs
   it locally, then runs `npm test` (`.github/workflows/release.yml:146-161`).
   Use the Node 22 invocation above when reproducing it in this lane.

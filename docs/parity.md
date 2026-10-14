@@ -286,3 +286,14 @@ targets structurally; moving the pin (bumping the `#<sha>` to a newer
 install`) needs no `VERSION`
 bump of its own unless `W6WApi` itself changed shape, in which case this check
 is what says so.
+
+## Server-only helpers
+
+Server-only helpers (`@w6w/sdk/server`'s `exchangeToken` and `createEmbedSessionClient`;
+`w6w.server`'s `exchange_token` and `EmbedSessionClient`) live outside `endpoints.json`
+and are exempt from §Conformance. They are still lockstep: node and python ship them
+together at the shared `VERSION`. The CLI deliberately has none: such a command would
+hold the tenant client secret in an end-user tool. React is a derived lane wrapping
+`@w6w/sdk` and is unchanged; it receives the browser-safe session object from the
+host's own backend route. The surface is recorded in
+[`sdk-surface.md`](./sdk-surface.md) "Server-only subpath".

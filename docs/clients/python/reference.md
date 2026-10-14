@@ -19,7 +19,7 @@ updatedAt: null
 # Python reference
 
 Everything the `w6w` package exports for application code. Import from `w6w`, except
-`exchange_token`, which lives in `w6w.server`. For a walkthrough, start with the
+`EmbedSessionClient` and `exchange_token`, which live in `w6w.server`. For a walkthrough, start with the
 [Python](/clients/python/) page.
 
 ## `Client(...)`
@@ -169,9 +169,22 @@ Reading works for any member. The rest need the `owner` or `admin` role.
 | `set_role(user_id, role)` | `TeamMember`. `role` is `"member"` or `"admin"`. |
 | `remove_member(user_id)` | `None` |
 
+## `w6w.server.EmbedSessionClient(...)`
+
+For backends only. The recommended way to mint a short-lived, account-scoped session for one user: `from w6w.server import EmbedSessionClient`. Walkthrough: [Embed w6w in your product](/guides/embed/).
+
+| Argument | What it is |
+| --- | --- |
+| `base_url` | Your API origin. Required; no `W6W_BASE_URL` fallback. Use the final `https` origin: the default transport follows redirects and re-sends the Basic client credential. |
+| `client_id`, `client_secret` | Your tenant's credentials. Keep the secret on your backend. |
+| `transport` | Optional, as on `Client`. |
+| `now` | Optional clock returning epoch seconds. Defaults to `time.time`. |
+
+`create(subject, account_ref)` makes one exchange. Both arguments are required and non-blank (`ConfigError` otherwise, no request sent). `subject` is sent as given; `account_ref` is trimmed. It returns a dict with exactly `token`, `expiresIn` (seconds), `expiresAt` (ISO-8601 UTC), `subject`, `tenant`, `account` (the resolved `acct_` id) and `accountRef`.
+
 ## `w6w.server.exchange_token(...)`
 
-For backends only. Trades your tenant's client credentials for a short-lived token for one user.
+For backends only. The lower-level call, with an optional `account`. Trades your tenant's client credentials for a short-lived token for one user.
 
 | Argument | What it is |
 | --- | --- |
