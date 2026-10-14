@@ -90,9 +90,9 @@ intake keeps working at the command line.
 Every CLI command must also answer `--help` at group and command level,
 generated from `endpoints.json` — see [cli.md](./cli.md).
 
-**Status field.** `endpoints.json` holds thirty-six operations. Thirty carry
-`"status": "required"`, and so do the six `team.*` operations (their
-`/me/account/...` routes are live server-side). Changing `status` regenerates
+**Status field.** `endpoints.json` holds fifty-one operations, all of them
+`"status": "required"` (the six `team.*` operations' `/me/account/...` routes
+are live server-side). Changing `status` regenerates
 the CLI's help (see [cli.md](./cli.md)). This catalog does not yet describe the
 `team.*` wire shapes; `endpoints.json`'s own `notes` for them are the reference
 until it does.
@@ -102,7 +102,7 @@ route directly rather than wait on a never-built `/me` alias. `me`'s
 `serverImplemented` stays `"partial"` — identity is fully live, but the optional
 `versions` block does not exist server-side yet, and every wrapper tolerates its
 absence. `status` records **server** readiness, not wrapper obligation — all
-thirty-six are implemented and tested against a mocked transport in every
+fifty-one are implemented and tested against a mocked transport in every
 wrapper (see
 [implementation.md §10](./implementation.md#10-conformance-runner)).
 
@@ -324,7 +324,7 @@ and the run queue executes it.
 | `variables` | no       | Object merged into the run's **variable scope**, read by downstream expressions as `vars.*`.                                                                                                     |
 | `trigger`   | no       | A **string**, not an object. Defaults to `manual` server-side when omitted.                                                                                                                      |
 | `input`     | no       | Object delivered to the **entry trigger node's own recorded output**, read by downstream steps as `steps.<triggerId>.output.<key>` — this is the field that reaches a trigger's declared fields. |
-| `allowUnpublished` | no | Boolean. Run the **stored** definition even if it was never published or is not enabled (the draft run). Sent **only when `true`**; it runs the row as last saved, never a submitted body, so save first. Without it the run needs a published, enabled workflow (`409 workflow_not_published` / `workflow_disabled`). |
+| `allowUnpublished` | no | Boolean. Run the **stored** definition even if it was never published (the draft run; a disabled one is still refused). Sent **only when `true`**; it runs the row as last saved, never a submitted body, so save first. Without it the run needs a published workflow (`409 workflow_not_published`); a disabled workflow is refused either way (`409 workflow_disabled`). |
 
 **`variables` and `input` are not interchangeable, and reach the workflow
 differently.** `variables` seeds the run's variable scope; a step reads it as
@@ -785,10 +785,10 @@ frame is there for a caller who reads the raw response, and the `invocationId`
 in it resolves through `GET /invocations/{id}`.
 
 **Draft run.** `allowUnpublished: true` in the options runs the **stored**
-definition even if it was never published or is not enabled. It is sent in the
+definition even if it was never published (a disabled one is still refused). It is sent in the
 body only when `true`, and it executes the row exactly as last saved — never a
 definition passed in the call — so save first. Without it the call needs a
-published, enabled Function (`422 function_not_published` / `function_disabled`).
+published Function (`422 function_not_published`); a disabled Function is refused either way (`422 function_disabled`).
 
 **A `null` output is a successful run**, not a malformed body: a Function's
 output is an opaque pass-through, and an action that returns nothing yields
@@ -1379,7 +1379,7 @@ POST /workflows/:id/enable
 
 The server returns `{ "enabled": true }` and the wrapper unwraps it to
 **nothing** (`void` / `None` / exit code), the same pin as §10. **Idempotent.** A
-disabled workflow is refused by version runs and by non-draft runs
+disabled workflow is refused by every run, version runs and draft runs included
 (`workflow_disabled`).
 
 Names: TS `client.workflows.enable(id)` · Python `client.workflows.enable(id)` · CLI
@@ -1399,7 +1399,7 @@ POST /workflows/:id/disable
 
 The server returns `{ "enabled": false }` and the wrapper unwraps it to
 **nothing** (`void` / `None` / exit code), the same pin as §10. **Idempotent.** A
-disabled workflow is refused by version runs and by non-draft runs
+disabled workflow is refused by every run, version runs and draft runs included
 (`workflow_disabled`).
 
 Names: TS `client.workflows.disable(id)` · Python `client.workflows.disable(id)` · CLI
@@ -1529,7 +1529,7 @@ POST /functions/:id/enable
 
 The server returns `{ "enabled": true }` and the wrapper unwraps it to
 **nothing** (`void` / `None` / exit code), the same pin as §10. **Idempotent.** A
-disabled Function is refused by version runs and by non-draft runs
+disabled Function is refused by every run, version runs and draft runs included
 (`function_disabled`).
 
 Names: TS `client.functions.enable(id)` · Python `client.functions.enable(id)` · CLI
@@ -1549,7 +1549,7 @@ POST /functions/:id/disable
 
 The server returns `{ "enabled": false }` and the wrapper unwraps it to
 **nothing** (`void` / `None` / exit code), the same pin as §10. **Idempotent.** A
-disabled Function is refused by version runs and by non-draft runs
+disabled Function is refused by every run, version runs and draft runs included
 (`function_disabled`).
 
 Names: TS `client.functions.disable(id)` · Python `client.functions.disable(id)` · CLI

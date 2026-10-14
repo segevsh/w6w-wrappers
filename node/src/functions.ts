@@ -80,8 +80,8 @@ export interface FunctionRunOptions {
    */
   payload?: Record<string, unknown>;
   /**
-   * Run the **stored** definition even though it was never published or is not
-   * enabled — the draft run.
+   * Run the **stored** definition even though it was never published — the draft
+   * run. A disabled one is still refused.
    *
    * It runs the row exactly as last saved, never a definition you submit here,
    * so save first. Sent as `allowUnpublished: true` in the body **only when

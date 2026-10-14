@@ -170,8 +170,8 @@ export interface WorkflowRunOptions {
    */
   input?: Record<string, unknown>;
   /**
-   * Run the **stored** definition even though it was never published or is not
-   * enabled — the draft run.
+   * Run the **stored** definition even though it was never published — the draft
+   * run. A disabled one is still refused.
    *
    * It executes the row exactly as last saved, never a body you submit here, so
    * save first. Sent as `allowUnpublished: true` in the body **only when
