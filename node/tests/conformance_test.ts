@@ -168,7 +168,7 @@ Deno.test("the contract lists operations this runner can walk", async () => {
   );
   assertEquals(
     contract.operations.length,
-    36,
+    51,
     "conformance: the contract's operation count changed. Extend this lane (and its " +
       "version guard) in the same change, then update this pin — it exists so a " +
       "truncated or half-merged contract cannot silently shrink the walk.",

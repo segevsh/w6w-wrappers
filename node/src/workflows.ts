@@ -74,6 +74,18 @@ import type { ResolvedConfig } from "./config.ts";
 import { ApiError } from "./errors.ts";
 import { type CallOptions, type HttpResponse, path, type RequestOptions } from "./http.ts";
 import {
+  getVersion,
+  listVersions,
+  type PublishResult,
+  publishVersion,
+  type RevertResult,
+  revertVersion,
+  setEnabled,
+  type VersionDetail,
+  type VersionList,
+  versionRunPath,
+} from "./versions.ts";
+import {
   isTerminalRunStatus,
   mintId,
   type RunResult,
@@ -157,7 +169,21 @@ export interface WorkflowRunOptions {
    * the run's variable scope (`vars.*`) instead.
    */
   input?: Record<string, unknown>;
+  /**
+   * Run the **stored** definition even though it was never published or is not
+   * enabled — the draft run.
+   *
+   * It executes the row exactly as last saved, never a body you submit here, so
+   * save first. Sent as `allowUnpublished: true` in the body **only when
+   * `true`** (same rule as {@linkcode wait}); `false` is the same as omitting it.
+   * Not accepted by {@linkcode WorkflowsApi.runVersion}: a version is published
+   * by definition.
+   */
+  allowUnpublished?: boolean;
 }
+
+/** Per-call options for `workflows.runVersion`: everything `run` takes except the draft flag. */
+export type WorkflowRunVersionOptions = Omit<WorkflowRunOptions, "allowUnpublished">;
 
 /**
  * What `workflows.run` returns: the server's flat body, plus two signals derived
@@ -341,18 +367,36 @@ export class WorkflowsApi {
    * @throws {ApiError} `bad_response` when a success body is not a run object.
    */
   async run(id: string, options?: WorkflowRunOptions): Promise<WorkflowRunResult> {
+    return await this.#enqueue(path`/workflows/${id}/run`, options);
+  }
+
+  /**
+   * The one POST both {@linkcode run} and {@linkcode runVersion} go through, so
+   * the `bad_response` guard and the derived fields cannot drift between them.
+   *
+   * @param runPath - The already-encoded path.
+   * @param options - The run options as given by the public method.
+   * @returns The run handle and derived fields.
+   */
+  async #enqueue(runPath: string, options?: WorkflowRunOptions): Promise<WorkflowRunResult> {
     const res = await this.#host.request<unknown>({
       method: "POST",
-      path: path`/workflows/${id}/run`,
+      path: runPath,
       // `?wait=true` or no `wait` at all — never `?wait=false`, which the server
       // reads as "no wait" anyway and which would misrepresent the request in a
       // log or a proxy.
       query: { wait: options?.wait ? true : undefined },
       // Always a body, even when empty: the route parses one when the text is
       // non-empty and defaults to `{}` otherwise, so `{}` and no body are the
-      // same request — and sending the object keeps the three optional fields at
-      // one place instead of behind a conditional.
-      body: { variables: options?.variables, trigger: options?.trigger, input: options?.input },
+      // same request — and sending the object keeps the optional fields at
+      // one place instead of behind a conditional. `allowUnpublished` follows
+      // the `wait` rule: present only when `true`.
+      body: {
+        variables: options?.variables,
+        trigger: options?.trigger,
+        input: options?.input,
+        allowUnpublished: options?.allowUnpublished === true ? true : undefined,
+      },
     });
 
     const body = res.body;
@@ -548,6 +592,104 @@ export class WorkflowsApi {
       path: path`/workflows/${id}/archive`,
     });
     return unwrap<WorkflowDefinition>(res, "workflow");
+  }
+
+  /**
+   * List a workflow's published versions (metadata only).
+   *
+   * @param id - The `wf_…` id.
+   * @returns `enabled`, `currentPublishedVersion` (`null` before the first publish) and `versions[]`.
+   * @throws {ApiError} `404 unknown_workflow` when there is no such id.
+   */
+  async listVersions(id: string): Promise<VersionList> {
+    return await listVersions(this.#host, "workflows", id);
+  }
+
+  /**
+   * Read one published version, with its definition.
+   *
+   * @param id - The `wf_…` id.
+   * @param n - The 1-based version number.
+   * @returns The version, unwrapped from its `version` envelope.
+   * @throws {ApiError} `404 unknown_version` / `404 unknown_workflow`; `400 invalid_version` for a non-positive `n`.
+   */
+  async getVersion(id: string, n: number): Promise<VersionDetail> {
+    return await getVersion(this.#host, "workflows", id, n);
+  }
+
+  /**
+   * Publish the workflow's **stored** definition as a new immutable version.
+   *
+   * It snapshots what the server has saved, not what an editor holds in memory,
+   * so flush any pending save first. The server takes no precondition.
+   *
+   * @param id - The `wf_…` id.
+   * @returns The new version and `currentPublishedVersion`, as the server sent them.
+   * @throws {ApiError} `404 unknown_workflow` when there is no such id.
+   */
+  async publish(id: string): Promise<PublishResult> {
+    return await publishVersion(this.#host, "workflows", id);
+  }
+
+  /**
+   * Rewrite the live workflow from a published version. Does not publish.
+   *
+   * This rewrites the stored row, so its `updatedAt` moves: a later
+   * {@linkcode update} that passes `ifUnmodifiedSince` needs a freshly read
+   * `updatedAt` ({@linkcode get}), or it is `409 workflow_stale`.
+   *
+   * @param id - The `wf_…` id.
+   * @param n - The version to restore.
+   * @returns The `reverted` object, unwrapped from its envelope.
+   * @throws {ApiError} `404 unknown_version` / `404 unknown_workflow`; `400 invalid_version`.
+   */
+  async revert(id: string, n: number): Promise<RevertResult> {
+    return await revertVersion(this.#host, "workflows", id, n);
+  }
+
+  /**
+   * Allow runs of this workflow. Idempotent. Returns nothing.
+   *
+   * @param id - The `wf_…` id.
+   * @throws {ApiError} `404 unknown_workflow` when there is no such id.
+   */
+  async enable(id: string): Promise<void> {
+    await setEnabled(this.#host, "workflows", id, true);
+  }
+
+  /**
+   * Refuse runs of this workflow (`409 workflow_disabled`). Idempotent. Returns nothing.
+   *
+   * @param id - The `wf_…` id.
+   * @throws {ApiError} `404 unknown_workflow` when there is no such id.
+   */
+  async disable(id: string): Promise<void> {
+    await setEnabled(this.#host, "workflows", id, false);
+  }
+
+  /**
+   * Run one published version of a workflow rather than the live row.
+   *
+   * Takes {@linkcode run}'s options (minus `allowUnpublished`) and returns the
+   * same {@linkcode WorkflowRunResult}, including the 202 for a run still going.
+   *
+   * @param id - The `wf_…` id, or the Workflow's `key`.
+   * @param n - The version to run.
+   * @param options - `wait`, `variables`, `trigger`, `input`.
+   * @returns The run handle, status and result.
+   * @throws {ApiError} `404 unknown_version` / `404 unknown_workflow`; `409 workflow_archived` / `workflow_disabled` / `workflow_not_published`; `400 invalid_version`.
+   */
+  async runVersion(
+    id: string,
+    n: number,
+    options?: WorkflowRunVersionOptions,
+  ): Promise<WorkflowRunResult> {
+    // `allowUnpublished` is stripped: a version is published by definition, and
+    // a JS caller passing it anyway must not put it on this route's wire.
+    return await this.#enqueue(versionRunPath("workflows", id, n), {
+      ...options,
+      allowUnpublished: undefined,
+    });
   }
 
   /**
