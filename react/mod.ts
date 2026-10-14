@@ -25,6 +25,13 @@ export {
 } from "./src/W6WProvider.tsx";
 
 export {
+  useW6WSession,
+  type W6WSession,
+  type W6WSessionState,
+  type W6WSessionStatus,
+} from "./src/session.ts";
+
+export {
   type MutationResult,
   type ReadResult,
   useArchiveWorkflow,
