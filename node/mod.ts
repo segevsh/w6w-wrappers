@@ -98,8 +98,18 @@ export type {
   FunctionDefinition,
   FunctionDetail,
   FunctionRunOptions,
+  FunctionRunVersionOptions,
   FunctionsHost,
 } from "./src/functions.ts";
+export type {
+  PublishResult,
+  RevertResult,
+  VersionDetail,
+  VersionedKind,
+  VersionList,
+  VersionsHost,
+  VersionSummary,
+} from "./src/versions.ts";
 export { EndpointsApi } from "./src/endpoints.ts";
 export type { EndpointRunOptions, EndpointsHost } from "./src/endpoints.ts";
 export { TeamApi } from "./src/team.ts";
@@ -116,6 +126,7 @@ export type {
   WorkflowListOptions,
   WorkflowRunOptions,
   WorkflowRunResult,
+  WorkflowRunVersionOptions,
   WorkflowSaveResult,
   WorkflowsHost,
   WorkflowWriteOptions,

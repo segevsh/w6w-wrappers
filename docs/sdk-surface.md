@@ -238,11 +238,26 @@ Three rules both operations obey:
 | `client.workflows.update(id, definition, opts?)` | `client.workflows.update(id, definition, project=None, if_unmodified_since=None)` | `WorkflowSaveResult`                          |
 | `client.workflows.archive(id)`                   | `client.workflows.archive(id)`                                                    | the definition                                |
 | `client.workflows.delete(id)`                    | `client.workflows.delete(id)`                                                     | `void` / `None`                               |
+| `client.workflows.listVersions(id)` | `client.workflows.list_versions(id)` | `VersionList` |
+| `client.workflows.getVersion(id, n)` | `client.workflows.get_version(id, n)` | `VersionDetail` |
+| `client.workflows.publish(id)` | `client.workflows.publish(id)` | `PublishResult` |
+| `client.workflows.revert(id, n)` | `client.workflows.revert(id, n)` | `RevertResult` |
+| `client.workflows.enable(id)` | `client.workflows.enable(id)` | `void` / `None` |
+| `client.workflows.disable(id)` | `client.workflows.disable(id)` | `void` / `None` |
+| `client.workflows.runVersion(id, n, opts?)` | `client.workflows.run_version(id, n, ...)` | `WorkflowRunResult` |
 | `client.functions.list(opts?)`                   | `client.functions.list()`                                                         | `FunctionSummary[]` / `List[FunctionSummary]` |
 | `client.functions.get(id, opts?)`                | `client.functions.get(id)`                                                        | `FunctionDetail`                              |
 | `client.functions.create(definition)`            | `client.functions.create(definition)`                                             | `{id, key}` / `SaveResult`                    |
 | `client.functions.update(id, definition)`        | `client.functions.update(id, definition)`                                         | `{id, key}` / `SaveResult`                    |
 | `client.functions.delete(id)`                    | `client.functions.delete(id)`                                                     | `void` / `None`                               |
+| `client.functions.archive(id)` | `client.functions.archive(id)` | the definition |
+| `client.functions.listVersions(id)` | `client.functions.list_versions(id)` | `VersionList` |
+| `client.functions.getVersion(id, n)` | `client.functions.get_version(id, n)` | `VersionDetail` |
+| `client.functions.publish(id)` | `client.functions.publish(id)` | `PublishResult` |
+| `client.functions.revert(id, n)` | `client.functions.revert(id, n)` | `RevertResult` |
+| `client.functions.enable(id)` | `client.functions.enable(id)` | `void` / `None` |
+| `client.functions.disable(id)` | `client.functions.disable(id)` | `void` / `None` |
+| `client.functions.runVersion(id, n, opts?)` | `client.functions.run_version(id, n, ...)` | the Function's output |
 
 **The definition itself is opaque in both languages** —
 `Record<string, unknown>` / `dict`. A workflow's `steps[]` carry node types the
@@ -252,7 +267,7 @@ wrapper reject a document a newer server accepts. What the SDKs _do_ model is
 the envelope around it: `WorkflowDetail`, `WorkflowSaveResult`,
 `FunctionDetail`, `FunctionSummary`.
 
-Four rules all ten obey:
+Four rules all of them obey:
 
 - **`create` and `update` are the same route.** The server has one upsert per
   domain and no PATCH. What separates the two methods is that `create` mints the
@@ -267,7 +282,17 @@ Four rules all ten obey:
   the input to the write.
 - **Deleting a workflow takes two calls.** `archive` then `delete`; the SDK does
   not do the first for you when the server answers `409 workflow_not_archived`.
-  A Function deletes in one.
+  A Function is the same: `functions.archive` then `functions.delete`
+  (`409 function_not_archived`).
+
+**Versions and the draft run.** Both domains also expose `listVersions`,
+`getVersion`, `publish`, `revert`, `enable`, `disable` and `runVersion`, with the
+same names and shapes (`runVersion` is `POST …/versions/{n}/run` for a workflow
+and `…/invoke` for a Function). `getVersion` and `revert` unwrap their single-key
+envelope, `enable` and `disable` return nothing, and `run` on either domain takes
+`allowUnpublished: true` to execute the **stored** definition without a publish —
+sent only when `true`, and never a submitted body, so save first. `publish`
+snapshots the stored row, so flush any pending save before it.
 
 The asymmetries between the two domains are the server's, not the wrappers':
 workflows take `?project=` and an `x-w6w-if-unmodified-since` precondition;
