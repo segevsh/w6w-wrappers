@@ -161,7 +161,12 @@ export function W6WProvider(props: W6WProviderProps): ReactNode {
 
   const hasToken = token !== undefined && token !== null;
   const hasSession = getSession !== undefined && getSession !== null;
-  if (hasToken === hasSession) {
+  // An explicit-but-undefined `token` (`token={maybeToken}` while signed out)
+  // behaves exactly as before this prop pair existed: legacy token mode, the
+  // SDK rejects the blank value per request. Only a provider with NEITHER key
+  // present is real misuse.
+  const legacyUndefinedToken = !hasToken && !hasSession && "token" in props;
+  if (hasToken === hasSession && !legacyUndefinedToken) {
     throw new Error(
       hasToken
         ? "<W6WProvider> takes exactly one of `token` or `getSession`, not both."

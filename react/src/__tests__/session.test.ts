@@ -11,9 +11,10 @@ import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import type { FetchLike, W6WClient } from "@w6w/sdk";
 import { JSDOM } from "jsdom";
-import { act, createElement } from "react";
+import { StrictMode, act, createElement } from "react";
 import { type Root, createRoot } from "react-dom/client";
 import { W6WProvider, useW6WClient } from "../W6WProvider.tsx";
+import { useMe } from "../hooks.ts";
 import { type W6WSession, type W6WSessionState, useW6WSession } from "../session.ts";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -537,4 +538,151 @@ test("a 401 on a POST: fetch is called exactly 2x whether the retry succeeds or 
     assert.equal(badFetch.calls.length, 2);
     assert.equal(denied.length, 1);
     assert.equal(m2.calls, 2);
+  }));
+
+// ── B1 (round 2): StrictMode's mount -> cleanup -> mount ─────────────────
+
+async function mountStrict(root: Root, props: Props, probe: () => null = Probe): Promise<void> {
+  await act(async () => {
+    root.render(
+      createElement(
+        StrictMode,
+        null,
+        createElement(W6WProvider, props as never, createElement(probe)),
+      ),
+    );
+  });
+  await settle();
+}
+
+let meCap: { error: unknown; data: unknown; loading: boolean } | null = null;
+function MeProbe() {
+  cap.client = useW6WClient();
+  cap.session = useW6WSession();
+  const r = useMe();
+  meCap = { error: r.error, data: r.data, loading: r.loading };
+  return null;
+}
+
+test("StrictMode: a read at mount succeeds on the minted token, no 'disposed' error, getSession <= 2", () =>
+  withRoot(async (root) => {
+    const fake = fakeFetch(() => json(ME_BODY));
+    const m = minter(600_000);
+    await mountStrict(root, { baseUrl: BASE, getSession: m.fn, fetch: fake.fetch }, MeProbe);
+    assert.equal(meCap?.error, undefined, String((meCap?.error as Error | undefined)?.message));
+    assert.equal((meCap?.data as { subject?: string } | undefined)?.subject, "s1");
+    assert.equal(state().status, "ready");
+    assert.equal(state().error, null);
+    assert.ok(m.calls >= 1 && m.calls <= 2, `getSession calls: ${m.calls}`);
+    assert.ok(fake.calls.length >= 1);
+    for (const c of fake.calls) assert.match(bearer(c) ?? "", /^Bearer tok-[12]$/);
+  }));
+
+test("StrictMode + identity switch: the new identity's reads carry only its own token", () =>
+  withRoot(async (root) => {
+    const fake = fakeFetch(() => json(ME_BODY));
+    await mountStrict(
+      root,
+      {
+        baseUrl: BASE,
+        identityKey: "A",
+        getSession: () =>
+          Promise.resolve({
+            token: "tok-A",
+            expiresAt: new Date(Date.now() + 600_000).toISOString(),
+          }),
+        fetch: fake.fetch,
+      },
+      MeProbe,
+    );
+    assert.equal(meCap?.error, undefined);
+    const before = fake.calls.length;
+    await mountStrict(
+      root,
+      {
+        baseUrl: BASE,
+        identityKey: "B",
+        getSession: () =>
+          Promise.resolve({
+            token: "tok-B",
+            expiresAt: new Date(Date.now() + 600_000).toISOString(),
+          }),
+        fetch: fake.fetch,
+      },
+      MeProbe,
+    );
+    assert.equal(meCap?.error, undefined, String((meCap?.error as Error | undefined)?.message));
+    assert.equal(state().status, "ready");
+    const after = fake.calls.slice(before);
+    assert.ok(after.length >= 1);
+    for (const c of after) assert.equal(bearer(c), "Bearer tok-B");
+  }));
+
+// ── round 2: explicit-undefined token stays legacy token mode ────────────
+
+test("token={undefined} with no getSession behaves as before (token mode); no key at all still throws", () =>
+  withRoot(async (root) => {
+    const fake = fakeFetch(() => json(ME_BODY));
+    await mount(root, { baseUrl: BASE, token: undefined, ready: false, fetch: fake.fetch });
+    assert.equal(state().status, "loading");
+    assert.equal(state().expiresAt, null);
+    assert.equal(fake.calls.length, 0);
+  }));
+
+// ── round 2 / N1 + M10: ordinary-call join, listener removal ─────────────
+
+test("an ordinary request issued while a refresh()-started acquisition is in flight joins it", () =>
+  withRoot(async (root) => {
+    const fake = fakeFetch(() => json(ME_BODY));
+    const d = deferred<W6WSession>();
+    let calls = 0;
+    await mount(root, {
+      baseUrl: BASE,
+      getSession: () => {
+        calls++;
+        return d.promise;
+      },
+      fetch: fake.fetch,
+    });
+    const r = state().refresh();
+    await settle();
+    assert.equal(calls, 1);
+    const req = client().me();
+    await settle();
+    assert.equal(calls, 1, "the ordinary request must join, not start a second acquisition");
+    d.resolve({ token: "joined", expiresAt: new Date(Date.now() + 600_000).toISOString() });
+    await Promise.all([r, req]);
+    assert.equal(calls, 1);
+    assert.equal(bearer(fake.calls[0]), "Bearer joined");
+  }));
+
+test("unmount removes the visibilitychange listener and cancels the timer", () =>
+  withRoot(async (root) => {
+    fakeClock();
+    const added: string[] = [];
+    const removed: string[] = [];
+    const doc = document as unknown as Document;
+    const origAdd = doc.addEventListener.bind(doc);
+    const origRemove = doc.removeEventListener.bind(doc);
+    doc.addEventListener = ((t: string, ...r: unknown[]) => {
+      if (t === "visibilitychange") added.push(t);
+      return (origAdd as (...a: unknown[]) => void)(t, ...r);
+    }) as never;
+    doc.removeEventListener = ((t: string, ...r: unknown[]) => {
+      if (t === "visibilitychange") removed.push(t);
+      return (origRemove as (...a: unknown[]) => void)(t, ...r);
+    }) as never;
+    const m = minter(600_000);
+    await mount(root, { baseUrl: BASE, getSession: m.fn, fetch: fakeFetch().fetch });
+    await state().refresh();
+    assert.equal(m.calls, 1);
+    await act(async () => {
+      root.render(createElement("div"));
+    });
+    await settle();
+    assert.ok(added.length >= 1);
+    assert.equal(removed.length, added.length, "every added listener is removed on unmount");
+    await tick(700_000); // past expiry: a surviving timer or listener would re-acquire
+    await show(true);
+    assert.equal(m.calls, 1, "no acquisition after unmount");
   }));

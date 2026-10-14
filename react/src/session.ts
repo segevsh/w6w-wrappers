@@ -65,7 +65,7 @@ export class SessionStore {
   #flight: Flight | null = null;
   #error: unknown = null;
   #hasError = false;
-  /** Bumped by `detach()`: an acquisition from an older epoch never commits. */
+  /** Bumped on disposal: an acquisition from an older epoch never commits. */
   #epoch = 0;
   #dead = false;
   #attached = false;
@@ -115,10 +115,19 @@ export class SessionStore {
     throw outcome.error;
   };
 
-  // ── lifecycle (effect-driven; reversible so StrictMode's remount works) ─
+  // ── lifecycle (effect-driven; disposal deferred so StrictMode's remount works) ─
 
+  /**
+   * Called from the provider's effect. Disposal is DEFERRED one microtask (the
+   * same refcount idiom `hooks.ts` uses for its abort controller): React
+   * StrictMode runs mount -> cleanup -> mount synchronously, and descendants'
+   * passive effects (a read hook's first request) have already entered the
+   * supplier by the time the cleanup runs, so tearing the flight down at
+   * cleanup would reject that request ("stale acquisition"). A re-attach in
+   * the same task simply cancels the pending disposal; a real unmount or
+   * identity change disposes one microtask later.
+   */
   attach(): void {
-    this.#dead = false;
     this.#attached = true;
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", this.#onVisibility);
@@ -127,15 +136,18 @@ export class SessionStore {
   }
 
   detach(): void {
-    this.#dead = true;
     this.#attached = false;
-    this.#epoch += 1;
-    this.#flight = null;
     if (this.#timer !== undefined) clearTimeout(this.#timer);
     this.#timer = undefined;
     if (typeof document !== "undefined") {
       document.removeEventListener("visibilitychange", this.#onVisibility);
     }
+    queueMicrotask(() => {
+      if (this.#attached || this.#dead) return;
+      this.#dead = true;
+      this.#epoch += 1;
+      this.#flight = null;
+    });
   }
 
   // ── internals ──────────────────────────────────────────────────────────
