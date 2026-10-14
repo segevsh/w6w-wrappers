@@ -19,11 +19,17 @@ import socket
 import unittest
 from typing import Any, Callable, List, Optional
 from urllib.error import HTTPError, URLError
-from urllib.request import Request
+from urllib.request import BaseHandler, Request
 
 from w6w import ApiError, Client, ConfigError, HttpResponse, path
 from w6w._config import resolve_config
-from w6w._http import _request, build_url, default_transport
+from w6w._http import (
+    _request,
+    build_no_redirect_opener,
+    build_url,
+    default_transport,
+    no_redirect_transport,
+)
 
 CONFIG = resolve_config(base_url="https://api.example.com", token="tok_1")
 
@@ -580,3 +586,79 @@ class TypingTest(unittest.TestCase):
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
+
+
+class FakeUrlResponse(io.BytesIO):
+    """The few attributes urllib's response processors read off an `http_open` result."""
+
+    def __init__(self, url: str, status: int, headers: email.message.Message) -> None:
+        super().__init__(b"")
+        self.url, self.code, self.status, self.msg, self._headers = url, status, status, "", headers
+
+    def info(self) -> email.message.Message:
+        return self._headers
+
+    def geturl(self) -> str:
+        return self.url
+
+
+class RedirectingHandler(BaseHandler):
+    """A fake protocol handler (no sockets): answers every open with a 3xx to another host."""
+
+    handler_order = 100  # ahead of the stdlib http/https handlers in the chain
+
+    def __init__(self, status: int) -> None:
+        self.status = status
+        self.opened: List[str] = []
+
+    def _open(self, req: Request) -> Any:
+        self.opened.append(req.full_url)
+        if req.host == "evil.example.net":
+            return FakeUrlResponse(req.full_url, 200, email.message.Message())
+        headers = email.message.Message()
+        headers["Location"] = "https://evil.example.net/steal"
+        return FakeUrlResponse(req.full_url, self.status, headers)
+
+    http_open = _open
+    https_open = _open
+
+
+class NoRedirectTransportTest(unittest.TestCase):
+    def test_every_redirect_status_raises_http_error_and_never_opens_the_location(self) -> None:
+        for status in (301, 302, 303, 307, 308):
+            with self.subTest(status=status):
+                handler = RedirectingHandler(status)
+                opener = build_no_redirect_opener(handler)
+                req = Request(
+                    "https://api.example.com/auth/exchange",
+                    data=b"{}",
+                    method="POST",
+                    headers={"Authorization": "Basic c2VjcmV0"},
+                )
+                with self.assertRaises(HTTPError) as caught:
+                    opener.open(req)
+                self.assertEqual(caught.exception.code, status)
+                self.assertEqual(handler.opened, ["https://api.example.com/auth/exchange"])
+
+    def test_stdlib_default_opener_would_follow_the_same_redirect(self) -> None:
+        # Control: proves the fake handler really triggers a redirect, so the test above
+        # is not green merely because the 3xx was never produced.
+        from urllib.request import build_opener
+
+        handler = RedirectingHandler(302)
+        build_opener(handler).open(Request("https://api.example.com/x"))
+        self.assertEqual(len(handler.opened), 2)
+        self.assertIn("evil.example.net", handler.opened[1])
+
+    def test_a_redirect_through_request_becomes_api_error_with_the_status(self) -> None:
+        handler = RedirectingHandler(302)
+        opener = build_no_redirect_opener(handler)
+        config = resolve_config(base_url="https://api.example.com", token="t")
+        with self.assertRaises(ApiError) as caught:
+            _request(config, opener.open, "POST", "/auth/exchange", body={})
+        self.assertEqual(caught.exception.status, 302)
+        self.assertEqual(len(handler.opened), 1)
+
+    def test_client_keeps_the_default_transport_and_it_is_a_distinct_function(self) -> None:
+        self.assertIs(Client(base_url="https://api.example.com", token="t").transport, default_transport)
+        self.assertIsNot(no_redirect_transport, default_transport)

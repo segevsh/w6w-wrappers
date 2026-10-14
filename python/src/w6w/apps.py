@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Mapping, Optional, Protocol, Sequence
 
 from ._http import HttpResponse
+from .errors import ConfigError
 from .types import unwrap_list
 
 #: The server's own `ids` cap per `GET /apps` request; `by_ids` chunks to it.
@@ -67,10 +68,13 @@ class AppsApi:
 
         :param ids: The app ids to look up.
         :returns: The matching apps, unwrapped from the `apps` page envelope.
-        :raises ConfigError: When no token is configured.
+        :raises ConfigError: When no token is configured, or `ids` is a bare string
+            (it would be split into characters); no request is made.
         :raises ApiError: On any non-2xx.
         :raises ApiError: `bad_response` when a `2xx` body carries no `apps` list.
         """
+        if isinstance(ids, str):
+            raise ConfigError("apps.by_ids: `ids` must be a list of ids, not a single string")
         unique = list(dict.fromkeys(ids))
         apps: List[Dict[str, Any]] = []
         for start in range(0, len(unique), MAX_IDS_PER_REQUEST):

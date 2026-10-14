@@ -27,7 +27,7 @@ Everything the `w6w` package exports for application code. Import from `w6w`, ex
 | Argument | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `base_url` | `str` | `W6W_BASE_URL` | Your API origin, such as `https://<your-host>`. Must be an absolute `http` or `https` URL. A path is kept as given. |
-| `token` | `str` or a callable | `W6W_TOKEN` | A token, or a synchronous callable called before every request, as `token()` or `token(force_refresh=True)`. |
+| `token` | `str` or a callable | `W6W_TOKEN` | A token, or a synchronous callable called before every authenticated request, as `token()` or `token(force_refresh=True)`. Its result is not cached or shared by the client; cache inside your callable. |
 | `project` | `str` | your account's default | Default project for `documents.*`, `workflows.list`, `workflows.create` and `workflows.update`. |
 | `refresh_on_unauthorized` | `bool` | `False` | On a `401 unauthorized`, call the token callable with `force_refresh=True` and retry once. |
 | `on_unauthorized` | callable | `None` | Called with the final `401` `ApiError`, at most once per call. |
@@ -105,7 +105,7 @@ Creating, updating, testing and OAuth-connecting a connection are not in the Pyt
 
 | Method | Returns | Notes |
 | --- | --- | --- |
-| `by_ids(ids)` | `list[dict]` | Catalog summaries for the given app ids. Duplicates collapse; `[]` returns `[]` with no request; the client sends chunks of at most 100 ids (sequentially). Unknown ids are absent. Prefer the inline `app` on a connection when you have one. |
+| `by_ids(ids)` | `list[dict]` | Catalog summaries for the given app ids. Duplicates collapse; `[]` returns `[]` with no request; the client sends chunks of at most 100 ids (sequentially). Unknown ids are absent. Prefer the inline `app` on a connection when you have one. Raises `ConfigError` (no request) for a bare string such as `"abc"`; pass a list. |
 
 ## `client.dashboard`
 
@@ -175,7 +175,7 @@ For backends only. The recommended way to mint a short-lived, account-scoped ses
 
 | Argument | What it is |
 | --- | --- |
-| `base_url` | Your API origin. Required; no `W6W_BASE_URL` fallback. Use the final `https` origin: the default transport follows redirects and re-sends the Basic client credential. |
+| `base_url` | Your API origin. Required; no `W6W_BASE_URL` fallback. Use the final `https` origin. `exchange_token` and `EmbedSessionClient` refuse redirects by default: a 3xx raises `ApiError` and the Basic client credential is never re-sent. An injected `transport` is used as given. |
 | `client_id`, `client_secret` | Your tenant's credentials. Keep the secret on your backend. |
 | `transport` | Optional, as on `Client`. |
 | `now` | Optional clock returning epoch seconds. Defaults to `time.time`. |

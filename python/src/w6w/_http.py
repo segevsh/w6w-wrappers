@@ -44,7 +44,14 @@ from dataclasses import replace
 from typing import Any, Callable, Dict, List, Mapping, NamedTuple, Optional, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
-from urllib.request import Request, urlopen
+from urllib.request import (
+    BaseHandler,
+    HTTPRedirectHandler,
+    OpenerDirector,
+    Request,
+    build_opener,
+    urlopen,
+)
 
 from ._config import ResolvedConfig, require_token
 from .errors import ApiError
@@ -207,6 +214,44 @@ def default_transport(request: Request) -> Any:
     :returns: The `HTTPResponse`.
     """
     return urlopen(request)  # noqa: S310 — the URL comes from resolved config, not user input
+
+
+class NoRedirectHandler(HTTPRedirectHandler):
+    """Refuses every redirect, so a 3xx surfaces as an `HTTPError` of that status.
+
+    `redirect_request` returning `None` makes `urllib` fall through to its
+    default error handler instead of re-sending the request (and its headers,
+    including a Basic client credential) to the `Location` target.
+    """
+
+    def redirect_request(self, *args: Any, **kwargs: Any) -> None:  # type: ignore[override]
+        return None
+
+
+def build_no_redirect_opener(*extra_handlers: BaseHandler) -> OpenerDirector:
+    """The opener `no_redirect_transport` uses: stdlib defaults plus :class:`NoRedirectHandler`.
+
+    `extra_handlers` exists so a test can add a protocol handler to the exact
+    production chain; production passes none.
+
+    :param extra_handlers: Additional handlers to install.
+    :returns: The opener.
+    """
+    return build_opener(NoRedirectHandler, *extra_handlers)
+
+
+def no_redirect_transport(request: Request) -> Any:
+    """Like :func:`default_transport`, but never follows an HTTP redirect.
+
+    Used by the tenant-credential helpers (`exchange_token`,
+    `EmbedSessionClient`) so a 3xx from the exchange origin cannot forward the
+    Basic client credential to another host. The 3xx raises `HTTPError`, which
+    `_request` reports as `ApiError`.
+
+    :param request: The request to send.
+    :returns: The `HTTPResponse`.
+    """
+    return build_no_redirect_opener().open(request)  # noqa: S310 — URL comes from resolved config
 
 
 def _status_of(response: Any) -> int:
