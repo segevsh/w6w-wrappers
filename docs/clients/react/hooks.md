@@ -126,7 +126,7 @@ See the [Node SDK reference](/clients/node/reference/) for each one.
 | Export | What it does |
 | --- | --- |
 | `useW6WClient()` | Returns the provider's `W6WClient`. Throws outside a `<W6WProvider>`. |
-| `createW6WUiAdapter(client)` | Adapts the client for `@w6w/ui` components. `@w6w/ui` isn't published to npm yet. |
+| `createW6WUiAdapter(client)` | Adapts the client for `@w6w/ui` components. `@w6w/ui@0.1.0` is available on npm. |
 | `VERSION` | The installed `@w6w/react` version. |
 
 ## Where to next

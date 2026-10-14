@@ -4,8 +4,8 @@
  * member that is present in the type but missing, mis-forwarded, or
  * error-body-dropping at run time. Three things are asserted here:
  *
- * 1. Every member name is READ from the installed `@w6w/ui` source
- *    (`provider.tsx`'s `interface W6WApi`) — not the adapter's hand-copied
+ * 1. Every member name is READ from the installed `@w6w/ui` declarations
+ *    (`provider.d.ts`'s `interface W6WApi`) — not the adapter's hand-copied
  *    interface — and each is a function on the adapter.
  * 2. Forwarding: each member, driven with sentinel arguments through a stub
  *    transport, produces the literal wire request listed in `CASES`.
@@ -22,9 +22,7 @@ import type { FetchLike } from "@w6w/sdk";
 import { W6WClient } from "@w6w/sdk";
 import { createW6WUiAdapter } from "../adapter.ts";
 
-const PROVIDER_SRC = fileURLToPath(
-  new URL("../../node_modules/@w6w/ui/src/provider.tsx", import.meta.url),
-);
+const PROVIDER_SRC = fileURLToPath(new URL("./provider.d.ts", import.meta.resolve("@w6w/ui")));
 
 /** `W6WApi` members read from the pinned UI source: `name` and whether it is `?`-optional. */
 function readUiMembers(): { name: string; optional: boolean }[] {
@@ -34,8 +32,8 @@ function readUiMembers(): { name: string; optional: boolean }[] {
   const end = src.indexOf("\n}", start);
   const body = src.slice(start, end);
   const members: { name: string; optional: boolean }[] = [];
-  // Members sit at exactly two-space indent; JSDoc lines start ` *` so never match.
-  for (const m of body.matchAll(/^ {2}([A-Za-z]\w*)(\?)?\(/gm)) {
+  // Declaration members have four-space indentation; nested fields and JSDoc do not match.
+  for (const m of body.matchAll(/^ {4}([A-Za-z]\w*)(\?)?\(/gm)) {
     members.push({ name: m[1] as string, optional: m[2] === "?" });
   }
   return members;

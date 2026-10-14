@@ -31,8 +31,7 @@ permissions:
   contents: read
   id-token: write
 
-# Keep preflight and publishing on the same tested npm. npm 12 changes Git
-# dependency defaults; React's pinned @w6w/ui dev dependency needs npm 11.
+# Keep preflight and publishing on the same tested npm version.
 env:
   NPM_VERSION: "11.19.0"
 

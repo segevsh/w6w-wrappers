@@ -6,22 +6,14 @@
  * tsc's own output on failure — the output names whichever member went
  * missing).
  *
- * `@w6w/ui`'s root barrel (`import type { W6WApi } from "@w6w/ui"`) reaches
- * `@w6w/expr` (`packages/core`) through its own import chain; npm installs
- * the `github:w6w-io/w6w-ui#<sha>` devDependency's OWN `package.json`
- * dependency on `github:w6w-io/w6w-core#path:packages/expr`, but npm does
- * not honor a `#path:` subpath on a `github:` spec — it installs core's
- * REPO ROOT as `@w6w/expr`, which has no matching exports and fails
- * `TS2307` the moment anything resolves the barrel. So this imports `W6WApi`
- * by RELATIVE PATH straight into `provider.tsx` instead — that file's own
- * closure (`./theme.ts` → `./types.ts` → `react`) compiles clean standalone,
- * with no `@w6w/expr` in it anywhere (building-blocks.md §1).
+ * Compile against the published UI's public exports. Its expression dependency
+ * is also available from npm, so this checks the same declarations consumers use.
  *
  * @module
  */
 
-import type { FlowWorkflow } from "../../node_modules/@w6w/ui/src/flow-types.ts";
-import type { W6WApi } from "../../node_modules/@w6w/ui/src/provider.tsx";
+import type { W6WApi } from "@w6w/ui";
+import type { FlowWorkflow } from "@w6w/ui/flow";
 import type { createW6WUiAdapter } from "../adapter.ts";
 import type { FlowWorkflowShape, fromFlowWorkflow } from "../flow-workflow.ts";
 
@@ -35,8 +27,6 @@ export const _uiConformanceCheck: W6WApi = {} as unknown as ReturnType<typeof cr
 
 // The `FlowWorkflow` converter's structural mirror, both directions (R-7):
 // ui's real `FlowWorkflow` is accepted by `fromFlowWorkflow`, and the mirror
-// is accepted wherever ui expects a `FlowWorkflow`. Imported by relative path
-// for the same `@w6w/expr` reason as above (`flow-types.ts`'s closure is
-// standalone).
+// is accepted wherever ui expects a `FlowWorkflow`.
 export const _uiFlowIntoConverter: Parameters<typeof fromFlowWorkflow>[0] = {} as FlowWorkflow;
 export const _converterShapeIntoUi: FlowWorkflow = {} as FlowWorkflowShape;
