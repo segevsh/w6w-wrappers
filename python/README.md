@@ -9,14 +9,11 @@ contract lane implements one shared contract, and all four packages
 (`w6w`, `@w6w/sdk`, `@w6w/cli`, `@w6w/react`) release together, so `w6w==X`
 gives you the same operations as `@w6w/sdk@X`.
 
-- **Version:** `0.9.12`.
+- **Version:** `0.9.13`.
 - **Guides:** [docs.w6w.io/clients/python](https://docs.w6w.io/clients/python/),
   with a [full reference](https://docs.w6w.io/clients/python/reference/).
-- **Surface:** `me`, `run`, `request`, `connections.list`, the complete
-  `workflows.*` lifecycle (list/run/cancel/get/create/update/archive/delete),
-  `functions.*` (run/list/get/create/update/delete), `endpoints.run`, the
-  complete `documents.*` and `vars.*` CRUD, `team.*`, and
-  `w6w.server.exchange_token` for backends.
+- **Surface:** every operation in [`endpoints.json`](https://github.com/w6w-io/w6w-wrappers/blob/main/endpoints.json),
+  plus `request` and, for backends, `w6w.server.exchange_token` and `EmbedSessionClient`.
 - Below `1.0.0`, breaking changes may arrive in a minor bump — that grace ends
   at `1.0.0`.
 
@@ -340,9 +337,11 @@ session = sessions.create(subject=user_id, account_ref=company_ref)  # both requ
 # keys: token, expiresIn, expiresAt, subject, tenant, account (resolved acct_ id), accountRef
 ```
 
-`base_url` must be the final `https` origin. The default transport follows
-redirects and re-sends the `Authorization: Basic` client credential, so a
-redirect hop would forward it.
+`base_url` must be the final `https` origin. `exchange_token` and
+`EmbedSessionClient` never follow redirects: a 3xx raises `ApiError` and the
+`Authorization: Basic` client credential is never re-sent to another host.
+Unlike `Client`'s default transport, these helpers use their own; a
+`transport=` you inject decides redirect behaviour for itself.
 
 The lower-level `w6w.server.exchange_token`, with an optional `account`, stays
 available:
