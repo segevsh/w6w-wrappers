@@ -324,6 +324,7 @@ and the run queue executes it.
 | `variables` | no       | Object merged into the run's **variable scope**, read by downstream expressions as `vars.*`.                                                                                                     |
 | `trigger`   | no       | A **string**, not an object. Defaults to `manual` server-side when omitted.                                                                                                                      |
 | `input`     | no       | Object delivered to the **entry trigger node's own recorded output**, read by downstream steps as `steps.<triggerId>.output.<key>` — this is the field that reaches a trigger's declared fields. |
+| `allowUnpublished` | no | Boolean. Run the **stored** definition even if it was never published or is not enabled (the draft run). Sent **only when `true`**; it runs the row as last saved, never a submitted body, so save first. Without it the run needs a published, enabled workflow (`409 workflow_not_published` / `workflow_disabled`). |
 
 **`variables` and `input` are not interchangeable, and reach the workflow
 differently.** `variables` seeds the run's variable scope; a step reads it as
@@ -782,6 +783,12 @@ unified `run` does — see §19. Since this operation's contract is "hand back t
 Function's output", a wrapper keeps unwrapping `output` and needs no change; the
 frame is there for a caller who reads the raw response, and the `invocationId`
 in it resolves through `GET /invocations/{id}`.
+
+**Draft run.** `allowUnpublished: true` in the options runs the **stored**
+definition even if it was never published or is not enabled. It is sent in the
+body only when `true`, and it executes the row exactly as last saved — never a
+definition passed in the call — so save first. Without it the call needs a
+published, enabled Function (`422 function_not_published` / `function_disabled`).
 
 **A `null` output is a successful run**, not a malformed body: a Function's
 output is an opaque pass-through, and an action that returns nothing yields
@@ -1242,12 +1249,335 @@ The server returns `{ "ok": true }` and the wrapper unwraps it to **nothing**
 id that is not there is `404 unknown_function`, and wrappers must not pretend
 otherwise.
 
-There is **no archive step** on this domain — unlike a workflow, a Function
-deletes in one call.
+**Archive first**, exactly as for a workflow (§30): a Function that is not
+`archived` yet is `409 function_not_archived`, and a wrapper must **not** catch
+that and archive on the caller's behalf.
 
 **Nothing checks for callers first.** A Function may be referenced by an
 Endpoint, by a Workflow step, or by another Function's `impl` (D-8), and the
 server does not walk those references — they break at call time.
+
+---
+
+## 30. `functions.archive` — archive a Function
+
+```
+POST /functions/:id/archive
+```
+
+`status: required` · served today
+
+One-way: there is no unarchive route. **Idempotent** — archiving an
+already-archived Function re-returns it unchanged. **Response `200`** — envelope
+key `function`; the wrapper unwraps.
+
+This is a **precondition of §29**, not a convenience: deleting a Function that is
+not archived is `409 function_not_archived`.
+
+Names: TS `client.functions.archive(id)` · Python `client.functions.archive(id)` ·
+CLI `w6w functions archive <id>`.
+
+Missing id is `404 unknown_function`.
+
+---
+
+## 31. `workflows.listVersions` — list a workflow's versions
+
+```
+GET /workflows/:id/versions
+```
+
+`status: required` · served today
+
+Returns the server's **whole body**: `enabled`, `currentPublishedVersion`
+(`null` before the first publish) and `versions[]` — each row `versionNumber`,
+`createdAt`, `createdBy` (`null` when unknown) and `isCurrentPublished`. Metadata
+only, no `definition`; fetch one with §32.
+
+Names: TS `client.workflows.listVersions(id)` · Python `client.workflows.list_versions(id)`
+· CLI `w6w workflows versions <id>`.
+
+Missing id is `404 unknown_workflow`.
+
+---
+
+## 32. `workflows.getVersion` — read one version of a workflow
+
+```
+GET /workflows/:id/versions/:n
+```
+
+`status: required` · served today
+
+**Response `200`** — envelope key `version` (`versionNumber`, `createdAt`,
+`createdBy`, `isCurrentPublished`, `definition`); the wrapper unwraps. The
+`definition` is opaque and redacted server-side — a sealed secret envelope is
+never returned.
+
+Names: TS `client.workflows.getVersion(id, n)` · Python `client.workflows.get_version(id, n)`
+· CLI `w6w workflows version <id> <n>`.
+
+Errors: `404 unknown_version`, `404 unknown_workflow`, `400 invalid_version` when `n` is not
+a positive integer.
+
+---
+
+## 33. `workflows.publish` — publish the stored workflow as a new version
+
+```
+POST /workflows/:id/publish
+```
+
+`status: required` · served today
+
+Snapshots the **stored** row — not whatever an editor holds in memory — as a new
+immutable version, so **flush any pending save first**. Publishing a workflow also activates a never-published workflow. The server takes no
+precondition, and the wrapper adds none.
+
+**Response `200`** — returned whole: `version` (`kind`, `callableId`,
+`versionNumber`, `createdAt`, `createdBy`, `null` when unknown) and
+`currentPublishedVersion`.
+
+Names: TS `client.workflows.publish(id)` · Python `client.workflows.publish(id)` · CLI
+`w6w workflows publish <id>`.
+
+Missing id is `404 unknown_workflow`.
+
+---
+
+## 34. `workflows.revert` — rewrite the live workflow from a version
+
+```
+POST /workflows/:id/versions/:n/revert
+```
+
+`status: required` · served today
+
+Rewrites the live definition from version `n`. It does **not** publish: the live
+row becomes a draft matching version `n` until §33 is called again.
+Revert **rewrites the live row**, so a following `workflows.update` that passes
+`ifUnmodifiedSince` needs a **freshly read** `updatedAt` (§20), not the one from before
+the revert, or it is `409 workflow_stale`.
+
+**Response `200`** — envelope key `reverted` (`kind`, `callableId`,
+`versionNumber`); the wrapper unwraps.
+
+Names: TS `client.workflows.revert(id, n)` · Python `client.workflows.revert(id, n)` · CLI
+`w6w workflows revert <id> <n>`.
+
+Errors: `404 unknown_version`, `404 unknown_workflow`, `400 invalid_version`.
+
+---
+
+## 35. `workflows.enable` — enable a workflow
+
+```
+POST /workflows/:id/enable
+```
+
+`status: required` · served today
+
+The server returns `{ "enabled": true }` and the wrapper unwraps it to
+**nothing** (`void` / `None` / exit code), the same pin as §10. **Idempotent.** A
+disabled workflow is refused by version runs and by non-draft runs
+(`workflow_disabled`).
+
+Names: TS `client.workflows.enable(id)` · Python `client.workflows.enable(id)` · CLI
+`w6w workflows enable <id>`.
+
+Missing id is `404 unknown_workflow`.
+
+---
+
+## 36. `workflows.disable` — disable a workflow
+
+```
+POST /workflows/:id/disable
+```
+
+`status: required` · served today
+
+The server returns `{ "enabled": false }` and the wrapper unwraps it to
+**nothing** (`void` / `None` / exit code), the same pin as §10. **Idempotent.** A
+disabled workflow is refused by version runs and by non-draft runs
+(`workflow_disabled`).
+
+Names: TS `client.workflows.disable(id)` · Python `client.workflows.disable(id)` · CLI
+`w6w workflows disable <id>`.
+
+Missing id is `404 unknown_workflow`.
+
+---
+
+## 37. `workflows.runVersion` — run one version of a workflow
+
+```
+POST /workflows/:id/versions/:n/run[?wait=true]
+```
+
+`status: required` · served today
+
+Same body (`variables`, `trigger`, `input`) and `?wait=true` as §4, against one
+**published version** instead of the live row. The response is §4's, including the
+`202` for a run still going; a failed run is `200` with status `failed` and is
+not an error. There is no `allowUnpublished` here — a version is published by
+definition.
+
+Names: TS `client.workflows.runVersion(id, n, opts?)` · Python
+`client.workflows.run_version(id, n, wait=False, variables=None, trigger=None, input=None)`
+· CLI `w6w workflows run-version <id> <n> [--wait] [--input <json>]`.
+
+Errors: `404 unknown_version`, `404 unknown_workflow`, `409 workflow_archived`,
+`409 workflow_disabled`, `409 workflow_not_published`, `400 invalid_version`.
+
+---
+
+## 38. `functions.listVersions` — list a Function's versions
+
+```
+GET /functions/:id/versions
+```
+
+`status: required` · served today
+
+Returns the server's **whole body**: `enabled`, `currentPublishedVersion`
+(`null` before the first publish) and `versions[]` — each row `versionNumber`,
+`createdAt`, `createdBy` (`null` when unknown) and `isCurrentPublished`. Metadata
+only, no `definition`; fetch one with §39.
+
+Names: TS `client.functions.listVersions(id)` · Python `client.functions.list_versions(id)`
+· CLI `w6w functions versions <id>`.
+
+Missing id is `404 unknown_function`.
+
+---
+
+## 39. `functions.getVersion` — read one version of a Function
+
+```
+GET /functions/:id/versions/:n
+```
+
+`status: required` · served today
+
+**Response `200`** — envelope key `version` (`versionNumber`, `createdAt`,
+`createdBy`, `isCurrentPublished`, `definition`); the wrapper unwraps. The
+`definition` is opaque and redacted server-side — a sealed secret envelope is
+never returned.
+
+Names: TS `client.functions.getVersion(id, n)` · Python `client.functions.get_version(id, n)`
+· CLI `w6w functions version <id> <n>`.
+
+Errors: `404 unknown_version`, `404 unknown_function`, `400 invalid_version` when `n` is not
+a positive integer.
+
+---
+
+## 40. `functions.publish` — publish the stored Function as a new version
+
+```
+POST /functions/:id/publish
+```
+
+`status: required` · served today
+
+Snapshots the **stored** row — not whatever an editor holds in memory — as a new
+immutable version, so **flush any pending save first**. The server takes no
+precondition, and the wrapper adds none.
+
+**Response `200`** — returned whole: `version` (`kind`, `callableId`,
+`versionNumber`, `createdAt`, `createdBy`, `null` when unknown) and
+`currentPublishedVersion`.
+
+Names: TS `client.functions.publish(id)` · Python `client.functions.publish(id)` · CLI
+`w6w functions publish <id>`.
+
+Missing id is `404 unknown_function`.
+
+---
+
+## 41. `functions.revert` — rewrite the live Function from a version
+
+```
+POST /functions/:id/versions/:n/revert
+```
+
+`status: required` · served today
+
+Rewrites the live definition from version `n`. It does **not** publish: the live
+row becomes a draft matching version `n` until §40 is called again.
+Functions have no concurrency precondition: a save after a revert is
+last-write-wins, as ever.
+
+**Response `200`** — envelope key `reverted` (`kind`, `callableId`,
+`versionNumber`); the wrapper unwraps.
+
+Names: TS `client.functions.revert(id, n)` · Python `client.functions.revert(id, n)` · CLI
+`w6w functions revert <id> <n>`.
+
+Errors: `404 unknown_version`, `404 unknown_function`, `400 invalid_version`.
+
+---
+
+## 42. `functions.enable` — enable a Function
+
+```
+POST /functions/:id/enable
+```
+
+`status: required` · served today
+
+The server returns `{ "enabled": true }` and the wrapper unwraps it to
+**nothing** (`void` / `None` / exit code), the same pin as §10. **Idempotent.** A
+disabled Function is refused by version runs and by non-draft runs
+(`function_disabled`).
+
+Names: TS `client.functions.enable(id)` · Python `client.functions.enable(id)` · CLI
+`w6w functions enable <id>`.
+
+Missing id is `404 unknown_function`.
+
+---
+
+## 43. `functions.disable` — disable a Function
+
+```
+POST /functions/:id/disable
+```
+
+`status: required` · served today
+
+The server returns `{ "enabled": false }` and the wrapper unwraps it to
+**nothing** (`void` / `None` / exit code), the same pin as §10. **Idempotent.** A
+disabled Function is refused by version runs and by non-draft runs
+(`function_disabled`).
+
+Names: TS `client.functions.disable(id)` · Python `client.functions.disable(id)` · CLI
+`w6w functions disable <id>`.
+
+Missing id is `404 unknown_function`.
+
+---
+
+## 44. `functions.runVersion` — run one version of a Function
+
+```
+POST /functions/:id/versions/:n/invoke
+```
+
+`status: required` · served today
+
+Same body (`inputs`, spelled `payload` by wrappers) as §17, against one
+**published version**. Note the wire verb is `invoke`, not `run`. Returns the
+Function's **output**, unwrapped exactly as §17 does (a `null` output is a
+successful run).
+
+Names: TS `client.functions.runVersion(id, n, opts?)` · Python
+`client.functions.run_version(id, n, payload=None)` · CLI
+`w6w functions run-version <id> <n> [--payload <json>]`.
+
+Errors: `404 unknown_version`, `404 unknown_function`, `422 function_incomplete`,
+`422 function_disabled`, `422 function_not_published`, `400 invalid_version`.
 
 ---
 

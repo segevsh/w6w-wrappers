@@ -78,24 +78,39 @@ when the server records them. A `kind` the SDK doesn't recognise is returned unc
 | Method | Returns | Notes |
 | --- | --- | --- |
 | `list({ project?, signal? })` | `WorkflowSummary[]` | `id`, `key`, `name`, `displayName`, `status` (`draft`, `active` or `archived`), `tags`, `runCount`, `updatedAt` |
-| `run(idOrKey, { wait?, input?, variables?, trigger? })` | `WorkflowRunResult` | `runId`, `status`, `terminal`, `output`, `error`, `stepErrors`, `steps`, `httpStatus`. A failed run is returned, not raised. |
+| `run(idOrKey, { wait?, input?, variables?, trigger?, allowUnpublished? })` | `WorkflowRunResult` | `runId`, `status`, `terminal`, `output`, `error`, `stepErrors`, `steps`, `httpStatus`. A failed run is returned, not raised. |
 | `cancel(runId)` | `{ id, status, cancelRequestedAt }` | Requests cancellation. `status` is the run's status at that moment. |
 | `get(id, { signal? })` | `{ workflow, sourceRef, updatedAt }` | The full definition. |
 | `create(definition, { project? })` | `{ workflow: { id, name }, scheduled, updatedAt }` | Assigns a `wf_…` id if the definition has none. |
 | `update(id, definition, { project?, ifUnmodifiedSince? })` | same as `create` | Replaces the whole definition. `409 workflow_stale` if `ifUnmodifiedSince` doesn't match. |
 | `archive(id)` | the archived definition | Required before `delete`. |
 | `delete(id)` | nothing | `409 workflow_not_archived` if it's still active. |
+| `listVersions(id)` | `VersionList` | `enabled`, `currentPublishedVersion`, `versions[]`. Metadata only. |
+| `getVersion(id, n)` | `VersionDetail` | One version with its `definition`. `404 unknown_version`. |
+| `publish(id)` | `PublishResult` | Snapshots the **saved** definition; save first. |
+| `revert(id, n)` | `RevertResult` | Rewrites the live definition from version `n`; does not publish. Re-read `updatedAt` before your next save. |
+| `enable(id)` | nothing | Idempotent. |
+| `disable(id)` | nothing | Idempotent. Runs then raise `workflow_disabled`. |
+| `runVersion(id, n, { wait?, input?, variables?, trigger? })` | `WorkflowRunResult` | Runs one published version. Same result as `run`. |
 
 ## `client.functions`
 
 | Method | Returns | Notes |
 | --- | --- | --- |
-| `run(idOrKey, { payload? })` | the Function's output | `404 unknown_function`, `422 function_incomplete`. |
+| `run(idOrKey, { payload?, allowUnpublished? })` | the Function's output | `404 unknown_function`, `422 function_incomplete`. `allowUnpublished: true` runs the saved definition without a publish. |
 | `list({ signal? })` | `FunctionSummary[]` | `id`, `key`, `displayName`, `description`, `updatedAt`, `valid` |
 | `get(id, { signal? })` | `{ function, valid }` | `valid` is `false` when the Function can't run yet. |
 | `create(definition)` | `{ id, key }` | Assigns a `fn_…` id if the definition has none. |
 | `update(id, definition)` | `{ id, key }` | Replaces the whole definition. |
-| `delete(id)` | nothing | The Function must be archived first. See [archiving a Function](/clients/node/workflows/#read-and-edit-a-function-definition). |
+| `archive(id)` | the archived definition | Required before `delete`. |
+| `delete(id)` | nothing | `409 function_not_archived` if it's still active. |
+| `listVersions(id)` | `VersionList` | `enabled`, `currentPublishedVersion`, `versions[]`. Metadata only. |
+| `getVersion(id, n)` | `VersionDetail` | One version with its `definition`. `404 unknown_version`. |
+| `publish(id)` | `PublishResult` | Snapshots the **saved** definition; save first. |
+| `revert(id, n)` | `RevertResult` | Rewrites the live definition from version `n`; does not publish. Re-read `updatedAt` before your next save. |
+| `enable(id)` | nothing | Idempotent. |
+| `disable(id)` | nothing | Idempotent. Runs then raise `function_disabled`. |
+| `runVersion(id, n, { payload? })` | the Function's output | Runs one published version. Same output as `run`. |
 
 ## `client.endpoints`
 
