@@ -185,14 +185,18 @@ re-test the bridge on an upgrade rather than assuming it.
 
 ### Keeping `createW6WUiAdapter` in sync with the real `@w6w/ui`
 
-`package.json`'s `devDependencies` carries a **dev-only, type-only** edge onto
+`package.json`'s `devDependencies` carries a **dev-only** edge onto
 `@w6w/ui` — `"@w6w/ui": "github:w6w-io/w6w-ui#<sha>"` — that this package never
 ships: `files: ["dist"]` means `dist/` is the only thing npm packs and publishes, so
-no installer of `@w6w/react` ever resolves or needs `@w6w/ui` at all. Its one job is
-`src/__tests__/ui-conformance.test.ts`, which runs at **dev/CI time only** (`npm
-test`, never part of `dist/`): it compiles `src/__tests__/ui-conformance.check.ts`
-against `@w6w/ui`'s real `provider.tsx` and fails, naming the member, the moment
-`createW6WUiAdapter`'s return type stops being assignable to the real `W6WApi` —
+no installer of `@w6w/react` ever resolves or needs `@w6w/ui` at all. It is used two
+ways, both at **dev/CI time only** (`npm test`, never part of `dist/`), and nothing is
+imported from it at run time. `src/__tests__/ui-conformance.test.ts` compiles
+`src/__tests__/ui-conformance.check.ts` against `@w6w/ui`'s real `provider.tsx` and
+`flow-types.ts`, and fails, naming the member, the moment
+`createW6WUiAdapter`'s return type stops being assignable to the real `W6WApi` (or the
+`FlowWorkflow` mirror drifts from the real type), and
+`src/__tests__/adapter-conformance.test.ts` reads the installed `provider.tsx` as text
+(see "Runtime conformance" below) —
 closing the gap a hand-duplicated interface alone cannot (nothing previously caught
 this package's `W6WApi` drifting from `@w6w/ui`'s own).
 
@@ -224,6 +228,10 @@ through a stub transport and asserts the exact wire request produced (forwarding
 asserts that a 4xx JSON error body reaches the caller as `err.body`, deep-equal to
 what the server sent. Nothing in it imports `@w6w/ui` at run time; the pinned UI is
 read as text.
+
+`toFlowWorkflow` does not validate `steps[].uses`, although the returned type declares it
+required; a step without `uses` converts, so guard before handing it to code that reads
+`step.uses.app`.
 
 ### Editing workflows with a typed shape
 
