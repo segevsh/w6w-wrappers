@@ -155,6 +155,11 @@ step is a method on `client.workflows` or `client.functions`, with the same name
 | Turn on or off | `enable(id)`, `disable(id)` |
 | Retire, then remove | `archive(id)`, then `delete(id)` |
 
+**What a plain run executes.** Without `allowUnpublished`, `run` still executes the **stored** definition
+as last saved — publishing is a precondition (the workflow or Function must have at least one published version), not a
+selector. Edits saved after a publish are what the next plain `run` executes. To execute exactly what was
+published, call `runVersion(id, n)`.
+
 For the editor's typed shape, convert with `toFlowWorkflow` and `fromFlowWorkflow` from
 `@w6w/react` instead of casting. The same fixture the SDK's tests compile and run lives in
 `react/src/__tests__/fixtures/embed-host.ts`.

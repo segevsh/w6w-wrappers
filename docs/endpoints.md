@@ -326,6 +326,11 @@ and the run queue executes it.
 | `input`     | no       | Object delivered to the **entry trigger node's own recorded output**, read by downstream steps as `steps.<triggerId>.output.<key>` — this is the field that reaches a trigger's declared fields. |
 | `allowUnpublished` | no | Boolean. Run the **stored** definition even if it was never published (the draft run; a disabled one is still refused). Sent **only when `true`**; it runs the row as last saved, never a submitted body, so save first. Without it the run needs a published workflow (`409 workflow_not_published`); a disabled workflow is refused either way (`409 workflow_disabled`). |
 
+**What a plain run executes.** Without `allowUnpublished`, `run` still executes the **stored** definition
+as last saved — publishing is a precondition (the workflow must have at least one published version), not a
+selector. Edits saved after a publish are what the next plain `run` executes. To execute exactly what was
+published, call `runVersion(id, n)`.
+
 **`variables` and `input` are not interchangeable, and reach the workflow
 differently.** `variables` seeds the run's variable scope; a step reads it as
 `vars.email`. `input` is injected into the entry trigger node's own output; a
@@ -789,6 +794,11 @@ definition even if it was never published (a disabled one is still refused). It 
 body only when `true`, and it executes the row exactly as last saved — never a
 definition passed in the call — so save first. Without it the call needs a
 published Function (`422 function_not_published`); a disabled Function is refused either way (`422 function_disabled`).
+
+**What a plain run executes.** Without `allowUnpublished`, `run` still executes the **stored** definition
+as last saved — publishing is a precondition (the Function must have at least one published version), not a
+selector. Edits saved after a publish are what the next plain `run` executes. To execute exactly what was
+published, call `runVersion(id, n)`.
 
 **A `null` output is a successful run**, not a malformed body: a Function's
 output is an opaque pass-through, and an action that returns nothing yields
