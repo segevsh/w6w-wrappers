@@ -27,7 +27,8 @@ backend.
 
 - Your organisation is set up as a w6w tenant, with a **client id** and **client secret**.
 - A Next.js 13.4 or later app using the App Router, with your own sign-in.
-- `@w6w/react` and `@w6w/sdk` installed: `npm install @w6w/react @w6w/sdk`.
+- `@w6w/react` and `@w6w/sdk` installed: `npm install @w6w/react @w6w/sdk`. The route below needs
+  `createEmbedSessionClient`, which ships in the first release after 0.9.10 that includes it.
 
 ## 1. Put the credentials in your server environment
 
@@ -77,6 +78,11 @@ export function POST(req: Request) {
 }
 ```
 
+To use the files from the SDK repository in a Next app, copy `handler.ts` and `route.ts` into the
+route folder and make two edits. In `route.ts`, import `./handler` without the `.ts` extension (a
+default Next tsconfig rejects it with TS5097). In `handler.ts`, change the type import
+`../../src/server/mod.ts` to `import type { EmbedSessionClient } from "@w6w/sdk/server"`.
+
 The `subject` and the company reference come from `authenticate`, never from the request body. The
 browser may send `{ "company": "<id>" }` to switch company, and the handler refuses (`403`) any
 company that is not in `companyIds`. The company id is your external company id: stable, and sent
@@ -98,26 +104,37 @@ it expires, and refreshes it when w6w rejects it:
 import { W6WProvider } from "@w6w/react";
 import { useCallback, useRef, type ReactNode } from "react";
 
-type Cached = { token: string; expiresAt: string }; // expiresAt is an ISO date string
+// expiresAt is an ISO date string; `company` records which company the session was minted for
+type Cached = { token: string; expiresAt: string; company: string | undefined };
 
-export function W6W({ userId, children }: { userId: string; children: ReactNode }) {
+export function W6W(
+  { userId, companyId, children }: { userId: string; companyId?: string; children: ReactNode },
+) {
   const cache = useRef<Cached | null>(null);
 
   const token = useCallback(async ({ forceRefresh = false } = {}) => {
     const c = cache.current;
-    if (!forceRefresh && c && Date.parse(c.expiresAt) - Date.now() > 30_000) return c.token;
+    // A session cached for another company is never reused.
+    if (!forceRefresh && c && c.company === companyId && Date.parse(c.expiresAt) - Date.now() > 30_000) {
+      return c.token;
+    }
 
-    const res = await fetch("/api/w6w-session", { method: "POST" });
+    const res = await fetch("/api/w6w-session", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ company: companyId }), // a hint; your route validates it
+    });
     if (!res.ok) return null; // hooks wait instead of sending an unauthenticated call
-    cache.current = (await res.json()) as Cached;
-    return cache.current.token;
-  }, []);
+    const minted = { ...(await res.json()), company: companyId } as Cached;
+    cache.current = minted;
+    return minted.token;
+  }, [companyId]);
 
   return (
     <W6WProvider
       baseUrl="https://<your-host>"
       token={token}
-      identityKey={userId}
+      identityKey={`${userId}:${companyId ?? ""}`}
       refreshOnUnauthorized
       onUnauthorized={() => window.location.assign("/sign-in")}
     >
@@ -127,12 +144,14 @@ export function W6W({ userId, children }: { userId: string; children: ReactNode 
 }
 ```
 
-A session is for one company. If your app lets a user switch company, clear `cache.current` and
-send `{ company }` in the request body when they do, so the next call mints a session for the new
-company.
+A session is for one company. When the user switches company, pass the new `companyId`: the
+supplier stops reusing the cached session (it was minted for the other company) and sends
+`{ company }` to your route, which checks it against `companyIds` before minting.
 
-`identityKey` tells the provider whose data it's showing. When a different user signs in, the
-client is rebuilt and every hook starts empty, so nothing from the previous user is shown.
+`identityKey` tells the provider whose data it's showing, so it includes both the user and the
+company. When either changes, the client is rebuilt and every hook starts empty, so nothing from
+the previous user, or from the company the user just left, stays on screen. Leave the company out
+of `identityKey` and company A's data keeps showing after a switch to company B.
 
 ## 4. Wrap your pages
 
@@ -147,7 +166,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en">
       <body>
-        {session ? <W6W userId={session.userId}>{children}</W6W> : children}
+        {session ? (
+          <W6W userId={session.userId} companyId={session.activeCompanyId}>
+            {children}
+          </W6W>
+        ) : children}
       </body>
     </html>
   );

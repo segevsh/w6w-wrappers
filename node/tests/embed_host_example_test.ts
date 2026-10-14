@@ -211,11 +211,76 @@ Deno.test("real client at wire level: one exchange per POST, later expiresAt on 
   assertEquals(second.expiresAt, "2026-01-01T00:25:00.000Z");
 });
 
+const W6W_ENV = ["W6W_BASE_URL", "W6W_TENANT_CLIENT_ID", "W6W_TENANT_CLIENT_SECRET"];
+
+/** Run `fn` with the W6W_* variables set to `values` (or all unset), then restore them. */
+async function withW6wEnv(values: Record<string, string> | null, fn: () => Promise<void>) {
+  const saved = W6W_ENV.map((k) => [k, Deno.env.get(k)] as const);
+  try {
+    for (const k of W6W_ENV) Deno.env.delete(k);
+    for (const [k, v] of Object.entries(values ?? {})) Deno.env.set(k, v);
+    await fn();
+  } finally {
+    for (const [k, v] of saved) {
+      if (v === undefined) Deno.env.delete(k);
+      else Deno.env.set(k, v);
+    }
+  }
+}
+
 Deno.test("route.ts imports without throwing and exports POST", async () => {
   assertEquals(typeof route.POST, "function");
   // Without credentials in the environment the lazy build fails closed, opaquely.
-  const res = await route.POST(post({ company: "A" }));
-  assertEquals(res.status, 502);
-  assertEquals(await errorCode(res), "session_unavailable");
-  assertEquals(res.headers.get("cache-control"), "no-store");
+  await withW6wEnv(null, async () => {
+    const res = await route.POST(post({ company: "A" }));
+    assertEquals(res.status, 502);
+    assertEquals(await errorCode(res), "session_unavailable");
+    assertEquals(res.headers.get("cache-control"), "no-store");
+  });
+});
+
+Deno.test("route.ts configured: the stub authenticate refuses with 401 and never calls w6w", async () => {
+  const realFetch = globalThis.fetch;
+  let fetches = 0;
+  globalThis.fetch = (() => {
+    fetches++;
+    return Promise.reject(new Error("must not be called"));
+  }) as typeof fetch;
+  try {
+    await withW6wEnv(
+      {
+        W6W_BASE_URL: "http://w6w.invalid",
+        W6W_TENANT_CLIENT_ID: "client-id",
+        W6W_TENANT_CLIENT_SECRET: SECRET,
+      },
+      async () => {
+        const res = await route.POST(post({ company: "A" }));
+        assertEquals(res.status, 401);
+        assertEquals(await errorCode(res), "unauthenticated");
+        assertEquals(res.headers.get("cache-control"), "no-store");
+      },
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  assertEquals(fetches, 0);
+});
+
+Deno.test("membership is exact: case and surrounding whitespace do not match", async () => {
+  const h = handlerFor({ userId: "u1", companyIds: ["A"] });
+  for (const company of ["a", " A", "A "]) {
+    const res = await h.handle(post({ company }));
+    assertEquals(res.status, 403, company);
+    assertEquals(await errorCode(res), "company_forbidden");
+  }
+  assertEquals(h.calls.length, 0);
+});
+
+Deno.test("a blank hint falls back to the active company", async () => {
+  const h = handlerFor(U1);
+  for (const body of [{ company: "" }, { company: "   " }, { company: 7 }, {}]) {
+    const res = await h.handle(post(body));
+    assertEquals(res.status, 200);
+  }
+  assertEquals(h.calls, Array(4).fill({ subject: "u1", accountRef: "A" }));
 });

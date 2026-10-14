@@ -48,13 +48,8 @@ The example in the SDK repository (`node/examples/embed-host/`) is a framework-n
 `(Request) => Promise<Response>` handler plus a Next.js App Router adapter. The handler:
 
 ```ts
-import { createEmbedSessionClient } from "@w6w/sdk/server";
-
-const sessions = createEmbedSessionClient({
-  baseUrl: process.env.W6W_BASE_URL!,
-  clientId: process.env.W6W_TENANT_CLIENT_ID!,
-  clientSecret: process.env.W6W_TENANT_CLIENT_SECRET!, // stays on the server
-});
+// handler.ts: builds no client, so importing it never reads the environment.
+import type { EmbedSessionClient } from "@w6w/sdk/server";
 
 // What YOUR sign-in knows about the caller. Build it from your server-side session.
 interface HostSession {
@@ -64,7 +59,7 @@ interface HostSession {
 }
 
 export function createEmbedSessionHandler(o: {
-  sessions: Pick<typeof sessions, "create">;
+  sessions: Pick<EmbedSessionClient, "create">;
   authenticate(req: Request): HostSession | null | Promise<HostSession | null>;
 }) {
   return async (req: Request): Promise<Response> => {
@@ -96,16 +91,20 @@ export function createEmbedSessionHandler(o: {
 }
 ```
 
-That listing is condensed. The tested version is `node/examples/embed-host/handler.ts`, and its
-tests pin every refusal below. Copy the file rather than retyping this one.
+That listing is a condensed excerpt. The tested version is `node/examples/embed-host/handler.ts`,
+and its tests pin every refusal below. Copy the file rather than retyping this one. Two edits make
+the copied files work in a real Next.js app: in `route.ts`, import `./handler` without the `.ts`
+extension (a default Next tsconfig rejects it with TS5097), and in `handler.ts`, change the
+repo-relative type import (`../../src/server/mod.ts`) to the one shown above, from
+`@w6w/sdk/server`.
 
-On Next.js, the adapter is a `route.ts` that builds the client on the first request and exports
-`POST`:
+On Next.js, the adapter is a `route.ts` that builds the client on the first request, so importing
+it (for example during `next build`) never reads the environment, and exports `POST`:
 
 ```ts
 // app/api/w6w-session/route.ts
 import { createEmbedSessionClient } from "@w6w/sdk/server";
-import { createEmbedSessionHandler } from "./handler"; // the file above
+import { createEmbedSessionHandler } from "./handler"; // handler.ts, the file above
 
 let handler: ReturnType<typeof createEmbedSessionHandler> | undefined;
 
@@ -114,7 +113,7 @@ export function POST(req: Request) {
     sessions: createEmbedSessionClient({
       baseUrl: process.env.W6W_BASE_URL!,
       clientId: process.env.W6W_TENANT_CLIENT_ID!,
-      clientSecret: process.env.W6W_TENANT_CLIENT_SECRET!,
+      clientSecret: process.env.W6W_TENANT_CLIENT_SECRET!, // stays on the server
     }),
     authenticate: yourSessionLookup, // replace with your session lookup
   });
@@ -139,7 +138,8 @@ no-store`.
 
 > **Good to know:** w6w trusts the `accountRef` you pass. Look the company up from your own
 > records for the signed-in user. Never take it, or the `subject`, from a value the browser sends
-> you. That is what the membership check above is for.
+> you without checking it. The `company` hint is accepted only if it is one of the user's
+> `companyIds`, and the `subject` always comes from your session.
 
 `create()` raises `ConfigError` before any request when `subject` or `accountRef` is blank, so a
 missing company can never fall back to your tenant's default account.
@@ -179,19 +179,21 @@ exposed to client code. When the secret is rotated, the previous secret keeps wo
 `TENANT_SECRET_ROTATION_OVERLAP_SEC`, **86400 seconds (24 hours) by default**, so you can roll it
 out without downtime. Update `W6W_TENANT_CLIENT_SECRET` within that window.
 
+Malformed credentials (a blank value, or a client id containing `:`) raise `ConfigError` when you
+create the client, before any request is sent.
+
 ### What a session token can do
 
 - It acts as one user (`subject`) inside one account.
-- Data is **account-scoped**: users of the same account see the same account's resources, and
-  another account, even of the same tenant, cannot see them.
-- A few resource classes are additionally kept **per subject**. The server decides which, per
-  resource class; you cannot configure it.
+- Data is **account-scoped**: another account, even of the same tenant, cannot see it.
+- Inside one account, the server decides **per resource class** whether a resource is shared by
+  the account's users or private to the subject that created it, and you cannot configure that.
+  Today, for example, workflows and functions are shared by every user of the account, while
+  variables and documents are visible only to the subject that created them (another user of the
+  same account gets a `404`). Do not build on this split: it can change per class.
 - There are **no fine-grained grants**: the session does not carry per-resource permissions.
 - There is **no per-user privacy promise**. Do not store anything in an account that one of its
   other users must not see.
-
-Malformed credentials (a blank value, or a client id containing `:`) raise `ConfigError` when you
-create the client, before any request is sent.
 
 ### The lower-level call
 
@@ -213,7 +215,8 @@ supplier** (as below) rather than minting a token on every call:
 ```ts
 import { W6WClient } from "@w6w/sdk";
 
-let cached: { token: string; expiresAt: string } | undefined;
+type Cached = { token: string; expiresAt: string };
+let cached: Cached | undefined;
 
 const client = new W6WClient({
   baseUrl: process.env.W6W_BASE_URL,
@@ -222,7 +225,7 @@ const client = new W6WClient({
       // Calls YOUR host endpoint from section 1. It returns the session JSON.
       const res = await fetch("/api/w6w-session", { method: "POST" });
       if (!res.ok) return null;
-      cached = await res.json();
+      cached = (await res.json()) as Cached;
     }
     return cached.token;
   },
@@ -293,11 +296,11 @@ fetches a session from your backend endpoint. See [Next.js and token minting](/c
 
 | Symptom | Cause | What to do |
 | --- | --- | --- |
-| `401 invalid_client` from `create()` | The client id or secret is wrong or unknown, or the tenant is disabled. The server gives one message for all of these on purpose. | Check `W6W_TENANT_CLIENT_ID` and `W6W_TENANT_CLIENT_SECRET` against what you were issued, then check with w6w that the tenant is active. |
-| `401 tenant_disabled` from `create()` | The credentials are valid, but the tenant is disabled. | Contact w6w to re-enable the tenant. |
-| `400 invalid_subject` or `400 invalid_account` | The subject is missing, or the account reference is not a string. | Send your user id as `subject` and your company id as `accountRef`, both strings. |
+| `401 invalid_client` from `create()` | The client id or secret is wrong or unknown, or the tenant is disabled. The server gives one message for all of these on purpose, so a disabled tenant with valid credentials gets this too. | Check `W6W_TENANT_CLIENT_ID` and `W6W_TENANT_CLIENT_SECRET` against what you were issued, then check with w6w that the tenant is active. |
+| `401 tenant_disabled` | Mostly on an API call made with a session token you already minted, once the tenant has been disabled. `create()` can also return it for a short while after a tenant is re-enabled, because w6w remembers a tenant's status for up to 30 seconds. | Nothing to change on your side. If the tenant was just re-enabled, retry in under a minute. If it stays, the tenant is disabled: new sessions fail with `invalid_client` (above), so check with w6w. |
+| `400 invalid_subject` or `400 invalid_account` | Only from `exchangeToken` or a hand-written call to `/auth/exchange`. `create()` refuses a blank or non-string `subject` or `accountRef` itself and raises `ConfigError` before sending anything. | Send your user id as `subject` and your company id as `accountRef`, both non-blank strings. |
 | `ConfigError` from `create()` or the factory | A value is blank (a blank `accountRef` is refused locally), the client id contains `:`, or the factory ran in a browser. | Check the environment variables are set on the backend and that `accountRef` is your company id. |
-| `429 rate_limited` with a `Retry-After` header | Too many exchanges for your client id. | Wait for the seconds in `Retry-After`, and mint a session once per expiry instead of once per request. |
+| `429 rate_limited` from `create()` | Too many exchanges for your client id. | Back off and try again later. Mint a session once per expiry instead of once per request. The error does not carry the server's `Retry-After` value. |
 | Your endpoint returns `502 session_unavailable` | The exchange failed. The body is opaque by design. | Read the error in your server logs. |
 | `ConfigError: No w6w API token is configured` on a call | Your supplier returned nothing. | Make sure it returns a token string, and handle the case where the user isn't signed in. |
 | Calls keep failing with `401` after a refresh | The supplier returns the same expired token. | Call the host endpoint again when `forceRefresh` is `true`, instead of returning a cached session. |
