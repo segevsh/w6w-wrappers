@@ -17,10 +17,12 @@ import io
 import json
 import socket
 import unittest
+from unittest import mock
 from typing import Any, Callable, List, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import BaseHandler, Request
 
+from w6w import _http
 from w6w import ApiError, Client, ConfigError, HttpResponse, path
 from w6w._config import resolve_config
 from w6w._http import (
@@ -584,10 +586,6 @@ class TypingTest(unittest.TestCase):
         self.assertEqual(unannotated, [])
 
 
-if __name__ == "__main__":  # pragma: no cover
-    unittest.main()
-
-
 class FakeUrlResponse(io.BytesIO):
     """The few attributes urllib's response processors read off an `http_open` result."""
 
@@ -605,7 +603,7 @@ class FakeUrlResponse(io.BytesIO):
 class RedirectingHandler(BaseHandler):
     """A fake protocol handler (no sockets): answers every open with a 3xx to another host."""
 
-    handler_order = 100  # ahead of the stdlib http/https handlers in the chain
+    handler_order = 50  # ahead of the stdlib http/https handlers and ProxyHandler (100)
 
     def __init__(self, status: int) -> None:
         self.status = status
@@ -664,3 +662,34 @@ class NoRedirectTransportTest(unittest.TestCase):
     def test_client_keeps_the_default_transport_and_it_is_a_distinct_function(self) -> None:
         self.assertIs(Client(base_url="https://api.example.com", token="t").transport, default_transport)
         self.assertIsNot(no_redirect_transport, default_transport)
+
+    def test_malformed_location_is_still_an_http_error_not_a_value_error(self) -> None:
+        class BadLocation(RedirectingHandler):
+            def _open(self, req: Request) -> Any:
+                self.opened.append(req.full_url)
+                headers = email.message.Message()
+                headers["Location"] = "http://[::1"
+                return FakeUrlResponse(req.full_url, self.status, headers)
+
+            http_open = _open
+            https_open = _open
+
+        for status in (301, 302, 303, 307, 308):
+            with self.subTest(status=status):
+                opener = build_no_redirect_opener(BadLocation(status))
+                with self.assertRaises(HTTPError) as caught:
+                    opener.open(Request("https://api.example.com/x", method="GET"))
+                self.assertEqual(caught.exception.code, status)
+
+    def test_no_redirect_transport_opens_the_request_once_through_the_no_redirect_opener(self) -> None:
+        req = Request("https://api.example.com/x")
+        with mock.patch.object(_http, "build_no_redirect_opener") as builder:
+            result = no_redirect_transport(req)
+        builder.assert_called_once_with()
+        builder.return_value.open.assert_called_once_with(req)
+        self.assertIs(result, builder.return_value.open.return_value)
+
+
+
+if __name__ == "__main__":  # pragma: no cover
+    unittest.main()

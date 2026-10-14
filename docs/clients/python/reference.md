@@ -177,7 +177,7 @@ For backends only. The recommended way to mint a short-lived, account-scoped ses
 | --- | --- |
 | `base_url` | Your API origin. Required; no `W6W_BASE_URL` fallback. Use the final `https` origin. `exchange_token` and `EmbedSessionClient` refuse redirects by default: a 3xx raises `ApiError` and the Basic client credential is never re-sent. An injected `transport` is used as given. |
 | `client_id`, `client_secret` | Your tenant's credentials. Keep the secret on your backend. |
-| `transport` | Optional, as on `Client`. |
+| `transport` | Optional. Defaults to a transport that never follows redirects (unlike `Client`); your own transport decides. |
 | `now` | Optional clock returning epoch seconds. Defaults to `time.time`. |
 
 `create(subject, account_ref)` makes one exchange. Both arguments are required and non-blank (`ConfigError` otherwise, no request sent). `subject` is sent as given; `account_ref` is trimmed. It returns a dict with exactly `token`, `expiresIn` (seconds), `expiresAt` (ISO-8601 UTC), `subject`, `tenant`, `account` (the resolved `acct_` id) and `accountRef`.
@@ -192,7 +192,7 @@ For backends only. The lower-level call, with an optional `account`. Trades your
 | `client_id`, `client_secret` | Your tenant's credentials. Keep the secret on your backend. |
 | `subject` | Your user's id. |
 | `account` | Optional. The w6w account the user works in, from your own records. |
-| `transport` | Optional, as on `Client`. |
+| `transport` | Optional. Defaults to a transport that never follows redirects (unlike `Client`); your own transport decides. |
 
 Returns a dict with `token`, `expiresIn` (seconds) and `user`.
 

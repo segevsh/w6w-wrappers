@@ -227,6 +227,14 @@ class NoRedirectHandler(HTTPRedirectHandler):
     def redirect_request(self, *args: Any, **kwargs: Any) -> None:  # type: ignore[override]
         return None
 
+    # `HTTPRedirectHandler.http_error_30x` parses `Location` before it asks
+    # `redirect_request`, so a malformed one would escape as `ValueError`.
+    # Returning `None` skips that and lets the status surface as `HTTPError`.
+    def http_error_301(self, *args: Any, **kwargs: Any) -> None:  # type: ignore[override]
+        return None
+
+    http_error_302 = http_error_303 = http_error_307 = http_error_308 = http_error_301
+
 
 def build_no_redirect_opener(*extra_handlers: BaseHandler) -> OpenerDirector:
     """The opener `no_redirect_transport` uses: stdlib defaults plus :class:`NoRedirectHandler`.
