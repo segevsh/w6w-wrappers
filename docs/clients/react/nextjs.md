@@ -19,8 +19,8 @@ updatedAt: null
 # Next.js and token minting
 
 This page wires `@w6w/react` into a Next.js App Router app so that each signed-in user calls w6w
-with their own short-lived token. Your server mints the token. The browser only ever sees that
-token, never your tenant's credentials. The same pattern works in any React framework with a
+with their own short-lived token. Your server mints the session. The browser only ever sees that
+session, never your tenant's credentials. The same pattern works in any React framework with a
 backend.
 
 ## Before you start
@@ -38,34 +38,54 @@ W6W_TENANT_CLIENT_ID=…
 W6W_TENANT_CLIENT_SECRET=…
 ```
 
-## 2. Add a route that mints a token
+## 2. Add a route that mints a session
 
-Create `app/api/w6w-token/route.ts`. It reads your own session, then exchanges your tenant
-credentials for a token that acts as that user:
+Create `app/api/w6w-session/route.ts`. It reads your own session, checks that the company the
+browser asks for is one the user belongs to, and only then exchanges your tenant credentials for a
+session that acts as that user in that company. The tested version of this adapter and its handler
+live in the SDK repository at `node/examples/embed-host/`; the shape is:
 
 ```ts
-import { exchangeToken } from "@w6w/sdk/server";
-import { NextResponse } from "next/server";
+import { createEmbedSessionClient } from "@w6w/sdk/server";
+import { createEmbedSessionHandler } from "./handler"; // copy node/examples/embed-host/handler.ts
 import { getSession } from "@/lib/auth"; // your own sign-in
 
-export async function POST() {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "signed_out" }, { status: 401 });
+let handler: ReturnType<typeof createEmbedSessionHandler> | undefined;
 
-  const { token, expiresIn } = await exchangeToken({
-    baseUrl: process.env.W6W_BASE_URL!,
-    clientId: process.env.W6W_TENANT_CLIENT_ID!,
-    clientSecret: process.env.W6W_TENANT_CLIENT_SECRET!,
-    subject: session.userId,
-    account: session.w6wAccountId, // from your records, never from the request
+// Next.js App Router route handler: no `next` import needed.
+export function POST(req: Request) {
+  handler ??= createEmbedSessionHandler({
+    sessions: createEmbedSessionClient({
+      baseUrl: process.env.W6W_BASE_URL!,
+      clientId: process.env.W6W_TENANT_CLIENT_ID!,
+      clientSecret: process.env.W6W_TENANT_CLIENT_SECRET!,
+    }),
+    // Replace with your session lookup. It must return the user's id and the
+    // external ids of the companies they belong to, from your records.
+    authenticate: async () => {
+      const session = await getSession();
+      return session
+        ? {
+          userId: session.userId,
+          companyIds: session.companyIds,
+          activeCompanyId: session.activeCompanyId,
+        }
+        : null;
+    },
   });
-
-  return NextResponse.json({ token, expiresAt: Date.now() + expiresIn * 1000 });
+  return handler(req);
 }
 ```
 
-Check it: while signed in, run `fetch("/api/w6w-token", { method: "POST" })` from the browser
-console. You should get back a `token` and an `expiresAt`.
+The `subject` and the company reference come from `authenticate`, never from the request body. The
+browser may send `{ "company": "<id>" }` to switch company, and the handler refuses (`403`) any
+company that is not in `companyIds`. The company id is your external company id: stable, and sent
+verbatim as the `accountRef`. The first time w6w sees one it creates an empty account for it. See
+[Embed w6w in your product](/guides/embed/) for the full rules.
+
+Check it: while signed in, run `fetch("/api/w6w-session", { method: "POST" })` from the browser
+console. You should get back a `token`, an `expiresAt` (an ISO date string) and an `account` (an
+`acct_…` id).
 
 ## 3. Add the provider in a client component
 
@@ -78,16 +98,16 @@ it expires, and refreshes it when w6w rejects it:
 import { W6WProvider } from "@w6w/react";
 import { useCallback, useRef, type ReactNode } from "react";
 
-type Cached = { token: string; expiresAt: number };
+type Cached = { token: string; expiresAt: string }; // expiresAt is an ISO date string
 
 export function W6W({ userId, children }: { userId: string; children: ReactNode }) {
   const cache = useRef<Cached | null>(null);
 
   const token = useCallback(async ({ forceRefresh = false } = {}) => {
     const c = cache.current;
-    if (!forceRefresh && c && c.expiresAt - Date.now() > 30_000) return c.token;
+    if (!forceRefresh && c && Date.parse(c.expiresAt) - Date.now() > 30_000) return c.token;
 
-    const res = await fetch("/api/w6w-token", { method: "POST" });
+    const res = await fetch("/api/w6w-session", { method: "POST" });
     if (!res.ok) return null; // hooks wait instead of sending an unauthenticated call
     cache.current = (await res.json()) as Cached;
     return cache.current.token;
@@ -106,6 +126,10 @@ export function W6W({ userId, children }: { userId: string; children: ReactNode 
   );
 }
 ```
+
+A session is for one company. If your app lets a user switch company, clear `cache.current` and
+send `{ company }` in the request body when they do, so the next call mints a session for the new
+company.
 
 `identityKey` tells the provider whose data it's showing. When a different user signs in, the
 client is rebuilt and every hook starts empty, so nothing from the previous user is shown.
@@ -158,18 +182,18 @@ report `loading: true` and send nothing while `ready` is `false`, then load as s
 
 Hooks and the provider only work in client components, the files marked `"use client"`. In a
 server component or a route handler, use the [Node SDK](/clients/node/) directly. Create a
-`W6WClient` with a token from `exchangeToken` and call it.
+`W6WClient` with a token from the session client's `create()` and call it.
 
 ## Troubleshooting
 
 | Symptom | Cause | What to do |
 | --- | --- | --- |
-| `401 invalid_client` from your token route | The tenant client id or secret is wrong. | Check the values in `.env.local` and restart the dev server. |
-| Hooks stay loading | The token route returns an error, so the supplier returns `null`. | Call `/api/w6w-token` from the browser console and fix what it returns. |
+| `401 invalid_client` from your session route | The tenant client id or secret is wrong, or the tenant is disabled. | Check the values in `.env.local` and restart the dev server. |
+| Hooks stay loading | The session route returns an error, so the supplier returns `null`. | Call `/api/w6w-session` from the browser console and fix what it returns. |
 | `W6W_TENANT_CLIENT_SECRET` shows up in the browser bundle | It was given a `NEXT_PUBLIC_` prefix or imported in client code. | Rename it, and only use it in route handlers and server code. Rotate the secret. |
 | `useW6WClient must be used inside <W6WProvider>` | A component using a hook renders outside the provider. | Wrap that part of the tree in the provider. |
 
 ## Where to next
 
 - **[Hooks reference](/clients/react/hooks/)**: every hook and provider prop.
-- **[Embed w6w in your product](/guides/embed/)**: the token exchange in more detail.
+- **[Embed w6w in your product](/guides/embed/)**: the session endpoint in more detail.
