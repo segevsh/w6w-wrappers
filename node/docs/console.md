@@ -973,16 +973,22 @@ claim) plus a server-side tenant-admin check, unlike the operator family
 | `put(appId, authKey, input)` | `PUT /tenant/oauth-app/:appId/:authKey`    | **Body built by omission — see below.** No query string is ever set. Reads `res.body.config` directly (server answers `201`); never calls `unwrap()`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `remove(appId, authKey)`     | `DELETE /tenant/oauth-app/:appId/:authKey` | Resolves `void`, discarding `{ok: true}`, same convention as `console.projects.delete`/`console.schedules.delete`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
+Each `TenantOAuthAppSummary` row may also carry (all optional; absent from an older server):
+`isDefault` (users of this tenant get this method preselected), `clientSecretHint` (a
+server-computed masked display string, or `null`; never the secret), and the joined app display
+fields `appDisplayName`, `iconSvg`, `iconSvgDark`, `brandColor`, `brandColorDark`. `AuthDef.default`
+marks the tenant's default method.
+
 **`put` builds its request body by OMISSION, key by key — an omitted field never reaches the wire.**
-`SetTenantOAuthAppInput` has four optional keys (`clientId`, `clientSecret`, `extra`, `disabled`);
-the server merges whichever ones are present over the stored row and leaves everything else
-untouched. This is a genuine RUNTIME allowlist, not merely a compile-time one: even a caller that
-defeats the type (`as unknown as SetTenantOAuthAppInput`) and passes `redirectUri` or `force` cannot
-get either one onto the wire — neither key is ever read by the body builder. Separately, `put` sets
-**no query string at all** on the request, so `?force=true` is unreachable by construction — there
-is no code path that could add it, not merely an unwritten one. Neither `redirectUri` (the callback
-URL is derived server-side, per row) nor `force` (the operator's affordance) is offered to a tenant
-admin.
+`SetTenantOAuthAppInput` has five optional keys (`clientId`, `clientSecret`, `extra`, `disabled`,
+`isDefault`); the server merges whichever ones are present over the stored row and leaves everything
+else untouched. This is a genuine RUNTIME allowlist, not merely a compile-time one: even a caller
+that defeats the type (`as unknown as SetTenantOAuthAppInput`) and passes `redirectUri` or `force`
+cannot get either one onto the wire — neither key is ever read by the body builder. Separately,
+`put` sets **no query string at all** on the request, so `?force=true` is unreachable by
+construction — there is no code path that could add it, not merely an unwritten one. Neither
+`redirectUri` (the callback URL is derived server-side, per row) nor `force` (the operator's
+affordance) is offered to a tenant admin.
 
 **`clientSecret: ""` IS carried to the wire verbatim, and it is destructive server-side — an omitted
 `clientSecret` is not.** Measured directly against the real request body (not inferred):

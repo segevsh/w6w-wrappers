@@ -90,6 +90,27 @@ export interface TenantOAuthAppSummary {
   hasClientSecret: boolean;
   /** Whether the override is switched off (the host's own client is used instead). */
   disabled: boolean;
+  /**
+   * Whether users of this tenant get this method preselected. Absent from an
+   * older server.
+   */
+  isDefault?: boolean;
+  /**
+   * Server-computed masked display string for the stored client secret, or
+   * `null` when none is stored. Never the secret itself. Absent from an older
+   * server.
+   */
+  clientSecretHint?: string | null;
+  /** The app's display name, joined server-side. Absent from an older server. */
+  appDisplayName?: string;
+  /** The app's icon as inline SVG, joined server-side. Absent when none or an older server. */
+  iconSvg?: string;
+  /** The app's dark-theme icon as inline SVG. Absent when none or an older server. */
+  iconSvgDark?: string;
+  /** The app's brand colour. Absent when none or an older server. */
+  brandColor?: string;
+  /** The app's dark-theme brand colour. Absent when none or an older server. */
+  brandColorDark?: string;
 }
 
 /** `GET /tenant/oauth-apps` → 200 (W3). */
@@ -137,13 +158,18 @@ export interface SetTenantOAuthAppInput {
   extra?: Record<string, unknown> | null;
   /** Whether to switch the override off. */
   disabled?: boolean;
+  /**
+   * Whether users of this tenant get this method preselected. `true` and
+   * `false` are both sent; omit to leave the stored value alone.
+   */
+  isDefault?: boolean;
 }
 
 /**
  * Serialise {@linkcode SetTenantOAuthAppInput} for the wire: **only the keys
  * actually present**, with `null` preserved as a real value.
  *
- * Written as four explicit `!== undefined` tests rather than a spread or an
+ * Written as five explicit `!== undefined` tests rather than a spread or an
  * `Object.entries` loop, for two reasons. It keeps `undefined` off the wire
  * without relying on `JSON.stringify` dropping it (a serializer that
  * normalised `undefined` to `null` would silently wipe a stored credential —
@@ -160,6 +186,7 @@ function toSetBody(input: SetTenantOAuthAppInput): Record<string, unknown> {
   if (input.clientSecret !== undefined) body.clientSecret = input.clientSecret;
   if (input.extra !== undefined) body.extra = input.extra;
   if (input.disabled !== undefined) body.disabled = input.disabled;
+  if (input.isDefault !== undefined) body.isDefault = input.isDefault;
   return body;
 }
 
