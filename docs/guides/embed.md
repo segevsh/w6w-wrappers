@@ -196,9 +196,12 @@ create the client, before any request is sent.
 
 - It acts as one user (`subject`) inside one account.
 - Most data is **account-scoped**: a session for another account, even of the same tenant, cannot
-  see it. One class is not: invocation records (the run record behind each `invocationId`,
-  including the call's inputs) belong to the `subject` and are not filtered by account, so a user
-  who holds sessions for two of your companies can read their own records from either.
+  see it. That is not true of every record. Some belong to the `subject` and are not filtered by
+  account, for example invocation records (the run record behind each `invocationId`, including the
+  call's inputs) and the API-call log (each outbound request an app action makes, with its redacted
+  request and response bodies). A user who holds sessions for two of your companies can read their
+  own such records from either, so do not treat the account as a confidentiality wall between
+  companies that share a user.
 - Inside one account, the server decides **per resource class** whether a resource is shared by
   the account's users or private to the subject that created it, and you cannot configure that.
   Today, for example, workflows and functions are shared by every user of the account, while
