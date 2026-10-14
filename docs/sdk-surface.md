@@ -294,6 +294,11 @@ envelope, `enable` and `disable` return nothing, and `run` on either domain take
 sent only when `true`, and never a submitted body, so save first. `publish`
 snapshots the stored row, so flush any pending save before it.
 
+**What a plain run executes.** Without `allowUnpublished`, `run` still executes the **stored** definition
+as last saved — publishing is a precondition (the workflow or Function must have at least one published version), not a
+selector. Edits saved after a publish are what the next plain `run` executes. To execute exactly what was
+published, call `runVersion(id, n)`.
+
 The asymmetries between the two domains are the server's, not the wrappers':
 workflows take `?project=` and an `x-w6w-if-unmodified-since` precondition;
 Functions take neither, and no request on that domain carries a project even
