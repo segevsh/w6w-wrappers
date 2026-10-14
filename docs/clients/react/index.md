@@ -177,6 +177,13 @@ unchanged in both directions, so converting there and back gives you the same de
 member is present as a function, forwards its arguments to the expected request, and hands the
 server's error body to the caller as `err.body`.
 
+The adapter is the supported way to connect the UI to w6w. Most of its members run on the
+Studio-internal `client.console.*` calls, which can change without notice, so pass
+`createW6WUiAdapter(client)` to the UI as it is. Don't call the console namespace yourself or add
+members to the adapter. `listAppsByIds` and `listConnections` use the public
+`client.apps.byIds` and `client.connections.list`. For a workflow or Function editor, see
+[Embed w6w in your product](/guides/embed/).
+
 ## Handle errors
 
 Hook errors are the SDK's `ApiError`, with `status`, `code`, `message` and `raw`:
