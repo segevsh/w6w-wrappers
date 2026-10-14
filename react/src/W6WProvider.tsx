@@ -38,16 +38,40 @@
  * @module
  */
 import { type ApiError, type FetchLike, type TokenProvider, W6WClient } from "@w6w/sdk";
-import { type ReactNode, createContext, useContext, useMemo, useRef } from "react";
+import { type ReactNode, createContext, useContext, useEffect, useMemo, useRef } from "react";
+import { DEFAULT_RENEW_BEFORE_MS, SessionStore, type W6WSession } from "./session.ts";
 
 /** A static bearer token, or a supplier called per request (concurrent requests share one call). */
 export type TokenSource = string | TokenProvider;
 
-export interface W6WProviderProps {
+/**
+ * Exactly one credential source: a `token` (string, or a supplier called per
+ * request) OR a `getSession` callback whose session the provider caches,
+ * renews before expiry and re-checks on tab resume (see `useW6WSession`).
+ */
+export type W6WCredentialProps =
+  | {
+      /** A literal bearer token, or a supplier called per request (concurrent requests share one call). */
+      token: TokenSource;
+      getSession?: never;
+      renewBeforeMs?: never;
+    }
+  | {
+      token?: never;
+      /**
+       * Mints a session (`{token, expiresAt, expiresIn?}`). Called lazily, at
+       * most once at a time; the result is cached until `renewBeforeMs` (capped
+       * at half the session's lifetime) before it expires. Always the LATEST
+       * callback, read through a ref.
+       */
+      getSession: () => Promise<W6WSession>;
+      /** Renew this long before expiry. Default `30_000`. */
+      renewBeforeMs?: number;
+    };
+
+export type W6WProviderProps = {
   /** The w6w server's origin, e.g. `"https://api.example.com"`. */
   baseUrl: string;
-  /** A literal bearer token, or a supplier called per request (concurrent requests share one call). */
-  token: TokenSource;
   /**
    * The real transport this provider's stable `fetch` wrapper delegates to.
    * Defaults to `globalThis.fetch`. Mainly for tests — a caller wanting to
@@ -91,10 +115,12 @@ export interface W6WProviderProps {
    */
   onUnauthorized?: (error: ApiError) => void;
   children: ReactNode;
-}
+} & W6WCredentialProps;
 
 interface W6WContextValue {
   client: W6WClient;
+  /** The `getSession` store, or `null` for a `token` provider. Read by `useW6WSession`. */
+  session: SessionStore | null;
   /** Mirrors the `ready` prop. Read by `hooks.ts`'s `useAsync`, never by `useW6WClient`. */
   ready: boolean;
 }
@@ -121,6 +147,8 @@ export function W6WProvider(props: W6WProviderProps): ReactNode {
   const {
     baseUrl,
     token,
+    getSession,
+    renewBeforeMs,
     fetch: fetchOverride,
     project,
     headers,
@@ -130,6 +158,16 @@ export function W6WProvider(props: W6WProviderProps): ReactNode {
     onUnauthorized,
     children,
   } = props;
+
+  const hasToken = token !== undefined && token !== null;
+  const hasSession = getSession !== undefined && getSession !== null;
+  if (hasToken === hasSession) {
+    throw new Error(
+      hasToken
+        ? "<W6WProvider> takes exactly one of `token` or `getSession`, not both."
+        : "<W6WProvider> needs exactly one of `token` or `getSession`.",
+    );
+  }
 
   // "Latest ref" pattern: kept in sync on every render, but never a `useMemo`
   // dependency below — the stable wrappers constructed inside always read the
@@ -143,6 +181,10 @@ export function W6WProvider(props: W6WProviderProps): ReactNode {
   // the moment the memo recomputes.
   const tokenRef = useRef(token);
   tokenRef.current = token;
+  const getSessionRef = useRef(getSession);
+  getSessionRef.current = getSession;
+  const renewBeforeMsRef = useRef(renewBeforeMs);
+  renewBeforeMsRef.current = renewBeforeMs;
   const fetchRef = useRef(fetchOverride);
   fetchRef.current = fetchOverride;
   const onUnauthorizedRef = useRef(onUnauthorized);
@@ -152,7 +194,7 @@ export function W6WProvider(props: W6WProviderProps): ReactNode {
 
   const headersSnapshot = headersKey(headers);
 
-  const client = useMemo(() => {
+  const { client, store } = useMemo(() => {
     // `identityKey` and `headersSnapshot` are not otherwise read in this body
     // — they exist purely so this memo depends on them (identity switch;
     // headers content change, per this module's header). Referencing them
@@ -160,7 +202,19 @@ export function W6WProvider(props: W6WProviderProps): ReactNode {
     // `useExhaustiveDependencies` from treating them as superfluous.
     void identityKey;
     void headersSnapshot;
+    // Born and killed with this memo (i.e. with `identityKey`); disposed by the
+    // effect below, never here (StrictMode double-invokes memo bodies).
+    const store = hasSession
+      ? new SessionStore(
+          () => {
+            const fn = getSessionRef.current;
+            return fn ? fn() : Promise.reject(new Error("getSession was removed"));
+          },
+          () => renewBeforeMsRef.current ?? DEFAULT_RENEW_BEFORE_MS,
+        )
+      : null;
     const stableToken: TokenProvider = (ctx) => {
+      if (store) return store.supplier(ctx);
       const current = tokenRef.current;
       return typeof current === "function" ? current(ctx) : current;
     };
@@ -172,7 +226,7 @@ export function W6WProvider(props: W6WProviderProps): ReactNode {
     const stableOnUnauthorized = (error: ApiError) => {
       onUnauthorizedRef.current?.(error);
     };
-    return new W6WClient({
+    const client = new W6WClient({
       baseUrl,
       project,
       token: stableToken,
@@ -181,9 +235,19 @@ export function W6WProvider(props: W6WProviderProps): ReactNode {
       refreshOnUnauthorized,
       onUnauthorized: stableOnUnauthorized,
     });
-  }, [baseUrl, project, identityKey, refreshOnUnauthorized, headersSnapshot]);
+    return { client, store };
+  }, [baseUrl, project, identityKey, refreshOnUnauthorized, headersSnapshot, hasSession]);
 
-  const value = useMemo<W6WContextValue>(() => ({ client, ready }), [client, ready]);
+  // Listener/timer lifecycle + late-discard of the OLD store on identity change.
+  useEffect(() => {
+    store?.attach();
+    return () => store?.detach();
+  }, [store]);
+
+  const value = useMemo<W6WContextValue>(
+    () => ({ client, ready, session: store }),
+    [client, ready, store],
+  );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
