@@ -214,6 +214,48 @@ main`) and run `npm install` again to refresh `package-lock.json`'s resolved
 entry — no code change is required unless `@w6w/ui`'s `W6WApi` itself changed
 shape, in which case `ui-conformance.test.ts` will say so.
 
+**Runtime conformance.** Assignability is checked at compile time only, so it cannot
+see a member that is typed but missing or mis-wired at run time.
+`src/__tests__/adapter-conformance.test.ts` closes that gap. It reads the member names
+(21 required, 8 optional) from the installed `@w6w/ui` `provider.tsx` source — not from
+this package's hand-copied interface — and asserts each is a function on
+`createW6WUiAdapter(client)`. It then drives every member with sentinel arguments
+through a stub transport and asserts the exact wire request produced (forwarding), and
+asserts that a 4xx JSON error body reaches the caller as `err.body`, deep-equal to
+what the server sent. Nothing in it imports `@w6w/ui` at run time; the pinned UI is
+read as text.
+
+### Editing workflows with a typed shape
+
+`@w6w/sdk` keeps a workflow definition opaque (`WorkflowDefinition`, a
+`Record<string, unknown>`) on purpose, so a newer server's extra fields never break a
+client. The visual editor wants a typed shape, so this package exports a validating
+converter instead of a cast:
+
+```ts
+import { fromFlowWorkflow, toFlowWorkflow, WorkflowShapeError } from "@w6w/react";
+
+const { workflow } = await client.workflows.get(id);
+try {
+  const flow = toFlowWorkflow(workflow); // FlowWorkflowShape
+  // ... hand `flow` to the editor, receive an edited copy back ...
+  await client.workflows.update(id, fromFlowWorkflow(edited));
+} catch (err) {
+  if (err instanceof WorkflowShapeError) console.error(err.issues); // [{ path, message }, ...]
+}
+```
+
+`toFlowWorkflow` requires string `manifestVersion`/`id`/`name` and a `steps` array of
+objects with a string `id` (plus `edges` an array, `settings` an object, `variables`
+an array, when present); anything else throws `WorkflowShapeError` whose `issues` lists
+every violation. It does not inspect the inside of `steps[].uses` or any other nested
+field. Unknown keys (`retry`, `onError`, `ports`, a host's `x-*` extension) are copied
+through in both directions, so `fromFlowWorkflow(toFlowWorkflow(def))` deep-equals
+`def`. `FlowWorkflowShape` is a structural mirror of `@w6w/ui`'s `FlowWorkflow`, with no
+runtime `@w6w/ui` dependency; `ui-conformance.check.ts` pins it both ways (ui's
+`FlowWorkflow` is accepted by `fromFlowWorkflow`, and the mirror is assignable to ui's
+`FlowWorkflow`).
+
 ## Hooks catalog
 
 Every read hook returns `{data, error, loading, refetch}`; every mutation hook
