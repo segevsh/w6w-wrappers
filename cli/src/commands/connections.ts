@@ -1,10 +1,14 @@
 /**
- * `w6w connections list` — discovery, and nothing more (D4).
+ * `w6w connections list | get | delete` — find a connection, read one, remove one.
  *
- * One command, one SDK call, no filters and no pagination: the operation
- * exists so a caller can find a `conn_…` id to pass to `w6w run`, and nothing
- * about creating, testing or reconnecting an app lives here — that is
- * `outOfScope` in `endpoints.json` for this version.
+ * `list` exists so a caller can find a `conn_…` id to pass to `w6w run`; it has
+ * no filters and no pagination. `get` and `delete` address one by that id.
+ * Creating, testing and reconnecting an app are NOT here — connect flows are
+ * interactive (OAuth) and stay `outOfScope` in `endpoints.json`.
+ *
+ * `delete` has no confirmation prompt (this lane is non-interactive) and the
+ * server scopes it to the caller's account: another account's id is a plain
+ * 404, which exits 2.
  *
  * @module
  */
@@ -12,7 +16,7 @@
 import type { CommandHandler, CommandRegistry } from "../../mod.ts";
 import type { ConnectionSummary } from "@w6w/sdk";
 import type { Styles } from "../output.ts";
-import { noExtraArguments, table } from "./shared.ts";
+import { argument, noExtraArguments, table } from "./shared.ts";
 
 /** One connection, as a table row. */
 function row(connection: ConnectionSummary): string[] {
@@ -31,6 +35,28 @@ const list: CommandHandler = async (context) => {
   context.out.emit(connections, (styles) => renderList(connections, styles));
 };
 
+const get: CommandHandler = async (context) => {
+  const id = argument(context, 0, "a connection id (see: `w6w connections list`)");
+  noExtraArguments(context, 1);
+  const connection = await context.client().connections.get(id);
+  context.out.emit(connection, (styles) =>
+    [
+      `${styles.bold(connection.displayName)} ${styles.dim(`(${connection.id})`)}`,
+      "",
+      JSON.stringify(connection, null, 2),
+    ].join("\n"));
+};
+
+const remove: CommandHandler = async (context) => {
+  const id = argument(context, 0, "a connection id (see: `w6w connections list`)");
+  noExtraArguments(context, 1);
+  await context.client().connections.delete(id);
+  // `null`: the SDK unwraps a delete to nothing; `--json` must not invent a body.
+  context.out.emit(null, (styles) => styles.dim(`Deleted ${id}.`));
+};
+
 export const CONNECTION_COMMANDS: CommandRegistry = {
   "connections list": list,
+  "connections get": get,
+  "connections delete": remove,
 };

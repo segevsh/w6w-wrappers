@@ -490,11 +490,14 @@ Deno.test("every `w6w connections` / `w6w workflows` / `w6w functions` command i
       assert(Object.hasOwn(COMMANDS, path), `\`${path}\` is not wired`);
     }
   }
-  assertEquals(Object.keys(CONNECTION_COMMANDS).length, 1);
-  // Eight and five: the two run commands (`workflows run`, `functions run`),
+  assertEquals(Object.keys(CONNECTION_COMMANDS).length, 3); // list, get, delete
+  // Fifteen and thirteen since the embed-sdk-coverage lane: the seven version
+  // commands (`versions`, `version`, `publish`, `revert`, `enable`, `disable`,
+  // `run-version`) landed on both groups and `functions` gained `archive`.
+  // Before that, eight and five: the two run commands (`workflows run`, `functions run`),
   // `workflows cancel` (T1.1.4, addressed by the run id `workflows run` hands
   // back), plus the definition lifecycle each domain now carries. `functions`
   // counts five here because its `run` is registered elsewhere — see above.
-  assertEquals(Object.keys(WORKFLOW_COMMANDS).length, 8);
-  assertEquals(Object.keys(FUNCTION_COMMANDS).length, 5);
+  assertEquals(Object.keys(WORKFLOW_COMMANDS).length, 15);
+  assertEquals(Object.keys(FUNCTION_COMMANDS).length, 13);
 });

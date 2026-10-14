@@ -105,13 +105,17 @@ const ROOT_EXAMPLES = [
 
 /** Summary shown for each group, in root help and in that group's own headline. */
 const GROUP_SUMMARIES: Record<string, string> = {
-  connections: "Inspect connections",
+  connections: "List, inspect and delete connections",
   workflows: "List, run and edit workflows",
   functions: "Run and edit functions",
   endpoints: "Run endpoints by key or id",
   documents: "Create, read, update and delete documents",
   vars: "Create, read, update and delete variables",
   team: "Invite, list and manage your account's team",
+  apps: "Look up apps by id",
+  dashboard: "Run-ledger rollup for your account",
+  projects: "List your projects",
+  reliability: "Health and performance of the apps you use",
 };
 
 const GROUP_EXAMPLES: Record<string, string[]> = {
@@ -122,12 +126,35 @@ const GROUP_EXAMPLES: Record<string, string[]> = {
   documents: ["w6w documents list", "w6w documents get doc_01HQ8N"],
   vars: ["w6w vars list", "w6w vars create greeting --type string --value hello"],
   team: ["w6w team members", "w6w team invite --email new@example.com --role admin"],
+  apps: ["w6w apps by-ids sendgrid,slack"],
+  dashboard: ["w6w dashboard stats", "w6w dashboard stats --bucket week"],
+  projects: ["w6w projects list"],
+  reliability: [
+    "w6w reliability members --project prj_01HQ8N",
+    "w6w reliability list --project prj_01HQ8N --apps sendgrid,slack",
+  ],
 };
 
 /** At least one runnable example per command — the part people actually copy. */
 const COMMAND_EXAMPLES: Record<string, string[]> = {
   "me": ["w6w me", "w6w info"],
   "connections.list": ["w6w connections list", "w6w connections list --json"],
+  "connections.get": ["w6w connections get conn_01HQ8N", "w6w connections get conn_01HQ8N --json"],
+  "connections.delete": ["w6w connections delete conn_01HQ8N"],
+  "apps.byIds": ["w6w apps by-ids sendgrid,slack", "w6w apps by-ids sendgrid --json"],
+  "dashboard.stats": [
+    "w6w dashboard stats",
+    "w6w dashboard stats --from 2026-10-01T00:00:00Z --to 2026-10-08T00:00:00Z --bucket day",
+  ],
+  "projects.list": ["w6w projects list", "w6w projects list --json"],
+  "reliability.list": [
+    "w6w reliability list --project prj_01HQ8N --apps sendgrid,slack",
+    "w6w reliability list --project prj_01HQ8N --apps sendgrid --days 7 --limit 20 --json",
+  ],
+  "reliability.members": [
+    "w6w reliability members --project prj_01HQ8N",
+    "w6w reliability members --project prj_01HQ8N --days 30 --json",
+  ],
   "workflows.list": ["w6w workflows list", "w6w workflows list --project prj_01HQ8N"],
   // The key form is shown FIRST in both: it is the address a reader actually
   // has, and the id form is the fallback for a resource whose key they do not
@@ -136,6 +163,7 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
     "w6w functions run send-email",
     `w6w functions run send-email --payload '{"to":"a@b.com"}'`,
     "w6w functions run fn_01HQ8N --json",
+    "w6w functions run send-email --allow-unpublished",
   ],
   "endpoints.run": [
     "w6w endpoints run send-email",
@@ -143,6 +171,7 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
   ],
   "workflows.run": [
     "w6w workflows run wf_01HQ8N --var email=a@b.com",
+    "w6w workflows run wf_01HQ8N --allow-unpublished --wait",
     "w6w workflows run wf_01HQ8N --wait --json",
     `w6w workflows run wf_01HQ8N --input '{"email":"a@b.com"}'`,
   ],
@@ -169,6 +198,39 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
   ],
   "functions.update": [`w6w functions update fn_01HQ8N --definition "$(cat function.json)"`],
   "functions.delete": ["w6w functions delete fn_01HQ8N"],
+  "workflows.listVersions": [
+    "w6w workflows versions wf_01HQ8N",
+    "w6w workflows versions wf_01HQ8N --json",
+  ],
+  "workflows.getVersion": [
+    "w6w workflows version wf_01HQ8N 3",
+    "w6w workflows version wf_01HQ8N 3 --json",
+  ],
+  "workflows.publish": ["w6w workflows publish wf_01HQ8N"],
+  "workflows.revert": ["w6w workflows revert wf_01HQ8N 2"],
+  "workflows.enable": ["w6w workflows enable wf_01HQ8N"],
+  "workflows.disable": ["w6w workflows disable wf_01HQ8N"],
+  "functions.listVersions": [
+    "w6w functions versions fn_01HQ8N",
+    "w6w functions versions fn_01HQ8N --json",
+  ],
+  "functions.getVersion": [
+    "w6w functions version fn_01HQ8N 3",
+    "w6w functions version fn_01HQ8N 3 --json",
+  ],
+  "functions.publish": ["w6w functions publish fn_01HQ8N"],
+  "functions.revert": ["w6w functions revert fn_01HQ8N 2"],
+  "functions.enable": ["w6w functions enable fn_01HQ8N"],
+  "functions.disable": ["w6w functions disable fn_01HQ8N"],
+  "functions.archive": ["w6w functions archive fn_01HQ8N", "w6w functions delete fn_01HQ8N"],
+  "workflows.runVersion": [
+    "w6w workflows run-version wf_01HQ8N 3 --wait",
+    `w6w workflows run-version wf_01HQ8N 3 --input '{"email":"a@b.com"}'`,
+  ],
+  "functions.runVersion": [
+    "w6w functions run-version send-email 3",
+    `w6w functions run-version fn_01HQ8N 3 --payload '{"to":"a@b.com"}'`,
+  ],
   "documents.list": ["w6w documents list", "w6w documents list --project prj_01HQ8N"],
   "documents.get": ["w6w documents get doc_01HQ8N"],
   "documents.getByKey": ["w6w documents get-by-key onboarding-email"],
@@ -212,6 +274,32 @@ const COMMAND_NOTES: Record<string, string[]> = {
     'window expires — a run still in progress is reported as "running", which is not an error.',
     'A run that finished with status "failed" exits 3, so --wait is usable in CI without ' +
     "parsing stdout.",
+    "--allow-unpublished runs the STORED draft even if it was never published (a disabled " +
+    "workflow is still refused). It runs the row as last saved, never a definition you pass " +
+    "here, so save first. It is sent only when given.",
+  ],
+  "workflows.runVersion": [
+    "Runs the published snapshot numbered <n>, never the saved draft. --wait and the exit code " +
+    'behave as in `w6w workflows run`: a finished run with status "failed" exits 3.',
+  ],
+  "functions.runVersion": [
+    "Runs the published snapshot numbered <n> and prints the Function's output, as `w6w functions run` does.",
+  ],
+  "workflows.publish": [
+    "Publishes the workflow as saved: snapshots the stored row into a new numbered version. " +
+    "Save any pending edit first.",
+  ],
+  "functions.publish": [
+    "Publishes the Function as saved: snapshots the stored row into a new numbered version. " +
+    "Save any pending edit first.",
+  ],
+  "functions.run": [
+    "--allow-unpublished runs the STORED draft even if it was never published (a disabled " +
+    "Function is still refused). It is sent only when given.",
+  ],
+  "reliability.list": [
+    "--apps takes at most 10 comma-separated app ids; the server rejects more and its error " +
+    "is shown unchanged. --days and --limit are positive integers.",
   ],
   "run": [
     "The result is tagged by kind. A connection action and a function return their value " +
@@ -269,6 +357,40 @@ const PARAM_HELP: Record<string, string> = {
   "definition": "The whole definition, as a JSON object",
   "ifUnmodifiedSince":
     "Refuse the write if the workflow changed since this updatedAt (see: w6w workflows get)",
+  "connections.get.id": "Connection id (see: w6w connections list)",
+  "connections.delete.id": "Connection id (see: w6w connections list)",
+  "apps.byIds.ids": "Comma-separated app ids (e.g. sendgrid,slack); duplicates are dropped",
+  "dashboard.stats.from": "Start of the window, ISO-8601 (default: the server's)",
+  "dashboard.stats.to": "End of the window, ISO-8601 (default: the server's)",
+  "dashboard.stats.bucket": "Series bucket: day|week (default: the server's)",
+  "reliability.list.project": "Project id (see: w6w projects list)",
+  "reliability.list.apps": "Comma-separated app ids, at most 10 (e.g. sendgrid,slack)",
+  "reliability.list.days": "Window length in days, a positive integer",
+  "reliability.list.limit": "Maximum services to return, a positive integer",
+  "reliability.members.project": "Project id (see: w6w projects list)",
+  "reliability.members.days": "Window length in days, a positive integer",
+  "allowUnpublished": "Run the saved draft even if it was never published (sent only when given)",
+  "n": "Version number (see: w6w <workflows|functions> versions <id>)",
+  "workflows.listVersions.id": "Workflow id (see: w6w workflows list)",
+  "workflows.getVersion.id": "Workflow id (see: w6w workflows list)",
+  "workflows.publish.id": "Workflow id (see: w6w workflows list)",
+  "workflows.revert.id": "Workflow id (see: w6w workflows list)",
+  "workflows.enable.id": "Workflow id (see: w6w workflows list)",
+  "workflows.disable.id": "Workflow id (see: w6w workflows list)",
+  "workflows.runVersion.id": "Workflow id (see: w6w workflows list)",
+  "workflows.runVersion.wait": "Wait for the run to reach a terminal state",
+  "workflows.runVersion.variables": "Set a run variable (repeatable)",
+  "workflows.runVersion.trigger": "Trigger payload, as a JSON string",
+  "workflows.runVersion.input": "Run input, as a JSON string",
+  "functions.archive.id": "Function id or key (see: w6w functions list)",
+  "functions.listVersions.id": "Function id or key (see: w6w functions list)",
+  "functions.getVersion.id": "Function id or key (see: w6w functions list)",
+  "functions.publish.id": "Function id or key (see: w6w functions list)",
+  "functions.revert.id": "Function id or key (see: w6w functions list)",
+  "functions.enable.id": "Function id or key (see: w6w functions list)",
+  "functions.disable.id": "Function id or key (see: w6w functions list)",
+  "functions.runVersion.id": "Function id or key (see: w6w functions list)",
+  "functions.runVersion.inputs": "The Function's inputs, as a JSON object",
   "workflows.get.id": "Workflow id (see: w6w workflows list)",
   "workflows.update.id": "Workflow id (see: w6w workflows list)",
   "workflows.cancel.id": "Run id (see: w6w workflows run)",
@@ -305,6 +427,7 @@ const FLAG_OVERRIDES: Record<string, { flag: string; placeholder: string | null 
   // parameter name is camelCase because that is the HEADER it maps to. Without
   // this entry the two spellings do not match and the placeholder silently
   // degrades to `<value>`.
+  "functions.runVersion.inputs": { flag: "--payload", placeholder: "<json>" },
   "workflows.update.ifUnmodifiedSince": {
     flag: "--if-unmodified-since",
     placeholder: "<ts>",
