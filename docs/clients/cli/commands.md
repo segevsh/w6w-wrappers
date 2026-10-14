@@ -83,8 +83,7 @@ Creating, testing and reconnecting a connection are not in the CLI.
 | `w6w workflows enable <id>` / `disable <id>` | Turn the workflow on or off. |
 | `w6w workflows run-version <id> <n> [--wait] [--input <json>]` | Run the published version `n`, never the draft. Exits `3` if the run failed. |
 
-`w6w workflows run` also lists `--var` and `--trigger`, and `update` lists
-`--if-unmodified-since`, but these aren't applied yet. See
+`w6w workflows update` lists `--if-unmodified-since`, but it isn't applied yet. See
 [Known limitations](/clients/cli/#known-limitations).
 
 ## Functions

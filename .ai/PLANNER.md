@@ -1,6 +1,6 @@
 # PLANNER.md — read this first when planning work in `w6w-wrappers`
 
-> **verified: 2026-10-13** (wrappers@e637745) — This guide records checked source locations, not a
+> **verified: 2026-10-14** (wrappers@96c5524) — This guide records checked source locations, not a
 > replacement for them. When this guide and the code disagree, **code wins**;
 > correct this guide in the same change.
 
@@ -22,7 +22,7 @@
 | ----------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------- |
 | endpoint coverage, lane parity, or a derived-lane exception | `docs/parity.md`, especially **Conformance** | **verified: 2026-10-06** — `docs/parity.md:31-59`           |
 | how a contract name is resolved by a client or CLI runner   | `docs/implementation.md` §10                 | **verified: 2026-10-06** — `docs/implementation.md:892-945` |
-| release order, version bumps, or CI gates                   | `docs/release.md`                            | **verified: 2026-10-06** — `docs/release.md:124-158`        |
+| release order, version bumps, or CI gates                   | `docs/release.md`, `.github/workflows/ci.yml` | **verified: 2026-10-14** — `docs/release.md:124-158`; `.github/workflows/ci.yml` `on:` block |
 | public docs or publication eligibility                      | `docs/README.md` and `docs/manifest.json`    | **verified: 2026-10-06** — `docs/README.md:1-6`             |
 | a `console.*` (`@w6w/sdk/console`) type or route            | `node/docs/console.md`, then trap 6 below    | **verified: 2026-10-13** — `node/src/console/mod.ts` header |
 
@@ -69,10 +69,9 @@
 
    **verified: 2026-10-14** — React ALSO has runtime adapter conformance now
    (`react/src/__tests__/adapter-conformance.test.ts`): it reads the required/optional `W6WApi`
-   member names from the installed `@w6w/ui` (pinned by git SHA `c798bbc` in
-   `react/package.json` devDependencies) and checks each is a function, forwards its arguments,
-   and preserves server error bodies. Re-pin that SHA when the UI provider contract changes; a
-   local `packages/ui` HEAD that is on no remote cannot be installed. The validating
+   member names from the installed `@w6w/ui` (pinned to the published `0.1.0` in
+   `react/package.json` devDependencies: `"@w6w/ui": "0.1.0"`) and checks each is a function, forwards its arguments,
+   and preserves server error bodies. Bump that version when the UI provider contract changes. The validating
    `toFlowWorkflow`/`fromFlowWorkflow` converter lives in `react/src/flow-workflow.ts` (no runtime
    `@w6w/ui` import). An embedding fixture + source-scan test (no `client.console`,
    `client.request`, handwritten lifecycle URLs, `as unknown as` workflow casts) lives under
@@ -167,6 +166,47 @@
    from a second catalog fetch. **verified: 2026-10-13** — wrappers@eb381a7 (0.9.7,
    `26-10-13-02-fixes`): `react` `npm test` 65 pass, pinned in `react/src/__tests__/provider.test.ts`.
 
+8. **`ci.yml` is the PR/main gate; it never publishes.**
+
+   **verified: 2026-10-14** — `.github/workflows/ci.yml` runs on `pull_request` and `push` to main (`on:` block) with
+   `permissions: contents: read` and no publish step. Jobs: `lockstep`, `python`, `node`, `cli`,
+   `react`. The `lockstep` job's `python3 - <<'PY'` heredoc compares **11** version literals against
+   `VERSION` (the `found = {` dict: node/cli/react `package.json`, node/cli `deno.json`,
+   `node/src/version.ts`, `cli/mod.ts`, `python/pyproject.toml`, `python/src/w6w/_version.py`,
+   `react/src/version.ts`). In the `cli` job `npm install && npm run build` must run before
+   `deno task check` (comment: "its types come from cli/node_modules (@types/node)").
+
+9. **CLI: flags a handler ignores are hidden explicitly, not exempted by accident.**
+
+   **verified: 2026-10-14** — `cli/scripts/gen-help.ts` exports `HIDDEN_PARAMS` (`workflows.run.variables`,
+   `workflows.run.trigger`, `workflows.runVersion.variables`, `workflows.runVersion.trigger`);
+   `renderCommandHelp` skips them and `cli/tests/help_test.ts` exempts exactly that set
+   (`if (HIDDEN_PARAMS.has(`). Add a flag to the set only when the handler never reads it, then run
+   `cd cli && deno task gen:help` and commit `cli/src/help.generated.ts`.
+
+10. **Python: tests inject a transport; redirects differ by client.**
+
+   **verified: 2026-10-14** — `docs/implementation.md` §9 "Tests and coverage" requires a mocked, injected transport (an
+   injected opener/`urlopen` seam), so tests open no sockets. `exchange_token` and
+   `EmbedSessionClient` default to `no_redirect_transport` (`python/src/w6w/server.py`, `transport if
+   transport is not None else no_redirect_transport`; defined in `python/src/w6w/_http.py`), so a 3xx
+   surfaces as `ApiError`; the Bearer `Client` uses `default_transport` and still follows redirects.
+   `apps.by_ids("x")` raises `ConfigError` (`python/src/w6w/apps.py`: "`ids` must be a list of ids, not
+   a single string").
+
+11. **React session store: attach/detach is reversible, and a re-suspending Suspense detaches it.**
+
+   **verified: 2026-10-14** — `react/src/session.ts` (`SessionStore`), the `W6WProvider` `getSession` prop and the
+   `useW6WSession` hook. The provider attaches in a layout effect (`W6WProvider.tsx`,
+   `store?.attach()` / `return () => store?.detach()`); `detach()` defers disposal with
+   `queueMicrotask`, and a re-`attach()` in the same task cancels it. That keeps StrictMode (and React 19
+   `<Activity>`, which re-runs effects) safe. Trap: a Suspense boundary that re-suspends *around* the
+   provider runs the layout cleanup, detaching the store; reads then throw "w6w session store was
+   disposed" until the content re-shows. Fake-clock tests use `node:test`
+   `mock.timers.enable({ apis: ["setTimeout", "Date"], ... })`
+   (`react/src/__tests__/session.test.ts`); its header says never `await new Promise(r =>
+   setTimeout(r, 0))` under the fake clock (it hangs) — flush with `settle()` / `tick()`.
+
 ## Gate baselines
 
 - **verified: 2026-10-06** — The release test job runs Python's unittest command
@@ -193,6 +233,10 @@
   `deno task test` → `ok | 618 passed | 0 failed`; cli 161 passed / 0 failed; python unittest
   `Ran 349 tests … OK`. `deno task --cwd cli check` fails with `npm:@types/node` missing in a tree
   with no `node_modules` (also on main) — run `npm ci` in `cli/` first.
+- **verified: 2026-10-14** — at the 26-10-14-05-embed-client-kit tip (wrappers@96c5524, `VERSION` 0.9.13): python
+  unittest 359 tests OK; cli `deno task test` 163 passed; react
+  `NODE_OPTIONS=--experimental-strip-types npm test` 164 pass. Local Node is 22.16, so react needs
+  `--experimental-strip-types`; CI uses Node 24 (`ci.yml` `node-version: "24"`).
 - **verified: 2026-10-06** — React's CI setup builds the sibling SDK, installs
   it locally, then runs `npm test` (`.github/workflows/release.yml:146-161`).
   Use the Node 22 invocation above when reproducing it in this lane.

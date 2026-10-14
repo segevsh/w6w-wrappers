@@ -30,7 +30,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Optional
 
 from ._config import resolve_config
-from ._http import Transport, _request, default_transport
+from ._http import Transport, _request, no_redirect_transport
 from .errors import ApiError, ConfigError
 
 
@@ -132,7 +132,9 @@ def exchange_token(
         deriving it from ITS OWN membership data, never from an
         unauthenticated client input.
     :param transport: Transport override. Defaults to
-        :func:`w6w._http.default_transport` (`urllib.request.urlopen`).
+        :func:`w6w._http.no_redirect_transport` — stdlib `urllib` that
+        never follows a redirect, so a 3xx raises `ApiError` and the Basic client
+        credential is never re-sent to another host.
     :returns: The parsed response body: ``{"token", "user": {"subject",
         "tenant", "role", "account"}, "expiresIn"}``.
     :raises ConfigError: Blank `client_id`/`client_secret`/`subject`; a
@@ -157,7 +159,7 @@ def exchange_token(
 
     res = _request(
         config,
-        transport if transport is not None else default_transport,
+        transport if transport is not None else no_redirect_transport,
         "POST",
         "/auth/exchange",
         body=body,

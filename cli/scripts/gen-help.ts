@@ -170,7 +170,6 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
     `w6w endpoints run send-email --payload '{"to":"a@b.com"}'`,
   ],
   "workflows.run": [
-    "w6w workflows run wf_01HQ8N --var email=a@b.com",
     "w6w workflows run wf_01HQ8N --allow-unpublished --wait",
     "w6w workflows run wf_01HQ8N --wait --json",
     `w6w workflows run wf_01HQ8N --input '{"email":"a@b.com"}'`,
@@ -416,18 +415,41 @@ const PARAM_HELP: Record<string, string> = {
 };
 
 /**
- * CLI spellings that differ from the contract's parameter name. `variables` is
- * the only real one: the API takes an object, the CLI takes repeatable
- * `--var key=value` pairs (`docs/cli.md`).
+ * Contract parameters whose handler never reads them, so the help must not show
+ * them (wiring them is a follow-up, not a help edit). Keyed `<operation>.<param>`.
+ * Exported so `tests/help_test.ts` can exempt exactly this set and nothing wider.
+ */
+export const HIDDEN_PARAMS: ReadonlySet<string> = new Set([
+  "workflows.run.variables",
+  "workflows.run.trigger",
+  "workflows.runVersion.variables",
+  "workflows.runVersion.trigger",
+]);
+
+/**
+ * Positional arguments the handler names differently from the contract's
+ * parameter: `functions run <name>` takes a key OR an id in one slot, while the
+ * contract calls it `idOrKey`. Positional detection matches by NAME, so without
+ * this the parameter degrades to `--id-or-key <value>`.
+ */
+export const POSITIONAL_ALIASES: Readonly<Record<string, string>> = {
+  "functions.run.idOrKey": "name",
+  "endpoints.run.idOrKey": "name",
+};
+
+/**
+ * CLI spellings that differ from the contract's parameter name.
  */
 const FLAG_OVERRIDES: Record<string, { flag: string; placeholder: string | null }> = {
-  "workflows.run.variables": { flag: "--var", placeholder: "<key=value>" },
-  "workflows.run.trigger": { flag: "--trigger", placeholder: "<json>" },
   // Kebab-case, so the flag reads like every other one; the contract's own
   // parameter name is camelCase because that is the HEADER it maps to. Without
   // this entry the two spellings do not match and the placeholder silently
   // degrades to `<value>`.
   "functions.runVersion.inputs": { flag: "--payload", placeholder: "<json>" },
+  // The handler (`src/commands/named-run.ts`) reads `--payload` and hands it to
+  // the contract's `inputs` / `input` body field.
+  "functions.run.inputs": { flag: "--payload", placeholder: "<json>" },
+  "endpoints.run.input": { flag: "--payload", placeholder: "<json>" },
   "workflows.update.ifUnmodifiedSince": {
     flag: "--if-unmodified-since",
     placeholder: "<ts>",
@@ -676,17 +698,20 @@ function buildParams(
   const usageParts: string[] = [];
 
   for (const param of operation.params) {
-    const override = FLAG_OVERRIDES[`${operation.name}.${param.name}`];
+    const key = `${operation.name}.${param.name}`;
+    if (HIDDEN_PARAMS.has(key)) continue;
+    const override = FLAG_OVERRIDES[key];
     const description = describeParam(operation.name, param.name);
-    if (!override && surface.positionals.has(param.name)) {
+    const positional = POSITIONAL_ALIASES[key] ?? param.name;
+    if (!override && surface.positionals.has(positional)) {
       params.push({
         name: param.name,
         kind: "argument",
-        display: `<${param.name}>`,
+        display: `<${positional}>`,
         description,
         required: param.required,
       });
-      usageParts.push(param.required ? `<${param.name}>` : `[<${param.name}>]`);
+      usageParts.push(param.required ? `<${positional}>` : `[<${positional}>]`);
       continue;
     }
     const flag = override?.flag ?? `--${kebab(param.name)}`;

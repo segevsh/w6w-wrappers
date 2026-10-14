@@ -16,7 +16,7 @@ from typing import Any, Callable, List, Tuple
 from urllib.error import HTTPError
 from urllib.request import Request
 
-from w6w import ApiError, Client
+from w6w import ApiError, Client, ConfigError
 
 BASE = "https://api.example.com"
 
@@ -145,6 +145,13 @@ class AppsByIdsTest(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0].get_method(), "GET")
         self.assertEqual(calls[0].full_url, f"{BASE}/apps?ids=a%2Cb")
+
+    def test_a_bare_string_raises_config_error_with_no_request(self) -> None:
+        c, calls = client((200, {"apps": [{"id": "never"}]}))
+
+        with self.assertRaises(ConfigError):
+            c.apps.by_ids("abc")  # type: ignore[arg-type]
+        self.assertEqual(calls, [])
 
     def test_empty_set_is_empty_list_with_no_request(self) -> None:
         c, calls = client((200, {"apps": [{"id": "never"}]}))
