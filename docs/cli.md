@@ -172,13 +172,11 @@ ARGUMENTS
   <id>                   Workflow id (see: w6w workflows list)
 
 OPTIONS
-  --var <key=value>      Set a run variable (repeatable)
   --wait                 Wait for the run to reach a terminal state
   --input <json>         Run input, as a JSON string
   --json                 Output raw JSON
 
 EXAMPLES
-  w6w workflows run wf_01HQ8N --var email=a@b.com
   w6w workflows run wf_01HQ8N --wait --json
   w6w workflows run wf_01HQ8N --input '{"email":"a@b.com"}'
 
