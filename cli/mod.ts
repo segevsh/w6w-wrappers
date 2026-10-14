@@ -180,8 +180,8 @@ const RUN_APP_FLAG: FlagSpec = { name: "--app", alias: null, type: "string" };
  * The flags a command declares for itself, lifted out of the generated help
  * tree so the parser and the help text cannot disagree about them.
  *
- * The flag's spelling is the first token of its help display (`--var
- * <key=value>` → `--var`, which is not always its contract parameter name), and
+ * The flag's spelling is the first token of its help display (`--input
+ * <json>` → `--input`, which is not always its contract parameter name), and
  * a display with nothing after that token is a boolean. Flags that shadow a
  * global one are dropped: `--json` is already parsed for every command.
  */
