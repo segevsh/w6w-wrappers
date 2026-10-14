@@ -7,7 +7,7 @@
     "@w6w/sdk": "../node/mod.ts",
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },
-  "nodeModulesDir": "auto",
+  "nodeModulesDir": "manual",
   "links": ["../node"],
   "tasks": {
     "test": "deno test -A",

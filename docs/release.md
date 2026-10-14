@@ -175,9 +175,10 @@ human again, and is not optional.
    test pins the range and the lock's `version` against
    `VERSION` (`react/src/__tests__/version.test.ts`, `cli/tests/help_test.ts`), so
    a lane that leaves it behind fails `test`. The CLI's Deno tasks never fetch
-   that not-yet-published version: `cli/deno.json`'s `"links": ["../node"]`
-   satisfies it from the sibling, which is why that lane runs with
-   `"nodeModulesDir": "auto"`.
+   that not-yet-published version: `cli/deno.json`'s import map resolves
+   `@w6w/sdk` to `../node/mod.ts`. `"nodeModulesDir": "manual"` prevents Deno
+   from eagerly installing the npm dependency. With Deno 2.9.7, `"auto"` tries
+   to fetch that range even with `"links": ["../node"]`, blocking a fresh release.
 4. **Publish a GitHub Release** tagged `v<VERSION>` at the validated commit.
    A tag alone does not trigger this workflow. For a dry run, invoke
    `release.yml` via `workflow_dispatch` on the intended ref; it has no inputs
