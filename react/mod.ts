@@ -56,3 +56,13 @@ export {
 } from "./src/hooks.ts";
 
 export { createW6WUiAdapter, type W6WApi } from "./src/adapter.ts";
+
+export {
+  type FlowEdgeShape,
+  type FlowStepShape,
+  type FlowWorkflowShape,
+  fromFlowWorkflow,
+  toFlowWorkflow,
+  WorkflowShapeError,
+  type WorkflowShapeIssue,
+} from "./src/flow-workflow.ts";

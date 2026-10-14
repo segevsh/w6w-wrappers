@@ -19,8 +19,11 @@
  *
  * @module
  */
+
+import type { FlowWorkflow } from "../../node_modules/@w6w/ui/src/flow-types.ts";
 import type { W6WApi } from "../../node_modules/@w6w/ui/src/provider.tsx";
 import type { createW6WUiAdapter } from "../adapter.ts";
+import type { FlowWorkflowShape, fromFlowWorkflow } from "../flow-workflow.ts";
 
 // An assignment to an explicitly-typed, EXPORTED const — not a bare
 // expression — so a real tsc diagnostic fires (naming every missing/
@@ -29,3 +32,11 @@ import type { createW6WUiAdapter } from "../adapter.ts";
 // `ReturnType<typeof createW6WUiAdapter>`; it does nothing to the check
 // below, which is the `: W6WApi` annotation on the left.
 export const _uiConformanceCheck: W6WApi = {} as unknown as ReturnType<typeof createW6WUiAdapter>;
+
+// The `FlowWorkflow` converter's structural mirror, both directions (R-7):
+// ui's real `FlowWorkflow` is accepted by `fromFlowWorkflow`, and the mirror
+// is accepted wherever ui expects a `FlowWorkflow`. Imported by relative path
+// for the same `@w6w/expr` reason as above (`flow-types.ts`'s closure is
+// standalone).
+export const _uiFlowIntoConverter: Parameters<typeof fromFlowWorkflow>[0] = {} as FlowWorkflow;
+export const _converterShapeIntoUi: FlowWorkflow = {} as FlowWorkflowShape;
