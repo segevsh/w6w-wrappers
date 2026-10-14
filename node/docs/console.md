@@ -449,14 +449,15 @@ transport, mirroring `console.projects`'s/`console.schedules`'s own host shape.
 
 **Console placement here is a resolved decision, not a default applied without thought — see
 `HITL-10` in `HITL.md` and `plan.md`'s SP2.3 section for the full investigation.**
-`endpoints.json`'s `outOfScope` entry for connections writes frames the eventual intent as a real
-partner operation, unlike `projects`/`schedules`/`apps` — but the server routes this domain wraps
-are plain, stateless handlers over an already-resolved payload for both real studio call sites,
-which makes console placement technically safe for studio's own use without by itself justifying
-promotion to the partner surface (cli/python lockstep; no partner-facing OAuth-flow counterpart
-exists yet either). Console placement is the pinned default for this round; partner-surface
-promotion is deferred to a dedicated future project. A future reader evaluating that promotion
-should start from `HITL-10`/SP2.3 rather than re-deriving the reasoning from scratch.
+`endpoints.json`'s `outOfScope` entry "connection create / update / test / OAuth" frames the
+eventual intent as a real partner operation — `connections.get`/`delete` have since been promoted to
+the root client (contract `0.7.0`) and these write flows have not — but the server routes this
+domain wraps are plain, stateless handlers over an already-resolved payload for both real studio
+call sites, which makes console placement technically safe for studio's own use without by itself
+justifying promotion to the partner surface (cli/python lockstep; no partner-facing OAuth-flow
+counterpart exists yet either). Console placement is the pinned default for this round;
+partner-surface promotion is deferred to a dedicated future project. A future reader evaluating that
+promotion should start from `HITL-10`/SP2.3 rather than re-deriving the reasoning from scratch.
 
 ## `console.workflows.*`
 
@@ -526,13 +527,14 @@ the transport, mirroring `console.projects`'s/`console.schedules`'s own host sha
 default.
 
 **Console placement here is the same precedent as `console.connections`'s `HITL-10`, not a fresh
-judgment call.** `endpoints.json`'s `outOfScope` array names "all write operations on connections
-and workflows" together, with the identical "in this version" framing HITL-10 already investigated
-for connections. The server routes here (`admin/workflows.ts`) are, like connections, plain
-stateless handlers over an already-resolved request body/precondition header — no interactive flow
-the SDK method itself would need to conduct. HITL-10's resolution transfers directly: console
-placement is safe for studio's own use; it does not by itself justify promotion to the partner
-surface (still needs cli/python parity + a documented partner story, neither of which exists today).
+judgment call.** `endpoints.json`'s `outOfScope` array once named "all write operations on
+connections and workflows" together (it now names only "connection create / update / test / OAuth"),
+with the identical "in this version" framing HITL-10 already investigated for connections. The
+server routes here (`admin/workflows.ts`) are, like connections, plain stateless handlers over an
+already-resolved request body/precondition header — no interactive flow the SDK method itself would
+need to conduct. HITL-10's resolution transfers directly: console placement is safe for studio's own
+use; it does not by itself justify promotion to the partner surface (still needs cli/python parity +
+a documented partner story, neither of which exists today).
 
 ## `console.savedTests.*`
 
@@ -973,16 +975,22 @@ claim) plus a server-side tenant-admin check, unlike the operator family
 | `put(appId, authKey, input)` | `PUT /tenant/oauth-app/:appId/:authKey`    | **Body built by omission — see below.** No query string is ever set. Reads `res.body.config` directly (server answers `201`); never calls `unwrap()`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `remove(appId, authKey)`     | `DELETE /tenant/oauth-app/:appId/:authKey` | Resolves `void`, discarding `{ok: true}`, same convention as `console.projects.delete`/`console.schedules.delete`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
+Each `TenantOAuthAppSummary` row may also carry (all optional; absent from an older server):
+`isDefault` (users of this tenant get this method preselected), `clientSecretHint` (a
+server-computed masked display string, or `null`; never the secret), and the joined app display
+fields `appDisplayName`, `iconSvg`, `iconSvgDark`, `brandColor`, `brandColorDark`. `AuthDef.default`
+marks the tenant's default method.
+
 **`put` builds its request body by OMISSION, key by key — an omitted field never reaches the wire.**
-`SetTenantOAuthAppInput` has four optional keys (`clientId`, `clientSecret`, `extra`, `disabled`);
-the server merges whichever ones are present over the stored row and leaves everything else
-untouched. This is a genuine RUNTIME allowlist, not merely a compile-time one: even a caller that
-defeats the type (`as unknown as SetTenantOAuthAppInput`) and passes `redirectUri` or `force` cannot
-get either one onto the wire — neither key is ever read by the body builder. Separately, `put` sets
-**no query string at all** on the request, so `?force=true` is unreachable by construction — there
-is no code path that could add it, not merely an unwritten one. Neither `redirectUri` (the callback
-URL is derived server-side, per row) nor `force` (the operator's affordance) is offered to a tenant
-admin.
+`SetTenantOAuthAppInput` has five optional keys (`clientId`, `clientSecret`, `extra`, `disabled`,
+`isDefault`); the server merges whichever ones are present over the stored row and leaves everything
+else untouched. This is a genuine RUNTIME allowlist, not merely a compile-time one: even a caller
+that defeats the type (`as unknown as SetTenantOAuthAppInput`) and passes `redirectUri` or `force`
+cannot get either one onto the wire — neither key is ever read by the body builder. Separately,
+`put` sets **no query string at all** on the request, so `?force=true` is unreachable by
+construction — there is no code path that could add it, not merely an unwritten one. Neither
+`redirectUri` (the callback URL is derived server-side, per row) nor `force` (the operator's
+affordance) is offered to a tenant admin.
 
 **`clientSecret: ""` IS carried to the wire verbatim, and it is destructive server-side — an omitted
 `clientSecret` is not.** Measured directly against the real request body (not inferred):

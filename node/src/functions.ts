@@ -22,9 +22,10 @@
  *
  * ── The rest of the namespace ──
  * `list`, `get`, `create`, `update` and `delete` complete the definition
- * lifecycle, mirroring `client.workflows.*` op for op with two differences the
+ * lifecycle, mirroring `client.workflows.*` op for op with one difference the
  * server dictates, not this package: there is no `?project=` anywhere on this
- * domain, and there is no archive step before `delete`.
+ * domain. `archive` is the required step before `delete`, and the version
+ * methods (`listVersions` … `runVersion`) match `client.workflows.*`.
  *
  * The server has ONE write route (`POST /functions`, an upsert), so `create`
  * and `update` are the same request shaped differently — `create` mints the
@@ -40,6 +41,18 @@ import type { ResolvedConfig } from "./config.ts";
 import { ApiError } from "./errors.ts";
 import { type CallOptions, type HttpResponse, path, type RequestOptions } from "./http.ts";
 import { type FunctionSummary, mintId, unwrap } from "./types.ts";
+import {
+  getVersion,
+  listVersions,
+  type PublishResult,
+  publishVersion,
+  type RevertResult,
+  revertVersion,
+  setEnabled,
+  type VersionDetail,
+  type VersionList,
+  versionRunPath,
+} from "./versions.ts";
 
 /**
  * What this namespace needs from the client — the same narrow seam
@@ -66,7 +79,20 @@ export interface FunctionRunOptions {
    * absent key says "I forgot".
    */
   payload?: Record<string, unknown>;
+  /**
+   * Run the **stored** definition even though it was never published — the draft
+   * run. A disabled one is still refused.
+   *
+   * It runs the row exactly as last saved, never a definition you submit here,
+   * so save first. Sent as `allowUnpublished: true` in the body **only when
+   * `true`**; `false` is the same as omitting it. Not accepted by
+   * {@linkcode FunctionsApi.runVersion}.
+   */
+  allowUnpublished?: boolean;
 }
+
+/** Per-call options for `functions.runVersion`: `payload` only. */
+export type FunctionRunVersionOptions = Pick<FunctionRunOptions, "payload">;
 
 /**
  * A Function definition — kept OPAQUE, for the same reason `WorkflowDefinition`
@@ -138,10 +164,26 @@ export class FunctionsApi {
    * @throws {ApiError} `bad_response` when a success body carries no `output` key at all.
    */
   async run(name: string, options?: FunctionRunOptions): Promise<unknown> {
+    return await this.#invoke(path`/functions/${name}/invoke`, options);
+  }
+
+  /**
+   * The one POST both {@linkcode run} and {@linkcode runVersion} go through, so
+   * the output guard cannot drift between them.
+   *
+   * @param invokePath - The already-encoded path.
+   * @param options - The run options as given by the public method.
+   * @returns The Function's output.
+   */
+  async #invoke(invokePath: string, options?: FunctionRunOptions): Promise<unknown> {
     const res = await this.#host.request<unknown>({
       method: "POST",
-      path: path`/functions/${name}/invoke`,
-      body: { inputs: options?.payload ?? {} },
+      path: invokePath,
+      body: {
+        inputs: options?.payload ?? {},
+        // Present only when `true`, like `workflows.run`'s `wait`.
+        ...(options?.allowUnpublished === true ? { allowUnpublished: true } : {}),
+      },
     });
 
     // Deliberately NOT `unwrap(res, "output")`. That helper treats `null` as
@@ -271,7 +313,121 @@ export class FunctionsApi {
   }
 
   /**
-   * Delete a Function.
+   * Archive a Function.
+   *
+   * One-way: there is no unarchive route. Idempotent — archiving an
+   * already-archived Function re-returns it unchanged. This is a required step,
+   * not a convenience: {@linkcode delete} refuses a Function that is not
+   * archived (`409 function_not_archived`).
+   *
+   * @param id - The `fn_…` id.
+   * @returns The archived definition, unwrapped from its `function` envelope.
+   * @throws {ApiError} `404 unknown_function` when there is no such id.
+   */
+  async archive(id: string): Promise<FunctionDefinition> {
+    const res = await this.#host.request<unknown>({
+      method: "POST",
+      path: path`/functions/${id}/archive`,
+    });
+    return unwrap<FunctionDefinition>(res, "function");
+  }
+
+  /**
+   * List a Function's published versions (metadata only).
+   *
+   * @param id - The `fn_…` id.
+   * @returns `enabled`, `currentPublishedVersion` (`null` before the first publish) and `versions[]`.
+   * @throws {ApiError} `404 unknown_function` when there is no such id.
+   */
+  async listVersions(id: string): Promise<VersionList> {
+    return await listVersions(this.#host, "functions", id);
+  }
+
+  /**
+   * Read one published version, with its definition.
+   *
+   * @param id - The `fn_…` id.
+   * @param n - The 1-based version number.
+   * @returns The version, unwrapped from its `version` envelope.
+   * @throws {ApiError} `404 unknown_version` / `404 unknown_function`; `400 invalid_version` for a non-positive `n`.
+   */
+  async getVersion(id: string, n: number): Promise<VersionDetail> {
+    return await getVersion(this.#host, "functions", id, n);
+  }
+
+  /**
+   * Publish the Function's **stored** definition as a new immutable version.
+   *
+   * It snapshots what the server has saved, so flush any pending save first.
+   * The server takes no precondition.
+   *
+   * @param id - The `fn_…` id.
+   * @returns The new version and `currentPublishedVersion`, as the server sent them.
+   * @throws {ApiError} `404 unknown_function` when there is no such id.
+   */
+  async publish(id: string): Promise<PublishResult> {
+    return await publishVersion(this.#host, "functions", id);
+  }
+
+  /**
+   * Rewrite the live Function from a published version. Does not publish.
+   *
+   * Saves remain last-write-wins: Functions have no concurrency precondition.
+   *
+   * @param id - The `fn_…` id.
+   * @param n - The version to restore.
+   * @returns The `reverted` object, unwrapped from its envelope.
+   * @throws {ApiError} `404 unknown_version` / `404 unknown_function`; `400 invalid_version`.
+   */
+  async revert(id: string, n: number): Promise<RevertResult> {
+    return await revertVersion(this.#host, "functions", id, n);
+  }
+
+  /**
+   * Allow invocations of this Function. Idempotent. Returns nothing.
+   *
+   * @param id - The `fn_…` id.
+   * @throws {ApiError} `404 unknown_function` when there is no such id.
+   */
+  async enable(id: string): Promise<void> {
+    await setEnabled(this.#host, "functions", id, true);
+  }
+
+  /**
+   * Refuse invocations of this Function (`422 function_disabled`). Idempotent. Returns nothing.
+   *
+   * @param id - The `fn_…` id.
+   * @throws {ApiError} `404 unknown_function` when there is no such id.
+   */
+  async disable(id: string): Promise<void> {
+    await setEnabled(this.#host, "functions", id, false);
+  }
+
+  /**
+   * Run one published version of a Function rather than the live row.
+   *
+   * Same output unwrapping as {@linkcode run}; the wire verb is `invoke`.
+   *
+   * @param id - The `fn_…` id, or the Function's `key`.
+   * @param n - The version to run.
+   * @param options - `payload`, the Function's canonical inputs.
+   * @returns The Function's output.
+   * @throws {ApiError} `404 unknown_version` / `404 unknown_function`; `422 function_incomplete` / `function_disabled` / `function_not_published`; `400 invalid_version`.
+   */
+  async runVersion(
+    id: string,
+    n: number,
+    options?: FunctionRunVersionOptions,
+  ): Promise<unknown> {
+    return await this.#invoke(versionRunPath("functions", id, n), { payload: options?.payload });
+  }
+
+  /**
+   * Delete an archived Function.
+   *
+   * **Archive first.** A Function that is not archived is `409
+   * function_not_archived`, which this method does NOT catch and retry through
+   * {@linkcode archive}.
    *
    * Not idempotent, and deliberately so: deleting an id that is not there is
    * `404 unknown_function`, not a silent success — the same pin
@@ -287,6 +443,7 @@ export class FunctionsApi {
    *
    * @param id - The `fn_…` id, or the Function's `key`.
    * @throws {ApiError} `404 unknown_function` when there is no such Function for this caller.
+   * @throws {ApiError} `409 function_not_archived` when it exists but has not been archived yet.
    */
   async delete(id: string): Promise<void> {
     await this.#host.request<unknown>({ method: "DELETE", path: path`/functions/${id}` });

@@ -10,7 +10,7 @@ The package is authored as runtime-neutral TypeScript against Web standards (`fe
 `URL`, `AbortController`), so the same build runs under Node 18+, Deno and Bun.
 
 - **License:** MIT (see [LICENSE](./LICENSE)).
-- **Version:** `0.9.8`.
+- **Version:** `0.9.12`.
 - **Guides:** [docs.w6w.io/clients/node](https://docs.w6w.io/clients/node/), with a
   [full reference](https://docs.w6w.io/clients/node/reference/).
 
@@ -287,8 +287,28 @@ unless you opted in with `refreshOnUnauthorized`, which retries the failed reque
 ## Embedding for enterprise tenants
 
 If you are a partner embedding w6w inside your OWN product, your backend mints a short-lived,
-per-user w6w token with one call — `exchangeToken`, from a **separate** entry point,
-`@w6w/sdk/server`, never from `@w6w/sdk` itself:
+per-user, account-scoped w6w session with `createEmbedSessionClient`, from a **separate** entry
+point, `@w6w/sdk/server`, never from `@w6w/sdk` itself. This is the recommended embed path; the host
+route and walkthrough are in [Embed w6w in your product](https://docs.w6w.io/guides/embed/).
+
+```ts
+import { createEmbedSessionClient } from "@w6w/sdk/server";
+
+const sessions = createEmbedSessionClient({
+  baseUrl: process.env.W6W_BASE_URL!,
+  clientId: process.env.W6W_TENANT_CLIENT_ID!,
+  clientSecret: process.env.W6W_TENANT_CLIENT_SECRET!, // never sent to the browser
+});
+
+// `accountRef` is required: YOUR reference for the company the signed-in user is acting in.
+const { token, expiresAt, account } = await sessions.create({ subject: userId, accountRef });
+```
+
+`create()` returns `{ token, expiresIn, expiresAt, subject, tenant, account, accountRef }`, where
+`account` is the server's resolved `acct_…` id. The factory throws in a browser-like runtime.
+
+The lower-level `exchangeToken`, with an optional `account`, stays available from the same entry
+point:
 
 ```ts
 import { exchangeToken } from "@w6w/sdk/server";

@@ -27,7 +27,7 @@
  */
 
 import { type FetchLike, resolveConfig } from "../config.ts";
-import { ConfigError } from "../errors.ts";
+import { ApiError, ConfigError } from "../errors.ts";
 import { request } from "../http.ts";
 
 /** Options for {@linkcode exchangeToken}. */
@@ -71,18 +71,26 @@ export interface ExchangeTokenResult {
     tenant: string;
     /** Always `"user"` for a token minted this way. */
     role: string;
-    /** The resolved account claim — the `account` passed, or the tenant id when omitted. */
+    /** The server's resolved account id (`acct_…`), never the ref you passed. */
     account: string;
   };
   /** Token lifetime, in seconds. */
   expiresIn: number;
 }
 
-/** Non-blank after trimming. */
-function required(value: string, field: string): void {
+/** Non-blank after trimming. `who` prefixes the message (the raw path keeps `exchangeToken`). */
+function required(value: string, field: string, who = "exchangeToken"): void {
   if (value.trim().length === 0) {
-    throw new ConfigError(`exchangeToken: \`${field}\` must not be blank.`);
+    throw new ConfigError(`${who}: \`${field}\` must not be blank.`);
   }
+}
+
+/** {@linkcode required}, but a non-string is a {@linkcode ConfigError} too, not a TypeError. */
+function requiredText(value: unknown, field: string, who: string): void {
+  if (typeof value !== "string") {
+    throw new ConfigError(`${who}: \`${field}\` must be a non-blank string.`);
+  }
+  required(value, field, who);
 }
 
 /**
@@ -97,10 +105,14 @@ function required(value: string, field: string): void {
  * @throws {ConfigError} When `clientId` contains `:` (indistinguishable from
  *   the Basic separator on decode) or either value is not latin-1.
  */
-function basicAuthHeader(clientId: string, clientSecret: string): string {
+function basicAuthHeader(
+  clientId: string,
+  clientSecret: string,
+  who = "exchangeToken",
+): string {
   if (clientId.includes(":")) {
     throw new ConfigError(
-      'exchangeToken: `clientId` must not contain ":" — the server splits a ' +
+      `${who}: \`clientId\` must not contain ":" — the server splits a ` +
         "decoded Basic credential on the FIRST colon, so a colon in `clientId` " +
         "would be read as part of the secret instead.",
     );
@@ -109,7 +121,7 @@ function basicAuthHeader(clientId: string, clientSecret: string): string {
     return btoa(`${clientId}:${clientSecret}`);
   } catch {
     throw new ConfigError(
-      "exchangeToken: `clientId`/`clientSecret` must be representable as " +
+      `${who}: \`clientId\`/\`clientSecret\` must be representable as ` +
         "latin-1 (ISO-8859-1) — the server decodes the Basic header with " +
         "`atob`, which cannot represent a wider character set.",
     );
@@ -180,4 +192,142 @@ export async function exchangeToken(
     requireAuth: false,
   });
   return res.body;
+}
+
+/** Options for {@linkcode createEmbedSessionClient}. */
+export interface EmbedSessionClientOptions {
+  /**
+   * The w6w server's origin. Required and explicit: unlike {@linkcode exchangeToken}
+   * this factory never falls back to `W6W_BASE_URL`.
+   */
+  baseUrl: string;
+  /** The tenant's client id. Must not contain `:` or a non-latin-1 character. */
+  clientId: string;
+  /** The tenant's client secret. Held by this instance only; never returned. */
+  clientSecret: string;
+  /** Transport override, passed through to {@linkcode exchangeToken}. */
+  fetch?: FetchLike;
+  /** Epoch-milliseconds clock, sampled before each request. Defaults to `Date.now`. */
+  now?: () => number;
+}
+
+/** Input to {@linkcode EmbedSessionClient.create}. */
+export interface CreateEmbedSessionInput {
+  /** The signed-in end user's id on the host. Sent verbatim, never trimmed. */
+  subject: string;
+  /**
+   * The host's own reference for the company/workspace the user is acting in
+   * (the account's external ref). Required and non-blank: the server silently
+   * selects the tenant's default account for a blank one, so this client refuses.
+   * It is trimmed before sending.
+   */
+  accountRef: string;
+}
+
+/** What {@linkcode EmbedSessionClient.create} returns. Safe to hand to a browser. */
+export interface EmbedSession {
+  /** The minted, short-lived bearer token. */
+  token: string;
+  /** Token lifetime, in seconds. */
+  expiresIn: number;
+  /** ISO-8601 UTC expiry, computed from the host clock sampled before the request. */
+  expiresAt: string;
+  /** The subject the server minted into the token. */
+  subject: string;
+  /** The tenant the client credentials resolved to. */
+  tenant: string;
+  /** The server's resolved account id (`acct_…`). */
+  account: string;
+  /** The trimmed account ref that was sent as the wire `account`. */
+  accountRef: string;
+}
+
+/** An account-scoped session minter bound to one set of tenant credentials. */
+export interface EmbedSessionClient {
+  /**
+   * Mint one account-scoped session: exactly one `POST /auth/exchange`.
+   *
+   * @throws {ConfigError} A non-string or blank `subject` / `accountRef` (no request is made).
+   * @throws {ApiError} Any server or transport failure, unwrapped (status and code intact).
+   */
+  create(input: CreateEmbedSessionInput): Promise<EmbedSession>;
+}
+
+const SESSION = "EmbedSessionClient";
+
+/**
+ * Build a session client that holds tenant credentials per instance and mints
+ * one account-scoped token per `create()`. A thin layer over
+ * {@linkcode exchangeToken}, which stays the only HTTP path.
+ *
+ * Backend-only: construction throws {@linkcode ConfigError} when both `window`
+ * and `document` exist (a browser-like global). This is a runtime check by
+ * design; a bundler may or may not remove it.
+ *
+ * @throws {ConfigError} A missing/blank `baseUrl` (even when `W6W_BASE_URL` is
+ *   set), blank/non-string `clientId` or `clientSecret`, a `clientId` containing
+ *   `:`, non-latin-1 credentials, or a browser-like runtime. No message echoes
+ *   `clientSecret`.
+ */
+export function createEmbedSessionClient(options: EmbedSessionClientOptions): EmbedSessionClient {
+  const g = globalThis as { window?: unknown; document?: unknown };
+  if (typeof g.window !== "undefined" && typeof g.document !== "undefined") {
+    throw new ConfigError(
+      `${SESSION}: refusing to construct in a browser-like runtime — the tenant client ` +
+        "secret must stay on your backend.",
+    );
+  }
+
+  const { baseUrl, clientId, clientSecret } = options ?? ({} as EmbedSessionClientOptions);
+  requiredText(baseUrl, "baseUrl", SESSION);
+  requiredText(clientId, "clientId", SESSION);
+  requiredText(clientSecret, "clientSecret", SESSION);
+  basicAuthHeader(clientId, clientSecret, SESSION);
+  resolveConfig({ baseUrl });
+
+  const fetchOption = options.fetch;
+  const now = options.now ?? Date.now;
+
+  return {
+    async create(input: CreateEmbedSessionInput): Promise<EmbedSession> {
+      const { subject, accountRef } = input ?? ({} as CreateEmbedSessionInput);
+      requiredText(subject, "subject", SESSION);
+      requiredText(accountRef, "accountRef", SESSION);
+      const account = accountRef.trim();
+
+      const t0 = now();
+      const res = await exchangeToken({
+        baseUrl,
+        clientId,
+        clientSecret,
+        subject,
+        account,
+        fetch: fetchOption,
+      });
+
+      const expiresAtMs = t0 + res?.expiresIn * 1000;
+      if (
+        res === null || res === undefined ||
+        typeof res.token !== "string" || typeof res.expiresIn !== "number" ||
+        Number.isNaN(new Date(expiresAtMs).getTime()) || res.user === null ||
+        typeof res.user !== "object" || typeof res.user.subject !== "string" ||
+        typeof res.user.tenant !== "string" || typeof res.user.account !== "string"
+      ) {
+        throw new ApiError(
+          200,
+          "bad_response",
+          `${SESSION}: the exchange response was not the documented shape.`,
+        );
+      }
+      return {
+        token: res.token,
+        expiresIn: res.expiresIn,
+        expiresAt: new Date(expiresAtMs).toISOString(),
+        subject: res.user.subject,
+        tenant: res.user.tenant,
+        account: res.user.account,
+        accountRef: account,
+      };
+    },
+  };
 }

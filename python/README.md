@@ -9,7 +9,7 @@ contract lane implements one shared contract, and all four packages
 (`w6w`, `@w6w/sdk`, `@w6w/cli`, `@w6w/react`) release together, so `w6w==X`
 gives you the same operations as `@w6w/sdk@X`.
 
-- **Version:** `0.9.8`.
+- **Version:** `0.9.12`.
 - **Guides:** [docs.w6w.io/clients/python](https://docs.w6w.io/clients/python/),
   with a [full reference](https://docs.w6w.io/clients/python/reference/).
 - **Surface:** `me`, `run`, `request`, `connections.list`, the complete
@@ -323,9 +323,29 @@ A timeout raises `ApiError` with `status=0` and `code="network_error"`.
 
 ## Embedding for enterprise tenants
 
-A partner backend mints a short-lived, per-user token with
-`w6w.server.exchange_token`. It takes your tenant's client secret, so it must
-only ever run on your backend:
+A partner backend mints a short-lived, per-user, account-scoped session with
+`w6w.server.EmbedSessionClient` (the recommended path; see
+[Embed w6w in your product](https://docs.w6w.io/guides/embed/)). It takes your
+tenant's client secret, so it must only ever run on your backend:
+
+```python
+from w6w.server import EmbedSessionClient
+
+sessions = EmbedSessionClient(
+    base_url="https://api.example.com",  # the final https origin: no redirect hop
+    client_id=client_id,
+    client_secret=client_secret,         # never sent to a browser
+)
+session = sessions.create(subject=user_id, account_ref=company_ref)  # both required
+# keys: token, expiresIn, expiresAt, subject, tenant, account (resolved acct_ id), accountRef
+```
+
+`base_url` must be the final `https` origin. The default transport follows
+redirects and re-sends the `Authorization: Basic` client credential, so a
+redirect hop would forward it.
+
+The lower-level `w6w.server.exchange_token`, with an optional `account`, stays
+available:
 
 ```python
 from w6w.server import exchange_token

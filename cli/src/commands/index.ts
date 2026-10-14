@@ -26,6 +26,10 @@ import { NAMED_RUN_COMMANDS } from "./named-run.ts";
 import { WORKFLOW_COMMANDS } from "./workflows.ts";
 import { RUN_COMMANDS } from "./run.ts";
 import { TEAM_COMMANDS } from "./team.ts";
+import { APP_COMMANDS } from "./apps.ts";
+import { DASHBOARD_COMMANDS } from "./dashboard.ts";
+import { PROJECT_COMMANDS } from "./projects.ts";
+import { RELIABILITY_COMMANDS } from "./reliability.ts";
 
 export { DOCUMENT_COMMANDS } from "./documents.ts";
 export { VAR_COMMANDS } from "./vars.ts";
@@ -36,6 +40,10 @@ export { NAMED_RUN_COMMANDS } from "./named-run.ts";
 export { WORKFLOW_COMMANDS } from "./workflows.ts";
 export { RUN_COMMANDS } from "./run.ts";
 export { TEAM_COMMANDS } from "./team.ts";
+export { APP_COMMANDS } from "./apps.ts";
+export { DASHBOARD_COMMANDS } from "./dashboard.ts";
+export { PROJECT_COMMANDS } from "./projects.ts";
+export { RELIABILITY_COMMANDS } from "./reliability.ts";
 
 /** Every wired command, keyed by canonical command path. */
 export const COMMANDS: CommandRegistry = {
@@ -48,4 +56,8 @@ export const COMMANDS: CommandRegistry = {
   ...NAMED_RUN_COMMANDS,
   ...RUN_COMMANDS,
   ...TEAM_COMMANDS,
+  ...APP_COMMANDS,
+  ...DASHBOARD_COMMANDS,
+  ...PROJECT_COMMANDS,
+  ...RELIABILITY_COMMANDS,
 };

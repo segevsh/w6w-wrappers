@@ -81,6 +81,10 @@ const PUBLIC_SURFACE: Record<string, "function" | "string"> = {
   // T2.1.4 — identity and discovery.
   fetchMe: "function",
   ConnectionsApi: "function",
+  AppsApi: "function",
+  DashboardApi: "function",
+  ProjectsApi: "function",
+  ReliabilityApi: "function",
   WorkflowsApi: "function",
   // Name-addressed run: `functions.run(name, {payload})` /
   // `endpoints.run(name, {payload})`, the sibling shape of `workflows.run`.
@@ -119,6 +123,13 @@ Deno.test("the barrel's classes and guards are reachable and usable, not just pr
   assertEquals(typeof client.documents.list, "function");
   assertEquals(typeof client.vars.list, "function");
   assertEquals(typeof client.connections.list, "function");
+  assertEquals(typeof client.connections.get, "function");
+  assertEquals(typeof client.connections.delete, "function");
+  assertEquals(typeof client.apps.byIds, "function");
+  assertEquals(typeof client.dashboard.stats, "function");
+  assertEquals(typeof client.projects.list, "function");
+  assertEquals(typeof client.reliability.list, "function");
+  assertEquals(typeof client.reliability.members, "function");
   assertEquals(typeof client.workflows.run, "function");
   assertEquals(typeof client.me, "function");
   assertEquals(typeof client.run, "function");

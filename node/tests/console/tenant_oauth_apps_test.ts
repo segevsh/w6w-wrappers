@@ -217,14 +217,46 @@ Deno.test("console.tenantOAuthApps.put sends every key the caller DID set", asyn
     clientSecret: "cs_test_1",
     extra: { scopes: ["mail.send"] },
     disabled: false,
+    isDefault: false,
   });
 
   // The opposite mutant: an over-eager omission rule that dropped falsy values
   // would lose `disabled: false` here.
   const body = sentBody(c.calls[0]);
-  assertEquals(Object.keys(body).sort(), ["clientId", "clientSecret", "disabled", "extra"]);
+  assertEquals(Object.keys(body).sort(), [
+    "clientId",
+    "clientSecret",
+    "disabled",
+    "extra",
+    "isDefault",
+  ]);
   assertEquals(body.disabled, false);
+  assertEquals(body.isDefault, false);
   assertEquals(body.extra, { scopes: ["mail.send"] });
+});
+
+Deno.test("console.tenantOAuthApps.put sends isDefault: true, and omits it when absent", async () => {
+  const c = client(() => json({ config: CONFIG_A }, 201));
+
+  await c.client.console.tenantOAuthApps.put("sendgrid", "oauth2", { isDefault: true });
+  await c.client.console.tenantOAuthApps.put("sendgrid", "oauth2", { clientId: "cid_2" });
+
+  const first = sentBody(c.calls[0]);
+  assertEquals(Object.keys(first), ["isDefault"]);
+  assertEquals(first.isDefault, true);
+  assertEquals(Object.keys(sentBody(c.calls[1])), ["clientId"]);
+});
+
+Deno.test("console.tenantOAuthApps.put never forwards a cast-in clientSecretHint", async () => {
+  const c = client(() => json({ config: CONFIG_A }, 201));
+
+  const input = {
+    clientId: "cid_2",
+    clientSecretHint: "****abcd",
+  } as unknown as SetTenantOAuthAppInput;
+  await c.client.console.tenantOAuthApps.put("sendgrid", "oauth2", input);
+
+  assertEquals(Object.keys(sentBody(c.calls[0])), ["clientId"]);
 });
 
 Deno.test("console.tenantOAuthApps.put returns res.body.config, not res.body", async () => {

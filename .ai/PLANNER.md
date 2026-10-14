@@ -67,6 +67,37 @@
    `ui-conformance.test.ts` runs the type-only `ui-conformance.check.ts` through
    TypeScript (`react/src/__tests__/ui-conformance.test.ts:1-23`).
 
+   **verified: 2026-10-14** — React ALSO has runtime adapter conformance now
+   (`react/src/__tests__/adapter-conformance.test.ts`): it reads the required/optional `W6WApi`
+   member names from the installed `@w6w/ui` (pinned by git SHA `c798bbc` in
+   `react/package.json` devDependencies) and checks each is a function, forwards its arguments,
+   and preserves server error bodies. Re-pin that SHA when the UI provider contract changes; a
+   local `packages/ui` HEAD that is on no remote cannot be installed. The validating
+   `toFlowWorkflow`/`fromFlowWorkflow` converter lives in `react/src/flow-workflow.ts` (no runtime
+   `@w6w/ui` import). An embedding fixture + source-scan test (no `client.console`,
+   `client.request`, handwritten lifecycle URLs, `as unknown as` workflow casts) lives under
+   `react/src/__tests__/fixtures/` with its own `react/tsconfig.embed-fixture.json`.
+
+   **verified: 2026-10-14** — contract `0.7.0` has **58** operations; `node/tests/conformance_test.ts`
+   pins the count, so a contract op change must update that literal in the same commit.
+   A plain `workflows.run` / `functions.run` executes the **stored** row as last saved; a publish is
+   only a precondition (server `run-workflow.ts` / `bll/invoke-function.ts` gate on
+   `currentPublishedVersion === null`). Only `runVersion(id, n)` executes a published snapshot —
+   proven against a real server by `server/e2e/embed_sdk_e2e_test.ts`.
+
+   **verified: 2026-10-14** — the account-scoped session minter is server-only and lives beside
+   `exchangeToken`: Node `createEmbedSessionClient` (`node/src/server/mod.ts`, `./server` subpath,
+   deliberately NOT in the root/console barrels) and Python `EmbedSessionClient`
+   (`python/src/w6w/server.py`). Both require a non-blank `accountRef` (no silent default-account
+   fallback; raw `exchangeToken` keeps its optional `account`). Python's blank check MUST use the
+   ECMAScript `trim()` set (`JS_WS` in `server.py`), not `str.strip()` — `str.strip()` keeps
+   U+FEFF, the server trims it, and a BOM-only ref silently lands on the default account.
+   The tested host recipe is `node/examples/embed-host/{handler.ts,route.ts}`, exercised by
+   `node/tests/embed_host_example_test.ts` (examples are outside `deno task check`'s inputs; the
+   test file is what type-checks them). The exchange route (`POST /auth/exchange`) is NOT in
+   `endpoints.json`, so the CLI lane has no command for it by design (`docs/parity.md`
+   `## Server-only helpers`).
+
 4. **`VERSION` moves as a lockstep release fact.**
 
    **verified: 2026-10-06** — Update node and cli `package.json` + `deno.json`,
@@ -154,6 +185,14 @@
 - **verified: 2026-10-13** — at wrappers@eb381a7 (0.9.7, 26-10-13-02-fixes closeout, fresh
   detached checkout): node `deno task test` → `ok | 528 passed | 0 failed`; cli 127 passed / 0
   failed; react `npm test` 65 pass / 0 fail; python unittest `Ran 284 tests … OK`.
+- **verified: 2026-10-14** — at the 26-10-14-03-embed-sdk-coverage integration tip (0.9.11,
+  contract 0.7.0): node `deno task test` → `ok | 562 passed | 0 failed`; cli 161 passed / 0 failed;
+  react `NODE_OPTIONS=--experimental-strip-types npm test` 144 pass / 0 fail; python unittest
+  `Ran 332 tests … OK`.
+- **verified: 2026-10-14** — at the 26-10-14-02-embed-sessions integration tip (0.9.12): node
+  `deno task test` → `ok | 618 passed | 0 failed`; cli 161 passed / 0 failed; python unittest
+  `Ran 349 tests … OK`. `deno task --cwd cli check` fails with `npm:@types/node` missing in a tree
+  with no `node_modules` (also on main) — run `npm ci` in `cli/` first.
 - **verified: 2026-10-06** — React's CI setup builds the sibling SDK, installs
   it locally, then runs `npm test` (`.github/workflows/release.yml:146-161`).
   Use the Node 22 invocation above when reproducing it in this lane.

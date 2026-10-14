@@ -48,7 +48,7 @@ function json(body: unknown, status = 200): Response {
 
 const SUCCESS_BODY = {
   token: "tok_short_lived",
-  user: { subject: "user_1", tenant: "tn_1", role: "user", account: "tn_1" },
+  user: { subject: "user_1", tenant: "tn_1", role: "user", account: "acct_a1B2c3D4e5F6g7H8" },
   expiresIn: 900,
 };
 
@@ -81,7 +81,7 @@ Deno.test(
     assertEquals(result.user.subject, "user_1");
     assertEquals(result.user.tenant, "tn_1");
     assertEquals(result.user.role, "user");
-    assertEquals(result.user.account, "tn_1");
+    assertEquals(result.user.account, "acct_a1B2c3D4e5F6g7H8");
     assertEquals(result.expiresIn, 900);
   },
 );
@@ -101,6 +101,24 @@ Deno.test(
     });
 
     assertEquals(fake.calls[0].body, '{"subject":"user_1","account":"acct_9"}');
+  },
+);
+
+Deno.test(
+  "exchangeToken: a blank `account` is sent verbatim — the raw path never trims or drops it",
+  async () => {
+    const fake = fakeFetch(() => json(SUCCESS_BODY));
+
+    await exchangeToken({
+      baseUrl: "https://api.example.com",
+      clientId: "client_1",
+      clientSecret: "secret_1",
+      subject: "user_1",
+      account: "",
+      fetch: fake.fetch,
+    });
+
+    assertEquals(fake.calls[0].body, '{"subject":"user_1","account":""}');
   },
 );
 

@@ -307,3 +307,16 @@ Deno.test("workflows.run: an unknown trigger value is sent, never validated", as
 
   assertEquals(JSON.parse(c.calls[0].body ?? "null"), { trigger: "a_future_server_value" });
 });
+
+Deno.test("workflows.run: allowUnpublished is in the body only when true", async () => {
+  const c = client(() => json({ runId: "run_1", status: "queued" }, 202));
+
+  await c.client.workflows.run("wf_01HQ", { allowUnpublished: true });
+  await c.client.workflows.run("wf_01HQ", { allowUnpublished: false });
+  await c.client.workflows.run("wf_01HQ", {});
+
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), { allowUnpublished: true });
+  assertEquals(JSON.parse(c.calls[1].body ?? "null"), {}, "false is omitted, never sent");
+  assertEquals(JSON.parse(c.calls[2].body ?? "null"), {});
+  assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_01HQ/run", "body, not query");
+});

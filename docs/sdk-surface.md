@@ -170,12 +170,32 @@ included) raises `bad_response`.
 
 Both exist so a caller can _discover_ a `conn_…` / `wf_…` id to hand to `run`
 (D4). Both unwrap their envelope key and return the payload array. Connections
-are read-only in this version: every write is an interactive, secret-handling
-studio flow and is out of scope. `connections.list` sends **no** `?project=`
+can be listed, fetched and deleted in this version; creating, updating, testing
+and OAuth-connecting one are interactive, secret-handling studio flows and are out
+of scope. `connections.list` sends **no** `?project=`
 even when the client has a default; `workflows.list` does.
 
 Neither is paginated today and neither pretends otherwise — no cursor argument,
 no client-side paging loop.
+
+`connections.get(id)` and `connections.delete(id)` address one such id: `get`
+returns one `ConnectionSummary`, `delete` returns nothing, and both answer a
+uniform `404` for another account's id or a built-in `zerocred:` row. The list can
+include that built-in row, flagged `builtIn: true` (optional — an older server
+omits it); it is never fetchable or deletable.
+
+### Integration reads
+
+| TS                                                       | Notes                                                                                      |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `client.apps.byIds(ids, opts?)`                          | Chunks to the server's 100-id cap; `[]` makes no request; duplicates collapsed            |
+| `client.dashboard.stats(opts?)`                          | Account-scoped (no project); `from` / `to` / `bucket`                                      |
+| `client.projects.list(opts?)`                            | Read-only; first call may create the default project                                       |
+| `client.reliability.list(project, appIds, opts?)`        | At most 10 app ids (server `400` otherwise, surfaced unchanged); no batching helper        |
+| `client.reliability.members(project, opts?)`             | Which apps the project's calls touch; feed up to ten at a time to `list`                   |
+
+For a connection's own icon and label use the inline `app` on `ConnectionSummary`
+— it is the primary source and costs no extra request.
 
 ### Execution
 
@@ -218,11 +238,26 @@ Three rules both operations obey:
 | `client.workflows.update(id, definition, opts?)` | `client.workflows.update(id, definition, project=None, if_unmodified_since=None)` | `WorkflowSaveResult`                          |
 | `client.workflows.archive(id)`                   | `client.workflows.archive(id)`                                                    | the definition                                |
 | `client.workflows.delete(id)`                    | `client.workflows.delete(id)`                                                     | `void` / `None`                               |
+| `client.workflows.listVersions(id)` | `client.workflows.list_versions(id)` | `VersionList` |
+| `client.workflows.getVersion(id, n)` | `client.workflows.get_version(id, n)` | `VersionDetail` |
+| `client.workflows.publish(id)` | `client.workflows.publish(id)` | `PublishResult` |
+| `client.workflows.revert(id, n)` | `client.workflows.revert(id, n)` | `RevertResult` |
+| `client.workflows.enable(id)` | `client.workflows.enable(id)` | `void` / `None` |
+| `client.workflows.disable(id)` | `client.workflows.disable(id)` | `void` / `None` |
+| `client.workflows.runVersion(id, n, opts?)` | `client.workflows.run_version(id, n, ...)` | `WorkflowRunResult` |
 | `client.functions.list(opts?)`                   | `client.functions.list()`                                                         | `FunctionSummary[]` / `List[FunctionSummary]` |
 | `client.functions.get(id, opts?)`                | `client.functions.get(id)`                                                        | `FunctionDetail`                              |
 | `client.functions.create(definition)`            | `client.functions.create(definition)`                                             | `{id, key}` / `SaveResult`                    |
 | `client.functions.update(id, definition)`        | `client.functions.update(id, definition)`                                         | `{id, key}` / `SaveResult`                    |
 | `client.functions.delete(id)`                    | `client.functions.delete(id)`                                                     | `void` / `None`                               |
+| `client.functions.archive(id)` | `client.functions.archive(id)` | the definition |
+| `client.functions.listVersions(id)` | `client.functions.list_versions(id)` | `VersionList` |
+| `client.functions.getVersion(id, n)` | `client.functions.get_version(id, n)` | `VersionDetail` |
+| `client.functions.publish(id)` | `client.functions.publish(id)` | `PublishResult` |
+| `client.functions.revert(id, n)` | `client.functions.revert(id, n)` | `RevertResult` |
+| `client.functions.enable(id)` | `client.functions.enable(id)` | `void` / `None` |
+| `client.functions.disable(id)` | `client.functions.disable(id)` | `void` / `None` |
+| `client.functions.runVersion(id, n, opts?)` | `client.functions.run_version(id, n, ...)` | the Function's output |
 
 **The definition itself is opaque in both languages** —
 `Record<string, unknown>` / `dict`. A workflow's `steps[]` carry node types the
@@ -232,7 +267,7 @@ wrapper reject a document a newer server accepts. What the SDKs _do_ model is
 the envelope around it: `WorkflowDetail`, `WorkflowSaveResult`,
 `FunctionDetail`, `FunctionSummary`.
 
-Four rules all ten obey:
+Four rules all of them obey:
 
 - **`create` and `update` are the same route.** The server has one upsert per
   domain and no PATCH. What separates the two methods is that `create` mints the
@@ -247,7 +282,22 @@ Four rules all ten obey:
   the input to the write.
 - **Deleting a workflow takes two calls.** `archive` then `delete`; the SDK does
   not do the first for you when the server answers `409 workflow_not_archived`.
-  A Function deletes in one.
+  A Function is the same: `functions.archive` then `functions.delete`
+  (`409 function_not_archived`).
+
+**Versions and the draft run.** Both domains also expose `listVersions`,
+`getVersion`, `publish`, `revert`, `enable`, `disable` and `runVersion`, with the
+same names and shapes (`runVersion` is `POST …/versions/{n}/run` for a workflow
+and `…/invoke` for a Function). `getVersion` and `revert` unwrap their single-key
+envelope, `enable` and `disable` return nothing, and `run` on either domain takes
+`allowUnpublished: true` to execute the **stored** definition without a publish —
+sent only when `true`, and never a submitted body, so save first. `publish`
+snapshots the stored row, so flush any pending save before it.
+
+**What a plain run executes.** Without `allowUnpublished`, `run` still executes the **stored** definition
+as last saved — publishing is a precondition (the workflow or Function must have at least one published version), not a
+selector. Edits saved after a publish are what the next plain `run` executes. To execute exactly what was
+published, call `runVersion(id, n)`.
 
 The asymmetries between the two domains are the server's, not the wrappers':
 workflows take `?project=` and an `x-w6w-if-unmodified-since` precondition;
@@ -377,11 +427,19 @@ See [`cli.md`](./cli.md) for the help text itself.
 
 ## 8. What is not here
 
-Out of scope for this version, in every wrapper, and named so nobody adds them
-in one language: apps, functions, endpoints, projects, vault, tokens, schedules,
-triggers, subscriptions, tenants, `runs.get`, and **all write operations on
-connections and workflows**. They exist on the API. They are not in the wrappers
-until they are in `endpoints.json` — see
+In scope since the contract's `0.5.0`–`0.7.0` lines: the full definition lifecycle
+of workflows and Functions (create / update / archive / delete, plus publish,
+version and draft-run operations), and, for integrations, `connections.get` and
+`connections.delete`, `apps.byIds`, `dashboard.stats`, `projects.list`, and
+`reliability.list` / `reliability.members`.
+
+Out of scope for this version, in every wrapper, and named so nobody adds them in
+one language: connection create / update / test / OAuth (interactive,
+secret-handling flows), the app catalog's browse / search / paging (only the
+bounded `apps.byIds` lookup is in), project writes, endpoint management, vault,
+tokens, schedules, triggers, subscriptions, tenants, `runs.get` and
+`workflows.listRuns`. They exist on the API. They are not in the wrappers until
+they are in `endpoints.json` — see
 [`parity.md` §Adding an operation](./parity.md#adding-an-operation).
 
 Also deliberately absent from every wrapper, because they are browser couplings
@@ -391,22 +449,78 @@ refresh, and client-side run polling.
 
 ## Server-only subpath — `@w6w/sdk/server`
 
-**Not part of the surface above.** `exchangeToken` / `exchange_token` is a
-standalone function, outside `endpoints.json`'s `operations[]`, reachable only
-through a separate entry point in each language:
+**Not part of the surface above.** `createEmbedSessionClient` /
+`EmbedSessionClient` (the recommended path) and the lower-level
+`exchangeToken` / `exchange_token` are standalone, outside `endpoints.json`'s
+`operations[]`, reachable only through a separate entry point in each language:
 
 |                      | TypeScript                                                                                                             | Python                                                                                              |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | Import               | `import { exchangeToken } from "@w6w/sdk/server"`                                                                      | `from w6w.server import exchange_token`                                                             |
 | On the root surface? | No — not exported from `@w6w/sdk`'s barrel (`mod.ts`), and not on `@w6w/sdk/console` either                            | No — not re-exported from `w6w/__init__.py`, and not listed in `w6w.__all__`                        |
 | Signature            | `exchangeToken(options: { baseUrl, clientId, clientSecret, subject, account?, fetch? }): Promise<ExchangeTokenResult>` | `exchange_token(base_url, client_id, client_secret, subject, account=None, transport=None) -> dict` |
+| Session client import | `import { createEmbedSessionClient } from "@w6w/sdk/server"` | `from w6w.server import EmbedSessionClient` |
+| Session client on the root surface? | No — same exclusions as above | No — same exclusions as above |
+| Session client signature | `createEmbedSessionClient(options: { baseUrl, clientId, clientSecret, fetch?, now? }): EmbedSessionClient`, then `.create({ subject, accountRef }): Promise<EmbedSession>` | `EmbedSessionClient(base_url, client_id, client_secret, *, transport=None, now=None)`, then `.create(subject, account_ref) -> dict` |
 
-**What it does.** Calls `POST /auth/exchange` with a tenant's client credentials
+**What it does.** `exchangeToken` / `exchange_token` calls `POST /auth/exchange` with a tenant's client credentials
 and names one of the tenant's end-users via `subject`, minting a short-lived,
 `role: "user"` token scoped to that tenant + subject — the server-side half of
 "Path A" token exchange. The user-facing walkthrough is
 [docs.w6w.io/clients/node/embedding](https://docs.w6w.io/clients/node/embedding/);
 see also the `node` lane's `README.md` "Embedding for enterprise tenants".
+
+**The session client — the recommended embed path.** `createEmbedSessionClient`
+/ `EmbedSessionClient` holds one tenant's credentials per instance and mints one
+account-scoped session per `create()`: exactly one `POST /auth/exchange`, made
+through `exchangeToken` / `exchange_token` (still the only HTTP path). Unlike
+`exchangeToken`, the account is **required**: `accountRef` / `account_ref` is the
+host's own reference for the company the user is acting in (the account's
+external ref), because the server selects the tenant's default account when
+`account` is blank. Rules:
+
+- `baseUrl` / `base_url` is required and explicit; it never falls back to
+  `W6W_BASE_URL`. `clientId`/`clientSecret` follow the same rules as
+  `exchangeToken`'s (below).
+- `subject` is sent verbatim, never trimmed. `accountRef` is trimmed (Node: ECMAScript
+  `trim`; Python: the same whitespace set) and sent as the wire `account`. Both must be
+  non-blank strings; otherwise a local `ConfigError`, with no request made.
+- Node construction throws `ConfigError` when both `window` and `document` exist
+  (a browser-like global): a runtime check, which a bundler may or may not remove.
+  Python has no equivalent check; the class is simply not on the root surface.
+- `now` is a clock sampled before each request: epoch **milliseconds** in Node
+  (default `Date.now`), epoch **seconds** in Python (default `time.time`).
+- Python only: `base_url` must be the final `https` origin, with no redirect hop.
+  The default transport is `urllib.request.urlopen` (`_http.default_transport`), which
+  follows redirects and re-sends the request headers, so a redirect would re-send the
+  `Authorization: Basic` client credential to wherever it points. Pre-existing
+  behaviour of the default transport; point `base_url` at the origin that answers.
+
+`create()` returns exactly seven keys, all browser-safe (no `role`, no `studioUrl`,
+never the client secret):
+
+```
+{
+  token: string,       // the minted bearer token
+  expiresIn: number,   // lifetime, in seconds
+  expiresAt: string,   // ISO-8601 UTC, host clock sampled before the request + expiresIn
+  subject: string,     // the subject the server minted into the token
+  tenant: string,      // the tenant the client credentials resolved to
+  account: string,     // the server's resolved account id, acct_…
+  accountRef: string,  // the trimmed ref that was sent as the wire `account`
+}
+```
+
+(Python's dict uses the same camelCase keys.) A reply that is not the documented
+shape raises `ApiError` with status `200` and code `bad_response`. Server and transport
+errors are surfaced unwrapped, status and code intact. The step-by-step host route
+is [Embed w6w in your product](/guides/embed/).
+
+**Why there is no CLI command, and why React is unchanged.** The CLI gets no
+`session` command: it would put the tenant client secret in an end-user tool, and
+the helper is outside `endpoints.json`, which the CLI implements. `react/` is a derived
+lane wrapping `@w6w/sdk`, so it is unchanged; it only ever receives the browser-safe
+session object from the host's own route. See `parity.md` "Server-only helpers".
 
 **Basic auth only — never a second credential channel.** The tenant's
 `clientId`/`clientSecret` travel in exactly one place:
@@ -437,10 +551,17 @@ containing a character outside latin-1.
 }
 ```
 
+`user.account` is always the server's **resolved** account id (`acct_…`), never the
+raw claim you sent: a given `account` is an external reference that the server
+finds or creates, and with no `account` it is the tenant's default account.
+
 **Server errors**, surfaced as the lane's ordinary `ApiError` / `ApiError`
 exception, with the server's own code: `invalid_client` (401 — unknown or
 disabled client credentials), `invalid_body` (400 — malformed JSON),
-`invalid_subject` (400), `invalid_account` (400). None of these are retried: a
+`invalid_subject` (400), `invalid_account` (400), `tenant_disabled` (401 — the
+tenant itself is disabled) and `rate_limited` (429). A `400` can arrive before the
+credentials are verified, so a `400` does not prove the credentials are valid. None
+of these are retried: a
 `requireAuth: false` / `require_auth=False` request never gets the opt-in 401
 recovery either lane's transport otherwise offers.
 
