@@ -317,6 +317,11 @@ export interface AuthDef {
    */
   available?: boolean;
   /**
+   * True on the method the tenant has marked as its default; the connection
+   * modal preselects it. Absent from an older server.
+   */
+  default?: boolean;
+  /**
    * Names of host-side config keys this method needs. Present on `oauth2`
    * (["clientId", "clientSecret"]). Empty / undefined for
    * types that source everything from end-user input.
