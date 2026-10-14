@@ -33,7 +33,8 @@ answers with its own `acct_` id.
   secret**. These are issued when your tenant is provisioned.
 - A backend you control. The client secret must never reach a browser or mobile app.
 - `@w6w/sdk` installed on that backend. See the [Node SDK](/clients/node/) page. The session
-  client, `createEmbedSessionClient`, needs `@w6w/sdk` 0.9.12 or later.
+  client, `createEmbedSessionClient`, arrived in `@w6w/sdk` 0.9.12, and the
+  `getSession` recipe in section 2 needs `@w6w/react` and `@w6w/sdk` 0.9.13 or later.
   Earlier releases only have `exchangeToken` (see [the lower-level call](#the-lower-level-call)).
 - Coming from an existing integration that already minted tokens with `exchangeToken`? Read
   [Migrating to embed sessions](/guides/embed-session-migration/) before you switch.
@@ -222,30 +223,93 @@ anything per-company, use the session client, which has no such fallback.
 OIDC sign-in remains supported as the other way to get a user's token; it is documented with your
 tenant's identity-provider setup.
 
-## 2. Give the client a token supplier
+## 2. Give the client a session
 
-Instead of a fixed string, pass `token` a function. The client calls it for each request that starts,
-so a renewed session is picked up on the next call without rebuilding the client. Requests in flight
-at the same time share ONE supplier call, but nothing is cached once it settles, so **memoize your
-supplier** (as below) rather than minting a token on every call:
+In a React app, hand `<W6WProvider>` one callback, `getSession`, that calls your endpoint from
+section 1 and returns the session JSON. The provider calls it lazily, never more than once at a
+time, keeps the session until shortly before it expires, and re-checks when a hidden tab becomes
+visible (renewing only if the session is expired or inside the renew window). You write no cache, timer or tab-resume code. This needs `@w6w/react` and `@w6w/sdk`
+0.9.13 or later.
+
+```tsx
+"use client";
+
+import { W6WProvider, useW6WSession } from "@w6w/react";
+import type { ReactNode } from "react";
+
+async function getSession() {
+  // Calls YOUR host endpoint from section 1. It returns { token, expiresAt, ... }.
+  const res = await fetch("/api/w6w-session", { method: "POST" });
+  if (!res.ok) throw new Error(`session endpoint answered ${res.status}`);
+  return res.json();
+}
+
+export function W6W({ userId, children }: { userId: string; children: ReactNode }) {
+  return (
+    <W6WProvider
+      baseUrl="https://<your-host>"
+      getSession={getSession}
+      identityKey={userId}
+      refreshOnUnauthorized
+    >
+      {children}
+    </W6WProvider>
+  );
+}
+```
+
+`getSession` must resolve to `{ token, expiresAt, expiresIn? }`, which is what your endpoint
+returns. If it rejects, or resolves with a blank `token` or an `expiresAt` that is not a date, the
+failure shows up as `error` on `useW6WSession()` (below) and the request that needed the session
+fails with it, unless the previous session is still valid, in which case the request is sent with
+that held token. Pass `getSession` or `token`, not both, and not neither: the provider throws.
+
+**`identityKey` must change whenever the user or account behind `getSession` changes**, for example
+`` `${userId}:${companyId}` ``. A change throws away the cached session and the client, so the
+previous identity's token is never sent for the new one. With the same `identityKey` the provider
+keeps serving the cached session, even if `getSession` now mints for someone else.
+
+### Session status
+
+`useW6WSession()` returns `{ status, expiresAt, error, refresh }` for the nearest provider:
+
+| `status` | Meaning |
+| --- | --- |
+| `"loading"` | No session yet, or the first one is being fetched. |
+| `"ready"` | A session is cached and not yet expired. |
+| `"renewing"` | A new session is being fetched while the previous one is still held. |
+| `"expired"` | The held session has expired and no renewal is running (for example a hidden tab). |
+| `"error"` | The last `getSession` call failed. `error` holds the failure until the next attempt starts. |
+
+`refresh()` starts a renewal, or joins one already running, and resolves when it settles. It never
+rejects: read `error`. `renewBeforeMs` (default `30000`) sets how long before expiry the provider
+renews; it is capped at half the session's lifetime. `expiresAt` is `null` until a session exists.
+
+Place `<W6WProvider>` above any `<Suspense>` boundary that can suspend again after the first
+render. A boundary that re-suspends above or around the provider detaches its session store, and
+reads fail with a "disposed" error until the boundary shows again. A wrong token is never sent.
+
+### Switching identity with a request in flight
+
+On an `identityKey` change, read hooks abort their in-flight requests and blank their data. A
+**mutation** already in flight is not cancelled: it keeps the old client's request and token, its
+result still lands in the mutation hook's state, and that state is not reset. This release does
+not change that, so do not enable a switch while a save is running if the result would confuse the
+new view.
+
+### Without React
+
+The SDK's `W6WClient({ token: fn })` still caches nothing: it calls the function for each request
+that starts, and requests in flight at the same time share one call. That is correct for a server
+caller that mints once per job. If you build the client yourself, memoize the supplier, or call
+your minting code only when needed, rather than minting a token on every call:
 
 ```ts
 import { W6WClient } from "@w6w/sdk";
 
-type Cached = { token: string; expiresAt: string };
-let cached: Cached | undefined;
-
 const client = new W6WClient({
   baseUrl: process.env.W6W_BASE_URL,
-  token: async ({ forceRefresh } = {}) => {
-    if (forceRefresh || !cached || Date.parse(cached.expiresAt) - Date.now() < 30_000) {
-      // Calls YOUR host endpoint from section 1. It returns the session JSON.
-      const res = await fetch("/api/w6w-session", { method: "POST" });
-      if (!res.ok) return null;
-      cached = (await res.json()) as Cached;
-    }
-    return cached.token;
-  },
+  token: async () => (await mintSession()).token, // your own minting and caching
 });
 ```
 
@@ -257,8 +321,10 @@ raises `ConfigError` instead of being sent without a credential.
 Turn on `refreshOnUnauthorized` to retry once when a token turns out to be expired. When a request
 fails with `401 unauthorized`, the client calls your supplier again with `{ forceRefresh: true }`
 and resends the same request with the new token. For an embedded session that means calling your
-host endpoint again (see [Renewal](#renewal)). Use `onUnauthorized` to react when that doesn't
-help:
+host endpoint again (see [Renewal](#renewal)). With `getSession`, the provider joins any
+renewal already running, otherwise starts one, and hands the SDK the new token. Use
+`onUnauthorized` to react when that doesn't help. The snippet below is for Node or any non-React
+caller, where `supplier` is your own token function (in React, `getSession` replaces it):
 
 ```ts
 const client = new W6WClient({
@@ -273,8 +339,9 @@ const client = new W6WClient({
 ```
 
 The retry happens at most once per call, and only for `401` with code `unauthorized`. Nothing else
-is retried. `onUnauthorized` runs at most once per call: after a failed retry, or straight away
-when the token is a plain string or `refreshOnUnauthorized` is off.
+is retried. It applies to any HTTP method, `POST` included, so a write that the server rejected
+with `401` is sent a second time with the new token. `<W6WProvider>` adds no retry of its own. `onUnauthorized` runs at most once per call: after a
+failed retry, or straight away when the token is a plain string or `refreshOnUnauthorized` is off.
 
 ## 4. Send extra headers on every request
 
@@ -350,8 +417,8 @@ Rules that bite:
 ## In the browser
 
 Keep the session client and the client secret on your backend. In a React app, use
-[`@w6w/react`](/clients/react/): its provider takes the same token supplier, and your supplier
-fetches a session from your backend endpoint. See [Next.js and token minting](/clients/react/nextjs/).
+[`@w6w/react`](/clients/react/): its provider takes a `getSession` callback that
+fetches a session from your backend endpoint (section 2). See [Next.js and token minting](/clients/react/nextjs/).
 
 ## Troubleshooting
 
@@ -364,7 +431,7 @@ fetches a session from your backend endpoint. See [Next.js and token minting](/c
 | `429 rate_limited` from `create()` | Too many exchanges for your client id. | Back off and try again later. Mint a session once per expiry instead of once per request. The error does not carry the server's `Retry-After` value. |
 | Your endpoint returns `502 session_unavailable` | The exchange failed. The body is opaque by design. | Read the error in your server logs. |
 | `ConfigError: No w6w API token is configured` on a call | Your supplier returned nothing. | Make sure it returns a token string, and handle the case where the user isn't signed in. |
-| Calls keep failing with `401` after a refresh | The supplier returns the same expired token. | Call the host endpoint again when `forceRefresh` is `true`, instead of returning a cached session. |
+| Calls keep failing with `401` after a refresh | A hand-written supplier returns the same expired token. | With `getSession` the provider handles this. Otherwise call the host endpoint again when `forceRefresh` is `true`, instead of returning a cached session. |
 
 ## Where to next
 

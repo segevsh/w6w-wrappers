@@ -152,7 +152,6 @@ A few flags shown in `--help` aren't applied yet. Use these instead:
 | `w6w functions run --id-or-key <key>` or `w6w endpoints run --id-or-key <key>` | The flag isn't read, so the command says it needs a key. | Pass the key as an argument: `w6w functions run <key>`. |
 | `w6w functions run <key> --inputs '…'` | The inputs are ignored and the Function gets `{}`. `--payload` is rejected. | `w6w run fn:<key> --payload '…'` |
 | `w6w endpoints run <key> --input '…'` | The input is ignored and the Endpoint gets `{}`. `--payload` is rejected. | `w6w run ep:<key> --payload '…'` |
-| `w6w workflows run … --var k=v` or `--trigger …` | Variables and the trigger are ignored. `--wait` and `--input` work. | Set variables or a trigger from the [Node SDK](/clients/node/workflows/) or [Python](/clients/python/). |
 | `w6w workflows update … --if-unmodified-since …` | The check is skipped, so the save always wins. | Make conditional saves from an SDK with `ifUnmodifiedSince`. |
 
 ## Troubleshooting
