@@ -28,7 +28,7 @@ backend.
 - Your organisation is set up as a w6w tenant, with a **client id** and **client secret**.
 - A Next.js 13.4 or later app using the App Router, with your own sign-in.
 - `@w6w/react` and `@w6w/sdk` installed: `npm install @w6w/react @w6w/sdk`. The route below needs
-  `createEmbedSessionClient`, which ships in the first release after 0.9.10 that includes it.
+  `createEmbedSessionClient`, which needs `@w6w/sdk` 0.9.12 or later.
 
 ## 1. Put the credentials in your server environment
 

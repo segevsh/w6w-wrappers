@@ -33,7 +33,7 @@ answers with its own `acct_` id.
   secret**. These are issued when your tenant is provisioned.
 - A backend you control. The client secret must never reach a browser or mobile app.
 - `@w6w/sdk` installed on that backend. See the [Node SDK](/clients/node/) page. The session
-  client, `createEmbedSessionClient`, ships in the first release after 0.9.10 that includes it.
+  client, `createEmbedSessionClient`, needs `@w6w/sdk` 0.9.12 or later.
   Earlier releases only have `exchangeToken` (see [the lower-level call](#the-lower-level-call)).
 - Coming from an existing integration that already minted tokens with `exchangeToken`? Read
   [Migrating to embed sessions](/guides/embed-session-migration/) before you switch.
