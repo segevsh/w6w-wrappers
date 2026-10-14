@@ -28,7 +28,8 @@ backend.
 - Your organisation is set up as a w6w tenant, with a **client id** and **client secret**.
 - A Next.js 13.4 or later app using the App Router, with your own sign-in.
 - `@w6w/react` and `@w6w/sdk` installed: `npm install @w6w/react @w6w/sdk`. The route below needs
-  `createEmbedSessionClient`, which needs `@w6w/sdk` 0.9.12 or later.
+  `createEmbedSessionClient`, which arrived in `@w6w/sdk` 0.9.12, and the `getSession` provider
+  in step 3 needs `@w6w/react` and `@w6w/sdk` 0.9.13 or later.
 
 ## 1. Put the credentials in your server environment
 
@@ -97,45 +98,33 @@ console. You should get back a `token`, an `expiresAt` (an ISO date string) and 
 
 ## 3. Add the provider in a client component
 
-Create `app/w6w-provider.tsx`. It fetches a token from your route, caches it until shortly before
-it expires, and refreshes it when w6w rejects it:
+Create `app/w6w-provider.tsx`. You pass the provider one `getSession` callback that calls your
+route. The provider caches the session until shortly before it expires, renews it, re-checks when
+a hidden tab becomes visible, and refreshes it when w6w rejects it. You write no cache or timer:
 
 ```tsx
 "use client";
 
 import { W6WProvider } from "@w6w/react";
-import { useCallback, useRef, type ReactNode } from "react";
-
-// expiresAt is an ISO date string; `company` records which company the session was minted for
-type Cached = { token: string; expiresAt: string; company: string | undefined };
+import { useCallback, type ReactNode } from "react";
 
 export function W6W(
   { userId, companyId, children }: { userId: string; companyId?: string; children: ReactNode },
 ) {
-  const cache = useRef<Cached | null>(null);
-
-  const token = useCallback(async ({ forceRefresh = false } = {}) => {
-    const c = cache.current;
-    // A session cached for another company is never reused.
-    if (!forceRefresh && c && c.company === companyId && Date.parse(c.expiresAt) - Date.now() > 30_000) {
-      return c.token;
-    }
-
+  const getSession = useCallback(async () => {
     const res = await fetch("/api/w6w-session", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ company: companyId }), // a hint; your route validates it
     });
-    if (!res.ok) return null; // hooks wait instead of sending an unauthenticated call
-    const minted = { ...(await res.json()), company: companyId } as Cached;
-    cache.current = minted;
-    return minted.token;
+    if (!res.ok) throw new Error(`session route answered ${res.status}`);
+    return res.json(); // { token, expiresAt, ... }
   }, [companyId]);
 
   return (
     <W6WProvider
       baseUrl="https://<your-host>"
-      token={token}
+      getSession={getSession}
       identityKey={`${userId}:${companyId ?? ""}`}
       refreshOnUnauthorized
       onUnauthorized={() => window.location.assign("/sign-in")}
@@ -146,9 +135,14 @@ export function W6W(
 }
 ```
 
-A session is for one company. When the user switches company, pass the new `companyId`: the
-supplier stops reusing the cached session (it was minted for the other company) and sends
-`{ company }` to your route, which checks it against `companyIds` before minting.
+Components under the provider can read the session with `useW6WSession()`: its `status`
+(`"loading"`, `"ready"`, `"renewing"`, `"expired"` or `"error"`), `expiresAt`, `error`, and a
+`refresh()` that renews now. See the [Hooks reference](/clients/react/hooks/#usew6wsession).
+
+A session is for one company. When the user switches company, pass the new `companyId`: because
+`identityKey` includes it, the provider drops the cached session (it was minted for the other
+company), and the next `getSession` call sends the new `{ company }` to your route, which checks it
+against `companyIds` before minting.
 
 `identityKey` tells the provider whose data it's showing, so it includes both the user and the
 company. When either changes, the client is rebuilt and every hook starts empty, so nothing from
@@ -178,6 +172,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   );
 }
 ```
+
+Keep the provider above any `<Suspense>` boundary that can suspend again after the first render. A
+boundary that re-suspends above or around it detaches the session store, and reads fail with a
+"disposed" error until the boundary shows again. A wrong token is never sent.
 
 ## 5. Check that it worked
 
@@ -214,7 +212,7 @@ server component or a route handler, use the [Node SDK](/clients/node/) directly
 | Symptom | Cause | What to do |
 | --- | --- | --- |
 | `502 session_unavailable` from your session route | The exchange failed (the tenant client id or secret is wrong, or the tenant is disabled) or the `W6W_*` values are missing. The body is opaque by design. | Read the error in your server logs, check the values in `.env.local` and restart the dev server. |
-| Hooks stay loading | The session route returns an error, so the supplier returns `null`. | Call `/api/w6w-session` from the browser console and check the status (`401` not signed in, `403` company not yours, `502` see your server logs). |
+| Hooks stay loading, or `useW6WSession()` reports `error` | The session route returns an error, so `getSession` throws. | Call `/api/w6w-session` from the browser console and check the status (`401` not signed in, `403` company not yours, `502` see your server logs). |
 | `W6W_TENANT_CLIENT_SECRET` shows up in the browser bundle | It was given a `NEXT_PUBLIC_` prefix or imported in client code. | Rename it, and only use it in route handlers and server code. Rotate the secret. |
 | `useW6WClient must be used inside <W6WProvider>` | A component using a hook renders outside the provider. | Wrap that part of the tree in the provider. |
 

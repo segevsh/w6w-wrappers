@@ -22,7 +22,7 @@ npm install @w6w/react react
 
 `@w6w/sdk` comes in as a dependency. Add it to your own `package.json` too
 (`npm install @w6w/sdk`) if you import from it directly — `ApiError` for an
-`instanceof` check, or `exchangeToken` from `@w6w/sdk/server` on your backend.
+`instanceof` check, or `createEmbedSessionClient` from `@w6w/sdk/server` on your backend.
 
 `react-dom` is not a dependency of this package — `<W6WProvider>`'s only JSX is a
 context wrapper (`<Ctx.Provider>`), never a DOM element of its own. Your app already
@@ -76,7 +76,23 @@ function DocList() {
 
 A host juggling more than one signed-in identity — or one that does not have a
 token/identity yet at mount time — needs more than the Quick start's one-shot
-`token` prop. `<W6WProvider>` takes five more props for exactly this:
+`token` prop. `<W6WProvider>` takes more props for exactly this:
+
+- **`getSession`** (with **`renewBeforeMs`**, default `30000`) — instead of `token`,
+  one `() => Promise<{token, expiresAt, expiresIn?}>` callback that calls your
+  backend's session endpoint. The provider calls it lazily and one call at a time,
+  caches the session, renews it before expiry (never later than half the
+  session's lifetime) and re-checks when a hidden tab becomes visible; you write
+  no cache or timer. Pass exactly one of `token` or `getSession` (both, or
+  neither, throws). Needs 0.9.13 or later. `useW6WSession()` returns
+  `{status, expiresAt, error, refresh}`, where `status` is `"loading"`, `"ready"`,
+  `"renewing"`, `"expired"` or `"error"`. Keep the identity switch in
+  `identityKey` (it must change when the user or account behind `getSession`
+  does). Place the provider above any `<Suspense>` boundary that can re-suspend: one
+  above or around it detaches the store, and reads error with "disposed" until it
+  re-shows. A mutation in flight at an identity switch is not cancelled, keeps the
+  old client's request and token, still lands its result in the hook's state, and
+  that state is not reset (unchanged).
 
 - **`ready`** (default `true`) — set it `false` until you actually have a
   token/identity to embed with. While `false`, every read hook reports
@@ -105,26 +121,24 @@ token/identity yet at mount time — needs more than the Quick start's one-shot
 
 import { W6WProvider } from "@w6w/react";
 
+// Your own backend route: it holds the tenant credentials and answers with a
+// session ({ token, expiresAt, ... }) for this signed-in user, built with
+// `createEmbedSessionClient` from `@w6w/sdk/server`.
+async function getSession() {
+  const res = await fetch("/api/w6w-session", { method: "POST" });
+  if (!res.ok) throw new Error(`session route answered ${res.status}`);
+  return res.json();
+}
+
 export default function W6WLayout({ children }: { children: React.ReactNode }) {
   return (
     <W6WProvider
       baseUrl="https://api.example.com"
-      ready={true}
+      getSession={getSession}
       identityKey={`${session.subject}:${session.account}`}
       headers={{ "X-W6W-Tenant": session.tenantId }}
       refreshOnUnauthorized
       onUnauthorized={() => redirectToLogin()}
-      token={async () => {
-        // Your own backend route, not w6w's — it holds whatever credential
-        // mints a w6w token for this signed-in user (a tenant exchange, a
-        // cached short-lived token, …). This is a Next.js App Router layout,
-        // so it is a Client Component ("use client" above) even though the
-        // token-minting route itself runs on your server.
-        const res = await fetch("/api/w6w-token");
-        if (!res.ok) return null;
-        const { token } = await res.json();
-        return token;
-      }}
     >
       {children}
     </W6WProvider>
@@ -133,8 +147,7 @@ export default function W6WLayout({ children }: { children: React.ReactNode }) {
 ```
 
 The [Next.js walkthrough](https://docs.w6w.io/clients/react/nextjs/) builds the
-`/api/w6w-token` route this example fetches from, with `exchangeToken` and a
-cached, refreshable token supplier.
+`/api/w6w-session` route this example fetches from, with `createEmbedSessionClient`.
 
 ## Using this package with `@w6w/ui`
 
@@ -198,6 +211,10 @@ workflow converter in both directions. The runtime suite reads the installed
 To update the pin, change the npm version in `package.json`, refresh
 `package-lock.json`, and run `npm test` and `npm run build`. These checks report
 any incompatible UI contract changes.
+
+On Node older than 22.18, run the local gate as
+`NODE_OPTIONS=--experimental-strip-types npm test` (the tests load `.ts` files directly;
+CI uses Node 24).
 
 **Runtime conformance.** Assignability is checked at compile time only, so it cannot
 see a member that is typed but missing or mis-wired at run time.
