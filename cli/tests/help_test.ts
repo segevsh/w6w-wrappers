@@ -27,6 +27,7 @@ import {
   commandPathOf,
   formatModule,
   GENERATED_URL,
+  HIDDEN_PARAMS,
   loadContract,
   renderHelpModule,
 } from "../scripts/gen-help.ts";
@@ -131,6 +132,9 @@ Deno.test("command help names every parameter the contract gives the command", a
     if (resolution.kind !== "command") continue;
     const help = renderCommandHelp(resolution.command);
     for (const param of operation.params) {
+      // Only the explicit hidden set is exempt (handler never reads them); an
+      // aliased parameter keeps its contract name, so it is still checked.
+      if (HIDDEN_PARAMS.has(`${operation.name}.${param.name}`)) continue;
       const entry = resolution.command.params.find((candidate) => candidate.name === param.name);
       assert(
         entry,
@@ -142,6 +146,37 @@ Deno.test("command help names every parameter the contract gives the command", a
     // Every command's help carries at least one runnable example.
     assertStringIncludes(help, "EXAMPLES");
     assert(resolution.command.examples.length > 0);
+  }
+});
+
+Deno.test("functions run and endpoints run help show only what the handler reads", () => {
+  for (const path of [["functions", "run"], ["endpoints", "run"]]) {
+    const resolution = resolve(path);
+    assertEquals(resolution.kind, "command");
+    if (resolution.kind !== "command") continue;
+    const help = renderCommandHelp(resolution.command);
+    const label = path.join(" ");
+    assertStringIncludes(help, "<name>");
+    assertStringIncludes(help, "--payload <json>");
+    for (const stale of ["--id-or-key", "--inputs", "--input "]) {
+      assert(!help.includes(stale), `\`${label}\` help still shows \`${stale}\``);
+    }
+  }
+});
+
+Deno.test("workflows run and run-version help hide the flags their handlers ignore", () => {
+  const cases: [string[], string[]][] = [
+    [["workflows", "run"], ["--var", "--trigger", "--variables"]],
+    [["workflows", "run-version"], ["--variables", "--trigger", "--var"]],
+  ];
+  for (const [path, banned] of cases) {
+    const resolution = resolve(path);
+    assertEquals(resolution.kind, "command");
+    if (resolution.kind !== "command") continue;
+    const help = renderCommandHelp(resolution.command);
+    for (const stale of banned) {
+      assert(!help.includes(stale), `\`${path.join(" ")}\` help still shows \`${stale}\``);
+    }
   }
 });
 
