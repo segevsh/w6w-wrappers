@@ -87,7 +87,7 @@ export interface IntegrationRow {
 export async function integrations(client: W6WClient): Promise<IntegrationRow[]> {
   const connections: ConnectionSummary[] = await client.connections.list();
   const missing = connections.filter((c) => !c.app).map((c) => c.appId);
-  const fetched = await client.apps.byIds(missing);
+  const fetched = missing.length > 0 ? await client.apps.byIds(missing) : [];
   const names = new Map(fetched.map((a) => [a.id, a.displayName]));
 
   const rows = connections.map((c) => ({

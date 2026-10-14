@@ -3,7 +3,7 @@ id: null
 key: "embed"
 title: "Embed w6w in your product"
 section: "guides"
-description: "Mint per-user w6w tokens on your backend, rotate them without rebuilding the client, and recover from an expired token automatically."
+description: "Mint per-user w6w tokens on your backend, rotate them without rebuilding the client, and recover from an expired token automatically, and build workflow editors on the client."
 format: "markdown"
 shared: true
 sourceRepo: null
@@ -20,7 +20,8 @@ updatedAt: null
 
 When w6w runs inside your own product, each of your users calls it with their own short-lived
 token instead of one shared API token. This page shows how to mint those tokens on your backend,
-hand them to the client, and refresh them when they expire.
+hand them to the client, and refresh them when they expire. It also covers showing connection
+icons and building a workflow or Function editor.
 
 ## Before you start
 
@@ -167,8 +168,9 @@ Rules that bite:
   Functions have no such token: the last write wins.
 - **Refresh `updatedAt` after `revert`.** Reverting rewrites the stored row, so the token you
   held is stale. Call `get` again before the next save.
-- **The SDK doesn't retry.** A failed save, run or publish is thrown as an `ApiError` once. Decide
-  in your product whether to try again.
+- **The SDK adds no retry policy of its own.** The one exception is the single re-send after a
+  `401 unauthorized` when a token supplier is set (see section 3). Any other failed save, run or
+  publish is thrown as an `ApiError` once. Decide in your product whether to try again.
 - **A disabled workflow or Function can't run**, even as a draft run.
 - **Batch reliability lookups yourself.** `reliability.list` takes at most ten app ids per call.
   Ask `reliability.members(project)` for the ids, then call `list` in groups of ten.
