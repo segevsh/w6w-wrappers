@@ -305,8 +305,9 @@ export function createEmbedSessionClient(options: EmbedSessionClientOptions): Em
         fetch: fetchOption,
       });
 
-      const expiresAtMs = t0 + res.expiresIn * 1000;
+      const expiresAtMs = t0 + res?.expiresIn * 1000;
       if (
+        res === null || res === undefined ||
         typeof res.token !== "string" || typeof res.expiresIn !== "number" ||
         Number.isNaN(new Date(expiresAtMs).getTime()) || res.user === null ||
         typeof res.user !== "object" || typeof res.user.subject !== "string" ||

@@ -27,7 +27,7 @@ import type { WorkflowDefinition } from "@w6w/sdk";
 export interface FlowStepShape {
   id: string;
   uses: { app: string; action: string; connection?: string | null };
-  ports?: { in?: number | "many"; out?: number | "many" };
+  ports?: { in: number; out: number };
   with?: Record<string, unknown>;
   retry?: {
     maxAttempts: number;

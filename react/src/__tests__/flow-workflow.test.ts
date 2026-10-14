@@ -19,7 +19,7 @@ function valid(): WorkflowDefinition {
         uses: { app: "@w6w/trigger", action: "manual" },
         retry: { maxAttempts: 3 },
         onError: "continue",
-        ports: { out: 2 },
+        ports: { in: 0, out: 2 },
         "x-host": 1,
       },
       { id: "b", uses: { app: "@w6w/http", action: "request" } },
@@ -37,7 +37,7 @@ test("a valid definition converts and keeps every unknown key, top level and per
   assert.equal((flow.steps[0] as unknown as Record<string, unknown>)["x-host"], 1);
   assert.deepEqual(flow.steps[0]?.retry, { maxAttempts: 3 });
   assert.equal(flow.steps[0]?.onError, "continue");
-  assert.deepEqual(flow.steps[0]?.ports, { out: 2 });
+  assert.deepEqual(flow.steps[0]?.ports, { in: 0, out: 2 });
 });
 
 test("fromFlowWorkflow(toFlowWorkflow(def)) deep-equals def", () => {

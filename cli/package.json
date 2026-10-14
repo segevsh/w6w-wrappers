@@ -35,6 +35,7 @@
     "@w6w/sdk": "^0.9.12"
   },
   "devDependencies": {
+    "@types/node": "^22.20.5",
     "typescript": "^5.7.2"
   },
   "publishConfig": {

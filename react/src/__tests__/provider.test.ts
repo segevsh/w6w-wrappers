@@ -27,7 +27,6 @@ import { JSDOM } from "jsdom";
 import { StrictMode, act, createElement } from "react";
 import { type Root, createRoot } from "react-dom/client";
 import { W6WProvider, useW6WClient } from "../W6WProvider.tsx";
-import { subscribe } from "../single-flight.ts";
 import {
   useConnections,
   useCreateVar,
@@ -44,6 +43,7 @@ import {
   useWorkflow,
   useWorkflows,
 } from "../hooks.ts";
+import { subscribe } from "../single-flight.ts";
 
 // React 18.3+'s `act` warns ("not configured to support act(...)") unless this
 // flag is set — required once per process, not per test.

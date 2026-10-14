@@ -270,6 +270,7 @@ Deno.test("create(): the default clock is Date.now", async () => {
 
 for (
   const [name, body] of [
+    ["null body", null],
     ["no user", { token: "t", expiresIn: 900 }],
     ["non-numeric expiresIn", { ...SUCCESS_BODY, expiresIn: "900" }],
     ["absurd expiresIn", { ...SUCCESS_BODY, expiresIn: 1e300 }],
