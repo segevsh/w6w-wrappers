@@ -118,6 +118,24 @@
    console-only: no `endpoints.json` row, so cli/python gained nothing but the `VERSION` bump to
    0.9.5 (`e637745`); its doc section is in `node/docs/console.md` (`## console.tenantOAuthApps.*`).
 
+   **verified: 2026-10-13** — `26-10-13-01-oauth-client-setup` (wrappers@dac1698, `VERSION` 0.9.6
+   @ `fdeb467`): the SDK never takes or builds a callback URL. `TenantOAuthApp`/`GlobalOAuthApp` put
+   inputs have no `redirectUri`; the list response's top-level `callbackUrl` is gone and each entry
+   (and config row) carries the server-derived `callbackUrl` instead; `OAuth2ClientSetup` (the app's
+   `oauth2.setup` guidance) is exported from the `console` barrel (`node/src/console/apps.ts`,
+   `tenant-oauth-apps.ts`, `node/docs/console.md`).
+
+7. **Duplicate requests on load are shared, not avoided by callers.** `@w6w/react` shares one
+   in-flight read per client and key (`react/src/single-flight.ts` `subscribe`, a WeakMap per client
+   with refcounted abort), so StrictMode's double mount and two components reading the same list
+   make one request. An aborted shared fetch must not surface as an error to the survivor. The
+   SDK shares concurrent token-supplier calls per resolved config (`node/src/config.ts`
+   `requireToken`/`inflightTokens`), so a host's non-memoized async `token` runs once per burst,
+   not once per request. Connection reads carry `app?: ConnectionAppMeta | null`
+   (`node/src/types.ts`, `python/src/w6w/types.py`), so render the icon from the row, never
+   from a second catalog fetch. **verified: 2026-10-13** — wrappers@eb381a7 (0.9.7,
+   `26-10-13-02-fixes`): `react` `npm test` 65 pass, pinned in `react/src/__tests__/provider.test.ts`.
+
 ## Gate baselines
 
 - **verified: 2026-10-06** — The release test job runs Python's unittest command
@@ -131,6 +149,11 @@
 - **verified: 2026-10-13** — node `deno task test` → `ok | 519 passed | 0 failed` at
   wrappers@e637745 (0.9.5, `listCandidates` added); `deno task check`, `lint` (83 files) and
   `fmt:check` (88 files) exit 0.
+- **verified: 2026-10-13** — node `deno task test` → `ok | 522 passed | 0 failed` at the
+  T3.1.1 merge of `26-10-13-01-oauth-client-setup` (`dac1698`, its G1).
+- **verified: 2026-10-13** — at wrappers@eb381a7 (0.9.7, 26-10-13-02-fixes closeout, fresh
+  detached checkout): node `deno task test` → `ok | 528 passed | 0 failed`; cli 127 passed / 0
+  failed; react `npm test` 65 pass / 0 fail; python unittest `Ran 284 tests … OK`.
 - **verified: 2026-10-06** — React's CI setup builds the sibling SDK, installs
   it locally, then runs `npm test` (`.github/workflows/release.yml:146-161`).
   Use the Node 22 invocation above when reproducing it in this lane.

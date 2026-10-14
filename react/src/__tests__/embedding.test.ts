@@ -292,6 +292,7 @@ test("unmount aborts the in-flight signal", () =>
     assert.equal(ctl.calls[0]?.signal?.aborted, false);
 
     cleanup();
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     assert.equal(ctl.calls[0]?.signal?.aborted, true, "unmount must abort the in-flight signal");
   }));

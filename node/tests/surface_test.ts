@@ -188,7 +188,8 @@ const CONNECTION: ConnectionSummary = {
   id: "conn_1",
   appId: "sendgrid",
   authKey: "api_key",
-  owner: "user_01HQ",
+  tenant: "default",
+  subject: "user_01HQ",
   displayName: "Marketing sender",
   state: "connected",
   profile: { email: "ops@example.com" },
@@ -197,6 +198,21 @@ const CONNECTION: ConnectionSummary = {
   createdAt: "2026-07-01T12:00:00.000Z",
   updatedAt: "2026-07-20T09:00:00.000Z",
 };
+
+/** `app` is optional, and `null` (no app row) is distinct from absent (older server). */
+const _withApp: ConnectionSummary = {
+  ...CONNECTION,
+  app: {
+    displayName: "SendGrid",
+    iconSvg: "data:image/svg+xml;base64,AA==",
+    iconSvgDark: "data:image/svg+xml;base64,AB==",
+    brandColor: "#1A82E2",
+    brandColorDark: "#51A9F0",
+  },
+};
+const _nullApp: ConnectionSummary = { ...CONNECTION, app: null };
+// @ts-expect-error — `owner` is never sent; the server sends `tenant` + `subject`.
+const _withOwner: ConnectionSummary = { ...CONNECTION, owner: "user_01HQ" };
 
 /** Never tested: both fields are `null` until a first test runs. */
 const _untested: ConnectionSummary = { ...CONNECTION, lastTestOk: null, lastTestedAt: null };

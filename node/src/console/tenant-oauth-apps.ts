@@ -29,8 +29,8 @@
  *
  * **Response shapes are flat, no envelope key to peel with `unwrap()`** —
  * mirroring `console/auth.ts:29-32` for this whole family. `list` returns the
- * whole body deliberately, because `callbackUrl` rides beside `configs` and an
- * `unwrap(res, "configs")` would silently drop it; `put` reaches one level in
+ * whole body deliberately, so the response is exactly what the server sent
+ * (each row carries the server-derived `callbackUrl`: the same URL for every app, never assembled client-side); `put` reaches one level in
  * for `body.config`, which is the shape the server answers with (W4).
  *
  * **Wire shapes are planner pins, not reverse-engineered from a merged route.**
@@ -79,6 +79,11 @@ export interface TenantOAuthAppSummary {
    * {@linkcode SetTenantOAuthAppInput} carries no `redirectUri` key.
    */
   redirectUri: string | null;
+  /**
+   * This row's OAuth callback URL, derived SERVER-SIDE and specific to this
+   * app and auth method. Display it; never assemble it. Absent from an older server.
+   */
+  callbackUrl?: string;
   /** Provider-specific extras (scopes, audience, …). `{}` when none. */
   extra: Record<string, unknown>;
   /** Whether a client secret is stored. **Never the secret itself.** */
@@ -91,8 +96,6 @@ export interface TenantOAuthAppSummary {
 export interface TenantOAuthAppsResponse {
   /** Every override this tenant has, in the server's order. */
   configs: TenantOAuthAppSummary[];
-  /** This host's OAuth callback, derived SERVER-SIDE. Display it; never assemble it. */
-  callbackUrl: string;
 }
 
 /**
@@ -116,7 +119,7 @@ export interface TenantOAuthAppsResponse {
  * the user did not touch, never send `""`.
  *
  * **No `redirectUri` and no `force`.** Neither exists on this surface — the
- * callback URL is derived server-side (W3's `callbackUrl`) and the operator's
+ * callback URL is derived server-side (each row's `callbackUrl`) and the operator's
  * `?force` affordance is not offered to a tenant admin (W4). A field the SDK
  * declares is a field a form will fill, so neither is declared, and
  * {@linkcode toSetBody} additionally refuses to forward either at runtime.
@@ -207,8 +210,8 @@ export interface ListTenantOAuthCandidatesOptions {
  *
  * @example
  * ```ts
- * const { configs, callbackUrl } = await client.console.tenantOAuthApps.list();
- * // Register `callbackUrl` with the provider — never assemble it client-side.
+ * const { configs } = await client.console.tenantOAuthApps.list();
+ * // Register each row's `callbackUrl` with the provider — never assemble it client-side.
  * await client.console.tenantOAuthApps.put("sendgrid", "oauth2", { clientId: "abc" });
  * await client.console.tenantOAuthApps.remove("sendgrid", "oauth2");
  * ```
@@ -224,12 +227,13 @@ export class TenantOAuthAppsApi {
   }
 
   /**
-   * List the caller's tenant's OAuth overrides, plus this host's callback URL.
+   * List the caller's tenant's OAuth overrides; each row carries its own
+   * server-derived `callbackUrl`.
    *
-   * Returns the body VERBATIM rather than unwrapping `configs`: `callbackUrl`
-   * rides beside it and is the one value a caller cannot compute for itself.
+   * Returns the body VERBATIM rather than unwrapping `configs`, so the
+   * response stays exactly what the server sent.
    *
-   * @returns Every override for this tenant, and the server-derived callback URL.
+   * @returns Every override for this tenant.
    * @throws {ApiError} `403` when the caller does not administer its tenant.
    */
   async list(): Promise<TenantOAuthAppsResponse> {

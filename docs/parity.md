@@ -188,6 +188,10 @@ in `operations[]`. It is recorded here instead, the way §Conformance already
 separates "every operation, every lane" from everything else a lane legitimately
 differs on (§6 of `sdk-surface.md`).
 
+- **node shares concurrent supplier calls; python does not.** node's `requireToken`
+  lets requests in flight at the same time on one config share ONE supplier call
+  (dropped on settle, never a cache; `{forceRefresh: true}` never joins it).
+  python's sync transport has no concurrent requests to share, so it is unchanged.
 - **node and python both carry the callback; the CLI does not.** `W6WClient` and
   `Client` both accept `refreshOnUnauthorized`/`refresh_on_unauthorized`,
   `onUnauthorized`/`on_unauthorized` and a function-typed `token`. `@w6w/cli`

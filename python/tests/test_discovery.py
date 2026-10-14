@@ -24,16 +24,16 @@ from urllib.request import Request
 
 from w6w import ApiError, Client, ConnectionSummary, WorkflowSummary
 
-#: One connection, as the server sends it — **including the `tenant` the exposed
-#: type deliberately omits**. This is not a synthetic extra key: the server's own
-#: summary really carries it, so a reader that rejected unknown keys would raise
-#: on every real response.
+#: One connection, as the server sends it — **including a `futureField` the
+#: exposed type does not model**, standing for the next key the server adds, so a
+#: reader that rejected unknown keys would raise on every real response.
 CONNECTION_BODY = {
     "id": "conn_1",
     "appId": "sendgrid",
     "authKey": "api_key",
     "tenant": "default",
-    "owner": "user_01H",
+    "subject": "user_01H",
+    "futureField": "next-server-key",
     "displayName": "Marketing SendGrid",
     "state": "connected",
     "profile": {"accountName": "marketing"},
@@ -47,7 +47,8 @@ CONNECTION = ConnectionSummary(
     id="conn_1",
     appId="sendgrid",
     authKey="api_key",
-    owner="user_01H",
+    tenant="default",
+    subject="user_01H",
     displayName="Marketing SendGrid",
     state="connected",
     profile={"accountName": "marketing"},
@@ -198,16 +199,38 @@ class ConnectionsListTest(unittest.TestCase):
 
         self.assertEqual(instance.connections.list(), [])
 
-    def test_the_wire_tenant_field_is_dropped_rather_than_fatal(self) -> None:
-        # THE tolerance pin. `CONNECTION_BODY` carries `tenant` because the real
-        # response does; a strict model would raise on every live call. It is
-        # tolerated on the way in and absent on the way out.
+    def test_an_unknown_wire_field_is_dropped_rather_than_fatal(self) -> None:
+        # THE tolerance pin. `CONNECTION_BODY` carries `futureField`, which the
+        # type does not model; a strict model would raise on every live call. It
+        # is tolerated on the way in and absent on the way out.
         instance, _calls = client(responding({"connections": [CONNECTION_BODY]}))
 
         connection = instance.connections.list()[0]
 
-        self.assertIn("tenant", CONNECTION_BODY, "the case is vacuous without the extra key")
-        self.assertFalse(hasattr(connection, "tenant"))
+        self.assertIn("futureField", CONNECTION_BODY, "the case is vacuous without the extra key")
+        self.assertFalse(hasattr(connection, "futureField"))
+
+    def test_inline_app_meta_is_parsed_when_present(self) -> None:
+        app = {
+            "displayName": "SendGrid",
+            "iconSvg": "data:image/svg+xml;base64,TA==",
+            "iconSvgDark": "data:image/svg+xml;base64,REs=",
+            "brandColor": "#1A82E2",
+            "brandColorDark": "#51A9F0",
+        }
+        instance, _calls = client(responding({"connections": [{**CONNECTION_BODY, "app": app}]}))
+
+        meta = instance.connections.list()[0].app
+
+        self.assertIsNotNone(meta)
+        for key, value in app.items():
+            self.assertEqual(getattr(meta, key), value, key)
+
+    def test_app_absent_or_null_reads_as_none(self) -> None:
+        for body in (CONNECTION_BODY, {**CONNECTION_BODY, "app": None}):
+            instance, _calls = client(responding({"connections": [body]}))
+
+            self.assertIsNone(instance.connections.list()[0].app)
 
     def test_the_redacted_fields_are_not_modelled(self) -> None:
         # Declaring a field the server strips would invite a caller to look for

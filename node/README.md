@@ -10,7 +10,7 @@ The package is authored as runtime-neutral TypeScript against Web standards (`fe
 `URL`, `AbortController`), so the same build runs under Node 18+, Deno and Bun.
 
 - **License:** MIT (see [LICENSE](./LICENSE)).
-- **Version:** `0.9.5`.
+- **Version:** `0.9.8`.
 - **Guides:** [docs.w6w.io/clients/node](https://docs.w6w.io/clients/node/), with a
   [full reference](https://docs.w6w.io/clients/node/reference/).
 
@@ -194,7 +194,7 @@ them has an environment-variable spelling:
 
 | Option                  | Meaning                                                                                            |
 | ----------------------- | -------------------------------------------------------------------------------------------------- |
-| `token`                 | A bearer token, **or a supplier function** called fresh on every request (see below).              |
+| `token`                 | A bearer token, **or a supplier function** called per request (see below).                         |
 | `refreshOnUnauthorized` | Opt in to a single recovery retry when a request fails `401` / `unauthorized`. `false` by default. |
 | `onUnauthorized`        | Called with the terminal `401` `ApiError`, at most once per call.                                  |
 | `headers`               | Default headers sent with every request.                                                           |
@@ -202,7 +202,7 @@ them has an environment-variable spelling:
 ```ts
 const client = new W6WClient({
   baseUrl: "https://api.example.com",
-  // Called (and awaited) fresh on every request — never cached from construction.
+  // Called (and awaited) per request — never cached from construction.
   token: () => readTenantToken(),
   refreshOnUnauthorized: true, // one retry when the server answers 401
   onUnauthorized: (err) => redirectToLogin(err), // …and what to do when that did not help
@@ -212,10 +212,12 @@ const client = new W6WClient({
 
 **A token supplier is how a host mints or rotates a credential out of band.** `token` takes a
 `string` — sent verbatim on every call, exactly as before — or a `TokenProvider` function returning
-one, which is called **fresh on every request** rather than resolved once at construction, so a
-token that changes between calls is picked up without rebuilding the client. A nullish or blank
-result is treated exactly like a missing static token: a `ConfigError` naming `W6W_TOKEN`, never a
-request sent with no credential.
+one, which is called **per request** rather than resolved once at construction, so a token that
+changes between calls is picked up without rebuilding the client. Requests in flight
+**concurrently** on one client share ONE supplier call (and its result); nothing is cached once it
+settles, so memoize the supplier yourself if minting is expensive. A nullish or blank result is
+treated exactly like a missing static token: a `ConfigError` naming `W6W_TOKEN`, never a request
+sent with no credential.
 
 **`refreshOnUnauthorized` opts in to one recovery.** Off by default, and the behaviour before the
 option existed. When a request fails `401` with `{code: "unauthorized"}` and `token` is a function,

@@ -217,18 +217,32 @@ the array.
       "id": "conn_01H…",
       "appId": "sendgrid",
       "authKey": "api_key",
-      "owner": "user_01H…",
+      "tenant": "default",
+      "subject": "user_01H…",
       "displayName": "Marketing SendGrid",
       "state": "connected",
       "profile": {},
       "lastTestOk": true,
       "lastTestedAt": "2026-07-20T09:14:00.000Z",
       "createdAt": "2026-07-01T12:00:00.000Z",
-      "updatedAt": "2026-07-20T09:14:00.000Z"
+      "updatedAt": "2026-07-20T09:14:00.000Z",
+      "app": {
+        "displayName": "SendGrid",
+        "iconSvg": "data:image/svg+xml;base64,…",
+        "iconSvgDark": "data:image/svg+xml;base64,…",
+        "brandColor": "#1A82E2",
+        "brandColorDark": "#51A9F0"
+      }
     }
   ]
 }
 ```
+
+`app` is the connection's app, inlined as a top-level sibling of `appId` (never
+flattened into the row), so a list needs no second fetch for names and icons.
+Only `displayName` is always present inside it. `app` is `null` when the server
+found no app row, and absent from an older server; the TypeScript wrappers keep
+those two apart, Python reads both as `None`.
 
 Shape is `ConnectionSummary` (fields pinned in
 [implementation.md §5](./implementation.md#5-wire-types)) — the stored

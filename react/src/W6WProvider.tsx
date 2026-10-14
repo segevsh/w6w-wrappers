@@ -1,12 +1,13 @@
 /**
  * `<W6WProvider>` — one `W6WClient` per `{baseUrl, project, identityKey,
- * refreshOnUnauthorized, headers}` combination, with the token resolved FRESH
- * on every request.
+ * refreshOnUnauthorized, headers}` combination, with the token resolved per
+ * request (concurrent requests share one supplier call).
  *
  * `@w6w/sdk`'s `W6WClientOptions.token` (`node/src/config.ts:41-63`) accepts
  * either a plain string or a {@linkcode TokenProvider} function — the
- * function form is called (and its result awaited) fresh on every request,
- * never cached, never resolved once at construction. This provider hands the
+ * function form is called (and its result awaited) per request — requests in
+ * flight at the same time share ONE call, nothing is cached once it settles,
+ * and it is never resolved once at construction. This provider hands the
  * SDK a single STABLE function that reads the CURRENT `token` prop through a
  * ref: a string prop is returned as-is, a function prop is called with
  * whatever `ctx` the SDK forwards (including `{forceRefresh: true}` on its
@@ -39,13 +40,13 @@
 import { type ApiError, type FetchLike, type TokenProvider, W6WClient } from "@w6w/sdk";
 import { type ReactNode, createContext, useContext, useMemo, useRef } from "react";
 
-/** A static bearer token, or a supplier called fresh on every request. */
+/** A static bearer token, or a supplier called per request (concurrent requests share one call). */
 export type TokenSource = string | TokenProvider;
 
 export interface W6WProviderProps {
   /** The w6w server's origin, e.g. `"https://api.example.com"`. */
   baseUrl: string;
-  /** A literal bearer token, or a supplier called fresh on every request. */
+  /** A literal bearer token, or a supplier called per request (concurrent requests share one call). */
   token: TokenSource;
   /**
    * The real transport this provider's stable `fetch` wrapper delegates to.
