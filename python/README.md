@@ -12,11 +12,8 @@ gives you the same operations as `@w6w/sdk@X`.
 - **Version:** `0.9.12`.
 - **Guides:** [docs.w6w.io/clients/python](https://docs.w6w.io/clients/python/),
   with a [full reference](https://docs.w6w.io/clients/python/reference/).
-- **Surface:** `me`, `run`, `request`, `connections.list`, the complete
-  `workflows.*` lifecycle (list/run/cancel/get/create/update/archive/delete),
-  `functions.*` (run/list/get/create/update/delete), `endpoints.run`, the
-  complete `documents.*` and `vars.*` CRUD, `team.*`, and
-  `w6w.server.exchange_token` for backends.
+- **Surface:** every operation in [`endpoints.json`](https://github.com/w6w-io/w6w-wrappers/blob/main/endpoints.json),
+  plus `request` and, for backends, `w6w.server.exchange_token` and `EmbedSessionClient`.
 - Below `1.0.0`, breaking changes may arrive in a minor bump — that grace ends
   at `1.0.0`.
 

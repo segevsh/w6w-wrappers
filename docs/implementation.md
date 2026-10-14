@@ -812,8 +812,8 @@ process. `deno test` and `python3 -m unittest` both run the suite in-process.
 
 ### Required tests
 
-For **every operation in `endpoints.json` — all thirty-six, `required` and
-`planned` alike**:
+For **every operation in `endpoints.json` — `required` and `planned`
+alike**:
 
 1. **Success path.** Assert the request the wrapper _made_ (method, resolved URL
    including query parameters, `Authorization` header, JSON body) **and** the
@@ -964,9 +964,9 @@ and the drift would only be discovered when the fence clears — which is
 precisely the failure the lockstep bet exists to prevent.
 
 So: `status` tells a **user** whether calling the operation will reach a live
-route today. It tells an **implementer** nothing. Implement all thirty-six;
-test all thirty-six against a mocked transport; assert all thirty-six in
-conformance.
+route today. It tells an **implementer** nothing. Implement every operation in `endpoints.json`;
+test every operation in `endpoints.json` against a mocked transport; assert
+every one of them in conformance.
 
 One more claim this section does not make: `react/` is exempt from this runner
 not through `required`/`planned` bookkeeping but because it is a **derived
