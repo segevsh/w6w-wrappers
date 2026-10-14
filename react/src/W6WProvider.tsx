@@ -38,7 +38,15 @@
  * @module
  */
 import { type ApiError, type FetchLike, type TokenProvider, W6WClient } from "@w6w/sdk";
-import { type ReactNode, createContext, useContext, useEffect, useMemo, useRef } from "react";
+import {
+  type ReactNode,
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from "react";
 import { DEFAULT_RENEW_BEFORE_MS, SessionStore, type W6WSession } from "./session.ts";
 
 /** A static bearer token, or a supplier called per request (concurrent requests share one call). */
@@ -165,7 +173,8 @@ export function W6WProvider(props: W6WProviderProps): ReactNode {
   // behaves exactly as before this prop pair existed: legacy token mode, the
   // SDK rejects the blank value per request. Only a provider with NEITHER key
   // present is real misuse.
-  const legacyUndefinedToken = !hasToken && !hasSession && "token" in props;
+  const legacyUndefinedToken =
+    !hasToken && !hasSession && "token" in props && !("getSession" in props);
   if (hasToken === hasSession && !legacyUndefinedToken) {
     throw new Error(
       hasToken
@@ -244,7 +253,7 @@ export function W6WProvider(props: W6WProviderProps): ReactNode {
   }, [baseUrl, project, identityKey, refreshOnUnauthorized, headersSnapshot, hasSession]);
 
   // Listener/timer lifecycle + late-discard of the OLD store on identity change.
-  useEffect(() => {
+  (typeof document === "undefined" ? useEffect : useLayoutEffect)(() => {
     store?.attach();
     return () => store?.detach();
   }, [store]);

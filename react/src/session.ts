@@ -128,6 +128,7 @@ export class SessionStore {
    * identity change disposes one microtask later.
    */
   attach(): void {
+    this.#dead = false;
     this.#attached = true;
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", this.#onVisibility);

@@ -15,7 +15,7 @@ import { StrictMode, act, createElement } from "react";
 import { type Root, createRoot } from "react-dom/client";
 import { W6WProvider, useW6WClient } from "../W6WProvider.tsx";
 import { useMe } from "../hooks.ts";
-import { type W6WSession, type W6WSessionState, useW6WSession } from "../session.ts";
+import { SessionStore, type W6WSession, type W6WSessionState, useW6WSession } from "../session.ts";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -161,6 +161,7 @@ test("W6WProvider throws a plain Error when both or neither of token/getSession 
       for (const props of [
         { baseUrl: BASE, token: "t", getSession: minter(1000).fn },
         { baseUrl: BASE },
+        { baseUrl: BASE, token: undefined, getSession: undefined },
       ]) {
         await assert.rejects(
           (async () => {
@@ -685,4 +686,48 @@ test("unmount removes the visibilitychange listener and cancels the timer", () =
     await tick(700_000); // past expiry: a surviving timer or listener would re-acquire
     await show(true);
     assert.equal(m.calls, 1, "no acquisition after unmount");
+  }));
+
+// ── round 3: B2 revival across a task boundary, D4 pin ───────────────────
+
+test("a store detached for longer than one task is revived by attach()", async () => {
+  const soon = () => new Date(Date.now() + 600_000).toISOString();
+  const store = new SessionStore(
+    () => Promise.resolve({ token: "tok", expiresAt: soon() }),
+    () => 1000,
+  );
+  store.attach();
+  assert.equal(await store.supplier(), "tok");
+  store.detach();
+  await new Promise((r) => setImmediate(r));
+  await assert.rejects(store.supplier(), /disposed/);
+  store.attach();
+  assert.equal(await store.supplier(), "tok");
+  store.detach();
+  await new Promise((r) => setImmediate(r));
+});
+
+test("a stale client rejects 'disposed' after an identity switch even when A's session was cached", () =>
+  withRoot(async (root) => {
+    const fake = fakeFetch(() => json(ME_BODY));
+    const soon = () => new Date(Date.now() + 600_000).toISOString();
+    await mount(root, {
+      baseUrl: BASE,
+      identityKey: "A",
+      getSession: () => Promise.resolve({ token: "tok-A", expiresAt: soon() }),
+      fetch: fake.fetch,
+    });
+    const oldClient = client();
+    await oldClient.me();
+    await mount(root, {
+      baseUrl: BASE,
+      identityKey: "B",
+      getSession: () => Promise.resolve({ token: "tok-B", expiresAt: soon() }),
+      fetch: fake.fetch,
+    });
+    await settle();
+    await new Promise((r) => setImmediate(r));
+    const before = fake.calls.length;
+    await assert.rejects(oldClient.me(), /disposed/);
+    assert.equal(fake.calls.length, before);
   }));
