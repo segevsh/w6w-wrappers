@@ -490,11 +490,11 @@ external ref), because the server selects the tenant's default account when
   Python has no equivalent check; the class is simply not on the root surface.
 - `now` is a clock sampled before each request: epoch **milliseconds** in Node
   (default `Date.now`), epoch **seconds** in Python (default `time.time`).
-- Python only: `base_url` must be the final `https` origin, with no redirect hop.
-  The default transport is `urllib.request.urlopen` (`_http.default_transport`), which
-  follows redirects and re-sends the request headers, so a redirect would re-send the
-  `Authorization: Basic` client credential to wherever it points. Pre-existing
-  behaviour of the default transport; point `base_url` at the origin that answers.
+- Python only: `base_url` must be the final `https` origin, with no redirect hop. The
+  exchange and session helpers (`exchange_token`, `EmbedSessionClient`) use a no-redirect
+  transport (`_http.no_redirect_transport`) by default: a 3xx raises `ApiError` and the
+  `Authorization: Basic` client credential is never re-sent. `Client` is unchanged and still
+  uses `urllib.request.urlopen`. An injected `transport` is used as given.
 
 `create()` returns exactly seven keys, all browser-safe (no `role`, no `studioUrl`,
 never the client secret):

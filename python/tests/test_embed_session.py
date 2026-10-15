@@ -273,6 +273,29 @@ class ErrorsTest(SecretHygiene):
         )
 
 
+class DefaultTransportTest(unittest.TestCase):
+    """With no `transport=`, the exchange goes through `no_redirect_transport`."""
+
+    def test_exchange_token_defaults_to_no_redirect_transport(self) -> None:
+        fake = responding(SUCCESS_BODY)
+        with mock.patch.object(w6w.server, "no_redirect_transport", fake):
+            w6w.server.exchange_token(BASE, "client_1", SECRET, "u1")
+        self.assertEqual(len(fake.calls), 1)
+
+    def test_embed_session_client_defaults_to_no_redirect_transport(self) -> None:
+        fake = responding(SUCCESS_BODY)
+        client = EmbedSessionClient(base_url=BASE, client_id="client_1", client_secret=SECRET)
+        with mock.patch.object(w6w.server, "no_redirect_transport", fake):
+            client.create("u1", "co-9")
+        self.assertEqual(len(fake.calls), 1)
+
+    def test_an_injected_transport_is_used_instead(self) -> None:
+        fake, injected = responding(SUCCESS_BODY), responding(SUCCESS_BODY)
+        with mock.patch.object(w6w.server, "no_redirect_transport", fake):
+            make(injected).create("u1", "co-9")
+        self.assertEqual((len(fake.calls), len(injected.calls)), (0, 1))
+
+
 class BarrelTest(unittest.TestCase):
     def test_not_an_attribute_of_the_package_root(self) -> None:
         self.assertFalse(hasattr(w6w, "EmbedSessionClient"))

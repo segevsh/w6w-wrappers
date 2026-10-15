@@ -1,0 +1,201 @@
+name: CI
+
+# Pull-request and main gates for every lane. Read-only by construction: no
+# permission beyond `contents: read`, no secret, no publishing step. Publishing
+# lives in release.yml alone — its FILENAME is the npm/PyPI trusted-publisher
+# credential, so it is never edited from here and never renamed.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NPM_VERSION: "11.19.0"
+
+jobs:
+  # One version, eleven places it is written down; the same check release.yml
+  # runs, minus the release-tag comparison.
+  lockstep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: VERSION and every manifest must agree
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, re, sys
+
+          root = pathlib.Path(".")
+          shared = (root / "VERSION").read_text().strip()
+
+          def from_json(path, *keys):
+              data = json.loads((root / path).read_text())
+              for key in keys:
+                  data = data[key]
+              return data
+
+          def from_regex(path, pattern):
+              text = (root / path).read_text()
+              match = re.search(pattern, text, re.M)
+              if not match:
+                  sys.exit(f"::error::no version literal matched in {path}")
+              return match.group(1)
+
+          found = {
+              "VERSION": shared,
+              "node/package.json": from_json("node/package.json", "version"),
+              "node/deno.json": from_json("node/deno.json", "version"),
+              "node/src/version.ts": from_regex(
+                  "node/src/version.ts", r'VERSION:\s*string\s*=\s*"([^"]+)"'),
+              "cli/package.json": from_json("cli/package.json", "version"),
+              "cli/deno.json": from_json("cli/deno.json", "version"),
+              "cli/mod.ts": from_regex(
+                  "cli/mod.ts", r'VERSION:\s*string\s*=\s*"([^"]+)"'),
+              "python/pyproject.toml": from_regex(
+                  "python/pyproject.toml", r'^version\s*=\s*"([^"]+)"'),
+              "python/src/w6w/_version.py": from_regex(
+                  "python/src/w6w/_version.py", r'__version__:\s*str\s*=\s*"([^"]+)"'),
+              "react/package.json": from_json("react/package.json", "version"),
+              "react/src/version.ts": from_regex(
+                  "react/src/version.ts", r'VERSION:\s*string\s*=\s*"([^"]+)"'),
+          }
+
+          # Echo everything BEFORE deciding: when this fails, the log should
+          # already answer "which one disagreed" without a re-run.
+          width = max(len(name) for name in found)
+          for name, value in found.items():
+              print(f"  {name:<{width}}  {value}")
+
+          wrong = {n: v for n, v in found.items() if v != shared}
+          if wrong:
+              for name, value in wrong.items():
+                  print(f"::error::{name} is {value}, but VERSION is {shared}")
+              sys.exit(1)
+          print(f"\nall {len(found)} agree on {shared}")
+          PY
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: python — unittest (includes the conformance suite)
+        working-directory: python
+        run: PYTHONPATH=src python3 -m unittest discover -s tests -t .
+      - name: python — build sdist + wheel
+        working-directory: python
+        run: |
+          python -m pip install --upgrade build
+          python -m build --outdir dist
+
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: node — deno check
+        working-directory: node
+        run: deno task check
+      - name: node — deno lint
+        working-directory: node
+        run: deno task lint
+      - name: node — deno fmt --check
+        working-directory: node
+        run: deno task fmt:check
+      - name: node — deno test
+        working-directory: node
+        run: deno task test
+      # Before any npm step: Deno's clean-tree check covers the whole repository
+      # and npm installs can touch sibling lockfiles.
+      - name: JSR — validate the SDK package (dry run)
+        working-directory: node
+        run: deno publish --dry-run
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm install --global "npm@$NPM_VERSION"
+      - name: node — install + build
+        working-directory: node
+        run: npm ci && npm run build
+      - name: node — validate the tarball
+        working-directory: node
+        run: npm pack --dry-run
+
+  cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm install --global "npm@$NPM_VERSION"
+      - name: node — build the SDK this lane links
+        working-directory: node
+        run: npm ci && npm run build
+      # Before `deno check`: its types come from cli/node_modules (@types/node).
+      - name: cli — install + build
+        working-directory: cli
+        run: npm install && npm run build
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: cli — deno check
+        working-directory: cli
+        run: deno task check
+      - name: cli — deno lint
+        working-directory: cli
+        run: deno task lint
+      - name: cli — deno fmt --check
+        working-directory: cli
+        run: deno task fmt:check
+      - name: cli — deno test
+        working-directory: cli
+        run: deno task test
+      - name: cli — validate the tarball
+        working-directory: cli
+        run: npm pack --dry-run
+
+  react:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm install --global "npm@$NPM_VERSION"
+      - name: node — build the SDK this lane imports
+        working-directory: node
+        run: npm ci && npm run build
+      # The sibling goes in FIRST: react's @w6w/sdk range tracks VERSION, so on a
+      # release commit a bare `npm install` dies with ETARGET (see release.yml).
+      - name: react — install against the sibling SDK
+        working-directory: react
+        run: |
+          npm install --no-save ../node
+          npm install
+      - name: react — typecheck
+        working-directory: react
+        run: npm run typecheck
+      - name: react — lint
+        working-directory: react
+        run: npm run lint
+      - name: react — test
+        working-directory: react
+        run: npm test
+      - name: react — build
+        working-directory: react
+        run: npm run build
+      - name: react — validate the tarball
+        working-directory: react
+        run: npm pack --dry-run

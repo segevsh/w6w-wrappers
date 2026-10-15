@@ -59,6 +59,11 @@ whenever a request needs a token, and concurrent requests share one in-flight ca
 not cached once it settles, so a rotated token is picked up on the next request. Until it returns a token, read
 hooks stay in their loading state instead of sending a request without one.
 
+For per-user sessions minted by your backend, pass `getSession` instead of `token`: one callback
+that calls your session endpoint. The provider caches the session, renews it before it expires and
+re-checks on tab resume, and `useW6WSession()` reports its status. It needs `@w6w/react` 0.9.13 or
+later. See [Next.js and token minting](/clients/react/nextjs/).
+
 ## 3. Read data with a hook
 
 ```tsx
