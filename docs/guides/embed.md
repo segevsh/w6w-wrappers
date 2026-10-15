@@ -375,6 +375,8 @@ two components calling `useConnections()` (or StrictMode's double mount) send a 
 
 ## 6. Build a workflow or Function editor
 
+This section builds the editor loop yourself. To mount w6w's own editor instead, see [Embed the workflow editor](/clients/embed/).
+
 A visual editor needs to load a definition, save it, try it, publish it and roll it back. Every
 step is a method on `client.workflows` or `client.functions`, with the same names on both:
 
@@ -420,6 +422,9 @@ Keep the session client and the client secret on your backend. In a React app, u
 [`@w6w/react`](/clients/react/): its provider takes a `getSession` callback that
 fetches a session from your backend endpoint (section 2). See [Next.js and token minting](/clients/react/nextjs/).
 
+If you want the whole workflow editor rather than the pieces to build one, mount the managed
+editor from `@w6w/embed`: see [Embed the workflow editor](/clients/embed/).
+
 ## Troubleshooting
 
 | Symptom | Cause | What to do |
@@ -438,6 +443,8 @@ fetches a session from your backend endpoint (section 2). See [Next.js and token
 - **[React](/clients/react/)**: the provider and hooks for your frontend.
 - **[Next.js and token minting](/clients/react/nextjs/)**: a complete backend route plus provider
   setup.
+- **[Embed the workflow editor](/clients/embed/)**: the managed editor from `@w6w/embed`, one
+  package and one provider.
 - **[Migrating to embed sessions](/guides/embed-session-migration/)**: moving an existing
   `exchangeToken` integration over.
 - **[Node SDK reference](/clients/node/reference/)**: every option on `W6WClient`.
