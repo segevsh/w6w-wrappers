@@ -532,3 +532,48 @@ test('mod.ts\'s first statement is "use client"; — above the doc comment, not 
       "out of that position.",
   );
 });
+
+test("listAppsPage forwards snapshot/offset and returns the snapshot page fields", async () => {
+  const fake = fakeFetch((call) => {
+    const url = new URL(call.url);
+    assert.equal(url.searchParams.get("snapshot"), "lsn_s");
+    assert.equal(url.searchParams.get("offset"), "0");
+    return json({
+      apps: [appFor("app_1")],
+      snapshot: "lsn_s",
+      total: 7,
+      offset: 0,
+      limit: 50,
+      expiresAt: "2026-10-16T01:00:00.000Z",
+    });
+  });
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  const page = await required(adapter.listAppsPage)({ snapshot: "lsn_s", offset: 0, limit: 50 });
+
+  assert.equal(fake.calls.length, 1);
+  assert.equal(page.snapshot, "lsn_s");
+  assert.equal(page.total, 7);
+  assert.equal(page.offset, 0);
+  assert.equal(page.limit, 50);
+  assert.equal(page.expiresAt, "2026-10-16T01:00:00.000Z");
+});
+
+test("listApps restarts once when the snapshot expires mid-walk and resolves only the restarted set", async () => {
+  const fake = fakeFetch((_call, i) => {
+    if (i === 0) return json({ apps: [appFor("app_1")], nextCursor: "c2" });
+    if (i === 1) return json({ error: { code: "snapshot_expired", message: "gone" } }, 410);
+    if (i === 2) return json({ apps: [appFor("app_1")], nextCursor: "d2" });
+    if (i === 3) return json({ apps: [appFor("app_3")] });
+    return json({ error: { code: "internal", message: "runaway" } }, 500);
+  });
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  const apps = await adapter.listApps();
+
+  assert.deepEqual(
+    apps.map((a) => a.id),
+    ["app_1", "app_3"],
+  );
+  assert.equal(fake.calls.length, 4);
+});
