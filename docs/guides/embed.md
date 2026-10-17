@@ -36,6 +36,8 @@ answers with its own `acct_` id.
   client, `createEmbedSessionClient`, arrived in `@w6w/sdk` 0.9.12, and the
   `getSession` recipe in section 2 needs `@w6w/react` and `@w6w/sdk` 0.9.13 or later.
   Earlier releases only have `exchangeToken` (see [the lower-level call](#the-lower-level-call)).
+- The Function save token (`ifUnmodifiedSince` on `functions.update`, answered with
+  `409 function_stale` when stale) needs `@w6w/sdk` 0.9.15 or later.
 - Coming from an existing integration that already minted tokens with `exchangeToken`? Read
   [Migrating to embed sessions](/guides/embed-session-migration/) before you switch.
 
@@ -415,6 +417,32 @@ Rules that bite:
 - **A disabled workflow or Function can't run**, even as a draft run.
 - **Batch reliability lookups yourself.** `reliability.list` takes at most ten app ids per call.
   Ask `reliability.members(project)` for the ids, then call `list` in groups of ten.
+
+## Compose w6w's own components
+
+Section 6 builds an editor loop by hand. If you would rather reuse w6w's own pieces, you can mount
+them at three depths, from least to most work. All of them must sit inside `W6WEmbedProvider`.
+
+**Drop in an `@w6w/embed` component.** `WorkflowList`, `FunctionList`, `EndpointList`,
+`ConnectionList`, `RunHistory`, `ReliabilityBoard` and the other lists and forms (`@w6w/embed/lists`,
+`@w6w/embed/forms`), and the editors `WorkflowEditor`, `FunctionEditor` and `EndpointEditor`
+(`@w6w/embed/editors`), fetch, save and handle the stale-save `409` themselves. You pass an id, a
+project and the navigation callbacks.
+
+**Feed an `@w6w/ui` component from an embed hook.** `@w6w/ui` holds presentational components, for
+example `CallableList`, that take plain rows and callbacks and do no fetching. Read the rows with a
+hook from `@w6w/embed/repos` (such as `useFunctionsQuery`) and pass them in when you want your own
+data handling around w6w's look.
+
+**Use the hook alone.** The `@w6w/embed/repos` hooks return the data and nothing else, for a screen
+you draw entirely yourself.
+
+**One cache.** Inside `W6WEmbedProvider`, read w6w data through the `@w6w/embed` hooks and
+components, not the `@w6w/react` read hooks. The embed hooks share one query cache, so a save in
+an editor refreshes the list beside it. The `@w6w/react` read hooks keep their own per-hook
+`useAsync` state and would not see that refresh.
+
+For the component catalogue, props and slots, see [Embed components](/clients/embed/components/).
 
 ## In the browser
 
