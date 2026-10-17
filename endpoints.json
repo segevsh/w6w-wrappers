@@ -1012,7 +1012,7 @@
         "python": "client.functions.get(id)",
         "cli": "w6w functions get <id>"
       },
-      "notes": "Takes an `fn_…` id OR a `key`, the same either-or `functions.run` takes and for the same reason: an id carries an underscore and a key's grammar forbids one, so the two cannot collide. Returns `{function, valid}` and wrappers MUST keep `valid` a top-level sibling rather than splicing it into the definition — it is computed per request, it is not part of the stored document (`rfcs/function.md`), and folding it in would put it inside the object a caller sends straight back to `functions.update`. (`console.functions.get` does splice it, for studio's sake; that is the console surface, not this one.) The definition stays OPAQUE: its `impl` is a union the server extends — an app Action, another Function, or a Workflow since D-8 — and the whole point of a Function is that `impl` is the part you swap. Missing id is `404 unknown_function`."
+      "notes": "Takes an `fn_…` id OR a `key`, the same either-or `functions.run` takes and for the same reason: an id carries an underscore and a key's grammar forbids one, so the two cannot collide. Returns `{function, valid, updatedAt}` and wrappers MUST keep `valid` and `updatedAt` top-level siblings rather than splicing them into the definition — it is computed per request, it is not part of the stored document (`rfcs/function.md`), and folding it in would put it inside the object a caller sends straight back to `functions.update`. `updatedAt` is the concurrency token to pass to `functions.update` as `ifUnmodifiedSince`. (`console.functions.get` does splice both, for studio's sake; that is the console surface, not this one.) The definition stays OPAQUE: its `impl` is a union the server extends — an app Action, another Function, or a Workflow since D-8 — and the whole point of a Function is that `impl` is the part you swap. Missing id is `404 unknown_function`."
     },
     {
       "name": "functions.create",
@@ -1038,7 +1038,7 @@
         "python": "client.functions.create(definition)",
         "cli": "w6w functions create --definition <json>"
       },
-      "notes": "The create half of the server's single upsert route (`POST /functions`). THE SERVER MINTS AN ID ONLY WHEN THE CALLER SENDS NONE — a caller-supplied `id` is accepted only if it matches `^fn_[A-Za-z0-9-]{1,64}$`, else `400 invalid_function` — so wrappers still mint `fn_<uuid>` client-side when the definition carries none, exactly as `workflows.create` does. `key` is NOT minted: it is the name the Function is CALLED by, so it is the caller's to choose. The server validates `key` on FIRST SAVE ONLY (3–39 chars, starts lowercase, lowercase letters/digits/single hyphens, no `_`), deliberately leaving legacy keys alone on update; that grammar is what keeps `/functions/{idOrKey}/invoke` unambiguous. `impl` is OPTIONAL — a Function with none is a valid draft that stores fine and answers `valid: false`, and wrappers must not require it. Returns `{id, key}` under a `function` envelope. `409 function_conflict` is an ownership clash on the id; `409 function_key_conflict` is the key already being taken — two distinct codes, and a wrapper must surface both rather than flattening them."
+      "notes": "The create half of the server's single upsert route (`POST /functions`). THE SERVER MINTS AN ID ONLY WHEN THE CALLER SENDS NONE — a caller-supplied `id` is accepted only if it matches `^fn_[A-Za-z0-9-]{1,64}$`, else `400 invalid_function` — so wrappers still mint `fn_<uuid>` client-side when the definition carries none, exactly as `workflows.create` does. `key` is NOT minted: it is the name the Function is CALLED by, so it is the caller's to choose. The server validates `key` on FIRST SAVE ONLY (3–39 chars, starts lowercase, lowercase letters/digits/single hyphens, no `_`), deliberately leaving legacy keys alone on update; that grammar is what keeps `/functions/{idOrKey}/invoke` unambiguous. `impl` is OPTIONAL — a Function with none is a valid draft that stores fine and answers `valid: false`, and wrappers must not require it. Returns `{id, key}` under a `function` envelope plus the first `updatedAt` as a TOP-LEVEL sibling of it (wrappers surface it as `{id, key, updatedAt}`); create takes no precondition — there is nothing yet to be stale against. `409 function_conflict` is an ownership clash on the id; `409 function_key_conflict` is the key already being taken — two distinct codes, and a wrapper must surface both rather than flattening them."
     },
     {
       "name": "functions.update",
@@ -1059,6 +1059,12 @@
           "in": "body",
           "type": "object",
           "required": true
+        },
+        {
+          "name": "ifUnmodifiedSince",
+          "in": "header",
+          "type": "string",
+          "required": false
         }
       ],
       "returns": "SaveResult",
@@ -1066,11 +1072,11 @@
         201
       ],
       "naming": {
-        "ts": "client.functions.update(id, definition)",
-        "python": "client.functions.update(id, definition)",
-        "cli": "w6w functions update <id> --definition <json>"
+        "ts": "client.functions.update(id, definition, opts?)",
+        "python": "client.functions.update(id, definition, if_unmodified_since=None)",
+        "cli": "w6w functions update <id> --definition <json> [--if-unmodified-since <ts>]"
       },
-      "notes": "The update half of the same upsert route as `functions.create`. **A FULL REPLACEMENT, NOT A PATCH** — read with `functions.get`, change what you mean to change, send the whole thing back. `id` comes from the FIRST ARGUMENT and is pinned into the body, overriding any `id` the definition carries. There is NO concurrency precondition on this route — workflows have one, Functions do not — so the write is last-write-wins and no wrapper should invent a header the server does not read. Do not send `valid` back: it is not part of the stored document, which is exactly why `functions.get` leaves it outside the definition."
+      "notes": "The update half of the same upsert route as `functions.create`. **A FULL REPLACEMENT, NOT A PATCH** — read with `functions.get`, change what you mean to change, send the whole thing back. `id` comes from the FIRST ARGUMENT and is pinned into the body, overriding any `id` the definition carries. `ifUnmodifiedSince` is the optimistic-concurrency precondition, sent as the `x-w6w-if-unmodified-since` HEADER (not a query param) and ONLY when a value was given — never as an empty or \"null\" string, which the server answers `400 invalid_precondition`. Pass the exact `updatedAt` from `functions.get` or a prior save; a stale one is `409 function_stale`, which IS recoverable by reloading and re-saving, unlike `409 function_conflict`, which is not. Omitted, the write is last-write-wins. The save answers the new `updatedAt` as a TOP-LEVEL sibling of the `function` envelope, so a caller can chain saves without a re-read. Do not send `valid` or `updatedAt` back: neither is part of the stored document, which is exactly why `functions.get` leaves them outside the definition."
     },
     {
       "name": "functions.delete",
@@ -1220,7 +1226,7 @@
         "python": "client.functions.revert(id, n)",
         "cli": "w6w functions revert <id> <n>"
       },
-      "notes": "The server answers `{reverted: {kind, callableId, versionNumber}}` and the wrapper UNWRAPS the `reverted` key. Functions have no concurrency precondition, so a save after a revert is last-write-wins as ever. It does not publish: the live row becomes a draft that matches version `n` until `functions.publish` is called. Errors: `404 unknown_version`, `404 unknown_function`, `400 invalid_version`."
+      "notes": "The server answers `{reverted: {kind, callableId, versionNumber}}` and the wrapper UNWRAPS the `reverted` key. Revert itself is unguarded, but it rewrites the stored row, so its `updatedAt` moves: a token read before a revert is stale after it (`409 function_stale` on the next guarded `functions.update`). It does not publish: the live row becomes a draft that matches version `n` until `functions.publish` is called. Errors: `404 unknown_version`, `404 unknown_function`, `400 invalid_version`."
     },
     {
       "name": "functions.enable",

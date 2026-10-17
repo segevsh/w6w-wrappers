@@ -103,10 +103,21 @@ const create: CommandHandler = async (context) => {
   context.out.emit(saved, (styles) => renderSave("Created", saved, styles));
 };
 
+/**
+ * `w6w functions update <id> --definition <json> [--if-unmodified-since <ts>]`.
+ *
+ * `--if-unmodified-since` is the optimistic-concurrency precondition (the
+ * `updatedAt` from `functions get`), passed through only when supplied: an
+ * absent flag is last-write-wins, and turning it into an empty header would be a
+ * `400 invalid_precondition` naming something the caller never asked for. A
+ * stale one is `409 function_stale`.
+ */
 const update: CommandHandler = async (context) => {
   const id = argument(context, 0, "a function id or key (see: `w6w functions list`)");
   noExtraArguments(context, 1);
-  const saved = await context.client().functions.update(id, definition(context));
+  const saved = await context.client().functions.update(id, definition(context), {
+    ifUnmodifiedSince: textFlag(context, "ifUnmodifiedSince"),
+  });
   context.out.emit(saved, (styles) => renderSave("Updated", saved, styles));
 };
 
