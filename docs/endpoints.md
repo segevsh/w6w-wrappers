@@ -1763,3 +1763,9 @@ They all exist on the API. They are not in the wrappers until they are in
 > interactive flow, so it joined `get`; the connect flows still do not belong in
 > a wrapper. `apps` and `projects` keep everything but the one bounded read each
 > (§§47, 49).
+>
+> **At contract `0.8.0` three Function operations changed shape.** `functions.update`
+> takes an optional `ifUnmodifiedSince` header (the save token; a stale one answers
+> `409 function_stale`), and `functions.create`, `functions.update` and `functions.get`
+> now return `updatedAt`, the value to send back as that token. The operation count
+> stays 58.
