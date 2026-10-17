@@ -384,7 +384,7 @@ step is a method on `client.workflows` or `client.functions`, with the same name
 
 | To | Call |
 | --- | --- |
-| Save (full replacement) | `update(id, definition, { ifUnmodifiedSince })` (workflows only take the option) |
+| Save (full replacement) | `update(id, definition, { ifUnmodifiedSince })` (workflows and Functions both take the option) |
 | Try the saved draft | `run(id, { allowUnpublished: true, wait: true })` |
 | Publish the saved draft | `publish(id)` |
 | See and read versions | `listVersions(id)`, `getVersion(id, n)` |
@@ -426,7 +426,7 @@ them at three depths, from least to most work. All of them must sit inside `W6WE
 **Drop in an `@w6w/embed` component.** `WorkflowList`, `FunctionList`, `EndpointList`,
 `ConnectionList`, `RunHistory`, `ReliabilityBoard` and the other lists and forms (`@w6w/embed/lists`,
 `@w6w/embed/forms`), and the editors `WorkflowEditor`, `FunctionEditor` and `EndpointEditor`
-(`@w6w/embed/editors`), fetch, save and handle the stale-save `409` themselves. You pass an id, a
+(`@w6w/embed/editors`), fetch their own data themselves, and the editors also save and handle the stale-save `409`. You pass an id, a
 project and the navigation callbacks.
 
 **Feed an `@w6w/ui` component from an embed hook.** `@w6w/ui` holds presentational components, for
