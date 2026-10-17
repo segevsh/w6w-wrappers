@@ -109,3 +109,20 @@ test("a missing argument is still Node's ERR_MISSING_ARGS, never a silent pass",
     assert.equal((err as { code?: string }).code, "ERR_MISSING_ARGS", name);
   }
 });
+
+test("a custom Error as the message is thrown as-is, even for a heavy operand", () => {
+  const mine = new Error("my own failure");
+  const err = caught(() => assert.deepStrictEqual(bigPlain(), {}, mine));
+  assert.equal(err, mine);
+});
+
+test("the strict notEqual / notDeepEqual aliases are bounded too", () => {
+  const big = bigPlain();
+  for (const [name, fn] of [
+    ["strict.notEqual", () => assert.notEqual(big, big)],
+    ["strict.notDeepEqual", () => assert.notDeepEqual(bigPlain(), bigPlain())],
+  ] as const) {
+    const err = caught(fn);
+    assert.ok(err.message.length < BOUND, `${name}: message is ${err.message.length} chars`);
+  }
+});
