@@ -19,16 +19,18 @@ import { inspect, isDeepStrictEqual } from "node:util";
 const BUDGET = 2_000;
 const MAX_CHARS = 2_000;
 
-/** True when `v` reaches more than BUDGET values (own enumerable keys, array items, Map/Set entries). */
+/**
+ * True when `v` reaches more than BUDGET values (own enumerable keys, array items, Map/Set entries).
+ * Every OCCURRENCE counts, not every distinct object: inspect expands a shared reference each time it
+ * meets one, so a small diamond-shaped graph renders exponentially. The budget also ends a cycle.
+ */
 function heavy(v) {
   if (v === null || typeof v !== "object") return false;
-  const seen = new Set();
   const stack = [v];
   let visited = 0;
   while (stack.length > 0) {
     const cur = stack.pop();
-    if (cur === null || typeof cur !== "object" || seen.has(cur)) continue;
-    seen.add(cur);
+    if (cur === null || typeof cur !== "object") continue;
     // A DOM node is a window into the whole document, and React's fiber keys are enumerable.
     if (typeof cur.nodeType === "number" && typeof cur.nodeName === "string") return true;
     let kids;
@@ -94,11 +96,14 @@ const SPECS = [
 function guard(target, method, operator, fails) {
   const original = target[method];
   if (typeof original !== "function" || original.__w6wGuarded) return;
-  const wrapped = function (actual, expected, message) {
+  const wrapped = function (...args) {
+    // Fewer than two arguments is Node's own ERR_MISSING_ARGS: let it throw that.
+    if (args.length < 2) return original.apply(this, args);
+    const [actual, expected, message] = args;
     if (fails(actual, expected) && (heavy(actual) || heavy(expected))) {
       failBounded(operator, actual, expected, message, wrapped);
     }
-    return original.call(this, actual, expected, message);
+    return original.apply(this, args);
   };
   wrapped.__w6wGuarded = true;
   target[method] = wrapped;

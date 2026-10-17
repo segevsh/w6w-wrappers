@@ -36,6 +36,13 @@ function bigPlain() {
   return o;
 }
 
+/** Few distinct objects, but inspect expands each shared reference: 2^10 leaves. */
+function diamond() {
+  let d: Record<string, unknown> = { leaf: 1 };
+  for (let i = 0; i < 10; i++) d = { a: d, b: d };
+  return d;
+}
+
 function caught(fn: () => void): Error & { operator?: string } {
   try {
     fn();
@@ -68,6 +75,7 @@ test("every guarded entry point is bounded: strict, legacy, named import, deep a
     ["legacy.strictEqual", () => legacy.strictEqual(node, null)],
     ["legacy.equal", () => legacy.equal(node, null)],
     ["legacy.deepStrictEqual", () => legacy.deepStrictEqual(bigPlain(), {})],
+    ["diamond (shared references)", () => assert.deepStrictEqual(diamond(), {})],
   ];
   for (const [name, fn] of cases) {
     const err = caught(fn);
@@ -82,4 +90,18 @@ test("small plain operands keep Node's own diff; passing assertions still pass",
   assert.equal(node, node);
   assert.deepStrictEqual(bigPlain(), bigPlain());
   assert.notEqual(node, null);
+});
+
+test("a missing argument is still Node's ERR_MISSING_ARGS, never a silent pass", () => {
+  const call = (fn: (...a: unknown[]) => void, ...a: unknown[]) => caught(() => fn(...a));
+  for (const [name, err] of [
+    ["strict.equal()", call(assert.equal as (...a: unknown[]) => void)],
+    [
+      "strict.strictEqual(undefined)",
+      call(assert.strictEqual as (...a: unknown[]) => void, undefined),
+    ],
+    ["legacy.equal(1)", call(legacy.equal as (...a: unknown[]) => void, 1)],
+  ] as const) {
+    assert.equal((err as { code?: string }).code, "ERR_MISSING_ARGS", name);
+  }
 });
