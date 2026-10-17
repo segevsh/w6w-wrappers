@@ -1,3 +1,6 @@
+// Test-only. The assert guard bounds a failing assertion on a rendered DOM node, which Node would
+// otherwise inspect through the whole React tree; see test-assert-guard.mjs.
+import "./test-assert-guard.mjs";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { register } from "node:module";
