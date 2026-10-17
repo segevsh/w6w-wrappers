@@ -94,7 +94,7 @@ Creating, testing and reconnecting a connection are not in the CLI.
 | `w6w functions list` | List your Functions, and whether each can run. |
 | `w6w functions get <id>` | Print a Function's definition. |
 | `w6w functions create --definition <json>` | Create a Function. A new `fn_…` id is assigned if it has none. |
-| `w6w functions update <id> --definition <json>` | Replace a Function's definition. |
+| `w6w functions update <id> --definition <json> [--if-unmodified-since <ts>]` | Replace a Function's definition. `--if-unmodified-since` takes the `updatedAt` from `functions get` and refuses a stale write with `409 function_stale`. |
 | `w6w functions archive <id>` | Archive a Function. Required before deleting it. |
 | `w6w functions delete <id>` | Delete an archived Function. |
 | `w6w functions versions <id>` | List a Function's published versions and whether it is enabled. |

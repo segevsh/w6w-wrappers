@@ -97,6 +97,7 @@ const FUNCTION_SUMMARY: FunctionSummary = {
   description: "",
   updatedAt: "2026-08-22T09:00:00.000Z",
   valid: true,
+  archivedAt: null,
 };
 
 Deno.test("workflows: all seven operations are functions on a constructed client", () => {
@@ -333,12 +334,18 @@ Deno.test("functions.create mints an fn_ id but never a key", async () => {
   assertEquals(sent.key, "send-email");
 });
 
-Deno.test("functions.create unwraps the function envelope to {id, key}", async () => {
-  const c = client(() => json({ function: { id: "fn_1", key: "send-email" } }, 201));
+Deno.test("functions.create unwraps the function envelope to {id, key, updatedAt}", async () => {
+  const c = client(() =>
+    json(
+      { function: { id: "fn_1", key: "send-email" }, updatedAt: "2026-10-17T01:00:00.000Z" },
+      201,
+    )
+  );
 
   assertEquals(await c.client.functions.create({ key: "send-email", inputs: [] }), {
     id: "fn_1",
     key: "send-email",
+    updatedAt: "2026-10-17T01:00:00.000Z",
   });
 });
 

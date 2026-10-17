@@ -200,21 +200,30 @@ client's default project, then your account's default project.
 
 ## Read and edit a Function definition
 
-Functions follow the same read, change, save pattern, without a concurrency check:
+Functions follow the same read, change, save pattern, with the same optional concurrency check:
 
 ```ts
-const { function: fn, valid } = await client.functions.get("fn_01H…");
+const { function: fn, valid, updatedAt } = await client.functions.get("fn_01H…");
 console.log(valid); // false means the Function can't run yet
 
-await client.functions.update("fn_01H…", { ...fn, description: "Welcome email" });
+await client.functions.update(
+  "fn_01H…",
+  { ...fn, description: "Welcome email" },
+  { ifUnmodifiedSince: updatedAt }, // optional: 409 function_stale if someone saved since
+);
 
-const { id, key } = await client.functions.create({ key: "notify-team", /* inputs, impl */ });
-console.log(id, key);
+const { id, key, updatedAt: first } = await client.functions.create({
+  key: "notify-team", /* inputs, impl */
+});
+console.log(id, key, first);
 ```
 
 - `get`, `update` and `delete` take the Function's `fn_…` id. Only `run` also accepts its key.
 - `update` replaces the whole definition, like workflows do.
-- `create` assigns a `fn_…` id when the definition has none, and returns the id and key.
+- `create` assigns a `fn_…` id when the definition has none, and returns the id, key and first
+  `updatedAt`. `update` returns the same three fields, so you can chain saves without a re-read.
+- `ifUnmodifiedSince` is sent only when you pass a value. A `409 function_stale` means someone saved
+  in between: reload with `get` and re-apply. `create` takes no token.
 
 Like workflows, a Function must be archived before it can be deleted:
 
@@ -244,7 +253,8 @@ await client.functions.runVersion("fn_01H…", 1, { payload: { to: "ada@example.
   from their envelope. `enable` and `disable` return nothing.
 - `revert` rewrites the live definition and does not publish it. After a workflow revert, read
   `updatedAt` again with `get` before saving with `ifUnmodifiedSince`, or you get `409 workflow_stale`.
-  Functions have no such check; saves stay last-write-wins.
+  The same holds for a Function: a token read before `functions.revert` is `409 function_stale`
+  afterwards.
 - `runVersion` takes the same options as `run` (`wait`, `variables`, `trigger`, `input` for a
   workflow; `payload` for a Function).
 

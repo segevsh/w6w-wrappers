@@ -55,6 +55,12 @@ import {
 } from "./versions.ts";
 
 /**
+ * The precondition header the write path sends when `ifUnmodifiedSince` is given.
+ * Same name the workflow arm uses (`./workflows.ts`).
+ */
+const PRECONDITION_HEADER = "x-w6w-if-unmodified-since";
+
+/**
  * What this namespace needs from the client — the same narrow seam
  * `WorkflowsApi` takes, so it is constructible in a test and this module never
  * imports the client back.
@@ -121,6 +127,34 @@ export interface FunctionDetail {
    * the object a caller sends back to {@linkcode FunctionsApi.update}.
    */
   valid: boolean;
+  /**
+   * The concurrency token — pass it to {@linkcode FunctionsApi.update} as
+   * `ifUnmodifiedSince` to make the next save refuse a stale write. **A
+   * top-level sibling of `function`, like {@linkcode valid}**, never a field
+   * inside the stored definition.
+   */
+  updatedAt: string;
+}
+
+/** What `functions.create` and `functions.update` return. */
+export interface FunctionSaveResult {
+  /** The saved Function's id. */
+  id: string;
+  /** The saved Function's key. */
+  key: string;
+  /** The new concurrency token, so a caller can chain saves without a re-`get`. */
+  updatedAt: string;
+}
+
+/** Per-call options for `functions.update`. */
+export interface FunctionWriteOptions {
+  /**
+   * The exact `updatedAt` this client last saw. When given, the server refuses
+   * the write with `409 function_stale` if the stored row has moved on since —
+   * recoverable by re-reading and re-saving. Omitted (or `null`), the save is
+   * last-write-wins and the header is not sent.
+   */
+  ifUnmodifiedSince?: string | null;
 }
 
 /**
@@ -236,13 +270,13 @@ export class FunctionsApi {
   /**
    * Fetch one Function's stored definition.
    *
-   * Returns the whole body — `{function, valid}` — rather than splicing `valid`
-   * into the definition. See {@linkcode FunctionDetail.valid} for why that
+   * Returns the whole body — `{function, valid, updatedAt}` — rather than
+   * splicing `valid` or `updatedAt` into the definition. See {@linkcode FunctionDetail.valid} for why that
    * placement matters on the way back OUT of this method.
    *
    * @param id - The `fn_…` id, or the Function's `key`. Percent-encoded into the path.
    * @param options - Optional per-call transport options (`signal` to abort).
-   * @returns The definition and the server's runnability verdict.
+   * @returns The definition, the server's runnability verdict and the concurrency token.
    * @throws {ApiError} `404 unknown_function` when there is no such Function for this caller.
    */
   async get(id: string, options?: CallOptions): Promise<FunctionDetail> {
@@ -269,12 +303,13 @@ export class FunctionsApi {
    * definition whose id already exists overwrites it.
    *
    * @param definition - The whole Function definition, forwarded verbatim apart from a minted `id`.
-   * @returns The new Function's id and key.
+   * @returns The new Function's id, key and first `updatedAt`.
    * @throws {ApiError} `400 invalid_function` — no `key`, no `inputs` array, or a malformed `impl`.
    * @throws {ApiError} `409 function_conflict` — another `(tenant, subject)` already owns that id.
    * @throws {ApiError} `409 function_key_conflict` — that `key` is already taken in this scope.
+   * (`create` sends no precondition, so it cannot be `function_stale`.)
    */
-  async create(definition: FunctionDefinition): Promise<{ id: string; key: string }> {
+  async create(definition: FunctionDefinition): Promise<FunctionSaveResult> {
     const body = typeof definition.id === "string" && definition.id.length > 0
       ? definition
       : { ...definition, id: mintId("fn") };
@@ -286,30 +321,37 @@ export class FunctionsApi {
    *
    * **A full replacement, not a patch** — the server has one write route and it
    * stores what it is given, so read with {@linkcode get}, change what you mean
-   * to change, and send the whole thing back. There is no concurrency
-   * precondition on this route (workflows have one; Functions do not), so the
-   * write is last-write-wins.
+   * to change, and send the whole thing back. Pass
+   * `options.ifUnmodifiedSince` (the `updatedAt` from {@linkcode get} or a prior
+   * save) to make the write refuse a stale base; omitted, the save is
+   * last-write-wins and the header is never sent — not as an empty or `"null"`
+   * string.
    *
    * `id` comes from the FIRST ARGUMENT and is pinned into the body, overriding
    * any `id` the definition carries — otherwise `update("fn_a", defOfB)` would
    * quietly write to B.
    *
-   * Do not send back the `valid` field: it is not part of the stored document,
-   * and {@linkcode get} deliberately leaves it outside the definition so that
-   * a read-modify-write round trip cannot pick it up by accident.
+   * Do not send back the `valid` or `updatedAt` fields: they are not part of the
+   * stored document, and {@linkcode get} deliberately leaves them outside the
+   * definition so that a read-modify-write round trip cannot pick them up by
+   * accident.
    *
    * @param id - The `fn_…` id to write to.
    * @param definition - The whole replacement definition.
-   * @returns The Function's id and key.
+   * @param options - `ifUnmodifiedSince` is the concurrency precondition.
+   * @returns The Function's id, key and new `updatedAt`.
    * @throws {ApiError} `400 invalid_function` — structurally invalid body.
+   * @throws {ApiError} `400 invalid_precondition` — the token is not a timestamp the server can read.
+   * @throws {ApiError} `409 function_stale` — the precondition did not match the stored `updatedAt`. IS recoverable by reloading and re-saving.
    * @throws {ApiError} `409 function_conflict` — another `(tenant, subject)` owns this id.
    * @throws {ApiError} `409 function_key_conflict` — the new `key` is already taken in this scope.
    */
   async update(
     id: string,
     definition: FunctionDefinition,
-  ): Promise<{ id: string; key: string }> {
-    return await this.#save({ ...definition, id });
+    options?: FunctionWriteOptions,
+  ): Promise<FunctionSaveResult> {
+    return await this.#save({ ...definition, id }, options);
   }
 
   /**
@@ -372,7 +414,9 @@ export class FunctionsApi {
   /**
    * Rewrite the live Function from a published version. Does not publish.
    *
-   * Saves remain last-write-wins: Functions have no concurrency precondition.
+   * Revert is not itself guarded, but it rewrites the stored row, so its
+   * `updatedAt` moves: a token read before a revert is stale after it
+   * (`409 function_stale` on the next guarded {@linkcode update}).
    *
    * @param id - The `fn_…` id.
    * @param n - The version to restore.
@@ -457,14 +501,24 @@ export class FunctionsApi {
    * two places for a server change to be half-applied.
    *
    * @param body - The complete definition, id already resolved.
-   * @returns The saved Function's id and key.
+   * @param options - The write options as given by the public method.
+   * @returns The saved Function's id and key, plus the top-level `updatedAt`.
    */
-  async #save(body: FunctionDefinition): Promise<{ id: string; key: string }> {
+  async #save(
+    body: FunctionDefinition,
+    options?: FunctionWriteOptions,
+  ): Promise<FunctionSaveResult> {
     const res = await this.#host.request<unknown>({
       method: "POST",
       path: "/functions",
       body,
+      ...(options?.ifUnmodifiedSince
+        ? { headers: { [PRECONDITION_HEADER]: options.ifUnmodifiedSince } }
+        : {}),
     });
-    return unwrap<{ id: string; key: string }>(res, "function");
+    // `updatedAt` is a TOP-LEVEL sibling of the `function` envelope, never inside it.
+    const saved = unwrap<{ id: string; key: string }>(res, "function");
+    const { updatedAt } = res.body as { updatedAt: string };
+    return { id: saved.id, key: saved.key, updatedAt };
   }
 }

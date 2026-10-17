@@ -1,8 +1,12 @@
+// Two test-only assert guards; load order matters, the LATER import wraps the earlier one:
+// test-assert-guard.mjs (inner) bounds any operand too large to diff; test-guards.mjs (outer) scrubs DOM
+// nodes to short tokens first and runs the RSS watchdog.
+import "./test-assert-guard.mjs";
+import "./test-guards.mjs";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { register } from "node:module";
 import ts from "typescript";
-import "./test-guards.mjs";
 
 register(import.meta.url, import.meta.url);
 

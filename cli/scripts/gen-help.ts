@@ -195,7 +195,10 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
     `w6w functions create --definition '{"manifestVersion":"1","key":"send-email","inputs":[]}'`,
     `w6w functions create --definition "$(cat function.json)"`,
   ],
-  "functions.update": [`w6w functions update fn_01HQ8N --definition "$(cat function.json)"`],
+  "functions.update": [
+    `w6w functions update fn_01HQ8N --definition "$(cat function.json)"`,
+    `w6w functions update fn_01HQ8N --definition "$(cat function.json)" --if-unmodified-since 2026-08-22T09:00:00.000Z`,
+  ],
   "functions.delete": ["w6w functions delete fn_01HQ8N"],
   "workflows.listVersions": [
     "w6w workflows versions wf_01HQ8N",
@@ -451,6 +454,10 @@ const FLAG_OVERRIDES: Record<string, { flag: string; placeholder: string | null 
   "functions.run.inputs": { flag: "--payload", placeholder: "<json>" },
   "endpoints.run.input": { flag: "--payload", placeholder: "<json>" },
   "workflows.update.ifUnmodifiedSince": {
+    flag: "--if-unmodified-since",
+    placeholder: "<ts>",
+  },
+  "functions.update.ifUnmodifiedSince": {
     flag: "--if-unmodified-since",
     placeholder: "<ts>",
   },

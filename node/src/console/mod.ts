@@ -113,6 +113,7 @@ export type {
   ReliabilityErrorMix,
   ReliabilityHost,
   ReliabilityService,
+  ReliabilityServiceMembers,
   ReliabilityServices,
   ReliabilityState,
   ReliabilityTimelineEntry,
@@ -180,8 +181,10 @@ export type {
   FunctionImpl,
   FunctionInput,
   FunctionOutputField,
+  FunctionRead,
   FunctionsHost,
   FunctionSummary,
+  FunctionUpsertOptions,
 } from "./functions.ts";
 export { EndpointsApi, SECRET_MASK } from "./endpoints.ts";
 export type {

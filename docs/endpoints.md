@@ -1178,12 +1178,13 @@ cannot collide.
 }
 ```
 
-Wrappers **must keep `valid` a top-level sibling** rather than splicing it into
-the definition: it is computed per request, it is not part of the stored
-document (`rfcs/function.md`), and folding it in would put it inside the object
-a caller sends straight back to §28. (The console surface's own
-`console.functions.get` does splice it, for the studio's sake. That is not this
-surface.)
+Wrappers **must keep `valid` and `updatedAt` top-level siblings** rather than
+splicing them into the definition: they are computed per request, they are not
+part of the stored document (`rfcs/function.md`), and folding them in would put
+them inside the object a caller sends straight back to §28. `updatedAt` is the
+concurrency token to pass there as `ifUnmodifiedSince`. (The console surface's
+own `console.functions.get` does splice both, for the studio's sake. That is not
+this surface.)
 
 The definition stays **opaque**: its `impl` is a union the server extends — an
 app Action, another Function, or a Workflow since D-8 — and the whole point of a
@@ -1216,8 +1217,9 @@ deliberately leaving legacy keys alone on update; that grammar is what keeps
 **`impl` is optional.** A Function with none is a valid draft that stores fine
 and answers `valid: false`. Wrappers must not require it.
 
-**Response `201`** — envelope key `function`; the wrapper unwraps to
-`{ id, key }`.
+**Response `201`** — envelope key `function`, plus the first `updatedAt` as a
+**top-level sibling** of it; the wrapper returns `{ id, key, updatedAt }`. Create
+takes no precondition: there is nothing yet to be stale against.
 
 Two distinct 409s, and a wrapper must surface both rather than flattening them:
 `409 function_conflict` is an ownership clash on the id;
@@ -1237,12 +1239,20 @@ The update half of the same upsert route as §27. **A full replacement, not a
 patch** — read with §26, change what you mean to change, send the whole thing
 back. `id` comes from the first argument and is pinned into the body.
 
-There is **no concurrency precondition on this route** — workflows have one,
-Functions do not — so the write is last-write-wins, and no wrapper should invent
-a header the server does not read.
+`ifUnmodifiedSince` is the optimistic-concurrency precondition, exactly as on
+workflows: it is sent as the `x-w6w-if-unmodified-since` **header** (not a query
+parameter) and **only when a value was given** — never as an empty or `"null"`
+string, which the server answers `400 invalid_precondition`. Pass the exact
+`updatedAt` from §26 or a prior save; a stale one is `409 function_stale`, which
+is recoverable by reloading and re-saving, unlike `409 function_conflict`.
+Omitted, the write is last-write-wins.
 
-Do not send `valid` back: it is not part of the stored document, which is
-exactly why §26 leaves it outside the definition.
+**Response `201`** — the `function` envelope plus the new `updatedAt` as a
+**top-level sibling** of it; the wrapper returns `{ id, key, updatedAt }`, so a
+caller can chain saves without a re-read.
+
+Do not send `valid` or `updatedAt` back: neither is part of the stored document,
+which is exactly why §26 leaves them outside the definition.
 
 ---
 
@@ -1516,8 +1526,9 @@ POST /functions/:id/versions/:n/revert
 
 Rewrites the live definition from version `n`. It does **not** publish: the live
 row becomes a draft matching version `n` until §40 is called again.
-Functions have no concurrency precondition: a save after a revert is
-last-write-wins, as ever.
+Revert itself is unguarded, but it rewrites the stored row, so its `updatedAt`
+moves: a token read before a revert is stale after it (`409 function_stale` on
+the next guarded §28).
 
 **Response `200`** — envelope key `reverted` (`kind`, `callableId`,
 `versionNumber`); the wrapper unwraps.
@@ -1752,3 +1763,9 @@ They all exist on the API. They are not in the wrappers until they are in
 > interactive flow, so it joined `get`; the connect flows still do not belong in
 > a wrapper. `apps` and `projects` keep everything but the one bounded read each
 > (§§47, 49).
+>
+> **At contract `0.8.0` three Function operations changed shape.** `functions.update`
+> takes an optional `ifUnmodifiedSince` header (the save token; a stale one answers
+> `409 function_stale`), and `functions.create`, `functions.update` and `functions.get`
+> now return `updatedAt`, the value to send back as that token. The operation count
+> stays 58.

@@ -72,7 +72,11 @@ function guardAssertAgainstDomNodes() {
     for (const name of NAMES) {
       const orig = target[name];
       if (typeof orig !== "function") continue;
-      const guarded = function (actual, expected, ...rest) {
+      const guarded = function (...args) {
+        // Fewer than two arguments is Node's own ERR_MISSING_ARGS; scrubbing would turn it into
+        // `equal(undefined, undefined)`, a silent pass.
+        if (args.length < 2) return orig.apply(this, args);
+        const [actual, expected, ...rest] = args;
         try {
           return orig.call(this, scrub(actual), scrub(expected), ...rest);
         } catch (e) {

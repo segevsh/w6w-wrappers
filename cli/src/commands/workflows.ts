@@ -242,7 +242,7 @@ const update: CommandHandler = async (context) => {
   noExtraArguments(context, 1);
   const saved = await context.client().workflows.update(id, definition(context), {
     ...scope(context),
-    ifUnmodifiedSince: textFlag(context, "if-unmodified-since"),
+    ifUnmodifiedSince: textFlag(context, "ifUnmodifiedSince"),
   });
   context.out.emit(saved, (styles) => renderSave("Updated", saved, styles));
 };
