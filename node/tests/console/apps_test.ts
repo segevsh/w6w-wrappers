@@ -995,3 +995,110 @@ Deno.test("console.apps.invoke posts a start-state step meta verbatim", async ()
 
   assertEquals(JSON.parse(c.calls[0].body ?? "null"), { params: { p: 1 }, state });
 });
+
+// --- listPage(): snapshot fields; list(): one-snapshot walk + restart-once ---
+
+Deno.test("console.apps.listPage forwards snapshot/offset in wire order (offset 0 sent) and resolves the snapshot fields", async () => {
+  const body = { apps: [], snapshot: "lsn_s", total: 7, offset: 0, limit: 50, expiresAt: "E" };
+  const c = client(() => json(body));
+
+  const res = await c.client.console.apps.listPage({
+    snapshot: "lsn_s",
+    offset: 0,
+    limit: 50,
+    sort: "name",
+    managed: true,
+    compact: true,
+  });
+
+  assertEquals(
+    c.calls[0].url,
+    "https://api.example.com/apps?sort=name&limit=50&snapshot=lsn_s&offset=0&managed=true&compact=true",
+  );
+  assertEquals(res.snapshot, "lsn_s");
+  assertEquals(res.total, 7);
+  assertEquals(res.offset, 0);
+  assertEquals(res.limit, 50);
+  assertEquals(res.expiresAt, "E");
+});
+
+const APP_C: AppSummary = { ...APP_B, id: "app_3", displayName: "Third" };
+
+/** A walk whose first attempt dies on page 2 with `gone`, then restarts cleanly; a 500 from the 5th call on. */
+function restartingFake(gone: { status: number; code: string }) {
+  return client((_call) => {
+    const n = ++restartCalls.n;
+    if (n === 1) return json({ apps: [APP_A], nextCursor: "c2" });
+    if (n === 2) return json({ error: { code: gone.code, message: "gone" } }, gone.status);
+    if (n === 3) return json({ apps: [APP_A], nextCursor: "d2" });
+    if (n === 4) return json({ apps: [APP_C] });
+    return json({ error: { code: "runaway", message: "runaway" } }, 500);
+  });
+}
+const restartCalls = { n: 0 };
+
+const RESTART_PATHS = [
+  "/apps?limit=200",
+  "/apps?limit=200&cursor=c2",
+  "/apps?limit=200",
+  "/apps?limit=200&cursor=d2",
+];
+
+for (
+  const gone of [
+    { status: 410, code: "snapshot_expired" },
+    { status: 404, code: "unknown_snapshot" },
+  ]
+) {
+  Deno.test(`console.apps.list restarts once on ${gone.code} mid-walk, discarding the abandoned walk`, async () => {
+    restartCalls.n = 0;
+    const c = restartingFake(gone);
+
+    const res = await c.client.console.apps.list();
+
+    assertEquals(res, [APP_A, APP_C]);
+    assertEquals(
+      c.calls.map((x) => x.url.replace("https://api.example.com", "")),
+      RESTART_PATHS,
+    );
+  });
+}
+
+Deno.test("console.apps.list rejects with the ApiError after exactly both attempts when the restart also expires", async () => {
+  let n = 0;
+  const c = client(() => {
+    n++;
+    if (n === 1 || n === 3) return json({ apps: [APP_A], nextCursor: "c2" });
+    if (n === 2 || n === 4) {
+      return json({ error: { code: "snapshot_expired", message: "gone" } }, 410);
+    }
+    return json({ error: { code: "runaway", message: "runaway" } }, 500);
+  });
+
+  const err = await assertRejects(() => c.client.console.apps.list(), ApiError);
+
+  assertEquals(err.code, "snapshot_expired");
+  assertEquals(c.calls.length, 4);
+});
+
+for (
+  const other of [
+    { status: 500, code: "internal" },
+    { status: 404, code: "not_found" },
+    { status: 400, code: "invalid_cursor" },
+  ]
+) {
+  Deno.test(`console.apps.list does not restart on ${other.code}/${other.status}`, async () => {
+    let n = 0;
+    const c = client(() => {
+      n++;
+      if (n === 1) return json({ apps: [APP_A], nextCursor: "c2" });
+      return json({ error: { code: other.code, message: "x" } }, other.status);
+    });
+
+    const err = await assertRejects(() => c.client.console.apps.list(), ApiError);
+
+    assertEquals(err.code, other.code);
+    assertEquals(c.calls.length, 2);
+  });
+}
