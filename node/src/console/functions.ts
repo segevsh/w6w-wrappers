@@ -140,6 +140,8 @@ export interface FunctionSummary {
   description: string;
   updatedAt: string;
   valid: boolean;
+  /** ISO-8601 archive time; `null` when the Function is live. Always present on the wire. */
+  archivedAt: string | null;
 }
 
 /**

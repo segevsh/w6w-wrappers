@@ -113,6 +113,7 @@ export type {
   ReliabilityErrorMix,
   ReliabilityHost,
   ReliabilityService,
+  ReliabilityServiceMembers,
   ReliabilityServices,
   ReliabilityState,
   ReliabilityTimelineEntry,

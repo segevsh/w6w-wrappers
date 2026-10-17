@@ -97,6 +97,7 @@ const FUNCTION_SUMMARY: FunctionSummary = {
   description: "",
   updatedAt: "2026-08-22T09:00:00.000Z",
   valid: true,
+  archivedAt: null,
 };
 
 Deno.test("workflows: all seven operations are functions on a constructed client", () => {

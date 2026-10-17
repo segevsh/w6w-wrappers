@@ -81,6 +81,7 @@ const SUMMARY_A: FunctionSummary = {
   description: "",
   updatedAt: "2026-08-09T00:00:00.000Z",
   valid: true,
+  archivedAt: null,
 };
 
 const SUMMARY_B: FunctionSummary = {
@@ -90,6 +91,7 @@ const SUMMARY_B: FunctionSummary = {
   description: "",
   updatedAt: "2026-08-09T00:00:01.000Z",
   valid: false,
+  archivedAt: null,
 };
 
 Deno.test(

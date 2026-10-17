@@ -82,6 +82,9 @@ const SUMMARY_EP_A: EndpointSummary = {
   description: "",
   updatedAt: "2026-08-09T00:00:00.000Z",
   invokeUrl: "https://api.example.com/invoke/ep_1",
+  status: "ready",
+  incomplete: false,
+  archivedAt: null,
 };
 
 const SUMMARY_EP_B: EndpointSummary = {
@@ -91,6 +94,9 @@ const SUMMARY_EP_B: EndpointSummary = {
   description: "",
   updatedAt: "2026-08-09T00:00:01.000Z",
   invokeUrl: "https://api.example.com/invoke/ep_2",
+  status: "ready",
+  incomplete: false,
+  archivedAt: null,
 };
 
 Deno.test(

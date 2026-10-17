@@ -225,6 +225,12 @@ export interface EndpointSummary {
   description: string;
   updatedAt: string;
   invokeUrl: string;
+  /** `"ready"` when the stored definition is runnable, else `"draft"`. */
+  status: "draft" | "ready";
+  /** `true` when `status` is not `"ready"`. */
+  incomplete: boolean;
+  /** ISO-8601 archive time; `null` when the Endpoint is live. */
+  archivedAt: string | null;
 }
 
 /**
