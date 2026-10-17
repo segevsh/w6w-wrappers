@@ -88,7 +88,6 @@ A few flags that `--help` lists aren't applied yet:
 - `functions run` / `endpoints run` read neither `--id-or-key` nor `--inputs` / `--input`, and
   reject `--payload`. Pass the key positionally, and send input with
   `w6w run fn:<key> --payload '…'` (or `ep:<key>`).
-- `workflows update` ignores `--if-unmodified-since`, so the save always wins.
 - `team --help` still says the routes return `404`; they are live and work.
 - `functions delete` needs the Function archived first, which the CLI can't do yet.
 

@@ -26,7 +26,11 @@ async function w6w(argv: string[]) {
     });
     return Promise.resolve(
       new Response(
-        JSON.stringify({ function: { id: "fn_1", key: "send-email" }, updatedAt: TOKEN }),
+        JSON.stringify({
+          function: { id: "fn_1", key: "send-email" },
+          workflow: { id: "wf_1", name: "wf" },
+          updatedAt: TOKEN,
+        }),
         { status: 201, headers: { "content-type": "application/json" } },
       ),
     );
@@ -61,4 +65,19 @@ Deno.test("functions update sends the precondition header only when --if-unmodif
 Deno.test("functions update --json emits the save result with its updatedAt", async () => {
   const r = await w6w(["functions", "update", "fn_1", "--definition", DEFINITION, "--json"]);
   assertEquals(JSON.parse(r.stdout), { id: "fn_1", key: "send-email", updatedAt: TOKEN });
+});
+
+Deno.test("workflows update --if-unmodified-since sends the precondition header", async () => {
+  const wf = JSON.stringify({ name: "wf", nodes: [], edges: [] });
+  const r = await w6w([
+    "workflows",
+    "update",
+    "wf_1",
+    "--definition",
+    wf,
+    "--if-unmodified-since",
+    TOKEN,
+  ]);
+  assertEquals(r.code, 0);
+  assertEquals(r.sent[0].header, TOKEN);
 });

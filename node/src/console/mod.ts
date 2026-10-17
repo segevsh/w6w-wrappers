@@ -181,8 +181,10 @@ export type {
   FunctionImpl,
   FunctionInput,
   FunctionOutputField,
+  FunctionRead,
   FunctionsHost,
   FunctionSummary,
+  FunctionUpsertOptions,
 } from "./functions.ts";
 export { EndpointsApi, SECRET_MASK } from "./endpoints.ts";
 export type {

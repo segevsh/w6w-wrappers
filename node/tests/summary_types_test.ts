@@ -6,7 +6,11 @@ import { assertEquals } from "@std/assert";
 import type { FunctionSummary as PublicFunctionSummary } from "../src/types.ts";
 import type { FunctionSummary } from "../src/console/functions.ts";
 import type { EndpointSummary } from "../src/console/endpoints.ts";
-import type { ReliabilityServiceMembers } from "../src/console/mod.ts";
+import type {
+  FunctionRead,
+  FunctionUpsertOptions,
+  ReliabilityServiceMembers,
+} from "../src/console/mod.ts";
 
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true
   : false;
@@ -42,9 +46,22 @@ Deno.test("summary types carry the list fields the server sends", () => {
   const bad: EndpointSummary["status"] = "published";
   const incomplete: EndpointSummary["incomplete"] = true as boolean;
   const members: ReliabilityServiceMembers | undefined = undefined;
+  const read: FunctionRead | undefined = undefined;
+  const opts: FunctionUpsertOptions | undefined = undefined;
   assertEquals(
-    [publicArchived, consoleArchived, endpointArchived, status, ready, bad, incomplete, members]
+    [
+      publicArchived,
+      consoleArchived,
+      endpointArchived,
+      status,
+      ready,
+      bad,
+      incomplete,
+      members,
+      read,
+      opts,
+    ]
       .length,
-    8,
+    10,
   );
 });
