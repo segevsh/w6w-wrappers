@@ -1,6 +1,6 @@
 # PLANNER.md — read this first when planning work in `w6w-wrappers`
 
-> **verified: 2026-10-14** (wrappers@96c5524) — This guide records checked source locations, not a
+> **verified: 2026-10-17** (wrappers@1df07aa) — This guide records checked source locations, not a
 > replacement for them. When this guide and the code disagree, **code wins**;
 > correct this guide in the same change.
 
@@ -207,6 +207,37 @@
    (`react/src/__tests__/session.test.ts`); its header says never `await new Promise(r =>
    setTimeout(r, 0))` under the fake clock (it hangs) — flush with `settle()` / `tick()`.
 
+12. **`console.apps` pages one server snapshot; `list()` restarts, `listPage()` never does.**
+
+   **verified: 2026-10-17** — `GET /apps` is served from a pinned list snapshot (server
+   `docs/reference/pagination.md`). `node/src/console/apps.ts`:
+   - `AppsPage` carries optional `snapshot`, `total`, `offset`, `limit` and `expiresAt`.
+   - `ListAppsOptions` takes `snapshot?`/`offset?`, and `listPage` forwards both in wire order after
+     `cursor`.
+   - `list()` follows each `nextCursor` verbatim, because the cursor already encodes the snapshot.
+     It never sends `snapshot`/`offset`, which the server refuses beside a `cursor`
+     (`400 invalid_cursor`). On an `ApiError` with `code` `snapshot_expired` (410) or
+     `unknown_snapshot` (404), `list()` discards the partial walk and restarts ONCE (`isSnapshotGone`).
+     A second such error is rethrown, and the cap is still 20 pages per attempt.
+   - `listPage()` never restarts. Its caller drops what it holds and calls again without `snapshot`.
+
+   **`QueryParams` drops only `undefined`** (`node/src/http.ts`, the `QueryParams` docblock), so
+   `offset: 0` IS sent, and so is a form's `""`. The server treats an empty
+   `maturity=`/`visibility=` as absent on open but as a mismatch beside a token that stored one.
+   Don't "clean up" an empty string in the SDK without checking the server's `canonicalize`.
+
+   The react adapter mirrors this by hand. `react/src/adapter.ts` `ListAppsPageOptions` /
+   `AppsPageResult` (copies of ui `src/provider.tsx`) gained the same fields, and `listAppsPage`
+   rebuilds the options and the result field by field, so a new page field must be added in both
+   places (trap 6). Docs: `node/docs/console.md` (`list()` / `listPage(options?)` rows and the
+   "`snapshot?` / `offset?` read a position in one server snapshot" paragraph). `docs/endpoints.md`
+   and `docs/sdk-surface.md` do not describe `console.apps` paging. Tests:
+   `node/tests/console/apps_test.ts` (`console.apps.list restarts once on …`,
+   `console.apps.listPage forwards snapshot/offset …`), `react/src/__tests__/adapter.test.ts`
+   (`listAppsPage forwards snapshot/offset and returns the snapshot page fields`, `listApps restarts
+   once …`) and `adapter-conformance.test.ts` (`listAppsPage forwards snapshot and offset …`).
+   Console-only, so the change needed no `endpoints.json` row, only the lockstep bump to 0.9.14.
+
 ## Gate baselines
 
 - **verified: 2026-10-06** — The release test job runs Python's unittest command
@@ -237,6 +268,19 @@
   unittest 359 tests OK; cli `deno task test` 163 passed; react
   `NODE_OPTIONS=--experimental-strip-types npm test` 164 pass. Local Node is 22.16, so react needs
   `--experimental-strip-types`; CI uses Node 24 (`ci.yml` `node-version: "24"`).
+- **verified: 2026-10-17** — at the 26-10-16-00-pinned-pagination integration tip (wrappers@ce7f88f,
+  `VERSION` 0.9.14): node `deno task test` → `ok | 626 passed | 0 failed`; react
+  `NODE_OPTIONS=--experimental-strip-types npm test` → `# tests 167 · # pass 167 · # fail 0`.
+- **verified: 2026-10-17** — at `main` @ `1df07aa` (`VERSION` 0.9.15, contract 0.8.0;
+  26-10-16-01-embed-composable-surfaces closeout, fresh detached checkout): node `deno task test` →
+  `ok | 640 passed | 0 failed`; cli 166 passed (`npm ci` in `cli/` first, or `deno task check` fails
+  on `@types/node`); python `PYTHONPATH=src python3 -m unittest discover -s tests -t .` → `Ran 366 tests
+  … OK` (without `-t .`, `test_functions_precondition` fails to import: relative import); react
+  `NODE_OPTIONS=--experimental-strip-types npm test` → 171 pass. 0.9.14 (pinned-pagination) was never
+  published; its change ships in 0.9.15. React's `test` script is capped
+  (`--max-old-space-size=2048 --test-concurrency=4 --test-timeout=120000`) and `src/test-jsx-loader.mjs`
+  loads two assert guards (`test-assert-guard.mjs` inner, `test-guards.mjs` outer), because a failing
+  assert on a rendered DOM node exhausted host memory (26-10-16-01 BLK-1).
 - **verified: 2026-10-06** — React's CI setup builds the sibling SDK, installs
   it locally, then runs `npm test` (`.github/workflows/release.yml:146-161`).
   Use the Node 22 invocation above when reproducing it in this lane.

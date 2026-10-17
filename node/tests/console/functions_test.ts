@@ -81,6 +81,7 @@ const SUMMARY_A: FunctionSummary = {
   description: "",
   updatedAt: "2026-08-09T00:00:00.000Z",
   valid: true,
+  archivedAt: null,
 };
 
 const SUMMARY_B: FunctionSummary = {
@@ -90,6 +91,7 @@ const SUMMARY_B: FunctionSummary = {
   description: "",
   updatedAt: "2026-08-09T00:00:01.000Z",
   valid: false,
+  archivedAt: null,
 };
 
 Deno.test(
@@ -122,7 +124,9 @@ Deno.test(
       inputs: [],
       impl: { uses: { app: "a", action: "b" } },
     };
-    const c = client(() => json({ function: stored, valid: true }));
+    const c = client(() =>
+      json({ function: stored, valid: true, updatedAt: "2026-10-17T01:00:00.000Z" })
+    );
 
     const res = await c.client.console.functions.get("fn_1");
 
@@ -131,7 +135,7 @@ Deno.test(
     // A mutant returning the raw two-key {function, valid} body would fail
     // this exact assertion (the result would carry a `function` key instead
     // of the definition's own fields).
-    assertEquals(res, { ...stored, valid: true });
+    assertEquals(res, { ...stored, valid: true, updatedAt: "2026-10-17T01:00:00.000Z" });
     assertEquals(Object.hasOwn(res, "function"), false);
     assertEquals(c.calls[0].method, "GET");
   },
@@ -150,12 +154,16 @@ Deno.test("console.functions.list unwraps the functions envelope", async () => {
 Deno.test(
   "console.functions.upsert unwraps the function envelope and sends the definition verbatim",
   async () => {
-    const c = client(() => json({ function: { id: "fn_1", key: "send" } }, 201));
+    const c = client(() =>
+      json({ function: { id: "fn_1", key: "send" }, updatedAt: "2026-10-17T01:00:00.000Z" }, 201)
+    );
 
     const res = await c.client.console.functions.upsert(FN);
 
-    assertEquals(res, { id: "fn_1", key: "send" });
-    assertEquals(JSON.parse(c.calls[0].body ?? "null"), FN);
+    assertEquals(res, { id: "fn_1", key: "send", updatedAt: "2026-10-17T01:00:00.000Z" });
+    // Verbatim apart from the read-only `valid` (FN carries one) — see the strip test.
+    const { valid: _valid, ...stored } = FN;
+    assertEquals(JSON.parse(c.calls[0].body ?? "null"), stored);
     assertEquals(c.calls[0].method, "POST");
     assertEquals(c.calls[0].url, "https://api.example.com/functions");
   },
@@ -187,4 +195,65 @@ Deno.test("console.functions.get percent-encodes id via the `path` tag", async (
   await c.client.console.functions.get("fn 1");
 
   assertEquals(c.calls[0].url, "https://api.example.com/functions/fn%201");
+});
+
+Deno.test("console.functions.get: top-level updatedAt/valid win over stale in-definition copies", async () => {
+  const stale = { ...FN, valid: false, updatedAt: "2020-01-01T00:00:00.000Z" };
+  const c = client(() =>
+    json({ function: stale, valid: true, updatedAt: "2026-10-17T01:00:00.000Z" })
+  );
+
+  const res = await c.client.console.functions.get("fn_1");
+
+  assertEquals(res.updatedAt, "2026-10-17T01:00:00.000Z");
+  assertEquals(res.valid, true);
+});
+
+Deno.test("console.functions.upsert sends the precondition header only when given", async () => {
+  const c = client(() =>
+    json({ function: { id: "fn_1", key: "send" }, updatedAt: "2026-10-17T01:00:00.000Z" }, 201)
+  );
+  const H = "x-w6w-if-unmodified-since";
+
+  await c.client.console.functions.upsert(FN);
+  await c.client.console.functions.upsert(FN, {});
+  await c.client.console.functions.upsert(FN, { ifUnmodifiedSince: null });
+  await c.client.console.functions.upsert(FN, { ifUnmodifiedSince: "" });
+  await c.client.console.functions.upsert(FN, { ifUnmodifiedSince: "2026-10-17T01:00:00.000Z" });
+
+  assertEquals(c.calls.map((x) => x.headers.get(H)), [
+    null,
+    null,
+    null,
+    null,
+    "2026-10-17T01:00:00.000Z",
+  ]);
+});
+
+Deno.test("console.functions.upsert strips the read-only updatedAt/valid and never mutates the caller's object", async () => {
+  const c = client(() =>
+    json({ function: { id: "fn_1", key: "send" }, updatedAt: "2026-10-17T01:00:00.000Z" }, 201)
+  );
+  const read = { ...FN, valid: true, updatedAt: "2020-01-01T00:00:00.000Z" };
+  const before = structuredClone(read);
+
+  await c.client.console.functions.upsert(read, { ifUnmodifiedSince: read.updatedAt });
+
+  const sent = JSON.parse(c.calls[0].body ?? "null");
+  assertEquals(Object.hasOwn(sent, "updatedAt"), false);
+  assertEquals(Object.hasOwn(sent, "valid"), false);
+  assertEquals(sent.id, "fn_1");
+  assertEquals(c.calls[0].headers.get("x-w6w-if-unmodified-since"), "2020-01-01T00:00:00.000Z");
+  assertEquals(read, before);
+});
+
+Deno.test("console.functions.upsert rejects a stale save as ApiError 409 function_stale", async () => {
+  const c = client(() => json({ error: { code: "function_stale", message: "Moved on." } }, 409));
+
+  const err = await assertRejects(
+    () => c.client.console.functions.upsert(FN, { ifUnmodifiedSince: "x" }),
+    ApiError,
+  );
+
+  assertEquals([err.status, err.code], [409, "function_stale"]);
 });

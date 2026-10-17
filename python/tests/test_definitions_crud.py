@@ -391,11 +391,22 @@ class FunctionWriteTest(unittest.TestCase):
         self.assertEqual(body["key"], "send-email")
 
     def test_create_unwraps_the_function_envelope(self) -> None:
-        instance, _ = client(responding({"function": {"id": "fn_1", "key": "send-email"}}, 201))
+        instance, _ = client(
+            responding(
+                {
+                    "function": {"id": "fn_1", "key": "send-email"},
+                    "updatedAt": "2026-10-17T01:00:00.000Z",
+                },
+                201,
+            )
+        )
 
         saved = instance.functions.create({"key": "send-email", "inputs": []})
 
-        self.assertEqual((saved.id, saved.key), ("fn_1", "send-email"))
+        self.assertEqual(
+            (saved.id, saved.key, saved.updatedAt),
+            ("fn_1", "send-email", "2026-10-17T01:00:00.000Z"),
+        )
 
     def test_update_pins_the_addressed_id_over_the_bodys_own(self) -> None:
         instance, calls = client(responding({"function": {"id": "fn_a", "key": "k"}}, 201))

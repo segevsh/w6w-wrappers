@@ -45,6 +45,9 @@
 import { type HttpResponse, path, type RequestOptions } from "../http.ts";
 import { unwrap } from "../types.ts";
 
+/** The precondition header `upsert` sends when `ifUnmodifiedSince` is given. */
+const PRECONDITION_HEADER = "x-w6w-if-unmodified-since";
+
 /**
  * The slice of `W6WClient` this namespace needs: the transport, and nothing
  * else. Structural rather than a concrete client type, so the namespace stays
@@ -225,6 +228,12 @@ export interface EndpointSummary {
   description: string;
   updatedAt: string;
   invokeUrl: string;
+  /** `"ready"` when the stored definition is runnable, else `"draft"`. */
+  status: "draft" | "ready";
+  /** `true` when `status` is not `"ready"`. */
+  incomplete: boolean;
+  /** ISO-8601 archive time; `null` when the Endpoint is live. */
+  archivedAt: string | null;
 }
 
 /**
@@ -275,8 +284,9 @@ export class EndpointsApi {
    * configured secret comes back masked with {@linkcode SECRET_MASK}, never
    * as plaintext or ciphertext.
    *
-   * **Returns the response body VERBATIM — a three-key top-level shape, NOT
-   * merged.** `invokeUrl`/`invokeUrlByKey` are never spliced into `endpoint`;
+   * **Returns the response body VERBATIM — a top-level shape (`endpoint`,
+   * `invokeUrl`, `invokeUrlByKey?`, and the read-only `updatedAt` concurrency
+   * token, a top-level sibling like the URLs), NOT merged.** `invokeUrl`/`invokeUrlByKey` are never spliced into `endpoint`;
    * this mirrors `console.workflows.get`'s "no envelope key to peel, multiple
    * top-level siblings" precedent, deliberately NOT
    * `console.functions.get`'s merge — these are two different,
@@ -294,9 +304,11 @@ export class EndpointsApi {
    */
   async get(
     id: string,
-  ): Promise<{ endpoint: EndpointDef; invokeUrl: string; invokeUrlByKey?: string }> {
+  ): Promise<
+    { endpoint: EndpointDef; invokeUrl: string; invokeUrlByKey?: string; updatedAt: string }
+  > {
     const res = await this.#host.request<
-      { endpoint: EndpointDef; invokeUrl: string; invokeUrlByKey?: string }
+      { endpoint: EndpointDef; invokeUrl: string; invokeUrlByKey?: string; updatedAt: string }
     >({
       method: "GET",
       path: path`/endpoints/${id}`,
@@ -309,31 +321,57 @@ export class EndpointsApi {
    *
    * `definition` is the whole definition, sent verbatim as the request body —
    * not wrapped in an envelope key. **Returns the response body VERBATIM**,
-   * same three-key shape as {@linkcode get} — no merge, no `unwrap()`.
+   * same top-level shape as {@linkcode get} (including the new top-level
+   * `updatedAt`) — no merge, no flattening, no `unwrap()`.
+   *
+   * Never send back read-only keys: `updatedAt` and `valid` are removed from
+   * `definition` before the POST (shallow, top level only; the caller's object
+   * is never mutated). `options.ifUnmodifiedSince`, when truthy, is sent as
+   * `x-w6w-if-unmodified-since` (never as an empty or `"null"` string).
    *
    * None of the four error codes below need special client-side handling —
    * they propagate as an ordinary `ApiError` with the server's own
    * `.message`, exactly like every other write in this package; this method
    * does not branch on any of them.
    *
-   * @param definition - The whole Endpoint definition, forwarded verbatim.
-   * @returns The new/updated Endpoint's id and key, plus its callable URL(s).
+   * @param definition - The whole Endpoint definition, forwarded verbatim apart from the read-only keys above.
+   * @param options - `ifUnmodifiedSince` is the concurrency precondition.
+   * @returns The new/updated Endpoint's id and key, its callable URL(s), and the new `updatedAt`.
    * @throws {ApiError} `400 invalid_endpoint` — structurally invalid body, or (first save only) a malformed `key`.
+   * @throws {ApiError} `400 invalid_precondition` — the token is not a readable timestamp.
+   * @throws {ApiError} `409 endpoint_stale` — the precondition did not match the stored `updatedAt`. Recoverable by reloading.
    * @throws {ApiError} `409 key_immutable` — `key` differs from the already-stored row's `key`.
    * @throws {ApiError} `409 endpoint_conflict` — another `(tenant,subject)` owns this id.
    * @throws {ApiError} `409 endpoint_key_conflict` — another Endpoint already holds this `key`.
    */
   async upsert(
     definition: EndpointDef,
+    options?: { ifUnmodifiedSince?: string | null },
   ): Promise<
-    { endpoint: { id: string; key: string }; invokeUrl: string; invokeUrlByKey?: string }
+    {
+      endpoint: { id: string; key: string };
+      invokeUrl: string;
+      invokeUrlByKey?: string;
+      updatedAt: string;
+    }
   > {
+    const { updatedAt: _updatedAt, valid: _valid, ...body } = definition as
+      & EndpointDef
+      & Record<string, unknown>;
     const res = await this.#host.request<
-      { endpoint: { id: string; key: string }; invokeUrl: string; invokeUrlByKey?: string }
+      {
+        endpoint: { id: string; key: string };
+        invokeUrl: string;
+        invokeUrlByKey?: string;
+        updatedAt: string;
+      }
     >({
       method: "POST",
       path: "/endpoints",
-      body: definition,
+      body,
+      ...(options?.ifUnmodifiedSince
+        ? { headers: { [PRECONDITION_HEADER]: options.ifUnmodifiedSince } }
+        : {}),
     });
     return res.body;
   }

@@ -93,12 +93,12 @@ Creating, updating, testing and OAuth-connecting a connection are not in the Pyt
 | --- | --- | --- |
 | `run(name, payload=None, allow_unpublished=False)` | the Function's output | `name` is the key or `fn_…` id. `allow_unpublished=True` runs the stored draft (body field, only when `True`). |
 | `run_version(id, n, payload=None)` | the Function's output | Runs published version `n` (wire verb `invoke`). No `allow_unpublished`. |
-| `list_versions(id)`, `get_version(id, n)`, `publish(id)`, `revert(id, n)`, `enable(id)`, `disable(id)` | as on `client.workflows` | Same shapes; Functions have no concurrency precondition. |
+| `list_versions(id)`, `get_version(id, n)`, `publish(id)`, `revert(id, n)`, `enable(id)`, `disable(id)` | as on `client.workflows` | Same shapes. `revert` is itself unguarded but moves `updatedAt`, so re-read the token before a guarded `update`. |
 | `archive(id)` | `dict` | Required before `delete`. Idempotent; one-way. |
-| `list()` | `list[FunctionSummary]` | `id`, `key`, `displayName`, `description`, `updatedAt`, `valid` |
-| `get(id)` | `FunctionDetail` | `function` (the definition), `valid` |
-| `create(definition)` | `SaveResult` | `id`, `key`. Assigns a `fn_…` id if the definition has none. |
-| `update(id, definition)` | `SaveResult` | Replaces the whole definition. |
+| `list()` | `list[FunctionSummary]` | `id`, `key`, `displayName`, `description`, `updatedAt`, `valid`, `archivedAt` (`None` while live) |
+| `get(id)` | `FunctionDetail` | `function` (the definition), `valid`, `updatedAt` (the concurrency token) |
+| `create(definition)` | `SaveResult` | `id`, `key`, `updatedAt`. Assigns a `fn_…` id if the definition has none. |
+| `update(id, definition, if_unmodified_since=None)` | `SaveResult` | Replaces the whole definition. Pass `if_unmodified_since` (the `updatedAt` from `get` or a prior save) to refuse a stale write with `409 function_stale`; omitted or `None`, no header is sent. |
 | `delete(id)` | `None` | `409 function_not_archived` unless the Function was archived first (`archive(id)`). |
 
 ## `client.apps`

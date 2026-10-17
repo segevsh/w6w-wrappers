@@ -1,6 +1,6 @@
 {
   "name": "@w6w/react",
-  "version": "0.9.13",
+  "version": "0.9.15",
   "description": "React bindings for @w6w/sdk — a <W6WProvider>, a small hook set, and a structural adapter for @w6w/ui's W6WApi contract.",
   "license": "MIT",
   "repository": {
@@ -36,7 +36,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import ./src/test-jsx-loader.mjs --test src/__tests__/*.test.ts",
+    "test": "node --max-old-space-size=2048 --import ./src/test-jsx-loader.mjs --test --test-concurrency=4 --test-timeout=120000 src/__tests__/*.test.ts",
     "lint": "biome check .",
     "format": "biome format --write ."
   },
@@ -44,7 +44,7 @@
     "react": ">=18"
   },
   "dependencies": {
-    "@w6w/sdk": "^0.9.13"
+    "@w6w/sdk": "^0.9.15"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

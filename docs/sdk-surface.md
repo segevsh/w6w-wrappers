@@ -247,8 +247,8 @@ Three rules both operations obey:
 | `client.workflows.runVersion(id, n, opts?)` | `client.workflows.run_version(id, n, ...)` | `WorkflowRunResult` |
 | `client.functions.list(opts?)`                   | `client.functions.list()`                                                         | `FunctionSummary[]` / `List[FunctionSummary]` |
 | `client.functions.get(id, opts?)`                | `client.functions.get(id)`                                                        | `FunctionDetail`                              |
-| `client.functions.create(definition)`            | `client.functions.create(definition)`                                             | `{id, key}` / `SaveResult`                    |
-| `client.functions.update(id, definition)`        | `client.functions.update(id, definition)`                                         | `{id, key}` / `SaveResult`                    |
+| `client.functions.create(definition)`            | `client.functions.create(definition)`                                             | `{id, key, updatedAt}` / `SaveResult`         |
+| `client.functions.update(id, definition, opts?)` | `client.functions.update(id, definition, if_unmodified_since=None)`                | `{id, key, updatedAt}` / `SaveResult`         |
 | `client.functions.delete(id)`                    | `client.functions.delete(id)`                                                     | `void` / `None`                               |
 | `client.functions.archive(id)` | `client.functions.archive(id)` | the definition |
 | `client.functions.listVersions(id)` | `client.functions.list_versions(id)` | `VersionList` |
@@ -277,7 +277,7 @@ Four rules all of them obey:
 - **`update` is a full replacement.** A field left out is a field removed. Read,
   edit, send the whole thing back.
 - **Reads keep their extra field outside the definition.** `workflows.get`'s
-  `updatedAt` and `functions.get`'s `valid` are siblings of the document, never
+  `updatedAt` and `functions.get`'s `valid` and `updatedAt` are siblings of the document, never
   spliced into it — they are not part of the stored document, and the read is
   the input to the write.
 - **Deleting a workflow takes two calls.** `archive` then `delete`; the SDK does

@@ -55,7 +55,7 @@ export async function workflowLifecycle(client: W6WClient): Promise<string> {
   return saved.updatedAt === refreshed.updatedAt ? saved.updatedAt : refreshed.updatedAt;
 }
 
-/** Function lifecycle: last-write-wins, so no token on save. */
+/** Function lifecycle. The save here is deliberately unguarded (last-write-wins); a guarded one passes `ifUnmodifiedSince`. */
 export async function functionLifecycle(client: W6WClient): Promise<void> {
   const created = await client.functions.create({ id: "fn_embed", name: "embed" });
   const loaded = await client.functions.get(created.id);

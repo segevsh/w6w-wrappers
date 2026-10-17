@@ -280,3 +280,14 @@ for (const c of CASES) {
     assert.deepEqual((caught as { body?: unknown }).body, errBody);
   });
 }
+
+// A standalone case, not a CASES row: CASES' members must equal the UI member list exactly.
+test("listAppsPage forwards snapshot and offset (offset 0 is sent) after cursor, before compact", async () => {
+  const { client, calls } = transport(200, {});
+  const adapter = createW6WUiAdapter(client) as unknown as Adapter;
+  await adapter
+    .listAppsPage({ snapshot: "lsn_s", offset: 0, limit: 50, compact: true })
+    .catch(() => undefined);
+  assert.equal(calls.length, 1);
+  assert.equal((calls[0] as Call).path, "/apps?limit=50&snapshot=lsn_s&offset=0&compact=true");
+});

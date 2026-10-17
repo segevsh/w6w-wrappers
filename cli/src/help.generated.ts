@@ -99,7 +99,7 @@ export interface HelpExitCode {
 /** The command tree, generated from the shared wrapper surface contract. */
 export const HELP_TREE: HelpTree = {
   "binary": "w6w",
-  "contractVersion": "0.7.0",
+  "contractVersion": "0.8.0",
   "tagline": "command-line client for the w6w workflow platform",
   "usage": "w6w <command> [options]",
   "docsUrl": "https://w6w.dev/docs/cli",
@@ -1692,7 +1692,7 @@ export const HELP_TREE: HelpTree = {
           "short": "Overwrite a Function definition",
           "headline": "overwrite a Function definition",
           "usage": "w6w functions update <id> --definition <json> [options]",
-          "naming": "w6w functions update <id> --definition <json>",
+          "naming": "w6w functions update <id> --definition <json> [--if-unmodified-since <ts>]",
           "status": "required",
           "params": [
             {
@@ -1710,6 +1710,14 @@ export const HELP_TREE: HelpTree = {
               "required": true,
             },
             {
+              "name": "ifUnmodifiedSince",
+              "kind": "flag",
+              "display": "--if-unmodified-since <ts>",
+              "description":
+                "Refuse the write if the workflow changed since this updatedAt (see: w6w workflows get)",
+              "required": false,
+            },
+            {
               "name": "json",
               "kind": "flag",
               "display": "--json",
@@ -1719,6 +1727,7 @@ export const HELP_TREE: HelpTree = {
           ],
           "examples": [
             'w6w functions update fn_01HQ8N --definition "$(cat function.json)"',
+            'w6w functions update fn_01HQ8N --definition "$(cat function.json)" --if-unmodified-since 2026-08-22T09:00:00.000Z',
           ],
           "notes": [],
         },

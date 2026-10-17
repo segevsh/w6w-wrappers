@@ -1022,6 +1022,9 @@ class FunctionSummary:
     #: (`db/repos/functions.ts`'s `is_function_valid`). A draft with no `impl`
     #: is `False`, and running it is `422 function_incomplete`.
     valid: bool
+    #: ISO-8601 archive time; `None` when the Function is live (or the server
+    #: did not say). Named as the wire names it, like every field here.
+    archivedAt: Optional[str] = None
 
     @classmethod
     def from_wire(cls, body: Any) -> "FunctionSummary":
@@ -1041,6 +1044,7 @@ class FunctionSummary:
             # whether a caller offers this Function as runnable, and the safe
             # default for an answer the server did not give is "no".
             valid=raw_valid if isinstance(raw_valid, bool) else False,
+            archivedAt=_nullable_text(body, "archivedAt"),
         )
 
 
@@ -1118,12 +1122,13 @@ class WorkflowSaveResult:
 
 @dataclass(frozen=True)
 class FunctionDetail:
-    """What `functions.get` returns: the definition, plus the server's verdict.
+    """What `functions.get` returns: the definition, plus what is not in it.
 
-    :attr:`valid` stays a **sibling** of :attr:`function` rather than being
-    spliced into it. It is computed per request, it is not part of the stored
-    document (`rfcs/function.md`), and folding it in would put it inside the
-    object a caller sends straight back to :meth:`w6w.FunctionsApi.update`.
+    :attr:`valid` and :attr:`updatedAt` stay **siblings** of :attr:`function`
+    rather than being spliced into it. They are computed per request, they are
+    not part of the stored document (`rfcs/function.md`), and folding them in
+    would put them inside the object a caller sends straight back to
+    :meth:`w6w.FunctionsApi.update`.
     """
 
     #: The stored definition, verbatim. A plain dict: see
@@ -1131,6 +1136,9 @@ class FunctionDetail:
     function: Dict[str, Any]
     #: Whether the Function can be run.
     valid: bool
+    #: The concurrency token: hand it to :meth:`w6w.FunctionsApi.update` as
+    #: `if_unmodified_since` to make the next save refuse a stale write.
+    updatedAt: str = ""
 
     @classmethod
     def from_wire(cls, body: Any) -> "FunctionDetail":
@@ -1143,32 +1151,37 @@ class FunctionDetail:
         return cls(
             function=_mapping(body, "function"),
             valid=raw_valid if isinstance(raw_valid, bool) else False,
+            updatedAt=_text(body, "updatedAt"),
         )
 
 
 @dataclass(frozen=True)
 class SaveResult:
-    """What `functions.create` and `functions.update` return: the two ids.
+    """What `functions.create` and `functions.update` return: the ids and the token.
 
-    Deliberately NOT reused for workflows, whose save answers three more fields
-    (:class:`WorkflowSaveResult`). One class covering both would have to make
-    `scheduled` and `updatedAt` optional, and a field that is absent for half
-    the callers is a field nobody can rely on.
+    Deliberately NOT reused for workflows, whose save answers a nested workflow
+    envelope and a `scheduled` flag (:class:`WorkflowSaveResult`). One class
+    covering both would have to make `scheduled` optional, and a field that is
+    absent for half the callers is a field nobody can rely on.
     """
 
     #: The saved Function's `fn_…` id.
     id: str
     #: The saved Function's `key` — the name `functions.run` takes.
     key: str
+    #: The new concurrency token, so a caller can chain saves without
+    #: re-reading. A top-level sibling of the `function` envelope on the wire.
+    updatedAt: str
 
     @classmethod
-    def from_wire(cls, body: Any) -> "SaveResult":
+    def from_wire(cls, body: Any, updated_at: str = "") -> "SaveResult":
         """Build a :class:`SaveResult`, ignoring unknown keys.
 
         :param body: The parsed `function` envelope payload.
+        :param updated_at: The top-level `updatedAt` — NOT inside `body`.
         :returns: The save result.
         """
-        return cls(id=_text(body, "id"), key=_text(body, "key"))
+        return cls(id=_text(body, "id"), key=_text(body, "key"), updatedAt=updated_at)
 
 
 def mint_id(prefix: str) -> str:
