@@ -104,6 +104,10 @@ export interface ListAppsPageOptions {
   category?: string;
   /** Opaque pagination cursor from a prior {@link AppsPageResult.nextCursor}. */
   cursor?: string;
+  /** Snapshot token from a prior {@link AppsPageResult.snapshot}; sent with `offset`, not with `cursor`. */
+  snapshot?: string;
+  /** Zero-based offset into the snapshot; `0` is sent. */
+  offset?: number;
   /** Page size; a host may clamp this to its own bounds. */
   limit?: number;
   /** Ask the host for a bounded picker-summary projection (heavy fields like inline icons may be trimmed). */
@@ -117,6 +121,16 @@ export interface AppsPageResult {
   apps: AppSummary[];
   /** Present unless this is the last page. */
   nextCursor?: string;
+  /** The snapshot token this page was cut from. */
+  snapshot?: string;
+  /** Total number of apps in the snapshot. */
+  total?: number;
+  /** Zero-based offset of this page's first app within the snapshot. */
+  offset?: number;
+  /** The page size the server applied. */
+  limit?: number;
+  /** ISO timestamp after which the snapshot may be gone. */
+  expiresAt?: string;
 }
 
 /**
@@ -393,11 +407,21 @@ export function createW6WUiAdapter(client: W6WClient): W6WApi {
           q: options.q,
           category: options.category,
           cursor: options.cursor,
+          snapshot: options.snapshot,
+          offset: options.offset,
           limit: options.limit,
           compact: options.compact,
           signal: options.signal,
         });
-        return { apps: page.apps, nextCursor: page.nextCursor };
+        return {
+          apps: page.apps,
+          nextCursor: page.nextCursor,
+          snapshot: page.snapshot,
+          total: page.total,
+          offset: page.offset,
+          limit: page.limit,
+          expiresAt: page.expiresAt,
+        };
       }),
 
     // Delegates to the public `client.apps.byIds` (R-18): it dedupes, resolves

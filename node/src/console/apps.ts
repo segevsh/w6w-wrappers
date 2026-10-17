@@ -62,6 +62,7 @@
  * @module
  */
 
+import { ApiError } from "../errors.ts";
 import { type HttpResponse, path, type RequestOptions } from "../http.ts";
 import { unwrap } from "../types.ts";
 
@@ -537,6 +538,16 @@ export interface UpsertOAuthConfigInput {
 export interface AppsPage {
   apps: AppSummary[];
   nextCursor?: string;
+  /** The snapshot token this page was cut from; pass it back as `snapshot` to page the same list. */
+  snapshot?: string;
+  /** Total number of apps in the snapshot. */
+  total?: number;
+  /** Zero-based offset of this page's first app within the snapshot. */
+  offset?: number;
+  /** The page size the server applied. */
+  limit?: number;
+  /** ISO timestamp after which the snapshot may be gone. */
+  expiresAt?: string;
 }
 
 /** {@link ListAppsOptions.sort}'s allowed wire values. */
@@ -562,6 +573,10 @@ export interface ListAppsOptions {
   limit?: number;
   /** Opaque pagination cursor from a prior page's `nextCursor`. */
   cursor?: string;
+  /** Snapshot token from a prior page; sent with `offset` to read the same list. Not with `cursor`. */
+  snapshot?: string;
+  /** Zero-based offset into the snapshot; `0` is sent, not dropped. */
+  offset?: number;
   /** Restrict to the caller's account-managed apps (T3.1.2's distinct query). */
   managed?: boolean;
   /** Ask the server for a bounded picker-summary projection (T3.1.1 owns the projection itself). */
@@ -612,11 +627,18 @@ export class AppsApi {
    * Every consumer treats this as the complete catalog with no "load more"
    * UI, so this method fetches every page itself — a bare `GET /apps` only
    * returns the server's default page and would silently hide anything past
-   * it. Capped at 20 pages (~4000 apps at the 200-per-page size) as a runaway
-   * backstop, not an expected limit; relocated verbatim from
-   * `client.ts:244-256`. Implemented on top of {@link listPage} (same
-   * `AppsHost.request` call, same cursor field) rather than a parallel fetch,
-   * so there is exactly one place that builds a `GET /apps` request.
+   * it. It walks ONE server snapshot by following each page's opaque
+   * `nextCursor` verbatim (which already encodes the snapshot), sending only
+   * `limit=200` and `cursor` — never `snapshot` or `offset`, which the server
+   * refuses alongside a `cursor`. Capped at 20 pages per attempt (~4000 apps at
+   * the 200-per-page size) as a runaway backstop, not an expected limit.
+   * Implemented on top of {@link listPage} rather than a parallel fetch, so
+   * there is exactly one place that builds a `GET /apps` request.
+   *
+   * If the snapshot expires mid-walk (`ApiError` with `code`
+   * `"snapshot_expired"` or `"unknown_snapshot"`), what was accumulated is
+   * discarded and the walk restarts ONCE from a fresh first request, so the
+   * result is never a mix of two snapshots. A second such error is rethrown.
    *
    * @deprecated Prefer {@linkcode listPage} with an explicit `ids` set —
    * studio's `AppsProvider` is the current consumer and resolves exactly the
@@ -625,9 +647,20 @@ export class AppsApi {
    * keep using `list()`.
    *
    * @returns Every app summary across all pages, in the order the server sent them.
-   * @throws {ApiError} On any non-2xx.
+   * @throws {ApiError} On any non-2xx; a snapshot expiry (`snapshot_expired`
+   * / `unknown_snapshot`) only after the one restart has also expired.
    */
   async list(): Promise<AppSummary[]> {
+    try {
+      return await this.#walk();
+    } catch (err) {
+      if (!isSnapshotGone(err)) throw err;
+      return await this.#walk();
+    }
+  }
+
+  /** One fresh cursor walk of the catalog: no carried cursor, page counter at zero. */
+  async #walk(): Promise<AppSummary[]> {
     const apps: AppSummary[] = [];
     let cursor: string | undefined;
     for (let page = 0; page < 20; page++) {
@@ -656,13 +689,20 @@ export class AppsApi {
    * all. A caller with more ids than the server accepts in one request gets
    * the server's own `400`; see {@link ListAppsOptions.ids}.
    *
+   * `options.snapshot` / `options.offset` read a position in an existing
+   * snapshot (`offset: 0` is sent, not dropped); do not combine `snapshot`
+   * with `cursor` (the server answers `400 invalid_cursor`). This method never
+   * restarts: when the snapshot is gone the caller starts a new one.
+   *
    * @param options - See {@link ListAppsOptions}. Omitted entirely, this is
    * one unfiltered, unsorted default-page-size request.
-   * @returns One page: `{apps, nextCursor}}`. `nextCursor` is absent on the
-   * last page.
-   * @throws {ApiError} On any non-2xx, and (distinguishably, `code:
-   * "cancelled"`) when `options.signal` was aborted before the response came
-   * back.
+   * @returns One page: `{apps, nextCursor, snapshot, total, offset, limit,
+   * expiresAt}`. `nextCursor` is absent on the last page; the snapshot fields
+   * are present when the server answered from a snapshot.
+   * @throws {ApiError} On any non-2xx — including `410 snapshot_expired` and
+   * `404 unknown_snapshot` (restart by calling again without `snapshot`) —
+   * and (distinguishably, `code: "cancelled"`) when `options.signal` was
+   * aborted before the response came back.
    */
   async listPage(options: ListAppsOptions = {}): Promise<AppsPage> {
     const { signal, ...rest } = options;
@@ -677,6 +717,8 @@ export class AppsApi {
         sort: rest.sort,
         limit: rest.limit,
         cursor: rest.cursor,
+        snapshot: rest.snapshot,
+        offset: rest.offset,
         managed: rest.managed,
         compact: rest.compact,
         ids: rest.ids !== undefined ? rest.ids.join(",") : undefined,
@@ -1017,4 +1059,10 @@ export class AppsApi {
     });
     return res.body;
   }
+}
+
+/** True for the two codes meaning "the snapshot this walk holds is gone" (410 / 404). */
+function isSnapshotGone(err: unknown): boolean {
+  return err instanceof ApiError &&
+    (err.code === "snapshot_expired" || err.code === "unknown_snapshot");
 }

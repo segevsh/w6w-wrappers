@@ -59,7 +59,11 @@ test("a failing equal(domNode, null, msg) is bounded and keeps the message and t
   assert.ok(err instanceof legacy.AssertionError, "still an AssertionError");
   assert.ok(err.message.length < BOUND, `message is ${err.message.length} chars`);
   assert.match(err.message, /^saving leaked onto b/);
-  assert.match(err.message, /<BUTTON> <button type="button">Saving…<\/button>/);
+  // test-guards.mjs scrubs a DOM node to a short token first; this guard renders it if it ever gets one.
+  assert.match(
+    err.message,
+    /<BUTTON> <button type="button">Saving…<\/button>|<button> \(DOM node #\d+\)/,
+  );
   assert.equal(err.operator, "strictEqual");
 });
 
