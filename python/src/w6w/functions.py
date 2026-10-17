@@ -47,6 +47,7 @@ from .types import (
     unwrap_list,
     unwrap_object,
 )
+from .workflows import PRECONDITION_HEADER
 
 
 class FunctionsHost(Protocol):
@@ -66,6 +67,7 @@ class FunctionsHost(Protocol):
         path: str,
         query: Optional[Mapping[str, Any]] = None,
         body: Optional[Any] = None,
+        headers: Optional[Mapping[str, str]] = None,
     ) -> HttpResponse:
         """Perform one request."""
         ...
@@ -216,8 +218,8 @@ class FunctionsApi:
     def get(self, id: str) -> FunctionDetail:
         """Fetch one Function's stored definition.
 
-        Returns the whole body — `function` and `valid` — rather than splicing
-        `valid` into the definition. See :class:`w6w.types.FunctionDetail` for
+        Returns the whole body — `function`, `valid` and `updatedAt` — rather
+        than splicing `valid` or `updatedAt` into the definition. See :class:`w6w.types.FunctionDetail` for
         why that placement matters on the way back OUT of this method.
 
         The definition itself stays a plain `dict`: its interesting field is
@@ -228,7 +230,8 @@ class FunctionsApi:
 
         :param id: The `fn_…` id, or the Function's `key`. Percent-encoded into
             the path by :func:`w6w.path`.
-        :returns: The definition and the server's runnability verdict.
+        :returns: The definition, the server's runnability verdict and the
+            concurrency token.
         :raises ConfigError: When no token is configured.
         :raises ApiError: `404 unknown_function` when there is no such Function
             for this caller.
@@ -252,7 +255,7 @@ class FunctionsApi:
 
         :param definition: The whole Function definition, forwarded verbatim
             apart from a minted `id`.
-        :returns: The new Function's id and key.
+        :returns: The new Function's id, key and first `updatedAt`.
         :raises ConfigError: When no token is configured.
         :raises ApiError: `400 invalid_function` — no `key`, no `inputs` array,
             or a malformed `impl`.
@@ -266,28 +269,44 @@ class FunctionsApi:
             body["id"] = mint_id("fn")
         return self._save(body)
 
-    def update(self, id: str, definition: Mapping[str, Any]) -> SaveResult:
+    def update(
+        self,
+        id: str,
+        definition: Mapping[str, Any],
+        if_unmodified_since: Optional[str] = None,
+    ) -> SaveResult:
         """Overwrite a Function's stored definition.
 
         **A full replacement, not a patch** — the server has one write route and
         it stores what it is given, so read with :meth:`get`, change what you
-        mean to change, and send the whole thing back. There is no concurrency
-        precondition on this route (workflows have one; Functions do not), so
-        the write is last-write-wins.
+        mean to change, and send the whole thing back. Pass
+        `if_unmodified_since` (the `updatedAt` from :meth:`get` or a prior save)
+        to make the write refuse a stale base; omitted, the save is
+        last-write-wins.
 
         `id` comes from the FIRST ARGUMENT and is pinned into the body,
         overriding any `id` the definition carries — otherwise
         ``update("fn_a", def_of_b)`` would quietly write to B.
 
-        Do not send back the `valid` field: it is not part of the stored
-        document, and :meth:`get` deliberately leaves it outside the definition
-        so that a read-modify-write round trip cannot pick it up by accident.
+        Do not send back the `valid` or `updatedAt` fields: they are not part of
+        the stored document, and :meth:`get` deliberately leaves them outside
+        the definition so that a read-modify-write round trip cannot pick them
+        up by accident.
 
         :param id: The `fn_…` id to write to.
         :param definition: The whole replacement definition.
-        :returns: The Function's id and key.
+        :param if_unmodified_since: The exact `updatedAt` this client last saw.
+            When given, the server refuses the write with `409 function_stale`
+            if the stored row has moved on since. Omitted (or `None`), the save
+            is last-write-wins and the header is never sent — never as an empty
+            string, which the server would reject as `400 invalid_precondition`.
+        :returns: The Function's id, key and new `updatedAt`.
         :raises ConfigError: When no token is configured.
         :raises ApiError: `400 invalid_function` — structurally invalid body.
+        :raises ApiError: `400 invalid_precondition` — the token is not a
+            timestamp the server can read.
+        :raises ApiError: `409 function_stale` — the precondition did not match
+            the stored `updatedAt`. Recoverable by reloading and re-saving.
         :raises ApiError: `409 function_conflict` — another `(tenant, subject)`
             owns this id.
         :raises ApiError: `409 function_key_conflict` — the new `key` is already
@@ -295,7 +314,7 @@ class FunctionsApi:
         """
         body = dict(definition)
         body["id"] = id
-        return self._save(body)
+        return self._save(body, if_unmodified_since)
 
     def archive(self, id: str) -> Dict[str, Any]:
         """Archive a Function.
@@ -352,8 +371,9 @@ class FunctionsApi:
     def revert(self, id: str, n: int) -> Dict[str, Any]:
         """Rewrite the live row from version `n`; it does not publish.
 
-        Functions have no concurrency precondition, so a following
-        :meth:`update` is last-write-wins.
+        Revert is not itself guarded, but it rewrites the stored row, so its
+        `updatedAt` moves: a token read before a revert is stale after it
+        (`409 function_stale` on the next guarded :meth:`update`).
 
         :param id: The `fn_…` id.
         :param n: The 1-based version number.
@@ -406,7 +426,9 @@ class FunctionsApi:
         """
         self._host.request("DELETE", path("/functions/{id}", id=id))
 
-    def _save(self, body: Dict[str, Any]) -> SaveResult:
+    def _save(
+        self, body: Dict[str, Any], if_unmodified_since: Optional[str] = None
+    ) -> SaveResult:
         """The one POST both :meth:`create` and :meth:`update` go through.
 
         Private and shared rather than duplicated: the route answers `201` with
@@ -414,7 +436,17 @@ class FunctionsApi:
         unwrap is two places for a server change to be half-applied.
 
         :param body: The complete definition, id already resolved.
-        :returns: The saved Function's id and key.
+        :param if_unmodified_since: The precondition token, if any.
+        :returns: The saved Function's id and key, plus the top-level `updatedAt`.
         """
-        response = self._host.request("POST", "/functions", body=body)
-        return SaveResult.from_wire(unwrap_object(response, "function"))
+        response = self._host.request(
+            "POST",
+            "/functions",
+            body=body,
+            headers={PRECONDITION_HEADER: if_unmodified_since} if if_unmodified_since else None,
+        )
+        # `updatedAt` is a TOP-LEVEL sibling of the `function` envelope.
+        token = require_object(response, "a save result").get("updatedAt")
+        return SaveResult.from_wire(
+            unwrap_object(response, "function"), token if isinstance(token, str) else ""
+        )
