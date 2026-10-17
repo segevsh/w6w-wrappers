@@ -8,6 +8,30 @@ import type { FunctionSummary } from "../src/console/functions.ts";
 import type { EndpointSummary } from "../src/console/endpoints.ts";
 import type { ReliabilityServiceMembers } from "../src/console/mod.ts";
 
+type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true
+  : false;
+const pin = <_T extends true>() => 0;
+// Exact, required types: an optional, widened or dropped field makes Equal false (TS2344).
+pin<Equal<PublicFunctionSummary["archivedAt"], string | null>>();
+pin<Equal<FunctionSummary["archivedAt"], string | null>>();
+pin<Equal<EndpointSummary["archivedAt"], string | null>>();
+pin<Equal<EndpointSummary["status"], "draft" | "ready">>();
+pin<Equal<EndpointSummary["incomplete"], boolean>>();
+// Requiredness: an optional key is not assignable to its required counterpart.
+pin<
+  Equal<
+    Required<Pick<PublicFunctionSummary, "archivedAt">>,
+    Pick<PublicFunctionSummary, "archivedAt">
+  >
+>();
+pin<Equal<Required<Pick<FunctionSummary, "archivedAt">>, Pick<FunctionSummary, "archivedAt">>>();
+pin<
+  Equal<
+    Required<Pick<EndpointSummary, "archivedAt" | "status" | "incomplete">>,
+    Pick<EndpointSummary, "archivedAt" | "status" | "incomplete">
+  >
+>();
+
 Deno.test("summary types carry the list fields the server sends", () => {
   const publicArchived: PublicFunctionSummary["archivedAt"] = null as string | null;
   const consoleArchived: FunctionSummary["archivedAt"] = null as string | null;
