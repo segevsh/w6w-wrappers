@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { register } from "node:module";
 import ts from "typescript";
+import "./test-guards.mjs";
 
 register(import.meta.url, import.meta.url);
 
