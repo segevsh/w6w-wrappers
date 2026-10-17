@@ -112,9 +112,9 @@ the synthetic zero-credential row in a list (optional; absent on older servers).
 | --- | --- | --- |
 | `run(idOrKey, { payload?, allowUnpublished? })` | the Function's output | `404 unknown_function`, `422 function_incomplete`. `allowUnpublished: true` runs the saved definition without a publish. |
 | `list({ signal? })` | `FunctionSummary[]` | `id`, `key`, `displayName`, `description`, `updatedAt`, `valid` |
-| `get(id, { signal? })` | `{ function, valid }` | `valid` is `false` when the Function can't run yet. |
-| `create(definition)` | `{ id, key }` | Assigns a `fn_…` id if the definition has none. |
-| `update(id, definition)` | `{ id, key }` | Replaces the whole definition. |
+| `get(id, { signal? })` | `{ function, valid, updatedAt }` | `valid` is `false` when the Function can't run yet. `updatedAt` is the save token. |
+| `create(definition)` | `{ id, key, updatedAt }` | Assigns a `fn_…` id if the definition has none. |
+| `update(id, definition, { ifUnmodifiedSince? })` | `{ id, key, updatedAt }` | Replaces the whole definition. A stale `ifUnmodifiedSince` is `409 function_stale`. |
 | `archive(id)` | the archived definition | Required before `delete`. |
 | `delete(id)` | nothing | `409 function_not_archived` if it's still active. |
 | `listVersions(id)` | `VersionList` | `enabled`, `currentPublishedVersion`, `versions[]`. Metadata only. |

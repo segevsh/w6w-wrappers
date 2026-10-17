@@ -404,9 +404,9 @@ Rules that bite:
 
 - **Save first.** A draft run and `publish` use the row the server has stored, never the
   definition in your editor. Flush any pending save, then run or publish.
-- **Pass the save token on workflows.** `get` returns `updatedAt`; send it back as
-  `ifUnmodifiedSince`. A `409 workflow_stale` means someone saved in between: reload and re-apply.
-  Functions have no such token: the last write wins.
+- **Pass the save token on workflows and Functions.** `get` returns `updatedAt`; send it back as
+  `ifUnmodifiedSince`. A `409 workflow_stale` (or `409 function_stale` for a Function) means someone
+  saved in between: reload and re-apply.
 - **Refresh `updatedAt` after `revert`.** Reverting rewrites the stored row, so the token you
   held is stale. Call `get` again before the next save.
 - **The SDK adds no retry policy of its own.** The one exception is the single re-send after a

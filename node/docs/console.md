@@ -752,15 +752,21 @@ comment block — field-for-field, not redesigned: `listFunctions` → `list`, `
 | Method               | Route                | Notes                                                                                                                |
 | -------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `list()`             | `GET /functions`     | `unwrap<FunctionSummary[]>(res, "functions")`. Each row already carries `valid` — server-computed, nothing to merge. |
-| `get(id)`            | `GET /functions/:id` | **The pinned `valid`-splice merge — see below.**                                                                     |
-| `upsert(definition)` | `POST /functions`    | Body is the whole `FunctionDef`, forwarded verbatim. `unwrap<{id,key}>(res, "function")` (`201`).                    |
+| `get(id)`            | `GET /functions/:id` | **The pinned `valid`-splice merge, plus a read-only `updatedAt` — see below.**                                       |
+| `upsert(definition, options?)` | `POST /functions` | Body is the definition minus the read-only `updatedAt`/`valid`. `options.ifUnmodifiedSince` (truthy only) is sent as the `x-w6w-if-unmodified-since` header. Returns `{id, key, updatedAt}` (`201`; the token is a top-level sibling of the `function` envelope). A stale write is `409 function_stale`. |
 
 **`get`'s `valid`-splice is a deliberate, behavior-preserving relocation, not a redesign.** On the
 wire, `valid` is a TOP-LEVEL SIBLING of `function`, never part of the stored definition itself
 (`admin/functions.ts:82-93` answers `{function, valid}`). This method DOES merge it into its return
-value — `{...body.function, valid: body.valid}` — matching studio's own current `getFunction`
+value — `{...body.function, valid: body.valid, updatedAt: body.updatedAt}`, the top-level values
+spread LAST so a stale copy echoed into a stored definition can never win — matching studio's own current `getFunction`
 (`client.ts:259-262`) exactly, so `FunctionsPage.tsx:173`'s `setDraft(fn)` needs zero adaptation. A
-raw `{function, valid}` return would be a regression, not a cleanup.
+raw `{function, valid}` return would be a regression, not a cleanup. The result is typed
+`FunctionDef & { updatedAt: string }`; `updatedAt` is NOT on `FunctionDef`, which is the `upsert`
+input type. Because `get` splices two read-only keys into the definition, `upsert` removes `updatedAt`
+and `valid` from the outgoing body (shallow, top level; the caller's object is never mutated), so a
+`get` → edit → `upsert` round trip cannot store them. Pass `get`'s `updatedAt` as
+`options.ifUnmodifiedSince` to make the save refuse a stale base.
 
 **`invoke` is deliberately NOT modeled here.** The base `client.run({urn, payload})`
 (already-published surface, `endpoints.json`-named, exported from the root `mod.ts`) dispatches a
@@ -794,11 +800,12 @@ comment block — field-for-field, not redesigned: `listEndpoints` → `list`, `
 | -------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------- |
 | `list()`             | `GET /endpoints`             | `unwrap<EndpointSummary[]>(res, "endpoints")`. Each row already carries its own `invokeUrl`.        |
 | `get(id)`            | `GET /endpoints/:id`         | **Returns the raw three-key body VERBATIM — see below.**                                            |
-| `upsert(definition)` | `POST /endpoints`            | Body is the whole `EndpointDef`, forwarded verbatim. **Returns the same three-key shape VERBATIM.** |
+| `upsert(definition, options?)` | `POST /endpoints`  | Body is the `EndpointDef` minus the read-only `updatedAt`/`valid`. `options.ifUnmodifiedSince` (truthy only) is sent as the `x-w6w-if-unmodified-since` header; stale is `409 endpoint_stale`. **Returns the same top-level shape VERBATIM.** |
 | `invoke(id, input)`  | `POST /endpoints/:id/invoke` | **The pinned invoke-path mechanism — see below.**                                                   |
 
-**`get`/`upsert` return `{endpoint, invokeUrl, invokeUrlByKey?}` VERBATIM — never merged, never
-`unwrap()`ed.** `invokeUrl`/`invokeUrlByKey` are never spliced into `endpoint`; this mirrors
+**`get`/`upsert` return `{endpoint, invokeUrl, invokeUrlByKey?, updatedAt}` VERBATIM — never merged,
+never `unwrap()`ed, never flattened.** `updatedAt` is the read-only concurrency token, a top-level
+sibling like the URLs; it is never spliced into `endpoint`. `invokeUrl`/`invokeUrlByKey` are never spliced into `endpoint`; this mirrors
 `console.workflows.get`'s "no envelope key to peel, multiple top-level siblings" precedent,
 deliberately NOT `console.functions.get`'s merge above — these are two different,
 individually-verified, individually-pinned shapes; they are not made uniform. `invokeUrl` is ALWAYS
