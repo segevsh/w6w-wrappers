@@ -99,7 +99,9 @@ export type {
   FunctionDetail,
   FunctionRunOptions,
   FunctionRunVersionOptions,
+  FunctionSaveResult,
   FunctionsHost,
+  FunctionWriteOptions,
 } from "./src/functions.ts";
 export type {
   PublishResult,

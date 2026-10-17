@@ -122,6 +122,7 @@ Deno.test(
         endpoint: EP,
         invokeUrl: "https://x/invoke/ep_1",
         invokeUrlByKey: "https://x/invoke/acme/hook",
+        updatedAt: "2026-10-17T01:00:00.000Z",
       })
     );
 
@@ -133,6 +134,7 @@ Deno.test(
       endpoint: EP,
       invokeUrl: "https://x/invoke/ep_1",
       invokeUrlByKey: "https://x/invoke/acme/hook",
+      updatedAt: "2026-10-17T01:00:00.000Z",
     });
     assertEquals(c.calls[0].method, "GET");
   },
@@ -141,11 +143,21 @@ Deno.test(
 Deno.test(
   "console.endpoints.get omits invokeUrlByKey entirely when absent from the fixture — not undefined-valued",
   async () => {
-    const c = client(() => json({ endpoint: EP, invokeUrl: "https://x/invoke/ep_1" }));
+    const c = client(() =>
+      json({
+        endpoint: EP,
+        invokeUrl: "https://x/invoke/ep_1",
+        updatedAt: "2026-10-17T01:00:00.000Z",
+      })
+    );
 
     const res = await c.client.console.endpoints.get("ep_1");
 
-    assertEquals(res, { endpoint: EP, invokeUrl: "https://x/invoke/ep_1" });
+    assertEquals(res, {
+      endpoint: EP,
+      invokeUrl: "https://x/invoke/ep_1",
+      updatedAt: "2026-10-17T01:00:00.000Z",
+    });
     // Genuinely absent — a mutant that defaults it to `undefined` explicitly
     // would still pass a loose equality check but fail this one.
     assertEquals(Object.hasOwn(res, "invokeUrlByKey"), false);
@@ -161,6 +173,7 @@ Deno.test(
           endpoint: { id: "ep_1", key: "hook" },
           invokeUrl: "https://x/invoke/ep_1",
           invokeUrlByKey: "https://x/invoke/acme/hook",
+          updatedAt: "2026-10-17T01:00:00.000Z",
         },
         201,
       )
@@ -172,6 +185,7 @@ Deno.test(
       endpoint: { id: "ep_1", key: "hook" },
       invokeUrl: "https://x/invoke/ep_1",
       invokeUrlByKey: "https://x/invoke/acme/hook",
+      updatedAt: "2026-10-17T01:00:00.000Z",
     });
     assertEquals(JSON.parse(c.calls[0].body ?? "null"), EP);
     assertEquals(c.calls[0].method, "POST");
@@ -287,4 +301,59 @@ Deno.test("console.endpoints.invoke percent-encodes id via the `path` tag", asyn
   await c.client.console.endpoints.invoke("ep 1", {});
 
   assertEquals(c.calls[0].url, "https://api.example.com/endpoints/ep%201/invoke");
+});
+
+Deno.test("console.endpoints.upsert sends the precondition header only when given", async () => {
+  const c = client(() =>
+    json({
+      endpoint: { id: "ep_1", key: "hook" },
+      invokeUrl: "https://x/i",
+      updatedAt: "2026-10-17T01:00:00.000Z",
+    }, 201)
+  );
+  const H = "x-w6w-if-unmodified-since";
+
+  await c.client.console.endpoints.upsert(EP);
+  await c.client.console.endpoints.upsert(EP, {});
+  await c.client.console.endpoints.upsert(EP, { ifUnmodifiedSince: null });
+  await c.client.console.endpoints.upsert(EP, { ifUnmodifiedSince: "2026-10-17T01:00:00.000Z" });
+
+  assertEquals(c.calls.map((x) => x.headers.get(H)), [
+    null,
+    null,
+    null,
+    "2026-10-17T01:00:00.000Z",
+  ]);
+});
+
+Deno.test("console.endpoints.upsert strips the read-only updatedAt/valid and never mutates the caller's object", async () => {
+  const c = client(() =>
+    json({
+      endpoint: { id: "ep_1", key: "hook" },
+      invokeUrl: "https://x/i",
+      updatedAt: "2026-10-17T01:00:00.000Z",
+    }, 201)
+  );
+  const read = { ...EP, valid: true, updatedAt: "2020-01-01T00:00:00.000Z" };
+  const before = structuredClone(read);
+
+  await c.client.console.endpoints.upsert(read, { ifUnmodifiedSince: read.updatedAt });
+
+  const sent = JSON.parse(c.calls[0].body ?? "null");
+  assertEquals(Object.hasOwn(sent, "updatedAt"), false);
+  assertEquals(Object.hasOwn(sent, "valid"), false);
+  assertEquals(sent, EP);
+  assertEquals(c.calls[0].headers.get("x-w6w-if-unmodified-since"), "2020-01-01T00:00:00.000Z");
+  assertEquals(read, before);
+});
+
+Deno.test("console.endpoints.upsert rejects a stale save as ApiError 409 endpoint_stale", async () => {
+  const c = client(() => json({ error: { code: "endpoint_stale", message: "Moved on." } }, 409));
+
+  const err = await assertRejects(
+    () => c.client.console.endpoints.upsert(EP, { ifUnmodifiedSince: "x" }),
+    ApiError,
+  );
+
+  assertEquals([err.status, err.code], [409, "endpoint_stale"]);
 });

@@ -50,6 +50,9 @@ import { type HttpResponse, path, type RequestOptions } from "../http.ts";
 import { unwrap } from "../types.ts";
 import type { CallableOnError, CallableRef, ErrorReroute, RetryPolicy } from "./endpoints.ts";
 
+/** The precondition header `upsert` sends when `ifUnmodifiedSince` is given. */
+const PRECONDITION_HEADER = "x-w6w-if-unmodified-since";
+
 /**
  * The slice of `W6WClient` this namespace needs: the transport, and nothing
  * else. Structural rather than a concrete client type, so the namespace stays
@@ -132,6 +135,24 @@ export interface FunctionDef {
   valid: boolean;
 }
 
+/**
+ * What {@linkcode FunctionsApi.get} returns: the definition plus the read-only
+ * concurrency token. `updatedAt` is NOT on {@linkcode FunctionDef} — that is the
+ * `upsert` INPUT type, and a token belongs to a read, never to a save body.
+ */
+export type FunctionRead = FunctionDef & { updatedAt: string };
+
+/** Per-call options for `console.functions.upsert`. */
+export interface FunctionUpsertOptions {
+  /**
+   * The exact `updatedAt` this client last saw ({@linkcode FunctionsApi.get} or a
+   * prior save). When truthy it is sent as `x-w6w-if-unmodified-since` and the
+   * server answers `409 function_stale` if the row has moved on. Absent or
+   * `null`, no header is sent and the save is last-write-wins.
+   */
+  ifUnmodifiedSince?: string | null;
+}
+
 /** One row of `list`'s result — a Function's summary, not its full definition. */
 export interface FunctionSummary {
   id: string;
@@ -193,34 +214,57 @@ export class FunctionsApi {
    * in this package except `console.schedules.get`'s documented exception.
    *
    * @param id - The `fn_…` id.
-   * @returns The Function definition with `valid` merged in at the top level.
+   * `updatedAt` (the concurrency token for {@linkcode upsert}) is spliced in the
+   * same way. Both top-level values are spread LAST, so a stale copy of either
+   * echoed into a stored definition can never win.
+   *
+   * @returns The Function definition with `valid` and `updatedAt` merged in at the top level.
    * @throws {ApiError} `404 unknown_function` when there is no such id.
    */
-  async get(id: string): Promise<FunctionDef> {
-    const res = await this.#host.request<{ function: FunctionDef; valid: boolean }>({
+  async get(id: string): Promise<FunctionRead> {
+    const res = await this.#host.request<
+      { function: FunctionDef; valid: boolean; updatedAt: string }
+    >({
       method: "GET",
       path: path`/functions/${id}`,
     });
-    return { ...res.body.function, valid: res.body.valid };
+    return { ...res.body.function, valid: res.body.valid, updatedAt: res.body.updatedAt };
   }
 
   /**
    * Register (create or overwrite) a Function definition.
    *
    * `definition` is the whole definition, sent verbatim as the request body —
-   * not wrapped in an envelope key.
+   * not wrapped in an envelope key — except that the read-only keys
+   * {@linkcode get} splices in (`updatedAt`, `valid`) are removed first
+   * (shallow, top level only; the caller's object is never mutated), so a
+   * `get` → edit → `upsert` round trip cannot store them.
    *
-   * @param definition - The whole Function definition, forwarded verbatim.
-   * @returns The new/updated Function's id and key.
+   * @param definition - The whole Function definition (a {@linkcode get} result is fine).
+   * @param options - `ifUnmodifiedSince` is the concurrency precondition.
+   * @returns The new/updated Function's id, key and new `updatedAt` (a top-level sibling of the `function` envelope on the wire).
    * @throws {ApiError} `400 invalid_function` — structurally invalid body.
+   * @throws {ApiError} `400 invalid_precondition` — the token is not a readable timestamp.
    * @throws {ApiError} `409 function_conflict` — another `(tenant,subject)` owns this id.
+   * @throws {ApiError} `409 function_stale` — the precondition did not match the stored `updatedAt`. Recoverable by reloading.
    */
-  async upsert(definition: FunctionDef): Promise<{ id: string; key: string }> {
+  async upsert(
+    definition: FunctionDef | FunctionRead,
+    options?: FunctionUpsertOptions,
+  ): Promise<{ id: string; key: string; updatedAt: string }> {
+    const { updatedAt: _updatedAt, valid: _valid, ...body } = definition as
+      & Partial<FunctionRead>
+      & Record<string, unknown>;
     const res = await this.#host.request<unknown>({
       method: "POST",
       path: "/functions",
-      body: definition,
+      body,
+      ...(options?.ifUnmodifiedSince
+        ? { headers: { [PRECONDITION_HEADER]: options.ifUnmodifiedSince } }
+        : {}),
     });
-    return unwrap<{ id: string; key: string }>(res, "function");
+    const saved = unwrap<{ id: string; key: string }>(res, "function");
+    const { updatedAt } = res.body as { updatedAt: string };
+    return { id: saved.id, key: saved.key, updatedAt };
   }
 }
