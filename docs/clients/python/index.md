@@ -247,6 +247,8 @@ minted = exchange_token(
 token, expires_in = minted["token"], minted["expiresIn"]
 ```
 
+Self-hosted deployments must pass their API origin explicitly; when omitted, `exchange_token` and `EmbedSessionClient` send the tenant client credentials to `https://api.w6w.io`. Neither reads `W6W_BASE_URL`; the snippet above passes it explicitly.
+
 Then give the client a callable instead of a string. It's called before every authenticated request (not cached or shared by the client — cache inside
 your callable), and with `force_refresh=True` when a refresh is needed:
 
@@ -272,7 +274,7 @@ each option in more detail.
 | `ConfigError: No w6w base URL is configured` | You passed an explicit blank `base_url=`. An unset or empty `W6W_BASE_URL` is not an error: the client uses `https://api.w6w.io`. | Pass a real origin, or omit `base_url`. |
 | `ConfigError: No w6w API token is configured` | `W6W_TOKEN` is unset or empty, or your callable returned nothing. | Export it, or pass `token=`. |
 | `ConfigError` about a control character in the token | The token has a newline, often from reading a file. | Strip it: `token=open(path).read().strip()`. |
-| `ApiError: [401 unauthorized] …` | The token is wrong, disabled or revoked. | Create a new token in Studio → **Settings** → **API tokens**. |
+| `ApiError: [401 unauthorized] …` | The token is wrong, disabled or revoked, or (for `exchange_token` / `EmbedSessionClient`) `base_url` was omitted on a self-hosted deployment. | Create a new token in Studio → **Settings** → **API tokens**, and pass `base_url` explicitly when self-hosting. |
 | `AttributeError: 'WorkflowsApi' object has no attribute 'cancel'` | Your installed version predates it. | Upgrade: `pip install -U w6w`. See [Versions](/clients/overview/#versions). |
 | A call hangs | There's no default timeout. | Pass a transport with a timeout, as shown above. |
 

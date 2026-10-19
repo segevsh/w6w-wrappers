@@ -26,7 +26,7 @@ Everything `@w6w/sdk` exports for application code. For a walkthrough, start wit
 | Import from | What it holds |
 | --- | --- |
 | `@w6w/sdk` | `W6WClient`, `ApiError`, `ConfigError`, `path`, `VERSION`, the result guards and every type. |
-| `@w6w/sdk/server` | `createEmbedSessionClient` (the recommended session minter) and the lower-level `exchangeToken`, for backends only. See [Embed w6w in your product](/guides/embed/). |
+| `@w6w/sdk/server` | `createEmbedSessionClient` (the recommended session minter) and the lower-level `exchangeToken`, for backends only. Self-hosted deployments must pass `baseUrl` explicitly: when omitted, the helpers send the tenant client credentials to `https://api.w6w.io`. See [Embed w6w in your product](/guides/embed/). |
 | `@w6w/sdk/console` | The calls Studio makes. Unstable: it can change in any release. |
 
 ## `new W6WClient(options?)`

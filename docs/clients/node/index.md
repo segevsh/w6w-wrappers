@@ -213,13 +213,16 @@ addresses a different route than the one you meant.
 > **Good to know:** `@w6w/sdk/console` exposes more of the API, the same calls Studio makes. It's
 > unstable and can change in any release, so prefer `client.request()` for anything you ship.
 
+> **Self-hosting and the backend helpers:** `exchangeToken` and `createEmbedSessionClient` (from
+> `@w6w/sdk/server`) never read `W6W_BASE_URL`. Self-hosted deployments must pass their API origin explicitly; when omitted, either helper sends the tenant client credentials to `https://api.w6w.io`.
+
 ## Troubleshooting
 
 | Symptom | Cause | What to do |
 | --- | --- | --- |
 | `ConfigError: No w6w base URL is configured` | You passed an empty `baseUrl` (an unset or empty `W6W_BASE_URL` falls to the default `https://api.w6w.io`). | Pass a real origin, or omit `baseUrl`. |
 | `ConfigError: No w6w API token is configured` | `W6W_TOKEN` is unset or empty, or your token supplier returned nothing. | Export it, or pass `token`. |
-| `ApiError` with `status` `401`, `code` `unauthorized` | The token is wrong, disabled or revoked. | Create a new token in Studio → **Settings** → **API tokens**. |
+| `ApiError` with `status` `401`, `code` `unauthorized` | The token is wrong, disabled or revoked, or (for `exchangeToken` / `createEmbedSessionClient`) `baseUrl` was omitted on a self-hosted deployment. | Create a new token in Studio → **Settings** → **API tokens**, and pass `baseUrl` explicitly when self-hosting. |
 | `ApiError` with `status` `404`, `code` `unknown_connection`, from `run` | The `conn_…` id isn't yours, or was deleted. | Run `client.connections.list()` and use an id from it. |
 | `ApiError` with `status` `424`, from `run` | The app's own API refused the call. | Read `err.raw` for the vendor's message, and check the connection's health in Studio. |
 | `TypeError: client.workflows.cancel is not a function` | Your installed SDK predates that method. | Upgrade `@w6w/sdk`. See [Versions](/clients/overview/#versions). |

@@ -8,7 +8,7 @@ makes, so a reader of two SDKs sees one model:
   `docs/implementation.md` §3, and raised by exactly the three failure modes in
   `_http._request`.
 - :class:`ConfigError` — the client was never in a position to make a request:
-  no base URL, or no token. No HTTP exchange happened, so an `ApiError`'s
+  an explicitly blank base URL, or no token. No HTTP exchange happened, so an `ApiError`'s
   `status` and `code` would have to be invented — and `status = 0` is already
   spoken for by `network_error`. Conflating "your server is unreachable" with
   "you have not configured a server" is exactly the diagnosis a user needs kept
@@ -99,7 +99,7 @@ class ApiError(Exception):
 class ConfigError(Exception):
     """The client is not configured well enough to make a request.
 
-    Raised at construction when there is no base URL, and on the first request
+    Raised at construction when an explicit base URL is blank or malformed, and on the first request
     when there is no token — a client with no token can still be *built*, so a
     CLI's `--help` and `--version` work offline (`docs/implementation.md` §2).
 

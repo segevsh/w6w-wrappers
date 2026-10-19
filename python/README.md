@@ -340,7 +340,7 @@ session = sessions.create(subject=user_id, account_ref=company_ref)  # both requ
 ```
 
 Omit `base_url` and both target `https://api.w6w.io` (`w6w.DEFAULT_BASE_URL`);
-they never read `W6W_BASE_URL`. An explicit `base_url` must be the final `https` origin. `exchange_token` and
+they never read `W6W_BASE_URL`. **Self-hosted deployments must pass `base_url` explicitly; when omitted, the helper sends the tenant client credentials to `https://api.w6w.io`.** An explicit `base_url` must be the final `https` origin. `exchange_token` and
 `EmbedSessionClient` never follow redirects: a 3xx raises `ApiError` and the
 `Authorization: Basic` client credential is never re-sent to another host.
 Unlike `Client`'s default transport, these helpers use their own; a

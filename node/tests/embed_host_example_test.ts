@@ -284,3 +284,58 @@ Deno.test("a blank hint falls back to the active company", async () => {
   }
   assertEquals(h.calls, Array(4).fill({ subject: "u1", accountRef: "A" }));
 });
+
+Deno.test("route.ts with W6W_BASE_URL unset: constructs (no 502) and exchanges against https://api.w6w.io", async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (() => Promise.reject(new Error("must not be called"))) as typeof fetch;
+  // route.ts caches its handler; start from a fresh build so POST's own construction runs.
+  route.__resetHandler();
+  try {
+    await withW6wEnv(
+      { W6W_TENANT_CLIENT_ID: "client-id", W6W_TENANT_CLIENT_SECRET: SECRET },
+      async () => {
+        const res = await route.POST(post({ company: "A" }));
+        // Construction succeeded (a 502 would be the opaque ConfigError); the stub refuses.
+        assertEquals(res.status, 401);
+      },
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+    route.__resetHandler();
+  }
+
+  // The value route.ts hands the helper is `undefined` for unset or blank, so the default applies.
+  assertEquals(route.baseUrlFromEnv({}), undefined);
+  assertEquals(route.baseUrlFromEnv({ W6W_BASE_URL: "   " }), undefined);
+  assertEquals(
+    route.baseUrlFromEnv({ W6W_BASE_URL: "https://w6w.example.com" }),
+    "https://w6w.example.com",
+  );
+
+  const urls: string[] = [];
+  const wireFetch: FetchLike = (url) => {
+    urls.push(String(url));
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          token: "tok",
+          user: { subject: "u1", tenant: "tn_1", role: "user", account: "acct_X1y2Z3a4B5c6D7e8" },
+          expiresIn: 900,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+  };
+  const handle = createEmbedSessionHandler({
+    sessions: createEmbedSessionClient({
+      baseUrl: route.baseUrlFromEnv({}),
+      clientId: "client-id",
+      clientSecret: SECRET,
+      fetch: wireFetch,
+    }),
+    authenticate: () => U1,
+  });
+  assertEquals((await handle(post({ company: "A" }))).status, 200);
+  assertEquals(urls.length, 1);
+  assert(urls[0].startsWith("https://api.w6w.io/"), urls[0]);
+});
