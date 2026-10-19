@@ -177,7 +177,7 @@ Two environment variables, read once when a client is constructed:
 
 | Variable | Meaning |
 |---|---|
-| `W6W_BASE_URL` | The **origin** of your w6w API — e.g. `https://api.example.com`. The API is served at the root of that host, so the client appends nothing. There is no default. |
+| `W6W_BASE_URL` | The **origin** of your w6w API — e.g. `https://api.example.com`. The API is served at the root of that host, so the client appends nothing. Unset (or blank), it is `https://api.w6w.io` (`w6w.DEFAULT_BASE_URL`). |
 | `W6W_TOKEN` | Your API token. Sent as `Authorization: Bearer <token>` on every request. |
 
 These variables are part of the published contract and are identical across
@@ -186,7 +186,8 @@ every client.
 **Explicit constructor arguments always win over the environment.**
 `Client(base_url=…, token=…)` overrides `W6W_BASE_URL` / `W6W_TOKEN`, and an
 argument you pass explicitly — including an empty string — is never quietly
-replaced by an environment variable behind your back.
+replaced by an environment variable behind your back. An explicit empty
+`base_url` raises a `ConfigError`: only an omitted value falls to the default.
 
 Credentials are per-client **instance state**, never module globals: two clients
 in one process can point at two servers with two tokens and not interfere.
@@ -261,7 +262,7 @@ real gateway prefix:
 **A blank value is not a base URL.** An environment variable that is set but
 empty or whitespace-only is treated as **absent**: `W6W_BASE_URL=`,
 `W6W_BASE_URL="   "` and an unset `W6W_BASE_URL` all behave identically and all
-raise the same `ConfigError` naming the variable. (`export W6W_BASE_URL=`, a
+fall to the default, `https://api.w6w.io`. (`export W6W_BASE_URL=`, a
 Dockerfile `ENV` with no build arg, and a CI variable whose template did not
 interpolate are the common cases, and they look unset in every log line.) The
 same rule applies to `W6W_TOKEN`.
@@ -273,7 +274,8 @@ raises a `ConfigError` naming the variable, at construction — not a confusing
 
 A client with no token can still be **constructed** — the error surfaces on the
 first request instead, so offline `--help`-style uses work. A client with no
-base URL raises immediately, at construction.
+base URL targets `https://api.w6w.io`; one whose base URL is passed blank,
+relative or not http(s) raises immediately, at construction.
 
 `W6W_TOKEN` is a plain string only. A credential that has to change between
 requests is spelled in the constructor — `token=read_tenant_token`,
@@ -292,7 +294,7 @@ Two exception types, and the split is deliberate:
 
 | Type | Means |
 |---|---|
-| `ConfigError` | The client was never in a position to make a request — no base URL, or no token. No HTTP exchange happened. |
+| `ConfigError` | The client was never in a position to make a request — a malformed base URL, or no token. No HTTP exchange happened. |
 | `ApiError` | The server answered, or could not be reached. Carries `status`, `code`, `message` and `raw` (the parsed body, kept because error bodies carry fields the message drops). |
 
 `ApiError` has exactly three shapes: `status=0` / `code="network_error"` for a
@@ -337,7 +339,8 @@ session = sessions.create(subject=user_id, account_ref=company_ref)  # both requ
 # keys: token, expiresIn, expiresAt, subject, tenant, account (resolved acct_ id), accountRef
 ```
 
-`base_url` must be the final `https` origin. `exchange_token` and
+Omit `base_url` and both target `https://api.w6w.io` (`w6w.DEFAULT_BASE_URL`);
+they never read `W6W_BASE_URL`. An explicit `base_url` must be the final `https` origin. `exchange_token` and
 `EmbedSessionClient` never follow redirects: a 3xx raises `ApiError` and the
 `Authorization: Basic` client credential is never re-sent to another host.
 Unlike `Client`'s default transport, these helpers use their own; a
