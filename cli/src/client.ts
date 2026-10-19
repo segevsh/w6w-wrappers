@@ -9,8 +9,15 @@
  * has a flag which outranks the environment variable.
  *
  * ```
- * CLI flag (--base-url / --token)  >  environment variable  >  nothing (an error)
+ * base URL  CLI flag (--base-url)  >  W6W_BASE_URL  >  stored `baseUrl`  >  DEFAULT_BASE_URL
+ * token     CLI flag (--token)     >  W6W_TOKEN     >  the stored token for the resolved base URL
  * ```
+ *
+ * The stored tier is the per-user config `w6w auth login` writes (see
+ * `src/config-store.ts`). A stored token is **bound to the base URL it was saved
+ * for**: it is looked up by the canonical resolved base URL, exact match only, so
+ * pointing `--base-url` or `W6W_BASE_URL` at another host can never send it
+ * there. That is the trust boundary of this module.
  *
  * The resolved values are passed to the SDK **explicitly**, and the SDK is never
  * left to read the environment on the CLI's behalf. That is a mechanism choice,
@@ -24,8 +31,15 @@
  * @module
  */
 
-import { ConfigError, type FetchLike, W6WClient } from "@w6w/sdk";
+import { ConfigError, type FetchLike, joinBaseUrl, W6WClient } from "@w6w/sdk";
 import type { GlobalOptions } from "./args.ts";
+import { NO_CONFIG, type StoredConfig } from "./config-store.ts";
+
+/** The API every command targets unless told otherwise. Equals endpoints.json `defaultBaseUrl`. */
+export const DEFAULT_BASE_URL = "https://api.w6w.io";
+
+/** Where a resolved setting came from. */
+export type Source = "flag" | "env" | "config" | "default";
 
 /**
  * Reads one environment variable, or `undefined` where the host has none.
@@ -49,8 +63,8 @@ export const NO_ENV: EnvReader = () => undefined;
  * Read an environment variable, treating a blank value as **absent**.
  *
  * `W6W_BASE_URL=`, `W6W_BASE_URL="   "` and an unset `W6W_BASE_URL` are the same
- * thing: all three fall through the precedence chain to the next source, and
- * ultimately to a usage error naming both sources.
+ * thing: all three fall through the precedence chain to the next source (the
+ * stored base URL, then the default).
  *
  * The check is a trim-and-emptiness test and deliberately **not** a nullish
  * coalesce. `??` does not convert `""`, so a set-but-empty variable would
@@ -73,21 +87,6 @@ export function envValue(env: EnvReader, name: string): string | undefined {
   const value = env(name);
   if (value === undefined || value.trim().length === 0) return undefined;
   return value;
-}
-
-/**
- * Apply the precedence rule to one setting.
- *
- * A flag that was **given** wins outright, even when what it was given is empty:
- * that is a value the user typed, and quietly consulting the environment behind
- * an explicit `--token=` would be the CLI second-guessing them. (It still does
- * not produce a usable value — an empty flag reaches the same error — but it
- * gets there without a detour through the environment.) Only an **absent** flag
- * falls through.
- */
-function resolve(flag: string | undefined, env: EnvReader, name: string): string | undefined {
-  if (flag !== undefined) return flag;
-  return envValue(env, name);
 }
 
 /**
@@ -151,7 +150,7 @@ function requireAbsolute(baseUrl: string): string {
  * the header builder and comes back as a bare `TypeError` from outside anyone's
  * error model: a stack trace, for a typo.
  */
-function isUnsendable(token: string): boolean {
+export function isUnsendable(token: string): boolean {
   for (const character of token) {
     const code = character.codePointAt(0) ?? 0;
     if (code < 0x20 || code === 0x7f || code > 0xff) return true;
@@ -180,6 +179,84 @@ export interface ClientOptions {
   fetch?: FetchLike;
   /** Default project id for the project-scoped operations. */
   project?: string;
+  /** The stored per-user config, already read. Defaults to nothing stored. */
+  stored?: StoredConfig;
+}
+
+/** The base URL and token one invocation resolves to, with where each came from. */
+export interface ResolvedSettings {
+  /** Canonical (the SDK's join: trailing slashes stripped); also the `hosts` key. */
+  readonly baseUrl: string;
+  readonly baseUrlSource: Source;
+  /** Absent when no source holds a token for {@linkcode baseUrl}. */
+  readonly token?: string;
+  readonly tokenSource?: Source;
+}
+
+/**
+ * The one resolver. `createClient` and every `auth` command use it, so what
+ * `auth status` reports is what a command will do.
+ *
+ * Base URL: flag (given, even empty) > env (blank = absent) > stored `baseUrl` >
+ * {@linkcode DEFAULT_BASE_URL}, validated, then canonicalised once. Token: flag >
+ * env > `stored.hosts[<canonical base URL>]` — exact key only.
+ *
+ * @throws {ConfigError} When the base URL is blank-by-flag, relative, or not http(s),
+ *   or a resolved token cannot be sent in a header. A *missing* token is not an
+ *   error here; `createClient` raises that.
+ */
+export function resolveSettings(
+  globals: GlobalOptions,
+  env: EnvReader = NO_ENV,
+  stored: StoredConfig = NO_CONFIG,
+): ResolvedSettings {
+  let raw: string;
+  let baseUrlSource: Source;
+  if (globals.baseUrl !== undefined) {
+    raw = globals.baseUrl;
+    baseUrlSource = "flag";
+  } else {
+    const fromEnv = envValue(env, ENV_BASE_URL);
+    if (fromEnv !== undefined) {
+      raw = fromEnv;
+      baseUrlSource = "env";
+    } else if (stored.baseUrl.trim().length > 0) {
+      raw = stored.baseUrl;
+      baseUrlSource = "config";
+    } else {
+      raw = DEFAULT_BASE_URL;
+      baseUrlSource = "default";
+    }
+  }
+  if (raw.trim().length === 0) {
+    throw configError(
+      "No w6w base URL is configured.",
+      "--base-url",
+      ENV_BASE_URL,
+      "It holds the server's origin, like `https://api.example.com`; the API is served at its root, so no path is appended.",
+    );
+  }
+  // Validate for the CLI's own message, then canonicalise with the SDK's join —
+  // the single key used both to look a token up and to build the client.
+  const baseUrl = joinBaseUrl(requireAbsolute(raw.trim()));
+
+  let token: string | undefined;
+  let tokenSource: Source | undefined;
+  if (globals.token !== undefined) {
+    token = globals.token;
+    tokenSource = "flag";
+  } else {
+    const fromEnv = envValue(env, ENV_TOKEN);
+    if (fromEnv !== undefined) {
+      token = fromEnv;
+      tokenSource = "env";
+    } else if (Object.hasOwn(stored.hosts, baseUrl)) {
+      token = stored.hosts[baseUrl].token;
+      tokenSource = "config";
+    }
+  }
+  if (token === undefined || token.trim().length === 0) return { baseUrl, baseUrlSource };
+  return { baseUrl, baseUrlSource, token: requireSendableToken(token), tokenSource };
 }
 
 /**
@@ -191,7 +268,7 @@ export interface ClientOptions {
  *
  * @param globals - The parsed global flags.
  * @param env - The environment seam. Defaults to an empty environment.
- * @param options - Transport and default project.
+ * @param options - Transport, default project and the stored config.
  * @returns A configured client.
  * @throws {ConfigError} When the base URL or token is missing or unusable — a usage error.
  */
@@ -200,23 +277,14 @@ export function createClient(
   env: EnvReader = NO_ENV,
   options: ClientOptions = {},
 ): W6WClient {
-  const baseUrl = resolve(globals.baseUrl, env, ENV_BASE_URL);
-  if (baseUrl === undefined || baseUrl.trim().length === 0) {
+  const settings = resolveSettings(globals, env, options.stored);
+  if (settings.token === undefined) {
     throw configError(
-      "No w6w base URL is configured.",
-      "--base-url",
-      ENV_BASE_URL,
-      "It holds the server's origin, like `https://api.example.com`; the API is served at its root, so no path is appended.",
-    );
-  }
-
-  const token = resolve(globals.token, env, ENV_TOKEN);
-  if (token === undefined || token.trim().length === 0) {
-    throw configError(
-      "No w6w API token is configured.",
+      `No w6w API token is configured for ${settings.baseUrl}.`,
       "--token",
       ENV_TOKEN,
-      "Every w6w API command is authenticated.",
+      "Or save one with `w6w auth login` (a saved token only applies to the base URL it was saved for). " +
+        "Every w6w API command is authenticated.",
     );
   }
 
@@ -224,8 +292,8 @@ export function createClient(
   // SDK and is applied by the constructor. Nothing here re-derives it — read it
   // back off `client.config.baseUrl` if you need to know where a request went.
   return new W6WClient({
-    baseUrl: requireAbsolute(baseUrl.trim()),
-    token: requireSendableToken(token),
+    baseUrl: settings.baseUrl,
+    token: settings.token,
     project: options.project,
     fetch: options.fetch,
   });

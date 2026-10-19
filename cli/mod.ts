@@ -30,6 +30,8 @@ import { GLOBAL_FLAG_SPECS, parse } from "./src/args.ts";
 import type { FlagSpec, Invocation } from "./src/args.ts";
 import { createClient, NO_ENV } from "./src/client.ts";
 import type { EnvReader } from "./src/client.ts";
+import { loadConfig, NO_STDIN, NO_STORE } from "./src/config-store.ts";
+import type { ConfigStore, StdinSource, StoredConfig } from "./src/config-store.ts";
 import { createOutput } from "./src/output.ts";
 import type { Output } from "./src/output.ts";
 import { EXIT_SUCCESS, EXIT_USAGE, exitCodeFor } from "./src/exit.ts";
@@ -47,8 +49,26 @@ import type { FetchLike, W6WClient } from "@w6w/sdk";
 
 export { parse } from "./src/args.ts";
 export type { FlagSpec, GlobalOptions, Invocation, ParseOptions, ParseResult } from "./src/args.ts";
-export { createClient, ENV_BASE_URL, ENV_TOKEN, envValue, NO_ENV } from "./src/client.ts";
-export type { ClientOptions, EnvReader } from "./src/client.ts";
+export {
+  createClient,
+  DEFAULT_BASE_URL,
+  ENV_BASE_URL,
+  ENV_TOKEN,
+  envValue,
+  NO_ENV,
+  resolveSettings,
+} from "./src/client.ts";
+export type { ClientOptions, EnvReader, ResolvedSettings, Source } from "./src/client.ts";
+export {
+  configPath,
+  loadConfig,
+  NO_CONFIG,
+  NO_STDIN,
+  NO_STORE,
+  parseConfig,
+  serializeConfig,
+} from "./src/config-store.ts";
+export type { ConfigStore, StdinSource, StoredConfig } from "./src/config-store.ts";
 export { createOutput, ENV_NO_COLOR, useColor } from "./src/output.ts";
 export type { Output, OutputOptions, Styles } from "./src/output.ts";
 export {
@@ -119,6 +139,14 @@ export interface CommandContext {
    * @throws {ConfigError} When the base URL or token is missing or unusable.
    */
   client(): W6WClient;
+  /** The environment seam this invocation runs with. */
+  readonly env: EnvReader;
+  /** The stored per-user config, read once before the handler runs (nothing stored by default). */
+  readonly stored: StoredConfig;
+  /** Where the config is persisted. Only the `auth` commands write through it. */
+  readonly store: ConfigStore;
+  /** Standard input, for `auth login -`. */
+  readonly stdin: StdinSource;
 }
 
 /**
@@ -151,6 +179,13 @@ export interface CliOptions {
   isTty?: boolean;
   /** The commands that are wired up. Defaults to none. */
   commands?: CommandRegistry;
+  /**
+   * The per-user config store. Defaults to {@linkcode NO_STORE}: nothing stored,
+   * no file I/O. Only `bin/w6w.ts` wires the real one.
+   */
+  store?: ConfigStore;
+  /** Standard input. Defaults to {@linkcode NO_STDIN}: a terminal, never read. */
+  stdin?: StdinSource;
 }
 
 /** A command the router could not answer by itself, ready to dispatch. */
@@ -333,19 +368,29 @@ async function dispatch(routed: RunRoute, io: CliIo, options: CliOptions): Promi
   // Built on demand and remembered: a command that never asks for the API never
   // needs a token, and one that asks twice gets one client, not two.
   let client: W6WClient | null = null;
-  const context: CommandContext = {
-    command: routed.command,
-    invocation: routed.invocation,
-    out,
-    client: () => {
-      if (client === null) {
-        client = createClient(globals, options.env ?? NO_ENV, { fetch: options.fetch });
-      }
-      return client;
-    },
-  };
+  const env = options.env ?? NO_ENV;
+  const store = options.store ?? NO_STORE;
 
   try {
+    // Read once, before any handler: every dispatched command sees the same
+    // stored config, `createClient` stays synchronous, and a malformed file fails
+    // the command up front (help and `--version` never reach this point).
+    const stored = await loadConfig(store);
+    const context: CommandContext = {
+      command: routed.command,
+      invocation: routed.invocation,
+      out,
+      env,
+      stored,
+      store,
+      stdin: options.stdin ?? NO_STDIN,
+      client: () => {
+        if (client === null) {
+          client = createClient(globals, env, { fetch: options.fetch, stored });
+        }
+        return client;
+      },
+    };
     return (await handler(context)) ?? EXIT_SUCCESS;
   } catch (error) {
     // Normalised at the boundary rather than inside the mapping: `throw "boom"`

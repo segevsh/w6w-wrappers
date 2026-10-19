@@ -2685,6 +2685,118 @@ export const HELP_TREE: HelpTree = {
         "w6w reliability list --project prj_01HQ8N --apps sendgrid,slack",
       ],
     },
+    {
+      "name": "auth",
+      "summary": "Save, remove and inspect the stored API token",
+      "headline": "save, remove and inspect the stored API token",
+      "usage": "w6w auth <command> [options]",
+      "commands": [
+        {
+          "operation": "auth.login",
+          "path": [
+            "auth",
+            "login",
+          ],
+          "name": "login",
+          "aliases": [],
+          "summary": "Save an API token for a base URL so later commands authenticate from it.",
+          "short": "Save an API token for a base URL so later commands authenticate from it",
+          "headline": "save an API token for a base URL so later commands authenticate from it",
+          "usage": "w6w auth login [<token>] [options]",
+          "naming": "w6w auth login [<token>]",
+          "status": "live",
+          "params": [
+            {
+              "name": "token",
+              "kind": "argument",
+              "display": "<token>",
+              "description":
+                "The API token to save, or `-` to read it from standard input (default when input is piped)",
+              "required": false,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "printf '%s' \"$W6W_TOKEN\" | w6w auth login -",
+            "w6w auth login <token>",
+            "w6w auth login - --base-url https://w6w.example.com",
+          ],
+          "notes": [],
+        },
+        {
+          "operation": "auth.logout",
+          "path": [
+            "auth",
+            "logout",
+          ],
+          "name": "logout",
+          "aliases": [],
+          "summary": "Remove the stored API token for a base URL.",
+          "short": "Remove the stored API token for a base URL",
+          "headline": "remove the stored API token for a base URL",
+          "usage": "w6w auth logout [options]",
+          "naming": "w6w auth logout",
+          "status": "live",
+          "params": [
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w auth logout",
+            "w6w auth logout --base-url https://w6w.example.com",
+          ],
+          "notes": [],
+        },
+        {
+          "operation": "auth.status",
+          "path": [
+            "auth",
+            "status",
+          ],
+          "name": "status",
+          "aliases": [],
+          "summary":
+            "Show the resolved base URL, where it came from, and whether a token is available.",
+          "short":
+            "Show the resolved base URL, where it came from, and whether a token is available",
+          "headline":
+            "show the resolved base URL, where it came from, and whether a token is available",
+          "usage": "w6w auth status [options]",
+          "naming": "w6w auth status",
+          "status": "live",
+          "params": [
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w auth status",
+            "w6w auth status --json",
+          ],
+          "notes": [],
+        },
+      ],
+      "options": [],
+      "examples": [
+        "w6w auth status",
+        "printf '%s' \"$W6W_TOKEN\" | w6w auth login -",
+      ],
+    },
   ],
   "globalFlags": [
     {
@@ -2693,7 +2805,7 @@ export const HELP_TREE: HelpTree = {
       "type": "string",
       "env": "W6W_BASE_URL",
       "display": "--base-url <url>",
-      "description": "API base URL (env: W6W_BASE_URL)",
+      "description": "API base URL (default: https://api.w6w.io) (env: W6W_BASE_URL)",
     },
     {
       "name": "--token",
@@ -2701,7 +2813,7 @@ export const HELP_TREE: HelpTree = {
       "type": "string",
       "env": "W6W_TOKEN",
       "display": "--token <token>",
-      "description": "API token (env: W6W_TOKEN)",
+      "description": "API token (or save one: w6w auth login) (env: W6W_TOKEN)",
     },
     {
       "name": "--json",
@@ -2980,6 +3092,18 @@ export const COMMAND_PATHS: string[][] = [
   [
     "reliability",
     "members",
+  ],
+  [
+    "auth",
+    "login",
+  ],
+  [
+    "auth",
+    "logout",
+  ],
+  [
+    "auth",
+    "status",
   ],
 ];
 
