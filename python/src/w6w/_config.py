@@ -156,8 +156,8 @@ def resolve_config(
 ) -> ResolvedConfig:
     """Resolve explicit arguments and the environment into one config value.
 
-    Precedence is **explicit argument > environment variable**, always; there is
-    no default base URL. The two sides of that chain treat emptiness
+    Precedence is **explicit argument > environment variable**, always, then the
+    default (``https://api.w6w.io``). The two sides of that chain treat emptiness
     *asymmetrically*, on purpose (`docs/implementation.md` §2, Precedence):
 
     - An explicitly passed empty string is an **explicit value**, not "unset".
@@ -167,13 +167,14 @@ def resolve_config(
       error is the same one either way.)
     - An **empty or whitespace-only environment variable is ABSENT** and falls
       through (see `_env.read_env`), so ``W6W_BASE_URL=``, ``W6W_BASE_URL="  "``
-      and an unset ``W6W_BASE_URL`` all end here, in the same configuration
-      error — never in a relative base.
+      and an unset ``W6W_BASE_URL`` all end here, at the default base URL —
+      never in a relative base.
 
     The difference is the difference between a value a *caller* chose and a
     value a *shell* produced.
 
-    :param base_url: Explicit origin; `None` consults `W6W_BASE_URL`.
+    :param base_url: Explicit origin; `None` consults `W6W_BASE_URL`, then
+        falls back to :data:`DEFAULT_BASE_URL`.
     :param token: Explicit bearer token, or a :data:`TokenProvider` called
         fresh on every request — a plain `str` is sent verbatim, exactly as
         before. `None` consults `W6W_TOKEN`, which stays a plain string: there

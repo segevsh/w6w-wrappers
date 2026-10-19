@@ -24,7 +24,7 @@ first action call, then covers errors and how to reach any route the client does
 
 ## Before you start
 
-- A w6w base URL and an API token. See [Configure](/clients/overview/#configure).
+- An API token, and a base URL only if your account lives on its own host (the default is `https://api.w6w.io`). See [Configure](/clients/overview/#configure).
 - Python 3.9 or later.
 
 ## 1. Install the package
@@ -166,7 +166,7 @@ your account and don't.
 
 The client raises two error types:
 
-- **`w6w.ConfigError`**: no request was sent. The base URL or token is missing or malformed.
+- **`w6w.ConfigError`**: no request was sent. The token is missing, or the base URL is blank or malformed.
 - **`w6w.ApiError`**: the request failed. It has `status`, `code`, `message` and `raw`, the
   parsed response body. Printed, it reads `[404 unknown_function] …`.
 
@@ -238,7 +238,7 @@ import os
 from w6w.server import exchange_token
 
 minted = exchange_token(
-    base_url=os.environ["W6W_BASE_URL"],
+    base_url=os.environ.get("W6W_BASE_URL"),  # None targets https://api.w6w.io
     client_id=os.environ["W6W_TENANT_CLIENT_ID"],
     client_secret=os.environ["W6W_TENANT_CLIENT_SECRET"],  # never leaves your backend
     subject=user_id,         # your user's id

@@ -70,8 +70,8 @@ once and it remembers the token for the base URL it was saved for (precedence: f
 environment, then that stored login, then the default).
 
 Every client also accepts the base URL and token as explicit arguments, which win over the
-environment. The React provider is the exception: a browser has no environment, so you always pass
-both as props.
+environment. The React provider is the exception: a browser has no environment, so the token is a prop and
+`baseUrl` is an optional prop that defaults to `https://api.w6w.io`.
 
 ## Make your first call
 
@@ -102,7 +102,7 @@ console.log(me.account, me.role);
 ```python
 from w6w import Client
 
-client = Client()  # reads W6W_BASE_URL and W6W_TOKEN
+client = Client()  # reads W6W_TOKEN, and W6W_BASE_URL if set (default https://api.w6w.io)
 me = client.me()
 print(me.account, me.role)
 ```

@@ -274,7 +274,8 @@ raises a `ConfigError` naming the variable, at construction — not a confusing
 
 A client with no token can still be **constructed** — the error surfaces on the
 first request instead, so offline `--help`-style uses work. A client with no
-base URL raises immediately, at construction.
+base URL targets `https://api.w6w.io`; one whose base URL is given but blank,
+relative or not http(s) raises immediately, at construction.
 
 `W6W_TOKEN` is a plain string only. A credential that has to change between
 requests is spelled in the constructor — `token=read_tenant_token`,
@@ -293,7 +294,7 @@ Two exception types, and the split is deliberate:
 
 | Type | Means |
 |---|---|
-| `ConfigError` | The client was never in a position to make a request — no base URL, or no token. No HTTP exchange happened. |
+| `ConfigError` | The client was never in a position to make a request — a malformed base URL, or no token. No HTTP exchange happened. |
 | `ApiError` | The server answered, or could not be reached. Carries `status`, `code`, `message` and `raw` (the parsed body, kept because error bodies carry fields the message drops). |
 
 `ApiError` has exactly three shapes: `status=0` / `code="network_error"` for a

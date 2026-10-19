@@ -83,6 +83,7 @@ class ConstructionTest(SecretHygiene):
         cases = {
             "blank base_url": dict(base_url="   "),
             "relative base_url": dict(base_url="/api"),
+            "non-string base_url": dict(base_url=123),
             "blank client_id": dict(client_id=" "),
             "missing client_id": dict(client_id=None),
             "blank client_secret": dict(client_secret=""),
@@ -107,6 +108,14 @@ class ConstructionTest(SecretHygiene):
             )
             client.create(subject="user_1", account_ref="acct_1")
         self.assertEqual(transport.calls[0].full_url, "https://api.w6w.io/auth/exchange")
+
+    def test_positional_order_is_base_url_client_id_client_secret(self) -> None:
+        transport = responding(SUCCESS_BODY)
+        client = EmbedSessionClient(BASE, "client_1", SECRET, transport=transport)
+        client.create(subject="user_1", account_ref="acct_1")
+        call = transport.calls[0]
+        self.assertEqual(call.full_url, BASE + "/auth/exchange")
+        self.assertEqual(call.get_header("Authorization"), basic("client_1", SECRET))
 
     def test_explicit_base_url_still_wins(self) -> None:
         transport = responding(SUCCESS_BODY)

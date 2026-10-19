@@ -225,6 +225,23 @@ class BlankFieldsTest(unittest.TestCase):
             exchange_token(**{**base, "subject": "  "})
         self.assertEqual(len(transport.calls), 0)
 
+    def test_omitted_credentials_raise_configerror_never_attributeerror(self) -> None:
+        transport = responding(SUCCESS_BODY)
+        with self.assertRaises(ConfigError):
+            exchange_token(transport=transport)
+        for missing in ("client_id", "client_secret", "subject"):
+            kwargs: Any = {
+                "client_id": "client_1",
+                "client_secret": "secret_1",
+                "subject": "user_1",
+                "transport": transport,
+            }
+            del kwargs[missing]
+            with self.subTest(missing):
+                with self.assertRaises(ConfigError):
+                    exchange_token(**kwargs)
+        self.assertEqual(len(transport.calls), 0)
+
 
 # ---------------------------------------------------------------------------
 # acc.3 — every server error surfaces as ApiError with the server's code;
