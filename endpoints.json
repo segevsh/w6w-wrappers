@@ -1695,7 +1695,7 @@
     }
   ],
   "cli": {
-    "$comment": "CLI-only surface. Not API operations — requirements the CLI wrapper must satisfy. See docs/cli.md.",
+    "$comment": "CLI-only surface. Not API operations — requirements the CLI wrapper must satisfy. See docs/cli.md. `commands` are CLI-only commands (no API operation behind them) that gen-help turns into help entries.",
     "binary": "w6w",
     "help": {
       "flags": [
@@ -1751,7 +1751,37 @@
       "1": "usage error",
       "2": "API error (4xx/5xx, including auth failure)",
       "3": "run failure (--wait returned status 'failed')"
-    }
+    },
+    "commands": [
+      {
+        "name": "auth.login",
+        "summary": "Save an API token for a base URL so later commands authenticate from it.",
+        "status": "live",
+        "naming": "w6w auth login [<token>]",
+        "params": [
+          {
+            "name": "token",
+            "in": "argument",
+            "type": "string",
+            "required": false
+          }
+        ]
+      },
+      {
+        "name": "auth.logout",
+        "summary": "Remove the stored API token for a base URL.",
+        "status": "live",
+        "naming": "w6w auth logout",
+        "params": []
+      },
+      {
+        "name": "auth.status",
+        "summary": "Show the resolved base URL, where it came from, and whether a token is available.",
+        "status": "live",
+        "naming": "w6w auth status",
+        "params": []
+      }
+    ]
   },
   "outOfScope": [
     "apps (catalog browse, search and paging; `apps.byIds` is the one in-scope read)",

@@ -23,6 +23,7 @@ import { main } from "../mod.ts";
 import type { CommandRegistry } from "../mod.ts";
 import { COMMANDS } from "../src/commands/index.ts";
 import { systemRuntime } from "../src/runtime.ts";
+import { fsConfigStore, readStdin, stdinIsTerminal } from "../src/store-fs.ts";
 
 /**
  * The commands this build can run.
@@ -60,5 +61,8 @@ const code = await main(runtime.args, runtime, {
   env: runtime.env,
   isTty: stdoutIsTerminal(),
   commands,
+  // The only place the real file store and real stdin are constructed.
+  store: fsConfigStore(runtime.env),
+  stdin: { isTerminal: stdinIsTerminal, read: readStdin },
 });
 runtime.exit(code);

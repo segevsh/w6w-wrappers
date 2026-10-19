@@ -103,8 +103,12 @@ Deno.test("group help lists that group's commands, and only those", async () => 
   for (const group of HELP_TREE.groups) {
     const help = renderGroupHelp(group);
     assertStringIncludes(help, `w6w ${group.name} — `);
-    const expected = contract.operations
-      .map((operation) => commandPathOf(operation.naming.cli))
+    // API operations first, then the CLI-only commands (`cli.commands[]`).
+    const expected = [
+      ...contract.operations.map((operation) => operation.naming.cli),
+      ...(contract.cli.commands ?? []).map((command) => command.naming),
+    ]
+      .map((naming) => commandPathOf(naming))
       .filter((path) => path.length === 2 && path[0] === group.name)
       .map((path) => path[1]);
     assertEquals(group.commands.map((command) => command.name), expected);

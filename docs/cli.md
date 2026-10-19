@@ -51,16 +51,22 @@ USAGE
 COMMANDS
   me                     Caller identity plus w6w component versions
   run                    Run anything addressable by URN
-  connections            Inspect connections
+  connections            List, inspect and delete connections
   workflows              List, run and edit workflows
   documents              Create, read, update and delete documents
   vars                   Create, read, update and delete variables
   functions              Run and edit functions
   endpoints              Run endpoints by key or id
+  team                   Invite, list and manage your account's team
+  apps                   Look up apps by id
+  dashboard              Run-ledger rollup for your account
+  projects               List your projects
+  reliability            Health and performance of the apps you use
+  auth                   Save, remove and inspect the stored API token
 
 GLOBAL OPTIONS
-  --base-url <url>       API base URL (env: W6W_BASE_URL)
-  --token <token>        API token (env: W6W_TOKEN)
+  --base-url <url>       API base URL (default: https://api.w6w.io) (env: W6W_BASE_URL)
+  --token <token>        API token (or save one: w6w auth login) (env: W6W_TOKEN)
   --json                 Output raw JSON instead of a table
   --no-color             Disable colored output
   -v, --version          Print the CLI version
@@ -101,6 +107,57 @@ with nothing for a node or python caller to mirror, so they are hand-declared in
 `ls` stands for `list` and applies inside _any_ group (`w6w vars ls`,
 `w6w docs ls`, …), never outside one — `w6w run ls` leaves `ls` as `run`'s
 positional argument, untouched.
+
+## `auth` — the stored token
+
+`w6w` targets **`https://api.w6w.io`** unless told otherwise (`endpoints.json`
+`defaultBaseUrl`). `w6w auth` saves a token so later commands authenticate
+without exporting anything. These three commands are CLI-only (declared in
+`endpoints.json` `cli.commands[]`), use no network, and never print a token.
+
+| Command | What it does |
+| --- | --- |
+| `w6w auth login [<token>\|-]` | Save the token for the resolved base URL and make that URL the current one. `-`, or no argument with piped input, reads the token from standard input (one trailing newline is stripped). With neither a token nor piped input it is a usage error — it never prompts. Never stores `--token` or `W6W_TOKEN`. |
+| `w6w auth logout` | Remove the stored token for the resolved base URL. Other hosts and the current base URL are kept. Exits `0` whether or not one existed; never creates the file. |
+| `w6w auth status` | Show the resolved base URL and its source (`flag`, `env`, `config` or `default`), and whether a token is available, its source and a masked form (`****` plus the last four characters; just `****` for a token shorter than 12). Exits `0` when logged out. `--json` prints exactly `{baseUrl, baseUrlSource, tokenSource, tokenMasked, configPath}`. |
+
+Prefer the stdin form. A token given as an argument lands in your shell history
+and is visible in the process list while the command runs:
+
+```
+printf '%s' "$TOKEN" | w6w auth login -
+```
+
+**Precedence**, per setting:
+
+- base URL: `--base-url` > `W6W_BASE_URL` (blank counts as unset) > the stored
+  base URL > `https://api.w6w.io`.
+- token: `--token` > `W6W_TOKEN` > the token stored **for the resolved base URL**.
+
+**A stored token is bound to the base URL it was saved for.** Hosts are keyed by
+the canonical URL (trailing slashes stripped, so `https://x.example` and
+`https://x.example/` are one host). Pointing `--base-url` or `W6W_BASE_URL` at a
+different host never sends the stored token there: with no other token the
+command exits `1` naming `w6w auth login`, before any request. Logging in to a
+self-hosted server does not erase the cloud login.
+
+**The file** is JSON, `{"version":1,"baseUrl":"…","hosts":{"<url>":{"token":"…"}}}`:
+
+| OS | Path |
+| --- | --- |
+| Linux, macOS | `$XDG_CONFIG_HOME/w6w/config.json` when set to an absolute path (a relative value is ignored, per the XDG spec), else `~/.config/w6w/config.json` |
+| Windows | `%APPDATA%\w6w\config.json` |
+
+The directory is created `0700` and the file `0600`; each write goes to a temp
+file in that directory and is renamed over `config.json`, and any looser mode an
+existing file or directory had is tightened. Windows has no POSIX modes, so
+there those are best-effort no-ops. There is no environment variable for the
+path.
+
+**A malformed file is never repaired.** If the file cannot be read or is not the
+shape above, every command that runs (not `--help`/`--version`) exits `1` naming
+the file's path — never its content — and `auth login` refuses to overwrite it.
+Fix or delete it. A missing file simply means nothing is stored.
 
 ## Group help
 

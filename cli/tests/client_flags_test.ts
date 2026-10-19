@@ -28,6 +28,7 @@ import type { FetchLike } from "@w6w/sdk";
 import {
   createClient,
   createOutput,
+  DEFAULT_BASE_URL,
   ENV_BASE_URL,
   ENV_NO_COLOR,
   ENV_TOKEN,
@@ -182,28 +183,36 @@ Deno.test("the environment variable names are the contract's, not this file's", 
 // Blank is absent — and nothing resolves to a relative URL.
 // ---------------------------------------------------------------------------
 
-Deno.test("a blank W6W_BASE_URL behaves exactly like an unset one", async () => {
+Deno.test("a blank W6W_BASE_URL behaves exactly like an unset one: the default API", async () => {
   // Four inputs, one behaviour. Testing only the unset case is the gap this
   // closes: `??` would let "" through, and the join rule would turn it into the
   // relative "/api" — a request that fails somewhere else, about something else.
+  // Blank is absent, so it falls through to the stored/default tier.
   for (const value of ["", "   ", "\n", undefined]) {
     const label = JSON.stringify(value);
-    const env = value === undefined ? fakeEnv({}) : fakeEnv({ [ENV_BASE_URL]: value });
+    const values: Record<string, string> = { [ENV_TOKEN]: "t_env" };
+    if (value !== undefined) values[ENV_BASE_URL] = value;
     const transport = recordingFetch();
     const io = recorder();
 
     const code = await main(["me"], io.io, {
-      env,
+      env: fakeEnv(values),
       fetch: transport.impl,
       commands: { me: (context) => void context.client() },
     });
 
-    assertEquals(code, 1, `W6W_BASE_URL=${label} should be a usage error`);
-    assertEquals(transport.calls.length, 0, `W6W_BASE_URL=${label} made a request anyway`);
-    assertStringIncludes(io.stderr, "--base-url");
-    assertStringIncludes(io.stderr, ENV_BASE_URL);
-    assertEquals(io.stdout, "", "an error must not be written to stdout");
+    assertEquals(code, 0, `W6W_BASE_URL=${label} should fall to the default: ${io.stderr}`);
+    assertEquals(io.stderr, "");
+    assertEquals(createClient(globals(), fakeEnv(values)).config.baseUrl, "https://api.w6w.io");
   }
+});
+
+Deno.test("DEFAULT_BASE_URL equals endpoints.json defaultBaseUrl", async () => {
+  const contract = JSON.parse(
+    await Deno.readTextFile(new URL("../../endpoints.json", import.meta.url)),
+  );
+  assertEquals(DEFAULT_BASE_URL, contract.defaultBaseUrl);
+  assertEquals(DEFAULT_BASE_URL, "https://api.w6w.io");
 });
 
 Deno.test("a blank W6W_TOKEN behaves exactly like an unset one", async () => {
@@ -264,7 +273,7 @@ Deno.test("a relative or schemeless base URL is a usage error, not a dead server
     const transport = recordingFetch();
     const io = recorder();
     const code = await main(["me"], io.io, {
-      env: fakeEnv({ [ENV_TOKEN]: "t_env" }),
+      env: fakeEnv({ [ENV_TOKEN]: "t_env", [ENV_BASE_URL]: baseUrl }),
       fetch: transport.impl,
       commands: { me: (context) => void context.client() },
     });

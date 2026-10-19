@@ -73,9 +73,22 @@ export interface ContractOperation {
   naming: { ts: string; python: string; cli: string };
 }
 
+/**
+ * A command that exists only in the CLI (no API operation behind it), declared in
+ * the contract's `cli.commands[]`. Built through the same path as an operation.
+ */
+export interface ContractCliCommand {
+  name: string;
+  summary: string;
+  status: string;
+  naming: string;
+  params: ContractParam[];
+}
+
 /** The CLI-only block of the contract. */
 export interface ContractCli {
   binary: string;
+  commands?: ContractCliCommand[];
   globalFlags: { name: string; alias?: string; type: string; env?: string; source?: string }[];
   exitCodes: Record<string, string>;
 }
@@ -116,6 +129,7 @@ const GROUP_SUMMARIES: Record<string, string> = {
   dashboard: "Run-ledger rollup for your account",
   projects: "List your projects",
   reliability: "Health and performance of the apps you use",
+  auth: "Save, remove and inspect the stored API token",
 };
 
 const GROUP_EXAMPLES: Record<string, string[]> = {
@@ -133,10 +147,18 @@ const GROUP_EXAMPLES: Record<string, string[]> = {
     "w6w reliability members --project prj_01HQ8N",
     "w6w reliability list --project prj_01HQ8N --apps sendgrid,slack",
   ],
+  auth: ["w6w auth status", "printf '%s' \"$W6W_TOKEN\" | w6w auth login -"],
 };
 
 /** At least one runnable example per command — the part people actually copy. */
 const COMMAND_EXAMPLES: Record<string, string[]> = {
+  "auth.login": [
+    "printf '%s' \"$W6W_TOKEN\" | w6w auth login -",
+    "w6w auth login <token>",
+    "w6w auth login - --base-url https://w6w.example.com",
+  ],
+  "auth.logout": ["w6w auth logout", "w6w auth logout --base-url https://w6w.example.com"],
+  "auth.status": ["w6w auth status", "w6w auth status --json"],
   "me": ["w6w me", "w6w info"],
   "connections.list": ["w6w connections list", "w6w connections list --json"],
   "connections.get": ["w6w connections get conn_01HQ8N", "w6w connections get conn_01HQ8N --json"],
@@ -323,6 +345,8 @@ const COMMAND_NOTES: Record<string, string[]> = {
  * added to the contract cannot reach help undescribed.
  */
 const PARAM_HELP: Record<string, string> = {
+  "auth.login.token":
+    "The API token to save, or `-` to read it from standard input (default when input is piped)",
   // Shared fallbacks, by bare parameter name.
   "project": "Project to scope to (default: the account's default project)",
   "description": "Human-readable description",
@@ -465,8 +489,8 @@ const FLAG_OVERRIDES: Record<string, { flag: string; placeholder: string | null 
 
 /** Descriptions and value placeholders for the contract's global flags. */
 const GLOBAL_FLAG_HELP: Record<string, { placeholder: string | null; description: string }> = {
-  "--base-url": { placeholder: "<url>", description: "API base URL" },
-  "--token": { placeholder: "<token>", description: "API token" },
+  "--base-url": { placeholder: "<url>", description: "API base URL (default: https://api.w6w.io)" },
+  "--token": { placeholder: "<token>", description: "API token (or save one: w6w auth login)" },
   "--json": { placeholder: null, description: "Output raw JSON instead of a table" },
   "--no-color": { placeholder: null, description: "Disable colored output" },
   "--version": { placeholder: null, description: "Print the CLI version" },
@@ -780,7 +804,19 @@ export function buildHelpTree(contract: Contract): Record<string, unknown> {
   const rootCommands: Record<string, unknown>[] = [];
   const groups = new Map<string, Record<string, unknown>>();
 
-  for (const operation of contract.operations) {
+  // CLI-only commands (`cli.commands[]`) go through the same builder as an API
+  // operation: they carry a naming string and params, and no method or path.
+  const cliOnly: ContractOperation[] = (contract.cli.commands ?? []).map((command) => ({
+    name: command.name,
+    summary: command.summary,
+    method: "",
+    path: "",
+    status: command.status,
+    params: command.params,
+    naming: { ts: "", python: "", cli: command.naming },
+  }));
+
+  for (const operation of [...contract.operations, ...cliOnly]) {
     const path = commandPathOf(operation.naming.cli);
     if (path.length === 0 || path.length > 2) {
       throw new Error(
