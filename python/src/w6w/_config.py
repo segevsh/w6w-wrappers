@@ -38,6 +38,10 @@ TokenProvider = Callable[..., Optional[str]]
 #: constant still answers "what does this client prepend?" — now "nothing".
 BASE_PATH: str = ""
 
+#: The origin every client targets when none is given. Mirrors `endpoints.json`'s
+#: `defaultBaseUrl` (a test pins the two equal).
+DEFAULT_BASE_URL: str = "https://api.w6w.io"
+
 #: The schemes a w6w base URL may use. Anything else is a configuration
 #: mistake — most often a bare `host:port` that `urlsplit` reads as a scheme.
 ALLOWED_SCHEMES = ("http", "https")
@@ -189,15 +193,19 @@ def resolve_config(
         per-request `headers` argument builds on; neither can displace the
         bearer this transport attaches.
     :returns: The resolved configuration.
-    :raises ConfigError: When no usable base URL was supplied, naming
-        `W6W_BASE_URL`.
+    :raises ConfigError: When an explicit base URL is blank, relative or not
+        http(s). With none given anywhere, the default applies.
     """
+    # Explicit argument (even blank — `join_base_url` rejects that) > env
+    # (blank is absent) > the default. Only `None` / a blank env fall through.
     raw_base_url = base_url if base_url is not None else read_env(ENV_BASE_URL, environ)
+    if raw_base_url is None:
+        raw_base_url = DEFAULT_BASE_URL
     return ResolvedConfig(
         # Every normalisation, emptiness test and validation lives in
         # `join_base_url` — one code path, so the exported helper and the client
         # can never answer differently for the same input.
-        base_url=join_base_url(raw_base_url or ""),
+        base_url=join_base_url(raw_base_url),
         token=token if token is not None else read_env(ENV_TOKEN, environ),
         refresh_on_unauthorized=refresh_on_unauthorized,
         on_unauthorized=on_unauthorized,

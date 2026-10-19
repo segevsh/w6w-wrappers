@@ -81,7 +81,6 @@ class SecretHygiene(unittest.TestCase):
 class ConstructionTest(SecretHygiene):
     def test_bad_inputs_raise_config_error_with_zero_requests(self) -> None:
         cases = {
-            "missing base_url": dict(base_url=None),
             "blank base_url": dict(base_url="   "),
             "relative base_url": dict(base_url="/api"),
             "blank client_id": dict(client_id=" "),
@@ -100,13 +99,19 @@ class ConstructionTest(SecretHygiene):
                 self.assertNoSecret(ctx.exception)
                 self.assertEqual(len(transport.calls), 0)
 
-    def test_missing_base_url_does_not_fall_back_to_the_environment(self) -> None:
+    def test_omitted_base_url_is_the_default_and_ignores_the_environment(self) -> None:
         transport = responding(SUCCESS_BODY)
         with mock.patch.dict(os.environ, {"W6W_BASE_URL": "https://env.example.com"}):
-            with self.assertRaises(ConfigError) as ctx:
-                make(transport, base_url=None)
-        self.assertIn("base_url", str(ctx.exception))
-        self.assertEqual(len(transport.calls), 0)
+            client = EmbedSessionClient(
+                client_id="client_1", client_secret=SECRET, transport=transport
+            )
+            client.create(subject="user_1", account_ref="acct_1")
+        self.assertEqual(transport.calls[0].full_url, "https://api.w6w.io/auth/exchange")
+
+    def test_explicit_base_url_still_wins(self) -> None:
+        transport = responding(SUCCESS_BODY)
+        make(transport).create(subject="user_1", account_ref="acct_1")
+        self.assertEqual(transport.calls[0].full_url, BASE + "/auth/exchange")
 
     def test_repr_does_not_contain_the_secret(self) -> None:
         self.assertNotIn(SECRET, repr(make(responding(SUCCESS_BODY))))

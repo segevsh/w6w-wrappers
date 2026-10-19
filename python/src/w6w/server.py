@@ -29,7 +29,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Optional
 
-from ._config import resolve_config
+from ._config import DEFAULT_BASE_URL, resolve_config
 from ._http import Transport, _request, no_redirect_transport
 from .errors import ApiError, ConfigError
 
@@ -54,6 +54,16 @@ def _required(
     strip-character set (default: Python's `str.strip()` whitespace)."""
     if not value.strip(ws):
         raise ConfigError("{who}: `{field}` must not be blank.".format(who=who, field=field))
+
+
+def _none_to_blank(value: Optional[str]) -> str:
+    """A missing (``None``) required parameter reads as blank so `_required` raises."""
+    return "" if value is None else value
+
+
+def _base_or_default(base_url: Optional[str]) -> str:
+    """`base_url`, or :data:`DEFAULT_BASE_URL` when omitted. Never consults the env."""
+    return DEFAULT_BASE_URL if base_url is None else base_url
 
 
 def _required_text(value: Any, field: str, who: str, ws: Optional[str] = None) -> None:
@@ -96,10 +106,10 @@ def _basic_auth_header(client_id: str, client_secret: str, who: str = "exchange_
 
 
 def exchange_token(
-    base_url: str,
-    client_id: str,
-    client_secret: str,
-    subject: str,
+    base_url: Optional[str] = None,
+    client_id: Optional[str] = None,
+    client_secret: Optional[str] = None,
+    subject: Optional[str] = None,
     account: Optional[str] = None,
     transport: Optional[Transport] = None,
 ) -> Dict[str, Any]:
@@ -117,8 +127,10 @@ def exchange_token(
     **before any network call**, and none of them ever echo `client_secret`.
 
     :param base_url: The w6w server's origin, e.g. ``"https://api.example.com"``.
-        Same rules as :func:`w6w._config.resolve_config`'s own `base_url` —
-        an absolute `http(s)` URL with a host.
+        Omitted (``None``) it is :data:`w6w.DEFAULT_BASE_URL`
+        (``https://api.w6w.io``) — this helper NEVER reads ``W6W_BASE_URL``. An
+        explicit value follows the same rules as `resolve_config`'s own
+        `base_url`: an absolute `http(s)` URL with a host; blank is an error.
     :param client_id: The tenant's client id. Must not contain `:` or a
         non-latin-1 character.
     :param client_secret: The tenant's client secret. Must be latin-1
@@ -139,19 +151,21 @@ def exchange_token(
         "tenant", "role", "account"}, "expiresIn"}``.
     :raises ConfigError: Blank `client_id`/`client_secret`/`subject`; a
         `client_id` containing `:`; a `client_id`/`client_secret` outside
-        latin-1; no base URL.
+        latin-1; a blank/relative explicit `base_url`.
     :raises ApiError: ``invalid_client`` (401, unknown/disabled credentials),
         ``invalid_body`` / ``invalid_subject`` / ``invalid_account`` (400), or
         any of the transport's own failure modes (`._http`). Never retried:
         this call always passes ``require_auth=False``, which `_request`
         never grants a recovery attempt for.
     """
-    _required(client_id, "client_id")
-    _required(client_secret, "client_secret")
-    _required(subject, "subject")
+    _required(_none_to_blank(client_id), "client_id")
+    _required(_none_to_blank(client_secret), "client_secret")
+    _required(_none_to_blank(subject), "subject")
+    assert client_id is not None and client_secret is not None and subject is not None
     basic = _basic_auth_header(client_id, client_secret)
 
-    config = resolve_config(base_url=base_url)
+    # Default here, never via `resolve_config(base_url=None)`, which reads the env.
+    config = resolve_config(base_url=_base_or_default(base_url))
 
     body: Dict[str, str] = {"subject": subject}
     if account is not None:
@@ -187,8 +201,9 @@ class EmbedSessionClient:
     only HTTP path. Backend-only, like :func:`exchange_token`; not re-exported
     from ``w6w/__init__.py``.
 
-    :param base_url: The w6w server's origin. Required and explicit: unlike
-        :func:`exchange_token` this never falls back to ``W6W_BASE_URL``.
+    :param base_url: The w6w server's origin. Omitted (``None``) it is
+        :data:`w6w.DEFAULT_BASE_URL` (``https://api.w6w.io``); like
+        :func:`exchange_token` this never reads ``W6W_BASE_URL``. Blank is an error.
     :param client_id: The tenant's client id (no `:`, latin-1 only).
     :param client_secret: The tenant's client secret. Never returned or put in a
         message.
@@ -196,24 +211,25 @@ class EmbedSessionClient:
         :func:`exchange_token`.
     :param now: Epoch-SECONDS clock, sampled before each request. Defaults to
         :func:`time.time`.
-    :raises ConfigError: A missing/blank `base_url` (even when ``W6W_BASE_URL``
-        is set), blank/non-string credentials, a `client_id` containing `:`, or
+    :raises ConfigError: A blank explicit `base_url`, missing/blank/non-string credentials, a `client_id` containing `:`, or
         non-latin-1 credentials.
     """
 
     def __init__(
         self,
-        base_url: str,
-        client_id: str,
-        client_secret: str,
+        base_url: Optional[str] = None,
+        client_id: Optional[str] = None,
+        client_secret: Optional[str] = None,
         *,
         transport: Optional[Transport] = None,
         now: Optional[Callable[[], float]] = None,
     ) -> None:
-        _required_text(base_url, "base_url", _SESSION)
+        if base_url is not None:
+            _required_text(base_url, "base_url", _SESSION)
         _required_text(client_id, "client_id", _SESSION)
         _required_text(client_secret, "client_secret", _SESSION)
         _basic_auth_header(client_id, client_secret, _SESSION)
+        base_url = _base_or_default(base_url)
         resolve_config(base_url=base_url)
         self._base_url = base_url
         self._client_id = client_id

@@ -10,7 +10,9 @@ server, no new test infrastructure.
 from __future__ import annotations
 
 import json
+import os
 import unittest
+from unittest import mock
 from typing import Any, Callable, List
 from urllib.request import Request
 
@@ -61,6 +63,31 @@ SUCCESS_BODY = {
 
 
 class WireShapeTest(unittest.TestCase):
+    def test_omitted_base_url_is_the_default_and_ignores_the_environment(self) -> None:
+        transport = responding(SUCCESS_BODY)
+        with mock.patch.dict(os.environ, {"W6W_BASE_URL": "https://env.example.com"}):
+            exchange_token(
+                client_id="client_1",
+                client_secret="secret_1",
+                subject="user_1",
+                transport=transport,
+            )
+        self.assertEqual(transport.calls[0].full_url, "https://api.w6w.io/auth/exchange")
+
+    def test_blank_explicit_base_url_still_raises(self) -> None:
+        transport = responding(SUCCESS_BODY)
+        for blank in ("", "   "):
+            with self.subTest(blank=blank):
+                with self.assertRaises(ConfigError):
+                    exchange_token(
+                        base_url=blank,
+                        client_id="client_1",
+                        client_secret="secret_1",
+                        subject="user_1",
+                        transport=transport,
+                    )
+        self.assertEqual(transport.calls, [])
+
     def test_posts_auth_exchange_with_basic_header_and_exact_subject_only_body(self) -> None:
         transport = responding(SUCCESS_BODY)
 

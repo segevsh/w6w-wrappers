@@ -3,6 +3,7 @@
   "contractVersion": "0.8.0",
   "$basePathComment": "Empty since 0.2.0: the server serves its routes at the ROOT of its own host (https://api.w6w.io/vars, not .../api/vars). Clients append nothing to the configured origin.",
   "basePath": "",
+  "defaultBaseUrl": "https://api.w6w.io",
   "auth": "bearer",
   "errorEnvelope": {
     "error": {

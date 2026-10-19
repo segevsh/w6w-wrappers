@@ -52,6 +52,7 @@ _CONTRACT = _REPO_ROOT.parent / "endpoints.json"
 #: export to `__init__.py` **and** its name here, in the same change — that is
 #: the point, not friction.
 PUBLIC_SURFACE = {
+    "DEFAULT_BASE_URL",
     # The Function and Workflow definition lifecycle: the list/get projections,
     # and what the two upsert routes answer with.
     "FunctionDetail",
@@ -314,6 +315,9 @@ class BarrelTest(unittest.TestCase):
 
     def test_all_lists_exactly_the_public_surface(self) -> None:
         self.assertEqual(set(w6w.__all__), PUBLIC_SURFACE)
+
+    def test_default_base_url_matches_the_contract(self) -> None:
+        self.assertEqual(_contract()["defaultBaseUrl"], w6w.DEFAULT_BASE_URL)
 
     def test_all_is_sorted_and_free_of_duplicates(self) -> None:
         # Sorted so a merge that adds two names in two branches conflicts
