@@ -166,10 +166,10 @@ Every call also takes an `AbortSignal` as `signal`; an aborted call raises `ApiE
 
 Two environment variables, both read only at client construction:
 
-| Variable       | Meaning                                                                                                                                | Required |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| Variable       | Meaning                                                                                                                                                                  | Required |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
 | `W6W_BASE_URL` | The **origin** of your w6w server, e.g. `https://api.example.com`. The API is served at the root of that host, so nothing is appended. Defaults to `https://api.w6w.io`. | No       |
-| `W6W_TOKEN`    | The bearer token, sent as `Authorization: Bearer <token>` on every request.                                                            | Yes      |
+| `W6W_TOKEN`    | The bearer token, sent as `Authorization: Bearer <token>` on every request.                                                                                              | Yes      |
 
 Explicit constructor arguments always win over the environment, and credentials are **instance
 state**: two clients in one process can hold different tokens and point at different servers with no
@@ -251,10 +251,10 @@ preserved verbatim, because it is indistinguishable from a real gateway prefix:
 > deployment behind a gateway prefix is addressed, and silently removing it would break those.
 
 A variable that is **set but empty** — or whitespace-only — counts as **unset**, in both variables.
-`W6W_BASE_URL=` is how a shell or a Dockerfile spells "I meant to set this and did not", so it
-falls through to the default `https://api.w6w.io`, exactly like an unset one, rather than quietly
-producing a relative URL. An empty string passed _explicitly_ to the constructor is different: it
-is an error, and falls back neither to the environment nor to the default.
+`W6W_BASE_URL=` is how a shell or a Dockerfile spells "I meant to set this and did not", so it falls
+through to the default `https://api.w6w.io`, exactly like an unset one, rather than quietly
+producing a relative URL. An empty string passed _explicitly_ to the constructor is different: it is
+an error, and falls back neither to the environment nor to the default.
 
 ### `W6W_TOKEN`
 
@@ -296,8 +296,9 @@ route and walkthrough are in [Embed w6w in your product](https://docs.w6w.io/gui
 import { createEmbedSessionClient } from "@w6w/sdk/server";
 
 const sessions = createEmbedSessionClient({
-  // Optional: defaults to https://api.w6w.io. This factory never reads W6W_BASE_URL itself.
-  baseUrl: process.env.W6W_BASE_URL,
+  // Optional: defaults to https://api.w6w.io. This factory never reads W6W_BASE_URL itself;
+  // `|| undefined` keeps a blank variable from reaching it as an explicit "" (a ConfigError).
+  baseUrl: process.env.W6W_BASE_URL || undefined,
   clientId: process.env.W6W_TENANT_CLIENT_ID!,
   clientSecret: process.env.W6W_TENANT_CLIENT_SECRET!, // never sent to the browser
 });
@@ -332,7 +333,7 @@ app.post("/api/w6w-token", async (req, res) => {
   const account = await yourOwnMembershipLookup(session.userId);
 
   const { token, expiresIn } = await exchangeToken({
-    baseUrl: process.env.W6W_BASE_URL, // optional; defaults to https://api.w6w.io, never read from env
+    baseUrl: process.env.W6W_BASE_URL || undefined, // optional; defaults to https://api.w6w.io, never read from env
     clientId: process.env.W6W_TENANT_CLIENT_ID!,
     clientSecret: process.env.W6W_TENANT_CLIENT_SECRET!, // never sent to the browser
     subject: session.userId,

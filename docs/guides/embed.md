@@ -118,7 +118,7 @@ export function POST(req: Request) {
       sessions: createEmbedSessionClient({
         // Optional: omit it and the client targets https://api.w6w.io. This client never
         // reads W6W_BASE_URL itself, so pass it here if you run against another host.
-        baseUrl: process.env.W6W_BASE_URL,
+        baseUrl: process.env.W6W_BASE_URL || undefined,
         clientId: process.env.W6W_TENANT_CLIENT_ID!,
         clientSecret: process.env.W6W_TENANT_CLIENT_SECRET!, // stays on the server
       }),
@@ -312,7 +312,7 @@ your minting code only when needed, rather than minting a token on every call:
 import { W6WClient } from "@w6w/sdk";
 
 const client = new W6WClient({
-  baseUrl: process.env.W6W_BASE_URL,
+  baseUrl: process.env.W6W_BASE_URL || undefined,
   token: async () => (await mintSession()).token, // your own minting and caching
 });
 ```
@@ -332,7 +332,7 @@ caller, where `supplier` is your own token function (in React, `getSession` repl
 
 ```ts
 const client = new W6WClient({
-  baseUrl: process.env.W6W_BASE_URL,
+  baseUrl: process.env.W6W_BASE_URL || undefined,
   token: supplier,
   refreshOnUnauthorized: true,
   onUnauthorized: (err) => {
@@ -354,7 +354,7 @@ default headers once on the client:
 
 ```ts
 const client = new W6WClient({
-  baseUrl: process.env.W6W_BASE_URL,
+  baseUrl: process.env.W6W_BASE_URL || undefined,
   token: supplier,
   headers: { "X-W6W-Tenant": "<your-tenant-id>" },
 });

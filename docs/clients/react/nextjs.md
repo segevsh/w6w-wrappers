@@ -59,7 +59,7 @@ let handler: ReturnType<typeof createEmbedSessionHandler> | undefined;
 export function POST(req: Request) {
   handler ??= createEmbedSessionHandler({
     sessions: createEmbedSessionClient({
-      baseUrl: process.env.W6W_BASE_URL, // optional; the client never reads it itself
+      baseUrl: process.env.W6W_BASE_URL || undefined, // optional; the client never reads it itself
       clientId: process.env.W6W_TENANT_CLIENT_ID!,
       clientSecret: process.env.W6W_TENANT_CLIENT_SECRET!,
     }),

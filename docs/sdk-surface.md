@@ -460,10 +460,10 @@ refresh, and client-side run polling.
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | Import               | `import { exchangeToken } from "@w6w/sdk/server"`                                                                      | `from w6w.server import exchange_token`                                                             |
 | On the root surface? | No — not exported from `@w6w/sdk`'s barrel (`mod.ts`), and not on `@w6w/sdk/console` either                            | No — not re-exported from `w6w/__init__.py`, and not listed in `w6w.__all__`                        |
-| Signature            | `exchangeToken(options: { baseUrl?, clientId, clientSecret, subject, account?, fetch? }): Promise<ExchangeTokenResult>` | `exchange_token(base_url, client_id, client_secret, subject, account=None, transport=None) -> dict` |
+| Signature            | `exchangeToken(options: { baseUrl?, clientId, clientSecret, subject, account?, fetch? }): Promise<ExchangeTokenResult>` | `exchange_token(base_url=None, client_id=None, client_secret=None, subject=None, account=None, transport=None) -> dict` |
 | Session client import | `import { createEmbedSessionClient } from "@w6w/sdk/server"` | `from w6w.server import EmbedSessionClient` |
 | Session client on the root surface? | No — same exclusions as above | No — same exclusions as above |
-| Session client signature | `createEmbedSessionClient(options: { baseUrl?, clientId, clientSecret, fetch?, now? }): EmbedSessionClient`, then `.create({ subject, accountRef }): Promise<EmbedSession>` | `EmbedSessionClient(base_url, client_id, client_secret, *, transport=None, now=None)`, then `.create(subject, account_ref) -> dict` |
+| Session client signature | `createEmbedSessionClient(options: { baseUrl?, clientId, clientSecret, fetch?, now? }): EmbedSessionClient`, then `.create({ subject, accountRef }): Promise<EmbedSession>` | `EmbedSessionClient(base_url=None, client_id=None, client_secret=None, *, transport=None, now=None)`, then `.create(subject, account_ref) -> dict` |
 
 **What it does.** `exchangeToken` / `exchange_token` calls `POST /auth/exchange` with a tenant's client credentials
 and names one of the tenant's end-users via `subject`, minting a short-lived,

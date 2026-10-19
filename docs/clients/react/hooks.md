@@ -162,6 +162,7 @@ See the [Node SDK reference](/clients/node/reference/) for each one.
 | `useW6WClient()` | Returns the provider's `W6WClient`. Throws outside a `<W6WProvider>`. |
 | `useW6WSession()` | The session state described above. |
 | `createW6WUiAdapter(client)` | Adapts the client for `@w6w/ui` components. `@w6w/ui@0.1.0` is available on npm. |
+| `DEFAULT_BASE_URL` | `https://api.w6w.io`, used when `<W6WProvider>` gets no `baseUrl`. |
 | `VERSION` | The installed `@w6w/react` version. |
 
 ## Where to next

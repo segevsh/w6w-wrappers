@@ -71,6 +71,7 @@ function assertNoSecret(err: unknown): void {
 
 const BAD_CONSTRUCTION: Array<[string, Record<string, unknown>]> = [
   ["blank baseUrl", { baseUrl: "   " }],
+  ["empty baseUrl", { baseUrl: "" }],
   ["relative baseUrl", { baseUrl: "/api" }],
   ["blank clientId", { clientId: " " }],
   ["missing clientId", { clientId: undefined }],
@@ -102,6 +103,21 @@ Deno.test("createEmbedSessionClient: an omitted baseUrl defaults to https://api.
     const client = createEmbedSessionClient(rest);
     await client.create({ subject: "u1", accountRef: "ref_1" });
     assertEquals(fake.calls.length, 1);
+    assertEquals(fake.calls[0].url, "https://api.w6w.io/auth/exchange");
+  } finally {
+    if (saved === undefined) Deno.env.delete("W6W_BASE_URL");
+    else Deno.env.set("W6W_BASE_URL", saved);
+  }
+});
+
+Deno.test("createEmbedSessionClient: construction never reads W6W_BASE_URL (an invalid env value does not throw)", async () => {
+  const saved = Deno.env.get("W6W_BASE_URL");
+  Deno.env.set("W6W_BASE_URL", "/api");
+  try {
+    const fake = fakeFetch(() => json(SUCCESS_BODY));
+    const { baseUrl: _omitted, ...rest } = opts({ fetch: fake.fetch });
+    const client = createEmbedSessionClient(rest);
+    await client.create({ subject: "u1", accountRef: "ref_1" });
     assertEquals(fake.calls[0].url, "https://api.w6w.io/auth/exchange");
   } finally {
     if (saved === undefined) Deno.env.delete("W6W_BASE_URL");

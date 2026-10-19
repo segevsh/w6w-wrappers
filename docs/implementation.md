@@ -850,8 +850,8 @@ alike**:
 Plus these cross-cutting tests, once each per wrapper:
 
 3. **Env-var base-URL resolution** — `W6W_BASE_URL=https://x.example.com`
-   produces `https://x.example.com/api/…`; a trailing slash does not double it;
-   a value already ending in `/api` is not doubled; an explicit constructor
+   produces `https://x.example.com/…` (the origin, nothing appended); a trailing
+   slash does not double it; an explicit constructor
    argument overrides the env var; with neither, the
    outgoing request goes to the literal `https://api.w6w.io/…` (assert the URL a
    fake transport receives), and the lane's `DEFAULT_BASE_URL` equals
