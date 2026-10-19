@@ -29,6 +29,11 @@ export function baseUrlFromEnv(env: Env): string | undefined {
 
 let handler: ((req: Request) => Promise<Response>) | undefined;
 
+/** Drops the cached handler so the next `POST` rebuilds it from the environment (tests). */
+export function __resetHandler(): void {
+  handler = undefined;
+}
+
 export function POST(req: Request): Promise<Response> {
   try {
     if (!handler) {

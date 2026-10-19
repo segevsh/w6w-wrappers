@@ -296,7 +296,8 @@ route and walkthrough are in [Embed w6w in your product](https://docs.w6w.io/gui
 import { createEmbedSessionClient } from "@w6w/sdk/server";
 
 const sessions = createEmbedSessionClient({
-  // Optional: defaults to https://api.w6w.io. This factory never reads W6W_BASE_URL itself;
+  // Optional: defaults to https://api.w6w.io. Self-hosted? Pass your API origin: when omitted, the
+  // tenant client credentials are sent to https://api.w6w.io. This factory never reads W6W_BASE_URL itself;
   // `|| undefined` keeps a blank variable from reaching it as an explicit "" (a ConfigError).
   baseUrl: process.env.W6W_BASE_URL || undefined,
   clientId: process.env.W6W_TENANT_CLIENT_ID!,

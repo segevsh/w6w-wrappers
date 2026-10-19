@@ -174,7 +174,9 @@ configuration error — it does not fall through to the default either.
 `createEmbedSessionClient` (and their Python equivalents) take the base URL
 explicitly or use the default; they never consult `W6W_BASE_URL`. The host they
 call is the issuer of tenant credentials, so a stray environment variable must
-not be able to redirect a client secret.
+not be able to redirect a client secret. The default is the cloud API, so a self-hosted
+deployment must pass its origin explicitly: when omitted, the tenant client credentials are sent to
+`https://api.w6w.io`.
 
 ### MECHANISM PIN — encoding caller-supplied values into the URL
 

@@ -247,7 +247,7 @@ minted = exchange_token(
 token, expires_in = minted["token"], minted["expiresIn"]
 ```
 
-Self-hosted deployments must pass their API origin explicitly; when omitted, `exchange_token` and `EmbedSessionClient` sends the tenant client credentials to `https://api.w6w.io`. Neither reads `W6W_BASE_URL`; the snippet above passes it explicitly.
+Self-hosted deployments must pass their API origin explicitly; when omitted, `exchange_token` and `EmbedSessionClient` send the tenant client credentials to `https://api.w6w.io`. Neither reads `W6W_BASE_URL`; the snippet above passes it explicitly.
 
 Then give the client a callable instead of a string. It's called before every authenticated request (not cached or shared by the client — cache inside
 your callable), and with `force_refresh=True` when a refresh is needed:

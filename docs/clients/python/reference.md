@@ -177,7 +177,7 @@ For backends only. The recommended way to mint a short-lived, account-scoped ses
 
 | Argument | What it is |
 | --- | --- |
-| `base_url` | Your API origin. Optional: omitted, it is `https://api.w6w.io`; it never reads `W6W_BASE_URL`. A blank value raises `ConfigError`. Use the final `https` origin. `exchange_token` and `EmbedSessionClient` refuse redirects by default: a 3xx raises `ApiError` and the Basic client credential is never re-sent. An injected `transport` is used as given. |
+| `base_url` | Your API origin. Optional: omitted, it is `https://api.w6w.io`; it never reads `W6W_BASE_URL`. Self-hosted deployments must pass their API origin explicitly: when omitted, the helper sends the tenant client credentials to `https://api.w6w.io`. A blank value raises `ConfigError`. Use the final `https` origin. `exchange_token` and `EmbedSessionClient` refuse redirects by default: a 3xx raises `ApiError` and the Basic client credential is never re-sent. An injected `transport` is used as given. |
 | `client_id`, `client_secret` | Your tenant's credentials. Keep the secret on your backend. |
 | `transport` | Optional. Defaults to a transport that never follows redirects (unlike `Client`); your own transport decides. |
 | `now` | Optional clock returning epoch seconds. Defaults to `time.time`. |
@@ -190,7 +190,7 @@ For backends only. The lower-level call, with an optional `account`. Trades your
 
 | Argument | What it is |
 | --- | --- |
-| `base_url` | Your API origin. Optional; omitted, it is `https://api.w6w.io`. |
+| `base_url` | Your API origin. Optional; omitted, it is `https://api.w6w.io`, and it never reads `W6W_BASE_URL`. Self-hosted deployments must pass their API origin explicitly: when omitted, the helper sends the tenant client credentials to `https://api.w6w.io`. |
 | `client_id`, `client_secret` | Your tenant's credentials. Keep the secret on your backend. |
 | `subject` | Your user's id. |
 | `account` | Optional. The w6w account the user works in, from your own records. |

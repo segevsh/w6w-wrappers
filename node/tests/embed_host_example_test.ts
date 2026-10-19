@@ -288,6 +288,8 @@ Deno.test("a blank hint falls back to the active company", async () => {
 Deno.test("route.ts with W6W_BASE_URL unset: constructs (no 502) and exchanges against https://api.w6w.io", async () => {
   const realFetch = globalThis.fetch;
   globalThis.fetch = (() => Promise.reject(new Error("must not be called"))) as typeof fetch;
+  // route.ts caches its handler; start from a fresh build so POST's own construction runs.
+  route.__resetHandler();
   try {
     await withW6wEnv(
       { W6W_TENANT_CLIENT_ID: "client-id", W6W_TENANT_CLIENT_SECRET: SECRET },
@@ -299,6 +301,7 @@ Deno.test("route.ts with W6W_BASE_URL unset: constructs (no 502) and exchanges a
     );
   } finally {
     globalThis.fetch = realFetch;
+    route.__resetHandler();
   }
 
   // The value route.ts hands the helper is `undefined` for unset or blank, so the default applies.
