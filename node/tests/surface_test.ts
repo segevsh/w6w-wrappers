@@ -73,6 +73,7 @@ const PUBLIC_SURFACE: Record<string, "function" | "string"> = {
   ApiError: "function",
   ConfigError: "function",
   BASE_PATH: "string",
+  DEFAULT_BASE_URL: "string",
   joinBaseUrl: "function",
   path: "function",
   // T2.1.3 — assets.
