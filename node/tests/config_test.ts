@@ -11,6 +11,7 @@
 import { assertEquals, assertRejects, assertStringIncludes, assertThrows } from "@std/assert";
 import {
   BASE_PATH,
+  DEFAULT_BASE_URL,
   type FetchLike,
   joinBaseUrl,
   requireToken,
@@ -216,30 +217,40 @@ Deno.test("an explicit argument overrides the environment", () => {
   });
 });
 
-Deno.test("a missing base URL raises a ConfigError naming W6W_BASE_URL", () => {
+Deno.test("an unset base URL resolves to the default https://api.w6w.io", () => {
   withEnv(NO_ENV, () => {
-    const err = assertThrows(() => resolveConfig(), ConfigError);
-    assertStringIncludes(err.message, "W6W_BASE_URL");
-    // Actionable: it says what to pass as well as what to export.
-    assertStringIncludes(err.message, "baseUrl");
+    assertEquals(resolveConfig().baseUrl, "https://api.w6w.io");
+    assertEquals(DEFAULT_BASE_URL, "https://api.w6w.io");
   });
 });
 
-Deno.test("an empty or blank W6W_BASE_URL behaves exactly like an unset one", () => {
-  // The regression this pins: `??` treats "" as a value, so an empty variable
-  // would survive into the join rule and resolve to the RELATIVE url "/api" —
-  // a browser same-origin assumption that has no meaning in a library. An
-  // env var set to "" is how a Dockerfile spells "never given a value".
+Deno.test("an empty or blank W6W_BASE_URL behaves exactly like an unset one: the default", () => {
+  // `??` treats "" as a value, so an empty variable would otherwise survive into
+  // the join rule and resolve to the RELATIVE url "/api". An env var set to ""
+  // is how a Dockerfile spells "never given a value": absent, hence the default.
   for (const blank of ["", "   ", "\n"]) {
     withEnv({ W6W_BASE_URL: blank, W6W_TOKEN: undefined }, () => {
-      const err = assertThrows(() => resolveConfig(), ConfigError);
-      assertStringIncludes(err.message, "W6W_BASE_URL");
+      assertEquals(resolveConfig().baseUrl, "https://api.w6w.io");
     });
   }
   // …and a blank W6W_TOKEN is absent too, rather than an empty bearer.
   withEnv({ W6W_BASE_URL: "https://api.example.com", W6W_TOKEN: "  " }, () => {
     assertEquals(resolveConfig().token, null);
   });
+});
+
+Deno.test("a client with no base URL sends its request to https://api.w6w.io", async () => {
+  const urls: string[] = [];
+  const spy: FetchLike = (input) => {
+    urls.push(input);
+    return Promise.resolve(new Response("{}", { status: 200 }));
+  };
+  let client!: W6WClient;
+  withEnv(NO_ENV, () => {
+    client = new W6WClient({ token: "tok_1", fetch: spy });
+  });
+  await client.request({ method: "GET", path: "/vars" });
+  assertEquals(urls, ["https://api.w6w.io/vars"]);
 });
 
 Deno.test("a base URL of nothing but slashes is still empty", () => {
@@ -254,6 +265,8 @@ Deno.test("an explicit empty base URL does not fall through to the environment",
   withEnv({ W6W_BASE_URL: "https://env.example.com", W6W_TOKEN: undefined }, () => {
     const err = assertThrows(() => resolveConfig({ baseUrl: "" }), ConfigError);
     assertStringIncludes(err.message, "W6W_BASE_URL");
+    // …nor to the default.
+    assertThrows(() => resolveConfig({ baseUrl: "  " }), ConfigError);
   });
 });
 

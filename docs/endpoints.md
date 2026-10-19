@@ -18,6 +18,8 @@ mounts the router at `/`, because the host already says "api" and
 contract 0.2.0. The exact join rule (strip trailing slashes, preserve any
 configured path) is pinned in
 [implementation.md §2](./implementation.md#2-configuration-and-environment).
+With no base URL given, a wrapper targets `https://api.w6w.io` — the
+`defaultBaseUrl` field of `endpoints.json`, one constant per lane.
 
 > **Breaking, 0.1.x → 0.2.0.** `basePath` was `/api`. A client still pointed at
 > `https://api.w6w.io/api` will 404 on every call; drop the suffix from

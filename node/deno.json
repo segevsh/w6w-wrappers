@@ -1,6 +1,6 @@
 {
   "name": "@w6w/sdk",
-  "version": "0.9.15",
+  "version": "0.9.16",
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",

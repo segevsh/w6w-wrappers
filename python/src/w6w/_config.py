@@ -38,6 +38,10 @@ TokenProvider = Callable[..., Optional[str]]
 #: constant still answers "what does this client prepend?" — now "nothing".
 BASE_PATH: str = ""
 
+#: The origin every client targets when none is given. Mirrors `endpoints.json`'s
+#: `defaultBaseUrl` (a test pins the two equal).
+DEFAULT_BASE_URL: str = "https://api.w6w.io"
+
 #: The schemes a w6w base URL may use. Anything else is a configuration
 #: mistake — most often a bare `host:port` that `urlsplit` reads as a scheme.
 ALLOWED_SCHEMES = ("http", "https")
@@ -152,8 +156,8 @@ def resolve_config(
 ) -> ResolvedConfig:
     """Resolve explicit arguments and the environment into one config value.
 
-    Precedence is **explicit argument > environment variable**, always; there is
-    no default base URL. The two sides of that chain treat emptiness
+    Precedence is **explicit argument > environment variable**, always, then the
+    default (``https://api.w6w.io``). The two sides of that chain treat emptiness
     *asymmetrically*, on purpose (`docs/implementation.md` §2, Precedence):
 
     - An explicitly passed empty string is an **explicit value**, not "unset".
@@ -163,13 +167,14 @@ def resolve_config(
       error is the same one either way.)
     - An **empty or whitespace-only environment variable is ABSENT** and falls
       through (see `_env.read_env`), so ``W6W_BASE_URL=``, ``W6W_BASE_URL="  "``
-      and an unset ``W6W_BASE_URL`` all end here, in the same configuration
-      error — never in a relative base.
+      and an unset ``W6W_BASE_URL`` all end here, at the default base URL —
+      never in a relative base.
 
     The difference is the difference between a value a *caller* chose and a
     value a *shell* produced.
 
-    :param base_url: Explicit origin; `None` consults `W6W_BASE_URL`.
+    :param base_url: Explicit origin; `None` consults `W6W_BASE_URL`, then
+        falls back to :data:`DEFAULT_BASE_URL`.
     :param token: Explicit bearer token, or a :data:`TokenProvider` called
         fresh on every request — a plain `str` is sent verbatim, exactly as
         before. `None` consults `W6W_TOKEN`, which stays a plain string: there
@@ -189,15 +194,20 @@ def resolve_config(
         per-request `headers` argument builds on; neither can displace the
         bearer this transport attaches.
     :returns: The resolved configuration.
-    :raises ConfigError: When no usable base URL was supplied, naming
-        `W6W_BASE_URL`.
+    :raises ConfigError: When an explicit base URL is blank, or the resolved
+        base URL (explicit, or from ``W6W_BASE_URL``) is relative or not
+        http(s). With none given, or an empty ``W6W_BASE_URL``, the default applies.
     """
+    # Explicit argument (even blank — `join_base_url` rejects that) > env
+    # (blank is absent) > the default. Only `None` / a blank env fall through.
     raw_base_url = base_url if base_url is not None else read_env(ENV_BASE_URL, environ)
+    if raw_base_url is None:
+        raw_base_url = DEFAULT_BASE_URL
     return ResolvedConfig(
         # Every normalisation, emptiness test and validation lives in
         # `join_base_url` — one code path, so the exported helper and the client
         # can never answer differently for the same input.
-        base_url=join_base_url(raw_base_url or ""),
+        base_url=join_base_url(raw_base_url),
         token=token if token is not None else read_env(ENV_TOKEN, environ),
         refresh_on_unauthorized=refresh_on_unauthorized,
         on_unauthorized=on_unauthorized,

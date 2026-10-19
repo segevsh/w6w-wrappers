@@ -26,7 +26,7 @@
  * @module
  */
 
-import { type FetchLike, resolveConfig } from "../config.ts";
+import { DEFAULT_BASE_URL, type FetchLike, resolveConfig } from "../config.ts";
 import { ApiError, ConfigError } from "../errors.ts";
 import { request } from "../http.ts";
 
@@ -35,9 +35,10 @@ export interface ExchangeTokenOptions {
   /**
    * The w6w server's origin, e.g. `https://api.example.com`. Same rules as
    * {@linkcode W6WClientOptions.baseUrl} — an absolute `http(s)` URL with a
-   * host.
+   * host. Defaults to {@linkcode DEFAULT_BASE_URL} when omitted; this helper
+   * never reads `W6W_BASE_URL`. A blank value is a {@linkcode ConfigError}.
    */
-  baseUrl: string;
+  baseUrl?: string;
   /** The tenant's client id. Must not contain `:` or a non-latin-1 character. */
   clientId: string;
   /** The tenant's client secret. Must be latin-1 encodable. */
@@ -158,8 +159,8 @@ function resolveFetch(fetchOption: FetchLike | undefined): FetchLike {
  * @param options - See {@linkcode ExchangeTokenOptions}.
  * @returns The minted token and the identity it carries.
  * @throws {ConfigError} Blank `clientId`/`clientSecret`/`subject`; a `clientId`
- *   containing `:`; a `clientId`/`clientSecret` outside latin-1; no base URL;
- *   no runtime `fetch`.
+ *   containing `:`; a `clientId`/`clientSecret` outside latin-1; a blank or
+ *   malformed `baseUrl`; no runtime `fetch`.
  * @throws {ApiError} `invalid_client` (401, unknown/disabled credentials),
  *   `invalid_body` / `invalid_subject` / `invalid_account` (400), or any of
  *   the transport's own failure modes (`../http.ts`). Never retried: this
@@ -176,7 +177,9 @@ export async function exchangeToken(
   required(subject, "subject");
   const basic = basicAuthHeader(clientId, clientSecret);
 
-  const config = resolveConfig({ baseUrl });
+  // A defined string never reaches resolveConfig's W6W_BASE_URL fallback: the
+  // credentials below go to the explicit host or the default, never an env host.
+  const config = resolveConfig({ baseUrl: baseUrl ?? DEFAULT_BASE_URL });
   const fetchImpl = resolveFetch(options.fetch);
 
   const body: { subject: string; account?: string } = { subject };
@@ -197,10 +200,11 @@ export async function exchangeToken(
 /** Options for {@linkcode createEmbedSessionClient}. */
 export interface EmbedSessionClientOptions {
   /**
-   * The w6w server's origin. Required and explicit: unlike {@linkcode exchangeToken}
-   * this factory never falls back to `W6W_BASE_URL`.
+   * The w6w server's origin. Defaults to {@linkcode DEFAULT_BASE_URL}; like
+   * {@linkcode exchangeToken} this factory never reads `W6W_BASE_URL`. A blank
+   * value is a {@linkcode ConfigError}.
    */
-  baseUrl: string;
+  baseUrl?: string;
   /** The tenant's client id. Must not contain `:` or a non-latin-1 character. */
   clientId: string;
   /** The tenant's client secret. Held by this instance only; never returned. */
@@ -264,9 +268,8 @@ const SESSION = "EmbedSessionClient";
  * and `document` exist (a browser-like global). This is a runtime check by
  * design; a bundler may or may not remove it.
  *
- * @throws {ConfigError} A missing/blank `baseUrl` (even when `W6W_BASE_URL` is
- *   set), blank/non-string `clientId` or `clientSecret`, a `clientId` containing
- *   `:`, non-latin-1 credentials, or a browser-like runtime. No message echoes
+ * @throws {ConfigError} A blank/malformed `baseUrl`, blank/non-string `clientId` or
+ *   `clientSecret`, a `clientId` containing `:`, non-latin-1 credentials, or a browser-like runtime. No message echoes
  *   `clientSecret`.
  */
 export function createEmbedSessionClient(options: EmbedSessionClientOptions): EmbedSessionClient {
@@ -279,11 +282,11 @@ export function createEmbedSessionClient(options: EmbedSessionClientOptions): Em
   }
 
   const { baseUrl, clientId, clientSecret } = options ?? ({} as EmbedSessionClientOptions);
-  requiredText(baseUrl, "baseUrl", SESSION);
+  if (baseUrl !== undefined) requiredText(baseUrl, "baseUrl", SESSION);
   requiredText(clientId, "clientId", SESSION);
   requiredText(clientSecret, "clientSecret", SESSION);
   basicAuthHeader(clientId, clientSecret, SESSION);
-  resolveConfig({ baseUrl });
+  resolveConfig({ baseUrl: baseUrl ?? DEFAULT_BASE_URL });
 
   const fetchOption = options.fetch;
   const now = options.now ?? Date.now;

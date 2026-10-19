@@ -27,7 +27,7 @@ at one version.
 
 from __future__ import annotations
 
-from ._config import BASE_PATH, ResolvedConfig, join_base_url
+from ._config import BASE_PATH, DEFAULT_BASE_URL, ResolvedConfig, join_base_url
 from ._http import HttpResponse, Transport, path
 from ._vars import VarsApi, VarsRequest
 from ._version import __version__
@@ -94,6 +94,7 @@ __all__ = [
     # their wire types and host protocols because a host that types a helper
     # around `client.documents` needs to name them; they are reached through a
     # client, never constructed directly.
+    "DEFAULT_BASE_URL",
     "DashboardApi",
     "DashboardHost",
     "Doc",

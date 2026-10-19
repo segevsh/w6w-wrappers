@@ -17,7 +17,7 @@ import os
 import unittest
 from typing import Dict
 
-from w6w import BASE_PATH, ConfigError, join_base_url
+from w6w import BASE_PATH, DEFAULT_BASE_URL, ConfigError, join_base_url
 from w6w._config import ResolvedConfig, require_token, resolve_config
 from w6w._env import ENV_BASE_URL, ENV_TOKEN, process_environ, read_env
 
@@ -133,7 +133,7 @@ class AbsoluteBaseUrlTest(unittest.TestCase):
 
 
 class PrecedenceTest(unittest.TestCase):
-    """Explicit argument > environment variable > (no default)."""
+    """Explicit argument > environment variable > default (`DEFAULT_BASE_URL`; the token has none)."""
 
     def test_the_environment_supplies_the_base_url_and_token(self) -> None:
         config = resolve_config(
@@ -172,36 +172,33 @@ class PrecedenceTest(unittest.TestCase):
 
 
 class MissingBaseUrlTest(unittest.TestCase):
-    """A missing or blank base URL is a configuration error naming `W6W_BASE_URL`."""
+    """No base URL anywhere falls to `DEFAULT_BASE_URL`; only an EXPLICIT blank is an error."""
 
-    def test_no_base_url_anywhere_raises_naming_the_variable(self) -> None:
-        with self.assertRaises(ConfigError) as caught:
-            resolve_config(environ=EMPTY)
-        message = str(caught.exception)
-        self.assertIn(ENV_BASE_URL, message)
-        # It must also say what the value *is*, since "origin, not base path" is
-        # the mistake the message exists to pre-empt.
-        self.assertIn(BASE_PATH, message)
+    def test_no_base_url_anywhere_resolves_the_default(self) -> None:
+        self.assertEqual(resolve_config(environ=EMPTY).base_url, "https://api.w6w.io")
+        self.assertEqual(resolve_config(environ=EMPTY).base_url, DEFAULT_BASE_URL)
 
     def test_blank_env_values_are_absent_exactly_like_an_unset_one(self) -> None:
-        # Three blank spellings plus unset, asserted to behave IDENTICALLY.
         # `export W6W_BASE_URL=`, a Dockerfile `ENV W6W_BASE_URL=` with no build
         # arg and an uninterpolated CI variable all produce a set-but-empty
-        # variable that nobody chose — and it looks absent in every log line.
+        # variable that nobody chose: absent, so the default applies.
         cases = {
             "empty string": {ENV_BASE_URL: ""},
             "whitespace only": {ENV_BASE_URL: "   "},
             "newline only": {ENV_BASE_URL: "\n"},
             "unset": EMPTY,
         }
-        messages = {}
         for label, environ in cases.items():
             with self.subTest(label):
-                with self.assertRaises(ConfigError) as caught:
-                    resolve_config(environ=environ)
-                self.assertIn(ENV_BASE_URL, str(caught.exception))
-                messages[label] = str(caught.exception)
-        self.assertEqual(len(set(messages.values())), 1, messages)
+                self.assertEqual(resolve_config(environ=environ).base_url, "https://api.w6w.io")
+
+    def test_env_beats_the_default_and_explicit_beats_env(self) -> None:
+        env = {ENV_BASE_URL: "https://env.example.com"}
+        self.assertEqual(resolve_config(environ=env).base_url, "https://env.example.com")
+        self.assertEqual(
+            resolve_config(base_url="https://explicit.example.com", environ=env).base_url,
+            "https://explicit.example.com",
+        )
 
     def test_no_blank_value_ever_resolves_to_a_relative_url(self) -> None:
         # The trap, made explicit: a NAIVE join of a blank value yields an
@@ -213,10 +210,10 @@ class MissingBaseUrlTest(unittest.TestCase):
         self.assertEqual("".rstrip("/") + BASE_PATH, "")  # what NOT to do
         with self.assertRaises(ConfigError):
             join_base_url("")
-        for environ in ({ENV_BASE_URL: ""}, {ENV_BASE_URL: "   "}, EMPTY):
-            with self.subTest(environ=environ):
+        for blank in ("", "   "):
+            with self.subTest(blank=blank):
                 with self.assertRaises(ConfigError):
-                    resolve_config(environ=environ)
+                    resolve_config(base_url=blank, environ=EMPTY)
         # And every value that *does* resolve is absolute.
         resolved = resolve_config(base_url="https://api.example.com", environ=EMPTY)
         self.assertTrue(resolved.base_url.startswith("https://"), resolved.base_url)

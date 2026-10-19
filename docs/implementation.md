@@ -140,22 +140,43 @@ appended to that resolved base verbatim. Their **parameters are not** — every
 caller-supplied value substituted into a path segment or a query string is
 percent-encoded, by the mechanism pinned immediately below.
 
-There is **no default base URL**. A client constructed with neither an explicit
-base URL nor `W6W_BASE_URL` raises a configuration error at construction time,
-naming the env var. (The studio's `?? "/api"` relative default is a browser
-same-origin assumption — it covers the Vite dev proxy and `SERVE_STUDIO`, where
-the SPA owns `/` and the API keeps a prefix — and has no meaning in a library.)
+**The default base URL is `https://api.w6w.io`.** A client constructed with
+neither an explicit base URL nor `W6W_BASE_URL` targets w6w's own production
+API. The value is declared once, as `defaultBaseUrl` in `endpoints.json`, and
+each lane keeps one constant for it (`DEFAULT_BASE_URL`) that a conformance test
+asserts equal to the contract — a lane cannot drift from the others without a
+red test.
+
+A fixed default is safe here where the studio's `?? "/api"` fallback was not.
+`"/api"` is a _relative_ URL: it means "whatever origin served this page" — a
+browser same-origin assumption that covers the Vite dev proxy and
+`SERVE_STUDIO`, where the SPA owns `/` and the API keeps a prefix — and in a
+library running under Node, Deno or Python it resolves against nothing and fails
+later, inside some operation, as a connection problem. `https://api.w6w.io` is an
+_absolute_ origin: it passes the join rule unchanged, means the same thing in
+every runtime, and a request to it is a request to the product's own API rather
+than to a guess.
 
 **A blank value is not a base URL.** An environment variable that is present but
 **empty or whitespace-only is treated as absent** — `W6W_BASE_URL=`,
 `W6W_BASE_URL="   "` and an unset `W6W_BASE_URL` are the same thing, and all
-three end in that same configuration error. The rule is stated in full under
-Precedence below and pinned mechanically in `readEnv`; it is repeated here
-because _this_ is the section it protects. Run the join rule above on `""` and
-you get an **empty base** — every request then goes out against a relative URL,
-which is exactly what the paragraph above forbids. It would not fail here, at
-construction, with a message naming the variable; it would fail later, inside
-some operation, with a message about a request.
+three fall through to the default. The rule is stated in full under Precedence
+below and pinned mechanically in `readEnv`; it is repeated here because _this_
+is the section it protects. Run the join rule above on `""` and you get an
+**empty base** — every request then goes out against a relative URL, which is
+exactly what the paragraph above forbids. Treating a blank variable as a value
+would not fail here, at construction; it would fail later, inside some
+operation, with a message about a request. An **explicit** empty string is the
+opposite: a caller wrote it on purpose, it is not "absent", and it is still a
+configuration error — it does not fall through to the default either.
+
+**The secret-bearing helpers never read the environment.** `exchangeToken` and
+`createEmbedSessionClient` (and their Python equivalents) take the base URL
+explicitly or use the default; they never consult `W6W_BASE_URL`. The host they
+call is the issuer of tenant credentials, so a stray environment variable must
+not be able to redirect a client secret. The default is the cloud API, so a self-hosted
+deployment must pass its origin explicitly: when omitted, the tenant client credentials are sent to
+`https://api.w6w.io`.
 
 ### MECHANISM PIN — encoding caller-supplied values into the URL
 
@@ -322,24 +343,30 @@ return value is called a second time: the opt-in `401` recovery retry.
 
 ### Precedence
 
-**Explicit constructor arguments override the environment, always.** For the CLI
-there is a third, highest tier: an explicit flag.
+**Explicit constructor arguments override the environment, always, and the
+environment overrides the default.** For the CLI there are two more tiers: an
+explicit flag on top, and a stored per-user config (written by `w6w auth login`,
+file `$XDG_CONFIG_HOME/w6w/config.json`, with the token bound to the base URL it
+was saved for) between the environment and the default. The SDK, Python and React
+lanes never read that stored config.
 
 ```
-CLI flag (--base-url / --token)  >  constructor argument  >  environment variable
+library:  constructor argument  >  environment variable  >  default (https://api.w6w.io)
+CLI:      flag (--base-url / --token)  >  environment variable  >  stored config  >  default
+helpers (exchangeToken / embed session):  argument  >  default (never env)
 ```
 
 An explicitly passed empty string is an explicit value, not "unset" — do not
 fall through to the environment on it. Fall through only when the argument is
 absent/`undefined`/`None`. (It still does not _produce_ a usable base URL: an
-explicit `""` reaches the emptiness check and raises the same configuration
-error. What it does not do is quietly consult the environment behind the
-caller's back.)
+explicit `""` reaches the emptiness check and raises a configuration error. What
+it does not do is quietly consult the environment, or substitute the default,
+behind the caller's back.)
 
 **An environment variable behaves the opposite way: present-but-empty is
 ABSENT.** A blank env var — `""` or whitespace-only — falls through the
 precedence chain exactly as if it were unset, to the next source and ultimately
-to the configuration error. This holds for every variable in this surface
+to the default (for the base URL) or to "no token" (for `W6W_TOKEN`). This holds for every variable in this surface
 (`W6W_BASE_URL`, `W6W_TOKEN`) and in every language.
 
 The asymmetry is deliberate, and it is the difference between a value a _caller_
@@ -826,14 +853,20 @@ alike**:
 Plus these cross-cutting tests, once each per wrapper:
 
 3. **Env-var base-URL resolution** — `W6W_BASE_URL=https://x.example.com`
-   produces `https://x.example.com/api/…`; a trailing slash does not double it;
-   a value already ending in `/api` is not doubled; an explicit constructor
-   argument overrides the env var; a missing base URL raises a configuration
-   error naming `W6W_BASE_URL`.
+   produces `https://x.example.com/…` (the origin, nothing appended); a trailing
+   slash does not double it; an explicit constructor
+   argument overrides the env var; with neither, the
+   outgoing request goes to the literal `https://api.w6w.io/…` (assert the URL a
+   fake transport receives), and the lane's `DEFAULT_BASE_URL` equals
+   `defaultBaseUrl` in `endpoints.json`. The helpers that carry credentials
+   (`exchangeToken`, the embed session client) get one more case: with
+   `W6W_BASE_URL` set to another host and no explicit base URL, the request still
+   goes to `https://api.w6w.io`.
 
    **Blank-is-absent, as three separate cases with identical behaviour**: the
    env var set to `""`, set to `"   "`, and **unset** must each produce the
-   _same_ configuration error naming `W6W_BASE_URL`. Write them as three cases
+   _same_ result — the default `https://api.w6w.io`. An **explicit** `""` or `"///"`
+   must still raise a configuration error. Write them as three cases
    (a table-driven test over the three inputs is fine, one case each is fine —
    what is not fine is testing only the unset one, which is the gap this
    closes). Assert additionally that **no request is ever made with a relative

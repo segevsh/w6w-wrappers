@@ -40,7 +40,8 @@ your own dependencies at the same version as `@w6w/react`: `npm install @w6w/sdk
 
 ## 2. Wrap your app in the provider
 
-The browser has no environment variables, so pass the base URL and token as props:
+The browser has no environment variables, so pass the token as a prop. `baseUrl` is optional and
+defaults to `https://api.w6w.io`; pass it to use another host:
 
 ```tsx
 import { W6WProvider } from "@w6w/react";

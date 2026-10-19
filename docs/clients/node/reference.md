@@ -26,14 +26,14 @@ Everything `@w6w/sdk` exports for application code. For a walkthrough, start wit
 | Import from | What it holds |
 | --- | --- |
 | `@w6w/sdk` | `W6WClient`, `ApiError`, `ConfigError`, `path`, `VERSION`, the result guards and every type. |
-| `@w6w/sdk/server` | `createEmbedSessionClient` (the recommended session minter) and the lower-level `exchangeToken`, for backends only. See [Embed w6w in your product](/guides/embed/). |
+| `@w6w/sdk/server` | `createEmbedSessionClient` (the recommended session minter) and the lower-level `exchangeToken`, for backends only. Self-hosted deployments must pass `baseUrl` explicitly: when omitted, the helpers send the tenant client credentials to `https://api.w6w.io`. See [Embed w6w in your product](/guides/embed/). |
 | `@w6w/sdk/console` | The calls Studio makes. Unstable: it can change in any release. |
 
 ## `new W6WClient(options?)`
 
 | Option | Type | Default | What it does |
 | --- | --- | --- | --- |
-| `baseUrl` | `string` | `W6W_BASE_URL` | Your API origin, such as `https://<your-host>`. Must be an absolute `http` or `https` URL. A path is kept as given. |
+| `baseUrl` | `string` | `W6W_BASE_URL`, then `https://api.w6w.io` | Your API origin, such as `https://<your-host>`. Must be an absolute `http` or `https` URL. A path is kept as given. |
 | `token` | `string` or a function | `W6W_TOKEN` | A token, or a supplier called per request with `{ forceRefresh }` (concurrent requests share one call; memoize it yourself). May be async. |
 | `project` | `string` | your account's default | Default project for `documents.*`, `workflows.list`, `workflows.create` and `workflows.update`. |
 | `refreshOnUnauthorized` | `boolean` | `false` | On a `401 unauthorized`, call the token supplier with `{ forceRefresh: true }` and retry once. |
@@ -41,7 +41,7 @@ Everything `@w6w/sdk` exports for application code. For a walkthrough, start wit
 | `headers` | `Record<string, string>` | none | Headers sent with every request. Can't override `Authorization`. |
 | `fetch` | `typeof fetch` | the global `fetch` | Your own fetch, for proxies or tests. |
 
-The constructor raises `ConfigError` if there's no usable base URL. A missing token is reported on
+The constructor raises `ConfigError` if the base URL is malformed or an explicit empty string. A missing token is reported on
 the first call instead.
 
 ## Client methods
@@ -177,7 +177,7 @@ the `owner` or `admin` role.
 
 | Class | Fields | Raised when |
 | --- | --- | --- |
-| `ConfigError` | `message` | The base URL or token is missing or malformed. No request was sent. |
+| `ConfigError` | `message` | The base URL is malformed or the token is missing. No request was sent. |
 | `ApiError` | `status`, `code`, `message`, `raw` | A request failed. `status` is `0` for `network_error` and `cancelled`. `raw` is the parsed error body. |
 
 See [Handle errors](/clients/node/#handle-errors) for how to read `status` and `code`.

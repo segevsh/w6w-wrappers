@@ -165,20 +165,22 @@ Deno.test("exit 1: an unknown or incomplete command prints help to stderr", asyn
   assertStringIncludes(badFlag.stderr, "unknown flag: --bogus");
 });
 
-Deno.test("exit 1: no usable base URL — a configuration failure, not an API failure", async () => {
+Deno.test("exit 1: no usable token — a configuration failure, not an API failure", async () => {
   // The split that must not collapse: nothing reached the server here, so this
-  // cannot be a 2. The message names both sources because either one would fix it.
+  // cannot be a 2. The base URL is never the problem now (it defaults), so the
+  // message names the token's sources, including `w6w auth login`.
   const unconfigured: Record<string, string>[] = [
-    { W6W_TOKEN: "t_probe" },
-    { W6W_BASE_URL: "", W6W_TOKEN: "t_probe" },
-    { W6W_BASE_URL: "   ", W6W_TOKEN: "t_probe" },
+    {},
+    { W6W_TOKEN: "" },
+    { W6W_TOKEN: "   " },
   ];
   for (const env of unconfigured) {
     const result = await probe("ok", ["me"], env);
     assertEquals(result.code, 1, result.stderr);
-    assertStringIncludes(result.stderr, "--base-url");
-    assertStringIncludes(result.stderr, "W6W_BASE_URL");
-    assert(!result.stdout.includes("answered:"), "a request was made without a base URL");
+    assertStringIncludes(result.stderr, "--token");
+    assertStringIncludes(result.stderr, "W6W_TOKEN");
+    assertStringIncludes(result.stderr, "auth login");
+    assert(!result.stdout.includes("answered:"), "a request was made without a token");
   }
 });
 

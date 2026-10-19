@@ -28,7 +28,7 @@ and the code disagree, **the code wins and this file is a bug**.
 |                       | TypeScript (`@w6w/sdk`)                                                       | Python (`w6w`)                                                                                                                       |
 | --------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Class                 | `new W6WClient(options?)`                                                     | `Client(base_url=None, token=None, project=None, transport=None, refresh_on_unauthorized=False, on_unauthorized=None, headers=None)` |
-| Base URL              | `options.baseUrl` → `W6W_BASE_URL`                                            | `base_url` → `W6W_BASE_URL`                                                                                                          |
+| Base URL              | `options.baseUrl` → `W6W_BASE_URL` → `https://api.w6w.io`                     | `base_url` → `W6W_BASE_URL` → `https://api.w6w.io`                                                                                                        |
 | Credential            | `options.token: string \| TokenProvider` → `W6W_TOKEN` (string fallback only) | `token: Union[str, Callable[..., Optional[str]], None]` → `W6W_TOKEN` (string fallback only)                                         |
 | 401 recovery (opt in) | `options.refreshOnUnauthorized?: boolean` (default `false`)                   | `refresh_on_unauthorized: bool` (default `False`)                                                                                    |
 | Terminal-401 callback | `options.onUnauthorized?: (err: ApiError) => void`                            | `on_unauthorized: Optional[Callable[[ApiError], None]]`                                                                              |
@@ -61,8 +61,10 @@ Behaviour that is the same in both, and pinned:
   configuration error. An environment variable that is **set but empty or
   whitespace-only is ABSENT** and does fall through. That asymmetry is the
   difference between a value a caller chose and a value a shell produced.
-- **A missing base URL raises at construction; a missing token raises on the
-  first request.** A tokenless client is constructible on purpose, so a CLI's
+- **There is always a base URL: explicit, then `W6W_BASE_URL`, then the default
+  `https://api.w6w.io`** (`defaultBaseUrl` in `endpoints.json`, mirrored by one
+  constant per lane). A malformed or explicitly empty one raises at
+  construction; a missing token raises on the first request. A tokenless client is constructible on purpose, so a CLI's
   `--help` and `--version` work offline.
 - **Credentials are instance state, never module globals.** Two clients in one
   process hold two credentials and point at two servers with no interference.
@@ -106,7 +108,7 @@ Two classes, in both languages, and the split is diagnostic:
 
 | Class         | Raised when                                                                                                                   | Fields                             |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| `ConfigError` | The client was never in a position to make a request — no base URL, no token, an unsendable token. No HTTP exchange happened. | message (naming the env var)       |
+| `ConfigError` | The client was never in a position to make a request — a malformed base URL, no token, an unsendable token. No HTTP exchange happened. | message (naming the env var)       |
 | `ApiError`    | The server answered, or could not be reached at all.                                                                          | `status`, `code`, `message`, `raw` |
 
 `ApiError` has exactly **three** shapes and no others:
@@ -458,10 +460,10 @@ refresh, and client-side run polling.
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | Import               | `import { exchangeToken } from "@w6w/sdk/server"`                                                                      | `from w6w.server import exchange_token`                                                             |
 | On the root surface? | No — not exported from `@w6w/sdk`'s barrel (`mod.ts`), and not on `@w6w/sdk/console` either                            | No — not re-exported from `w6w/__init__.py`, and not listed in `w6w.__all__`                        |
-| Signature            | `exchangeToken(options: { baseUrl, clientId, clientSecret, subject, account?, fetch? }): Promise<ExchangeTokenResult>` | `exchange_token(base_url, client_id, client_secret, subject, account=None, transport=None) -> dict` |
+| Signature            | `exchangeToken(options: { baseUrl?, clientId, clientSecret, subject, account?, fetch? }): Promise<ExchangeTokenResult>` | `exchange_token(base_url=None, client_id=None, client_secret=None, subject=None, account=None, transport=None) -> dict` |
 | Session client import | `import { createEmbedSessionClient } from "@w6w/sdk/server"` | `from w6w.server import EmbedSessionClient` |
 | Session client on the root surface? | No — same exclusions as above | No — same exclusions as above |
-| Session client signature | `createEmbedSessionClient(options: { baseUrl, clientId, clientSecret, fetch?, now? }): EmbedSessionClient`, then `.create({ subject, accountRef }): Promise<EmbedSession>` | `EmbedSessionClient(base_url, client_id, client_secret, *, transport=None, now=None)`, then `.create(subject, account_ref) -> dict` |
+| Session client signature | `createEmbedSessionClient(options: { baseUrl?, clientId, clientSecret, fetch?, now? }): EmbedSessionClient`, then `.create({ subject, accountRef }): Promise<EmbedSession>` | `EmbedSessionClient(base_url=None, client_id=None, client_secret=None, *, transport=None, now=None)`, then `.create(subject, account_ref) -> dict` |
 
 **What it does.** `exchangeToken` / `exchange_token` calls `POST /auth/exchange` with a tenant's client credentials
 and names one of the tenant's end-users via `subject`, minting a short-lived,
@@ -469,6 +471,8 @@ and names one of the tenant's end-users via `subject`, minting a short-lived,
 "Path A" token exchange. The user-facing walkthrough is
 [docs.w6w.io/clients/node/embedding](https://docs.w6w.io/clients/node/embedding/);
 see also the `node` lane's `README.md` "Embedding for enterprise tenants".
+
+**Self-hosting.** Self-hosted deployments must pass their API origin explicitly; when omitted, the helper sends the tenant client credentials to `https://api.w6w.io`. These helpers never read `W6W_BASE_URL`.
 
 **The session client — the recommended embed path.** `createEmbedSessionClient`
 / `EmbedSessionClient` holds one tenant's credentials per instance and mints one
@@ -479,8 +483,9 @@ host's own reference for the company the user is acting in (the account's
 external ref), because the server selects the tenant's default account when
 `account` is blank. Rules:
 
-- `baseUrl` / `base_url` is required and explicit; it never falls back to
-  `W6W_BASE_URL`. `clientId`/`clientSecret` follow the same rules as
+- `baseUrl` / `base_url` is optional: omitted, it defaults to
+  `https://api.w6w.io`; it never falls back to `W6W_BASE_URL`. A blank value
+  is a `ConfigError`, not the default. `clientId`/`clientSecret` follow the same rules as
   `exchangeToken`'s (below).
 - `subject` is sent verbatim, never trimmed. `accountRef` is trimmed (Node: ECMAScript
   `trim`; Python: the same whitespace set) and sent as the wire `account`. Both must be
