@@ -35,8 +35,10 @@ pip install w6w
 
 ## 2. Set your credentials
 
+The client targets `https://api.w6w.io` unless you say otherwise. To point it at another host
+(a self-hosted w6w, for example), also set `W6W_BASE_URL` to that origin, with no trailing path.
+
 ```bash
-export W6W_BASE_URL=https://<your-host>   # your API origin, no trailing path
 export W6W_TOKEN=…                         # Studio → Settings → API tokens
 ```
 
@@ -45,7 +47,7 @@ export W6W_TOKEN=…                         # Studio → Settings → API token
 ```python
 from w6w import Client
 
-client = Client()  # reads W6W_BASE_URL and W6W_TOKEN
+client = Client()  # reads W6W_TOKEN; W6W_BASE_URL if set, else https://api.w6w.io
 
 me = client.me()
 print(me.tenant, me.account, me.role)
@@ -267,7 +269,7 @@ each option in more detail.
 
 | Symptom | Cause | What to do |
 | --- | --- | --- |
-| `ConfigError: No w6w base URL is configured` | `W6W_BASE_URL` is unset or empty. | Export it, or pass `base_url=`. |
+| `ConfigError: No w6w base URL is configured` | You passed an explicit blank `base_url=`. An unset or empty `W6W_BASE_URL` is not an error: the client uses `https://api.w6w.io`. | Pass a real origin, or omit `base_url`. |
 | `ConfigError: No w6w API token is configured` | `W6W_TOKEN` is unset or empty, or your callable returned nothing. | Export it, or pass `token=`. |
 | `ConfigError` about a control character in the token | The token has a newline, often from reading a file. | Strip it: `token=open(path).read().strip()`. |
 | `ApiError: [401 unauthorized] …` | The token is wrong, disabled or revoked. | Create a new token in Studio → **Settings** → **API tokens**. |

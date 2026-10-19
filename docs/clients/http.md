@@ -24,12 +24,12 @@ routes it doesn't wrap.
 
 ## Base URL and token
 
-- **Base URL**: your w6w host, for example `https://api.example.com`. Routes sit directly under it,
-  with no path prefix, so the identity route is `https://api.example.com/auth/me`.
+- **Base URL**: `https://api.w6w.io` by default, or your own w6w host. Routes sit directly under it,
+  with no path prefix, so the identity route is `https://api.w6w.io/auth/me`.
 - **Authentication**: bearer. Send your token in the `Authorization` header on every request.
 
 ```bash
-export W6W_BASE_URL="https://api.example.com"
+export W6W_BASE_URL="https://api.w6w.io"   # or your own host
 export W6W_TOKEN="<your token>"
 ```
 
