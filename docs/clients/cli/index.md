@@ -38,13 +38,27 @@ You should see a version number.
 
 ## 2. Set your credentials
 
+By default the CLI talks to `https://api.w6w.io`. Save your token once (create one in Studio →
+Settings → API tokens):
+
 ```bash
-export W6W_BASE_URL=https://<your-host>   # your API origin, no trailing path
+printf '%s' "$YOUR_TOKEN" | w6w auth login -
+```
+
+Piping the token keeps it out of your shell history and the process list; `w6w auth login <token>` also
+works. The token is saved for your user and only ever sent to the API address it was saved for. Check
+it with `w6w auth status`; remove it with `w6w auth logout`.
+
+For a self-hosted server, or to override the saved login, use the environment instead:
+
+```bash
+export W6W_BASE_URL=https://<your-host>   # your API origin, no trailing path (default: https://api.w6w.io)
 export W6W_TOKEN=…                         # Studio → Settings → API tokens
 ```
 
-You can also pass `--base-url` and `--token` on any command, and they win over the environment.
-Prefer the environment variable for the token, so it stays out of your shell history.
+You can also pass `--base-url` and `--token` on any command. A flag wins over the environment, and the
+environment wins over what `w6w auth login` saved. Prefer `auth login -` or the environment variable
+for the token, so it stays out of your shell history.
 
 ## 3. Check your access
 
@@ -141,7 +155,7 @@ for exit code `2`, and only when it's safe to run twice.
 The CLI covers the operations listed in the [command reference](/clients/cli/commands/). For any
 other route, use the [Node SDK's](/clients/node/#call-a-route-the-sdk-doesnt-wrap) or
 [Python client's](/clients/python/#call-a-route-the-client-doesnt-wrap) `request` method, which
-use the same `W6W_BASE_URL` and `W6W_TOKEN`.
+use the same `W6W_BASE_URL` and `W6W_TOKEN` (the SDKs and the Python client do not read the CLI's saved login).
 
 ## Known limitations
 
@@ -158,8 +172,8 @@ A few flags shown in `--help` aren't applied yet. Use these instead:
 
 | Symptom | Cause | What to do |
 | --- | --- | --- |
-| `w6w: No w6w base URL is configured` (exit 1) | `W6W_BASE_URL` is unset or empty. | Export it, or pass `--base-url`. |
-| `w6w: No w6w API token is configured` (exit 1) | `W6W_TOKEN` is unset or empty. | Export it, or pass `--token`. |
+| `w6w: No w6w base URL is configured` (exit 1) | You passed an empty `--base-url`. | Pass a full origin, or omit the flag to use `https://api.w6w.io`. |
+| `w6w: No w6w API token is configured` (exit 1) | No token for that base URL: `W6W_TOKEN` is unset and `w6w auth login` was never run for it. | Run `w6w auth login`, export `W6W_TOKEN`, or pass `--token`. A saved token only applies to the base URL it was saved for. |
 | `w6w: Could not reach the w6w server` (exit 2) | The base URL is wrong or the server is down. | Check the URL, and your network or VPN. |
 | `w6w: unknown flag: --…` (exit 1) | The flag doesn't exist for that command. | Run the command with `--help` to see its flags. |
 | A `401` (exit 2) | The token is wrong, disabled or revoked. | Create a new token in Studio → **Settings** → **API tokens**. |

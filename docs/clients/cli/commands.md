@@ -27,8 +27,8 @@ These work on every command:
 
 | Option | What it does |
 | --- | --- |
-| `--base-url <url>` | Your API origin. Overrides `W6W_BASE_URL`. |
-| `--token <token>` | Your API token. Overrides `W6W_TOKEN`. |
+| `--base-url <url>` | Your API origin. Overrides `W6W_BASE_URL`. Defaults to `https://api.w6w.io`. |
+| `--token <token>` | Your API token. Overrides `W6W_TOKEN` and the token saved by `w6w auth login`. |
 | `--json` | Print the raw JSON response instead of a table. |
 | `--no-color` | Turn off colour. Setting `NO_COLOR` does the same. |
 | `-v`, `--version` | Print the CLI version. |
@@ -40,6 +40,16 @@ Shortcuts: `conn` for `connections`, `wf` for `workflows`, `docs` for `documents
 Flags that take JSON (`--payload`, `--input`, `--definition`, and `--value` for non-string vars)
 expect a JSON value in one shell argument. Wrap it in single quotes, or read it from a file with
 `"$(cat file.json)"`.
+
+## Auth
+
+| Command | What it does |
+| --- | --- |
+| `w6w auth login [<token>\|-]` | Save an API token for the base URL (default `https://api.w6w.io`). Use `-` (or pipe the token in) to read it from standard input: `printf '%s' "$TOKEN" \| w6w auth login -`. That keeps it out of your shell history and the process list, which a token given as an argument is not. |
+| `w6w auth logout` | Remove the saved token for the base URL. |
+| `w6w auth status` | Show the base URL, where it came from, and whether a token is available (masked, never printed in full). |
+
+A saved token is used only for the base URL it was saved for. See the [CLI](/clients/cli/) page.
 
 ## Identity
 

@@ -196,8 +196,11 @@ differs on (§6 of `sdk-surface.md`).
   `Client` both accept `refreshOnUnauthorized`/`refresh_on_unauthorized`,
   `onUnauthorized`/`on_unauthorized` and a function-typed `token`. `@w6w/cli`
   does not: `cli/src/client.ts`'s `createClient` resolves a single static string
-  token once, at startup, from a `--token`-flag-then-`W6W_TOKEN`-env precedence
-  chain with no supplier anywhere in it — there is nothing for a `401` recovery
+  token once, at startup, from a `--token`-flag, then `W6W_TOKEN`-env, then the
+  stored-token (`w6w auth login`) precedence chain with no supplier anywhere in
+  it. The stored tier is **CLI-only**: node, python and react never read the
+  CLI's config file (D7), and the CLI-only `auth` commands are declared in
+  `endpoints.json` `cli.commands[]`, not in `operations[]` — there is nothing for a `401` recovery
   attempt to call a second time, and a CLI invocation is already a single
   short-lived process a user re-runs by hand, which is a different
   failure-recovery story than a long-lived server process holding a client
