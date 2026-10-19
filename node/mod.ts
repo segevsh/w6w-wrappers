@@ -22,6 +22,7 @@ export { W6WClient } from "./src/client.ts";
 export { ApiError, ConfigError } from "./src/errors.ts";
 export {
   BASE_PATH,
+  DEFAULT_BASE_URL,
   type FetchLike,
   joinBaseUrl,
   type ResolvedConfig,

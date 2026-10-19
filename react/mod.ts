@@ -18,6 +18,7 @@
 export { VERSION } from "./src/version.ts";
 
 export {
+  DEFAULT_BASE_URL,
   type TokenSource,
   useW6WClient,
   W6WProvider,

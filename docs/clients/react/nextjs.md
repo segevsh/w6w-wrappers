@@ -35,6 +35,7 @@ backend.
 
 ```bash
 # .env.local, read only by server code. Don't prefix these with NEXT_PUBLIC_.
+# Optional: leave W6W_BASE_URL out and the route below uses https://api.w6w.io.
 W6W_BASE_URL=https://<your-host>
 W6W_TENANT_CLIENT_ID=…
 W6W_TENANT_CLIENT_SECRET=…
@@ -58,7 +59,7 @@ let handler: ReturnType<typeof createEmbedSessionHandler> | undefined;
 export function POST(req: Request) {
   handler ??= createEmbedSessionHandler({
     sessions: createEmbedSessionClient({
-      baseUrl: process.env.W6W_BASE_URL!,
+      baseUrl: process.env.W6W_BASE_URL || undefined, // optional; the client never reads it itself
       clientId: process.env.W6W_TENANT_CLIENT_ID!,
       clientSecret: process.env.W6W_TENANT_CLIENT_SECRET!,
     }),
