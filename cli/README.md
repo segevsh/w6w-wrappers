@@ -23,8 +23,8 @@ released together. A given version means the same set of operations in every lan
 
 ## Configuration
 
-With nothing configured, `w6w` talks to **`https://api.w6w.io`**. Save a token once and later commands
-use it:
+With nothing configured, `w6w` talks to **`https://api.w6w.io`**. Save a token once and later
+commands use it:
 
 ```bash
 printf '%s' "$W6W_TOKEN" | w6w auth login -   # preferred: keeps the token out of shell history
@@ -33,17 +33,17 @@ w6w auth status                                # base URL, where it came from, m
 w6w auth logout
 ```
 
-The token is stored per user (`~/.config/w6w/config.json`, or `$XDG_CONFIG_HOME/w6w/…`; `%APPDATA%\w6w\…`
-on Windows), mode `0600`, and **bound to the base URL it was saved for** — it is never sent to another
-host. Two environment variables and two flags override it:
+The token is stored per user (`~/.config/w6w/config.json`, or `$XDG_CONFIG_HOME/w6w/…`;
+`%APPDATA%\w6w\…` on Windows), mode `0600`, and **bound to the base URL it was saved for** — it is
+never sent to another host. Two environment variables and two flags override it:
 
-| Variable       | Meaning                                                                                                                                                                                         | Required |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| Variable       | Meaning                                                                                                                                                                                                                           | Required |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
 | `W6W_BASE_URL` | The **origin** of your w6w server, e.g. `https://api.example.com`. Defaults to `https://api.w6w.io`. The API is served at the root of that host, so nothing is appended — and a stale `/api` suffix from `0.1.x` must be dropped. | No       |
-| `W6W_TOKEN`    | Your API token, sent as `Authorization: Bearer <token>` on every request. Not needed after `w6w auth login`.                                                                                    | No       |
+| `W6W_TOKEN`    | Your API token, sent as `Authorization: Bearer <token>` on every request. Not needed after `w6w auth login`.                                                                                                                      | No       |
 
-Both have a flag equivalent, and **a flag always wins over the environment, which wins over the stored
-config**: `--base-url <url>` and `--token <token>`.
+Both have a flag equivalent, and **a flag always wins over the environment, which wins over the
+stored config**: `--base-url <url>` and `--token <token>`.
 
 ```bash
 export W6W_BASE_URL=https://api.example.com   # only for a self-hosted server
@@ -120,12 +120,12 @@ root help and exits `0`.
 
 ## Exit codes
 
-| Code | Meaning                                                                                                  |
-| ---- | -------------------------------------------------------------------------------------------------------- |
-| `0`  | Success — including help, and including a _queued_ or _running_ workflow                                 |
-| `1`  | Usage or configuration error — unknown command, missing argument, bad flag or JSON, no base URL or token |
-| `2`  | API error — 4xx/5xx from the server, including auth failure, or the server could not be reached          |
-| `3`  | Run failure — `--wait` returned a run with status `failed`                                               |
+| Code | Meaning                                                                                                             |
+| ---- | ------------------------------------------------------------------------------------------------------------------- |
+| `0`  | Success — including help, and including a _queued_ or _running_ workflow                                            |
+| `1`  | Usage or configuration error — unknown command, missing argument, bad flag or JSON, no token, an empty `--base-url` |
+| `2`  | API error — 4xx/5xx from the server, including auth failure, or the server could not be reached                     |
+| `3`  | Run failure — `--wait` returned a run with status `failed`                                                          |
 
 Code `3` exists so `w6w workflows run --wait` is usable in CI without parsing stdout. Keeping it
 distinct from `2` matters: a failed workflow and an unreachable API demand opposite responses, and a

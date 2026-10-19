@@ -324,3 +324,56 @@ Deno.test("help and --version never read the store", async () => {
     assertEquals(result.code, 0, `${argv.join(" ")}: ${result.stderr}`);
   }
 });
+
+Deno.test("binding: the stored key matches exactly - no prefix, scheme, port or case variants", async () => {
+  const { store } = memoryStore(file({ [CLOUD]: CLOUD_TOK }));
+  const variants = [
+    "http://api.w6w.io",
+    "https://api.w6w.io.example.com",
+    "https://api.w6w.io:8443",
+    "https://API.W6W.IO",
+    "https://api.w6w.io/v1",
+  ];
+  for (const url of variants) {
+    for (const via of ["flag", "env"]) {
+      const result = via === "flag"
+        ? await run(["--base-url", url, "me"], { store })
+        : await run(["me"], { store, env: { W6W_BASE_URL: url } });
+      assertEquals(result.calls.length, 0, `${via} ${url}: the token must not be sent`);
+      assertEquals(result.code, 1, `${via} ${url}`);
+    }
+  }
+});
+
+Deno.test("auth login/logout honour W6W_BASE_URL for the host key", async () => {
+  const login = memoryStore();
+  const ok = await run(["auth", "login", LOCAL_TOK], {
+    store: login.store,
+    env: { W6W_BASE_URL: `${LOCAL}/` },
+  });
+  assertEquals(ok.code, 0, ok.stderr);
+  const config = stored(login.state);
+  assertEquals(config.hosts, { [LOCAL]: { token: LOCAL_TOK } });
+  assert(!(CLOUD in config.hosts), "the token was saved under the cloud key");
+
+  const out = memoryStore(file({ [CLOUD]: CLOUD_TOK, [LOCAL]: LOCAL_TOK }));
+  const result = await run(["auth", "logout"], {
+    store: out.store,
+    env: { W6W_BASE_URL: `${LOCAL}/` },
+  });
+  assertEquals(result.code, 0, result.stderr);
+  assertEquals(stored(out.state).hosts, { [CLOUD]: { token: CLOUD_TOK } });
+});
+
+Deno.test("auth status: the mask boundary is 12 characters", async () => {
+  for (
+    const [token, want] of [["a".repeat(11) + "WXYZ".slice(0, 0), "****"], [
+      "a".repeat(8) + "WXYZ",
+      "****WXYZ",
+    ]]
+  ) {
+    const { store } = memoryStore(file({ [CLOUD]: token }));
+    const parsed = JSON.parse((await run(["auth", "status", "--json"], { store })).stdout);
+    assertEquals(parsed.tokenMasked, want, `${token.length} chars`);
+  }
+});

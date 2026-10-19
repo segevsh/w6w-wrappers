@@ -25,7 +25,7 @@ scripts, and exit codes your CI can act on.
 ## Before you start
 
 - Node.js 18 or later.
-- A w6w base URL and an API token. See [Configure](/clients/overview/#configure).
+- A w6w API token. The base URL defaults to `https://api.w6w.io`. See [Configure](/clients/overview/#configure).
 
 ## 1. Install the CLI
 
@@ -132,7 +132,7 @@ Every command exits with a code you can test:
 | Exit code | Meaning |
 | --- | --- |
 | `0` | Success. Includes a workflow that's still queued or running. |
-| `1` | A usage or configuration problem: an unknown flag, bad JSON, or no base URL or token. |
+| `1` | A usage or configuration problem: an unknown flag, bad JSON, no token, or an empty `--base-url`. |
 | `2` | The API returned an error, or couldn't be reached. |
 | `3` | A workflow run finished with status `failed`. |
 
