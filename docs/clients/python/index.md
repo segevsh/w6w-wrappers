@@ -166,7 +166,7 @@ your account and don't.
 
 The client raises two error types:
 
-- **`w6w.ConfigError`**: no request was sent. The token is missing, or the base URL is blank or malformed.
+- **`w6w.ConfigError`**: no request was sent. The token is missing, or the base URL you passed is blank, or the base URL is malformed.
 - **`w6w.ApiError`**: the request failed. It has `status`, `code`, `message` and `raw`, the
   parsed response body. Printed, it reads `[404 unknown_function] …`.
 

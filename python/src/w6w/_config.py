@@ -194,8 +194,9 @@ def resolve_config(
         per-request `headers` argument builds on; neither can displace the
         bearer this transport attaches.
     :returns: The resolved configuration.
-    :raises ConfigError: When an explicit base URL is blank, relative or not
-        http(s). With none given anywhere, the default applies.
+    :raises ConfigError: When an explicit base URL is blank, or the resolved
+        base URL (explicit, or from ``W6W_BASE_URL``) is relative or not
+        http(s). With none given, or an empty ``W6W_BASE_URL``, the default applies.
     """
     # Explicit argument (even blank — `join_base_url` rejects that) > env
     # (blank is absent) > the default. Only `None` / a blank env fall through.

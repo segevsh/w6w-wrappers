@@ -274,7 +274,7 @@ raises a `ConfigError` naming the variable, at construction — not a confusing
 
 A client with no token can still be **constructed** — the error surfaces on the
 first request instead, so offline `--help`-style uses work. A client with no
-base URL targets `https://api.w6w.io`; one whose base URL is given but blank,
+base URL targets `https://api.w6w.io`; one whose base URL is passed blank,
 relative or not http(s) raises immediately, at construction.
 
 `W6W_TOKEN` is a plain string only. A credential that has to change between

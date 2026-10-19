@@ -34,8 +34,9 @@ Everything the `w6w` package exports for application code. Import from `w6w`, ex
 | `headers` | mapping | `None` | Headers sent with every request. Can't override `Authorization`. |
 | `transport` | callable | `urllib.request.urlopen` | Takes a `urllib.request.Request` and returns a response. Use it to set a timeout or a proxy. |
 
-`Client()` raises `ConfigError` if a base URL is passed or exported but is blank, relative or not
-http(s); with none given it targets `https://api.w6w.io`. A missing token is reported on the
+`Client()` raises `ConfigError` if the `base_url` you pass is blank, or if the base URL it ends up
+with (passed, or from `W6W_BASE_URL`) is relative or not http(s). An unset or empty `W6W_BASE_URL`
+is not an error: the client targets `https://api.w6w.io`. A missing token is reported on the
 first call instead.
 
 ## Client methods
@@ -201,7 +202,7 @@ Returns a dict with `token`, `expiresIn` (seconds) and `user`.
 
 | Class | Attributes | Raised when |
 | --- | --- | --- |
-| `w6w.ConfigError` | `message` | The token is missing, or the base URL is blank or malformed. No request was sent. |
+| `w6w.ConfigError` | `message` | The token is missing, or the base URL you passed is blank, or the base URL is malformed. No request was sent. |
 | `w6w.ApiError` | `status`, `code`, `message`, `raw` | A request failed. `status` is `0` for `network_error`. |
 
 ## Helpers
