@@ -24,7 +24,7 @@ first action call, then covers errors and how to reach any route the client does
 
 ## Before you start
 
-- A w6w base URL and an API token. See [Configure](/clients/overview/#configure).
+- An API token, and a base URL only if your account lives on its own host (the default is `https://api.w6w.io`). See [Configure](/clients/overview/#configure).
 - Python 3.9 or later.
 
 ## 1. Install the package
@@ -35,8 +35,10 @@ pip install w6w
 
 ## 2. Set your credentials
 
+The client targets `https://api.w6w.io` unless you say otherwise. To point it at another host
+(a self-hosted w6w, for example), also set `W6W_BASE_URL` to that origin, with no trailing path.
+
 ```bash
-export W6W_BASE_URL=https://<your-host>   # your API origin, no trailing path
 export W6W_TOKEN=…                         # Studio → Settings → API tokens
 ```
 
@@ -45,7 +47,7 @@ export W6W_TOKEN=…                         # Studio → Settings → API token
 ```python
 from w6w import Client
 
-client = Client()  # reads W6W_BASE_URL and W6W_TOKEN
+client = Client()  # reads W6W_TOKEN; W6W_BASE_URL if set, else https://api.w6w.io
 
 me = client.me()
 print(me.tenant, me.account, me.role)
@@ -164,7 +166,7 @@ your account and don't.
 
 The client raises two error types:
 
-- **`w6w.ConfigError`**: no request was sent. The base URL or token is missing or malformed.
+- **`w6w.ConfigError`**: no request was sent. The token is missing, or the base URL you passed is blank, or the base URL is malformed.
 - **`w6w.ApiError`**: the request failed. It has `status`, `code`, `message` and `raw`, the
   parsed response body. Printed, it reads `[404 unknown_function] …`.
 
@@ -236,7 +238,7 @@ import os
 from w6w.server import exchange_token
 
 minted = exchange_token(
-    base_url=os.environ["W6W_BASE_URL"],
+    base_url=os.environ.get("W6W_BASE_URL"),  # None targets https://api.w6w.io
     client_id=os.environ["W6W_TENANT_CLIENT_ID"],
     client_secret=os.environ["W6W_TENANT_CLIENT_SECRET"],  # never leaves your backend
     subject=user_id,         # your user's id
@@ -244,6 +246,8 @@ minted = exchange_token(
 )
 token, expires_in = minted["token"], minted["expiresIn"]
 ```
+
+Self-hosted deployments must pass their API origin explicitly; when omitted, `exchange_token` and `EmbedSessionClient` send the tenant client credentials to `https://api.w6w.io`. Neither reads `W6W_BASE_URL`; the snippet above passes it explicitly.
 
 Then give the client a callable instead of a string. It's called before every authenticated request (not cached or shared by the client — cache inside
 your callable), and with `force_refresh=True` when a refresh is needed:
@@ -267,10 +271,10 @@ each option in more detail.
 
 | Symptom | Cause | What to do |
 | --- | --- | --- |
-| `ConfigError: No w6w base URL is configured` | `W6W_BASE_URL` is unset or empty. | Export it, or pass `base_url=`. |
+| `ConfigError: No w6w base URL is configured` | You passed an explicit blank `base_url=`. An unset or empty `W6W_BASE_URL` is not an error: the client uses `https://api.w6w.io`. | Pass a real origin, or omit `base_url`. |
 | `ConfigError: No w6w API token is configured` | `W6W_TOKEN` is unset or empty, or your callable returned nothing. | Export it, or pass `token=`. |
 | `ConfigError` about a control character in the token | The token has a newline, often from reading a file. | Strip it: `token=open(path).read().strip()`. |
-| `ApiError: [401 unauthorized] …` | The token is wrong, disabled or revoked. | Create a new token in Studio → **Settings** → **API tokens**. |
+| `ApiError: [401 unauthorized] …` | The token is wrong, disabled or revoked, or (for `exchange_token` / `EmbedSessionClient`) `base_url` was omitted on a self-hosted deployment. | Create a new token in Studio → **Settings** → **API tokens**, and pass `base_url` explicitly when self-hosting. |
 | `AttributeError: 'WorkflowsApi' object has no attribute 'cancel'` | Your installed version predates it. | Upgrade: `pip install -U w6w`. See [Versions](/clients/overview/#versions). |
 | A call hangs | There's no default timeout. | Pass a transport with a timeout, as shown above. |
 

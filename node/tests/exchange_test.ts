@@ -87,6 +87,46 @@ Deno.test(
 );
 
 Deno.test(
+  "exchangeToken: an omitted baseUrl defaults to https://api.w6w.io and ignores W6W_BASE_URL",
+  async () => {
+    const saved = Deno.env.get("W6W_BASE_URL");
+    Deno.env.set("W6W_BASE_URL", "https://env.example.com");
+    try {
+      const fake = fakeFetch(() => json(SUCCESS_BODY));
+      await exchangeToken({
+        clientId: "client_1",
+        clientSecret: "secret_1",
+        subject: "user_1",
+        fetch: fake.fetch,
+      });
+      assertEquals(fake.calls.length, 1);
+      assertEquals(fake.calls[0].url, "https://api.w6w.io/auth/exchange");
+    } finally {
+      if (saved === undefined) Deno.env.delete("W6W_BASE_URL");
+      else Deno.env.set("W6W_BASE_URL", saved);
+    }
+  },
+);
+
+Deno.test("exchangeToken: a blank baseUrl is still a ConfigError, not the default", async () => {
+  const fake = fakeFetch(() => json(SUCCESS_BODY));
+  for (const baseUrl of ["", "   "]) {
+    await assertRejects(
+      () =>
+        exchangeToken({
+          baseUrl,
+          clientId: "c",
+          clientSecret: "s",
+          subject: "u",
+          fetch: fake.fetch,
+        }),
+      ConfigError,
+    );
+  }
+  assertEquals(fake.calls.length, 0);
+});
+
+Deno.test(
   "exchangeToken: `account`, when given, is the ONLY extra body key — never null/undefined when omitted",
   async () => {
     const fake = fakeFetch(() => json(SUCCESS_BODY));

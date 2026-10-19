@@ -242,29 +242,36 @@ function parses(origin: string): boolean {
 }
 
 /**
+ * The base URL used when none is given: w6w's own production API. Declared once
+ * in `endpoints.json` as `defaultBaseUrl`; a conformance test pins this constant
+ * to it. An absolute origin, unlike a relative `"/api"`, resolves the same in
+ * every runtime.
+ */
+export const DEFAULT_BASE_URL = "https://api.w6w.io";
+
+/**
  * Resolve constructor options and the environment into one config value.
  *
- * Precedence is **explicit argument > environment variable**, always; there is
- * no default base URL. An explicitly passed empty string is an *explicit*
- * value, not "unset" — it does not fall through to the environment, and an
- * empty base URL is a configuration error either way. Only an absent
- * (`undefined`) argument consults the environment.
+ * Precedence is **explicit argument > environment variable >
+ * {@linkcode DEFAULT_BASE_URL}**. An explicitly passed empty string is an
+ * *explicit* value, not "unset" — it does not fall through to the environment
+ * or the default, and an empty base URL is a configuration error. Only an
+ * absent (`undefined`) argument consults the environment.
  *
  * An **empty or whitespace-only environment variable is absent** and falls
  * through (see `src/env.ts`), so `W6W_BASE_URL=`, `W6W_BASE_URL="  "` and an
- * unset `W6W_BASE_URL` all end here, in the same configuration error — never in
- * a relative `"/api"`.
+ * unset `W6W_BASE_URL` all end at the default — never at a relative `"/api"`.
  *
  * @param options - Constructor options; `fetch` is ignored here (the client owns it).
  * @returns The resolved configuration.
- * @throws {ConfigError} When no usable base URL was supplied, naming `W6W_BASE_URL`.
+ * @throws {ConfigError} When an explicit or environment base URL is malformed.
  */
 export function resolveConfig(options: W6WClientOptions = {}): ResolvedConfig {
   return {
     // Every normalisation, the emptiness test and the absoluteness check live in
     // `joinBaseUrl` — one code path, so the exported helper and the client can
     // never answer differently for the same input.
-    baseUrl: joinBaseUrl(options.baseUrl ?? readEnv(ENV_BASE_URL) ?? ""),
+    baseUrl: joinBaseUrl(options.baseUrl ?? readEnv(ENV_BASE_URL) ?? DEFAULT_BASE_URL),
     token: options.token ?? readEnv(ENV_TOKEN) ?? null,
     refreshOnUnauthorized: options.refreshOnUnauthorized ?? false,
     onUnauthorized: options.onUnauthorized ?? null,

@@ -138,6 +138,65 @@ test("token supplier is re-read per request, not captured at construction", () =
     assert.equal(fake.calls[1]?.headers.get("authorization"), "Bearer token-b");
   }));
 
+test("an omitted baseUrl targets https://api.w6w.io even when W6W_BASE_URL is set", () =>
+  withRoot(async (root) => {
+    const fake = fakeFetch();
+    const saved = process.env.W6W_BASE_URL;
+    process.env.W6W_BASE_URL = "https://env.example.com";
+    try {
+      let captured: W6WClient | null = null;
+      function Capture() {
+        captured = useW6WClient();
+        return null;
+      }
+      act(() => {
+        root.render(
+          createElement(W6WProvider, { token: "tok", fetch: fake.fetch }, createElement(Capture)),
+        );
+      });
+      assert.ok(captured);
+      await (captured as W6WClient).me();
+      assert.equal(fake.calls.length, 1);
+      assert.match(fake.calls[0]?.url ?? "", /^https:\/\/api\.w6w\.io\//);
+    } finally {
+      if (saved === undefined) Reflect.deleteProperty(process.env, "W6W_BASE_URL");
+      else process.env.W6W_BASE_URL = saved;
+    }
+  }));
+
+test("an explicit empty baseUrl is NOT replaced by the default: it raises ConfigError and sends nothing", () =>
+  withRoot(async (root) => {
+    const fake = fakeFetch();
+    let captured: W6WClient | null = null;
+    function Capture() {
+      captured = useW6WClient();
+      return null;
+    }
+    let renderError: unknown;
+    try {
+      act(() => {
+        root.render(
+          createElement(
+            W6WProvider,
+            { baseUrl: "", token: "tok", fetch: fake.fetch },
+            createElement(Capture),
+          ),
+        );
+      });
+    } catch (error) {
+      renderError = error;
+    }
+    const failure = renderError
+      ? renderError
+      : await (captured as W6WClient | null)?.me().then(
+          () => undefined,
+          (error: unknown) => error,
+        );
+    assert.ok(failure instanceof Error, "an empty baseUrl must fail, not fall back to the default");
+    assert.equal(failure.name, "ConfigError");
+    assert.equal(fake.calls.length, 0, "an empty baseUrl must never reach the wire");
+  }));
+
 test("a nullish token supplier sends no request and the SDK rejects with ConfigError", () =>
   withRoot(async (root) => {
     const fake = fakeFetch();

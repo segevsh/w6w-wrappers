@@ -15,6 +15,7 @@ from __future__ import annotations
 import email.message
 import io
 import json
+import os
 import socket
 import unittest
 from unittest import mock
@@ -529,14 +530,39 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(first_transport.calls[0].full_url, "https://one.example.com/me")
         self.assertEqual(second_transport.calls[0].full_url, "https://two.example.com/me")
 
-    def test_a_client_with_no_base_url_never_reaches_the_transport(self) -> None:
-        # Belt and braces on "no request is ever made with a relative URL": the
-        # failure happens at construction, before a transport is even stored.
+    def test_a_client_with_a_blank_explicit_base_url_never_reaches_the_transport(self) -> None:
+        # Belt and braces on "no request is ever made with a relative URL": an
+        # EXPLICIT blank fails at construction, before a transport is even stored.
         transport = responding({})
         with self.assertRaises(ConfigError) as caught:
             Client(base_url="", transport=transport)
         self.assertIn("W6W_BASE_URL", str(caught.exception))
         self.assertEqual(transport.calls, [])
+
+
+    def test_client_with_no_base_url_targets_the_default_host(self) -> None:
+        # unset, blank and whitespace-only env are all "absent" -> the default.
+        cases = {"unset": None, "empty": "", "whitespace": "   "}
+        for label, value in cases.items():
+            with self.subTest(label):
+                transport = responding({})
+                env = {} if value is None else {"W6W_BASE_URL": value}
+                with mock.patch.dict(os.environ, env):
+                    if value is None:
+                        os.environ.pop("W6W_BASE_URL", None)
+                    Client(token="tok_1", transport=transport).request("GET", "/me")
+                self.assertEqual(transport.calls[0].full_url, "https://api.w6w.io/me")
+
+    def test_env_beats_default_and_explicit_beats_env(self) -> None:
+        with mock.patch.dict(os.environ, {"W6W_BASE_URL": "https://env.example.com"}):
+            t1 = responding({})
+            Client(token="tok_1", transport=t1).request("GET", "/me")
+            t2 = responding({})
+            Client(base_url="https://x.example.com", token="tok_1", transport=t2).request(
+                "GET", "/me"
+            )
+        self.assertEqual(t1.calls[0].full_url, "https://env.example.com/me")
+        self.assertEqual(t2.calls[0].full_url, "https://x.example.com/me")
 
 
 class TypingTest(unittest.TestCase):

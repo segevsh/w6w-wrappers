@@ -12,8 +12,8 @@ access point and one credential. This page gets you from nothing to a first real
 
 ## 1. Get access
 
-w6w isn't self-serve yet. [Request access](/) from the homepage and you'll get back a base URL and
-an API token for your account.
+w6w isn't self-serve yet. [Request access](/) from the homepage and you'll get back an API token (and a base URL, if your
+account lives on its own host). Calls go to `https://api.w6w.io` by default.
 
 ## 2. Install a client
 
@@ -27,11 +27,11 @@ pip install w6w            # Python
 
 ## 3. Configure it
 
-Two values, from step 1:
+The token from step 1 is all you need; the base URL defaults to `https://api.w6w.io`:
 
 ```bash
-export W6W_BASE_URL=https://api.example.com   # your account's origin, no trailing path
 export W6W_TOKEN=…                             # sent as a Bearer token on every call
+# export W6W_BASE_URL=https://api.example.com   # optional: only for a different host, no trailing path
 ```
 
 ## 4. Make your first call
@@ -39,7 +39,7 @@ export W6W_TOKEN=…                             # sent as a Bearer token on eve
 ```ts
 import { W6WClient, isActionRun } from "@w6w/sdk";
 
-const client = new W6WClient(); // reads W6W_BASE_URL and W6W_TOKEN
+const client = new W6WClient(); // reads W6W_TOKEN (and W6W_BASE_URL if set)
 
 const me = await client.me();               // who am I, which versions am I talking to?
 const connections = await client.connections.list(); // what can I run?
@@ -52,7 +52,7 @@ const result = await client.run({
 if (isActionRun(result)) console.log(result.value);
 ```
 
-Same call from the CLI:
+Same call from the CLI. Save your token once with `w6w auth login <token>` (or export `W6W_TOKEN`):
 
 ```bash
 w6w connections list

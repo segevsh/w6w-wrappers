@@ -6,7 +6,7 @@ surface (`me`, `documents`, `vars`, `connections`, `workflows`, `functions`, `ru
 `createW6WUiAdapter`, a structural bridge from a `W6WClient` to
 [`@w6w/ui`](https://github.com/w6w-io/w6w-ui)'s `W6WApi` contract.
 
-License: MIT · Version: 0.9.15 · Guides: [docs.w6w.io/clients/react](https://docs.w6w.io/clients/react/)
+License: MIT · Version: 0.9.16 · Guides: [docs.w6w.io/clients/react](https://docs.w6w.io/clients/react/)
 (with a [hooks reference](https://docs.w6w.io/clients/react/hooks/) and a
 [Next.js walkthrough](https://docs.w6w.io/clients/react/nextjs/))
 
@@ -43,6 +43,10 @@ function App() {
   );
 }
 ```
+
+`baseUrl` is optional: omit it and the provider targets `https://api.w6w.io` (react's own
+`DEFAULT_BASE_URL`, exported from the package). It never reads `W6W_BASE_URL`, so an omitted prop
+means the default even under Next.js server rendering; pass `baseUrl` to point at another host.
 
 `token` accepts a literal string, or a supplier — sync or **async** — called per
 request (requests in flight at the same time share ONE supplier call; nothing is cached once
@@ -147,7 +151,9 @@ export default function W6WLayout({ children }: { children: React.ReactNode }) {
 ```
 
 The [Next.js walkthrough](https://docs.w6w.io/clients/react/nextjs/) builds the
-`/api/w6w-session` route this example fetches from, with `createEmbedSessionClient`.
+`/api/w6w-session` route this example fetches from, with `createEmbedSessionClient`. Self-hosted deployments must pass
+their API origin explicitly there: when omitted, the helper sends the tenant client credentials to
+`https://api.w6w.io`.
 
 ## Using this package with `@w6w/ui`
 

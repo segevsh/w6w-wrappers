@@ -196,15 +196,19 @@ differs on (§6 of `sdk-surface.md`).
   `Client` both accept `refreshOnUnauthorized`/`refresh_on_unauthorized`,
   `onUnauthorized`/`on_unauthorized` and a function-typed `token`. `@w6w/cli`
   does not: `cli/src/client.ts`'s `createClient` resolves a single static string
-  token once, at startup, from a `--token`-flag-then-`W6W_TOKEN`-env precedence
-  chain with no supplier anywhere in it — there is nothing for a `401` recovery
-  attempt to call a second time, and a CLI invocation is already a single
-  short-lived process a user re-runs by hand, which is a different
-  failure-recovery story than a long-lived server process holding a client
+  token once, at startup, from a `--token`-flag, then `W6W_TOKEN`-env, then the
+  stored-token (`w6w auth login`) precedence chain with no supplier anywhere in
+  it. There is nothing for a `401` recovery attempt to call a second time, and
+  a CLI invocation is already a single short-lived process a user re-runs by
+  hand, which is a different failure-recovery story than a long-lived server process holding a client
   across many calls. This is a **deliberate, permanent exclusion**, not a gap to
   close later: adding it would mean inventing a CLI-side token-refresh UX (a
   hook with nothing to register it against) for a surface that has none of the
-  host-process lifetime this feature exists for.
+  host-process lifetime this feature exists for. The stored-token tier is
+  **CLI-only**: node, python and react never read the CLI's config file, since
+  libraries do not read a per-user file the CLI owns. The CLI-only `auth`
+  commands are declared in `endpoints.json` `cli.commands[]`, not in
+  `operations[]`.
 - **python's supplier is sync-only; node's may be sync or async.** R-1 (and
   `sdk-surface.md` §6): there is no `asyncio` anywhere in
   `packages/wrappers/python`, and its transport (`urllib`, blocking) has no

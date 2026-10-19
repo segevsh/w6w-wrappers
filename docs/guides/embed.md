@@ -116,7 +116,9 @@ export function POST(req: Request) {
   try {
     handler ??= createEmbedSessionHandler({
       sessions: createEmbedSessionClient({
-        baseUrl: process.env.W6W_BASE_URL!,
+        // Optional: omit it and the client targets https://api.w6w.io. This client never
+        // reads W6W_BASE_URL itself, so pass it here if you run against another host.
+        baseUrl: process.env.W6W_BASE_URL || undefined,
         clientId: process.env.W6W_TENANT_CLIENT_ID!,
         clientSecret: process.env.W6W_TENANT_CLIENT_SECRET!, // stays on the server
       }),
@@ -222,6 +224,8 @@ call but returns the raw `{ token, user, expiresIn }`, and its `account` is opti
 out lands the token in your tenant's default account. Use it when you deliberately want that. For
 anything per-company, use the session client, which has no such fallback.
 
+Self-hosted deployments must pass their API origin explicitly; when omitted, the helper sends the tenant client credentials to `https://api.w6w.io`. Neither helper reads `W6W_BASE_URL`.
+
 OIDC sign-in remains supported as the other way to get a user's token; it is documented with your
 tenant's identity-provider setup.
 
@@ -310,7 +314,7 @@ your minting code only when needed, rather than minting a token on every call:
 import { W6WClient } from "@w6w/sdk";
 
 const client = new W6WClient({
-  baseUrl: process.env.W6W_BASE_URL,
+  baseUrl: process.env.W6W_BASE_URL || undefined,
   token: async () => (await mintSession()).token, // your own minting and caching
 });
 ```
@@ -330,7 +334,7 @@ caller, where `supplier` is your own token function (in React, `getSession` repl
 
 ```ts
 const client = new W6WClient({
-  baseUrl: process.env.W6W_BASE_URL,
+  baseUrl: process.env.W6W_BASE_URL || undefined,
   token: supplier,
   refreshOnUnauthorized: true,
   onUnauthorized: (err) => {
@@ -352,7 +356,7 @@ default headers once on the client:
 
 ```ts
 const client = new W6WClient({
-  baseUrl: process.env.W6W_BASE_URL,
+  baseUrl: process.env.W6W_BASE_URL || undefined,
   token: supplier,
   headers: { "X-W6W-Tenant": "<your-tenant-id>" },
 });

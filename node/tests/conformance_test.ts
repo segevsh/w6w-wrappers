@@ -34,7 +34,7 @@
  */
 
 import { assert, assertEquals } from "@std/assert";
-import { W6WClient } from "../mod.ts";
+import { DEFAULT_BASE_URL, W6WClient } from "../mod.ts";
 
 /** The shared contract, beside this lane — `packages/wrappers/endpoints.json`. */
 const CONTRACT_URL = new URL("../../endpoints.json", import.meta.url);
@@ -238,4 +238,10 @@ Deno.test("the runner resolves the pinned shapes, including a missing symbol", (
         "`client.workflows.listX` (from endpoints.json naming.ts)",
     ),
   );
+});
+
+Deno.test("conformance: DEFAULT_BASE_URL equals endpoints.json defaultBaseUrl", async () => {
+  const contract = await loadContract() as Contract & { defaultBaseUrl?: string };
+  assertEquals(contract.defaultBaseUrl, "https://api.w6w.io");
+  assertEquals(DEFAULT_BASE_URL, contract.defaultBaseUrl);
 });

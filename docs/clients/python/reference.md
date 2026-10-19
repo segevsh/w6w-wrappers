@@ -26,7 +26,7 @@ Everything the `w6w` package exports for application code. Import from `w6w`, ex
 
 | Argument | Type | Default | What it does |
 | --- | --- | --- | --- |
-| `base_url` | `str` | `W6W_BASE_URL` | Your API origin, such as `https://<your-host>`. Must be an absolute `http` or `https` URL. A path is kept as given. |
+| `base_url` | `str` | `W6W_BASE_URL`, else `https://api.w6w.io` | Your API origin, such as `https://<your-host>`. Must be an absolute `http` or `https` URL. A path is kept as given. |
 | `token` | `str` or a callable | `W6W_TOKEN` | A token, or a synchronous callable called before every authenticated request, as `token()` or `token(force_refresh=True)`. Its result is not cached or shared by the client; cache inside your callable. |
 | `project` | `str` | your account's default | Default project for `documents.*`, `workflows.list`, `workflows.create` and `workflows.update`. |
 | `refresh_on_unauthorized` | `bool` | `False` | On a `401 unauthorized`, call the token callable with `force_refresh=True` and retry once. |
@@ -34,7 +34,9 @@ Everything the `w6w` package exports for application code. Import from `w6w`, ex
 | `headers` | mapping | `None` | Headers sent with every request. Can't override `Authorization`. |
 | `transport` | callable | `urllib.request.urlopen` | Takes a `urllib.request.Request` and returns a response. Use it to set a timeout or a proxy. |
 
-`Client()` raises `ConfigError` if there's no usable base URL. A missing token is reported on the
+`Client()` raises `ConfigError` if the `base_url` you pass is blank, or if the base URL it ends up
+with (passed, or from `W6W_BASE_URL`) is relative or not http(s). An unset or empty `W6W_BASE_URL`
+is not an error: the client targets `https://api.w6w.io`. A missing token is reported on the
 first call instead.
 
 ## Client methods
@@ -175,7 +177,7 @@ For backends only. The recommended way to mint a short-lived, account-scoped ses
 
 | Argument | What it is |
 | --- | --- |
-| `base_url` | Your API origin. Required; no `W6W_BASE_URL` fallback. Use the final `https` origin. `exchange_token` and `EmbedSessionClient` refuse redirects by default: a 3xx raises `ApiError` and the Basic client credential is never re-sent. An injected `transport` is used as given. |
+| `base_url` | Your API origin. Optional: omitted, it is `https://api.w6w.io`; it never reads `W6W_BASE_URL`. Self-hosted deployments must pass their API origin explicitly: when omitted, the helper sends the tenant client credentials to `https://api.w6w.io`. A blank value raises `ConfigError`. Use the final `https` origin. `exchange_token` and `EmbedSessionClient` refuse redirects by default: a 3xx raises `ApiError` and the Basic client credential is never re-sent. An injected `transport` is used as given. |
 | `client_id`, `client_secret` | Your tenant's credentials. Keep the secret on your backend. |
 | `transport` | Optional. Defaults to a transport that never follows redirects (unlike `Client`); your own transport decides. |
 | `now` | Optional clock returning epoch seconds. Defaults to `time.time`. |
@@ -188,7 +190,7 @@ For backends only. The lower-level call, with an optional `account`. Trades your
 
 | Argument | What it is |
 | --- | --- |
-| `base_url` | Your API origin. |
+| `base_url` | Your API origin. Optional; omitted, it is `https://api.w6w.io`, and it never reads `W6W_BASE_URL`. Self-hosted deployments must pass their API origin explicitly: when omitted, the helper sends the tenant client credentials to `https://api.w6w.io`. |
 | `client_id`, `client_secret` | Your tenant's credentials. Keep the secret on your backend. |
 | `subject` | Your user's id. |
 | `account` | Optional. The w6w account the user works in, from your own records. |
@@ -200,7 +202,7 @@ Returns a dict with `token`, `expiresIn` (seconds) and `user`.
 
 | Class | Attributes | Raised when |
 | --- | --- | --- |
-| `w6w.ConfigError` | `message` | The base URL or token is missing or malformed. No request was sent. |
+| `w6w.ConfigError` | `message` | The token is missing, or the base URL you passed is blank, or the base URL is malformed. No request was sent. |
 | `w6w.ApiError` | `status`, `code`, `message`, `raw` | A request failed. `status` is `0` for `network_error`. |
 
 ## Helpers

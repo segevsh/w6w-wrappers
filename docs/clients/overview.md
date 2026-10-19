@@ -55,21 +55,25 @@ Every client reads the same two environment variables:
 
 | Variable | What it holds | Where it comes from |
 | --- | --- | --- |
-| `W6W_BASE_URL` | Your w6w API's origin, such as `https://<your-host>`. No path: the API is served at the root of that host. | The base URL you got with your account. |
+| `W6W_BASE_URL` | Your w6w API's origin, such as `https://<your-host>`. No path: the API is served at the root of that host. Defaults to `https://api.w6w.io`. | Only needed for a different host, such as a self-hosted w6w. |
 | `W6W_TOKEN` | An API token, sent as `Authorization: Bearer <token>` on every request. | Studio → **Settings** → **API tokens** → **+ Create token**. The secret is shown once. |
 
 ```bash
-export W6W_BASE_URL=https://<your-host>   # your API origin, no trailing path
+export W6W_BASE_URL=https://<your-host>   # optional: your API origin, no trailing path
 export W6W_TOKEN=…                         # Studio → Settings → API tokens
 ```
 
-An empty value counts as unset. If `W6W_BASE_URL` is missing, the client refuses to start. If
-`W6W_TOKEN` is missing, it refuses on the first call. Either way you get a configuration error that
-names the variable.
+An empty value counts as unset. If `W6W_BASE_URL` is unset, every client targets
+`https://api.w6w.io`. If `W6W_TOKEN` is missing, it refuses on the first call with a configuration
+error that names the variable. The CLI can also keep a login for you: run `w6w auth login <token>`
+once and it remembers the token for the base URL it was saved for (precedence: flag, then
+environment, then that stored login, then the default).
+
+The backend token-minting helpers (`exchangeToken`, `createEmbedSessionClient`, `exchange_token`, `EmbedSessionClient`) never read `W6W_BASE_URL`. Self-hosted deployments must pass their API origin explicitly; when omitted, a helper sends the tenant client credentials to `https://api.w6w.io`.
 
 Every client also accepts the base URL and token as explicit arguments, which win over the
-environment. The React provider is the exception: a browser has no environment, so you always pass
-both as props.
+environment. The React provider is the exception: a browser has no environment, so the token is a prop and
+`baseUrl` is an optional prop that defaults to `https://api.w6w.io`.
 
 ## Make your first call
 
@@ -88,7 +92,7 @@ w6w me
 ```ts
 import { W6WClient } from "@w6w/sdk";
 
-const client = new W6WClient(); // reads W6W_BASE_URL and W6W_TOKEN
+const client = new W6WClient(); // reads W6W_TOKEN, and W6W_BASE_URL if set (default https://api.w6w.io)
 const me = await client.me();
 console.log(me.account, me.role);
 ```
@@ -100,7 +104,7 @@ console.log(me.account, me.role);
 ```python
 from w6w import Client
 
-client = Client()  # reads W6W_BASE_URL and W6W_TOKEN
+client = Client()  # reads W6W_TOKEN, and W6W_BASE_URL if set (default https://api.w6w.io)
 me = client.me()
 print(me.account, me.role)
 ```
@@ -170,10 +174,10 @@ python -c "import w6w; print(w6w.__version__)" # Python
 
 | Symptom | Cause | What to do |
 | --- | --- | --- |
-| `No w6w base URL is configured` | `W6W_BASE_URL` is unset or empty, and none was passed. | Export it, or pass the base URL explicitly. |
+| `No w6w base URL is configured` | You passed an explicit blank base URL. An unset or empty `W6W_BASE_URL` is not an error: the default `https://api.w6w.io` is used. | Pass a real origin, or omit it. |
 | `… is not an absolute http(s) URL` | The base URL has no scheme or host, such as `api.example.com`. | Include the scheme: `https://<your-host>`. |
-| `No w6w API token is configured` | `W6W_TOKEN` is unset or empty, and none was passed. | Create a token in Studio → **Settings** → **API tokens** and export it. |
-| `401 unauthorized` | The token is wrong, disabled or revoked. | Create a new token and re-export `W6W_TOKEN`. |
+| `No w6w API token is configured` | `W6W_TOKEN` is unset or empty, and none was passed. | Create a token in Studio → **Settings** → **API tokens** and export it (or, in the CLI, `w6w auth login <token>`). |
+| `401 unauthorized` | The token is wrong, disabled or revoked, or `baseUrl` / `base_url` was omitted on a self-hosted deployment when calling a token-minting helper (`exchangeToken`, `createEmbedSessionClient`, `exchange_token`, `EmbedSessionClient`). | Create a new token and re-export `W6W_TOKEN`; for the helpers, pass your API origin explicitly. |
 | Every call is `404` | `W6W_BASE_URL` has a stray path, such as `/api`. | Set it to the bare origin. A path is kept as given, so a wrong one breaks every route. |
 | `network_error` with status `0` | The base URL doesn't resolve or the server is down. | Check the URL in a browser or with `curl`, and check your network. |
 

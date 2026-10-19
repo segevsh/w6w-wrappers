@@ -1,6 +1,6 @@
 # PLANNER.md — read this first when planning work in `w6w-wrappers`
 
-> **verified: 2026-10-17** (wrappers@1df07aa) — This guide records checked source locations, not a
+> **verified: 2026-10-19** (26-10-18-01-fixes integration tip) — This guide records checked source locations, not a
 > replacement for them. When this guide and the code disagree, **code wins**;
 > correct this guide in the same change.
 
@@ -238,6 +238,42 @@
    once …`) and `adapter-conformance.test.ts` (`listAppsPage forwards snapshot and offset …`).
    Console-only, so the change needed no `endpoints.json` row, only the lockstep bump to 0.9.14.
 
+13. **Every lane defaults to `https://api.w6w.io`; the value lives once in `endpoints.json`.**
+
+   **verified: 2026-10-19** — `endpoints.json` top-level `defaultBaseUrl` (beside `basePath`) is the
+   source; each lane carries its own constant and a test pins it equal: node
+   `DEFAULT_BASE_URL` in `node/src/config.ts` (exported from `node/mod.ts`; pinned by
+   `node/tests/conformance_test.ts` "DEFAULT_BASE_URL equals endpoints.json defaultBaseUrl"), python
+   `DEFAULT_BASE_URL` in `python/src/w6w/_config.py` (in `__all__`), react's OWN constant (never
+   imported from the SDK, pinned by `react/src/__tests__/default-base-url.test.ts`). Library
+   precedence: argument > `W6W_BASE_URL` (blank = absent) > default; an EXPLICIT blank base URL still
+   raises `ConfigError` ("No w6w base URL is configured"). The secret-bearing helpers
+   (`exchangeToken`/`exchange_token`, `createEmbedSessionClient`/`EmbedSessionClient`) are
+   argument-or-default and **never read `W6W_BASE_URL`** (`node/src/server/mod.ts` `baseUrl ??
+   DEFAULT_BASE_URL`, `python/src/w6w/server.py` `_base_or_default`) — don't route them through
+   env-reading `resolveConfig(undefined)`. React must apply its default BEFORE `new W6WClient`, or an
+   omitted prop reaches the SDK's env read during SSR. Adding `defaultBaseUrl` did NOT bump
+   `contractVersion` (wire-only, `docs/parity.md`). Docs for those helpers carry a self-host warning:
+   omit the base URL and the tenant client credentials go to `https://api.w6w.io`.
+
+14. **The CLI has a stored per-user token, bound to the URL it was saved for; `auth` is CLI-only.**
+
+   **verified: 2026-10-19** — `w6w auth login|logout|status` (`cli/src/commands/auth.ts`) is
+   declared in `endpoints.json`'s `cli.commands[]` (not an API operation), which
+   `cli/scripts/gen-help.ts` builds through the same path as an operation — regenerate with
+   `deno task gen:help` (`tests/help_test.ts` byte-compares `src/help.generated.ts`). The store:
+   `cli/src/config-store.ts` (`configPath`: `%APPDATA%\w6w\config.json` on Windows, else an
+   ABSOLUTE `$XDG_CONFIG_HOME/w6w/config.json`, else `~/.config/w6w/config.json`; `parseConfig` /
+   `serializeConfig`, `{version:1, baseUrl, hosts:{<url>:{token}}}`), real I/O behind the injected
+   `ConfigStore` seam in `cli/src/store-fs.ts` (Deno and the npm build; dir 0700, file 0600,
+   tmp+rename). CLI precedence: flag > env > stored current `baseUrl` > default for the URL;
+   `--token` > `W6W_TOKEN` > `hosts[<resolved URL>].token` — a stored token is sent ONLY to the URL
+   it was saved under (env/flag tokens are not host-bound). A malformed/unreadable store is a usage
+   error naming the path, never repaired. Tests never touch the real `~/.config`: inject
+   `XDG_CONFIG_HOME`/a fake store (`cli/tests/config_store_test.ts`, `cmd_auth_test.ts`); the
+   end-to-end probe (both runtimes, local capture server) lives in the 26-10-18-01-fixes project
+   record (`artifacts/probes/cli-auth-probe.sh`). The SDK, python and react never read this store.
+
 ## Gate baselines
 
 - **verified: 2026-10-06** — The release test job runs Python's unittest command
@@ -281,6 +317,9 @@
   (`--max-old-space-size=2048 --test-concurrency=4 --test-timeout=120000`) and `src/test-jsx-loader.mjs`
   loads two assert guards (`test-assert-guard.mjs` inner, `test-guards.mjs` outer), because a failing
   assert on a rendered DOM node exhausted host memory (26-10-16-01 BLK-1).
+- **verified: 2026-10-19** — at the 26-10-18-01-fixes integration tip (`VERSION` 0.9.16, contract
+  0.8.0 + `defaultBaseUrl`): node `deno task test` → `ok | 646 passed | 0 failed`; cli 192 passed;
+  python unittest 375 OK; react 176 pass (same invocations as above).
 - **verified: 2026-10-06** — React's CI setup builds the sibling SDK, installs
   it locally, then runs `npm test` (`.github/workflows/release.yml:146-161`).
   Use the Node 22 invocation above when reproducing it in this lane.

@@ -77,9 +77,21 @@ export type W6WCredentialProps =
       renewBeforeMs?: number;
     };
 
+/**
+ * The base URL used when `baseUrl` is omitted: w6w's own production API.
+ * Declared once in `endpoints.json` as `defaultBaseUrl` (a test pins this
+ * constant to it). React keeps its own copy and applies it BEFORE building the
+ * client, so an omitted prop never reaches the SDK's `W6W_BASE_URL` environment
+ * read under Node/Next SSR.
+ */
+export const DEFAULT_BASE_URL = "https://api.w6w.io";
+
 export type W6WProviderProps = {
-  /** The w6w server's origin, e.g. `"https://api.example.com"`. */
-  baseUrl: string;
+  /**
+   * The w6w server's origin, e.g. `"https://api.example.com"`. Optional:
+   * defaults to {@linkcode DEFAULT_BASE_URL} (`https://api.w6w.io`).
+   */
+  baseUrl?: string;
   /**
    * The real transport this provider's stable `fetch` wrapper delegates to.
    * Defaults to `globalThis.fetch`. Mainly for tests — a caller wanting to
@@ -153,7 +165,7 @@ function headersKey(headers: Record<string, string> | undefined): string {
  */
 export function W6WProvider(props: W6WProviderProps): ReactNode {
   const {
-    baseUrl,
+    baseUrl: baseUrlProp,
     token,
     getSession,
     renewBeforeMs,
@@ -166,6 +178,7 @@ export function W6WProvider(props: W6WProviderProps): ReactNode {
     onUnauthorized,
     children,
   } = props;
+  const baseUrl = baseUrlProp ?? DEFAULT_BASE_URL;
 
   const hasToken = token !== undefined && token !== null;
   const hasSession = getSession !== undefined && getSession !== null;
