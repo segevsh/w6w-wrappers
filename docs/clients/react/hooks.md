@@ -24,7 +24,7 @@ Everything `@w6w/react` exports. For a walkthrough, start with the [React](/clie
 
 | Prop | Type | Default | What it does |
 | --- | --- | --- | --- |
-| `baseUrl` | `string` | required | Your w6w API origin, such as `https://<your-host>`. |
+| `baseUrl` | `string` | `https://api.w6w.io` | Your w6w API origin, such as `https://<your-host>`. Optional; the provider never reads `W6W_BASE_URL`. |
 | `token` | `string` or a function | none | A literal token, or a supplier called per request (concurrent requests share one call, nothing is cached once it settles). May be async. Called with `{ forceRefresh: true }` on a refresh retry. Pass exactly one of `token` or `getSession`; the provider throws if you pass both or neither. |
 | `getSession` | `() => Promise<{ token, expiresAt, expiresIn? }>` | none | Mints a session, usually by calling your backend's session endpoint. The provider calls it lazily, one call at a time, caches the session, renews it before it expires and re-checks on tab resume. Needs `@w6w/react` 0.9.13 or later. See [`useW6WSession`](#usew6wsession). |
 | `renewBeforeMs` | `number` | `30000` | With `getSession`: renew this many milliseconds before expiry, capped at half the session's lifetime. |

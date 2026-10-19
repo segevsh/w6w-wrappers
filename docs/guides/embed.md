@@ -116,7 +116,9 @@ export function POST(req: Request) {
   try {
     handler ??= createEmbedSessionHandler({
       sessions: createEmbedSessionClient({
-        baseUrl: process.env.W6W_BASE_URL!,
+        // Optional: omit it and the client targets https://api.w6w.io. This client never
+        // reads W6W_BASE_URL itself, so pass it here if you run against another host.
+        baseUrl: process.env.W6W_BASE_URL,
         clientId: process.env.W6W_TENANT_CLIENT_ID!,
         clientSecret: process.env.W6W_TENANT_CLIENT_SECRET!, // stays on the server
       }),

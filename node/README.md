@@ -37,7 +37,7 @@ means the same set of operations in every language.
 ```ts
 import { isActionRun, isFunctionRun, isWorkflowRun, W6WClient } from "@w6w/sdk";
 
-const client = new W6WClient(); // reads W6W_BASE_URL and W6W_TOKEN
+const client = new W6WClient(); // W6W_BASE_URL (default https://api.w6w.io) and W6W_TOKEN
 
 // Who am I? (`me.versions.wrapper` is this SDK's version.)
 const me = await client.me();
@@ -168,13 +168,14 @@ Two environment variables, both read only at client construction:
 
 | Variable       | Meaning                                                                                                                                | Required |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| `W6W_BASE_URL` | The **origin** of your w6w server, e.g. `https://api.example.com`. The API is served at the root of that host, so nothing is appended. | Yes      |
+| `W6W_BASE_URL` | The **origin** of your w6w server, e.g. `https://api.example.com`. The API is served at the root of that host, so nothing is appended. Defaults to `https://api.w6w.io`. | No       |
 | `W6W_TOKEN`    | The bearer token, sent as `Authorization: Bearer <token>` on every request.                                                            | Yes      |
 
 Explicit constructor arguments always win over the environment, and credentials are **instance
 state**: two clients in one process can hold different tokens and point at different servers with no
-interference. There is no default base URL — a client built without one and without `W6W_BASE_URL`
-raises a configuration error naming the variable.
+interference. The base URL resolves as explicit `baseUrl`, then `W6W_BASE_URL`, then the default
+`https://api.w6w.io` (exported as `DEFAULT_BASE_URL`) — so a client built without either talks to
+w6w's own API.
 
 ```ts
 import { W6WClient } from "@w6w/sdk";
@@ -251,9 +252,9 @@ preserved verbatim, because it is indistinguishable from a real gateway prefix:
 
 A variable that is **set but empty** — or whitespace-only — counts as **unset**, in both variables.
 `W6W_BASE_URL=` is how a shell or a Dockerfile spells "I meant to set this and did not", so it
-raises the same configuration error as an absent one rather than quietly producing a relative URL.
-An empty string passed _explicitly_ to the constructor is likewise an error, and does not fall back
-to the environment.
+falls through to the default `https://api.w6w.io`, exactly like an unset one, rather than quietly
+producing a relative URL. An empty string passed _explicitly_ to the constructor is different: it
+is an error, and falls back neither to the environment nor to the default.
 
 ### `W6W_TOKEN`
 
@@ -269,7 +270,7 @@ the environment.
 
 Two error types, and the difference between them is diagnostic:
 
-- **`ConfigError`** — the client never got as far as a request: no base URL, or no token.
+- **`ConfigError`** — the client never got as far as a request: a malformed base URL, or no token.
 - **`ApiError`** — carries `status`, `code`, `message` and `raw` (the parsed response body, kept
   because an error body carries fields the message drops). It covers exactly three cases: a
   transport failure (`status: 0`, code `network_error`), a non-JSON body on a failing status (code
@@ -295,7 +296,8 @@ route and walkthrough are in [Embed w6w in your product](https://docs.w6w.io/gui
 import { createEmbedSessionClient } from "@w6w/sdk/server";
 
 const sessions = createEmbedSessionClient({
-  baseUrl: process.env.W6W_BASE_URL!,
+  // Optional: defaults to https://api.w6w.io. This factory never reads W6W_BASE_URL itself.
+  baseUrl: process.env.W6W_BASE_URL,
   clientId: process.env.W6W_TENANT_CLIENT_ID!,
   clientSecret: process.env.W6W_TENANT_CLIENT_SECRET!, // never sent to the browser
 });
@@ -330,7 +332,7 @@ app.post("/api/w6w-token", async (req, res) => {
   const account = await yourOwnMembershipLookup(session.userId);
 
   const { token, expiresIn } = await exchangeToken({
-    baseUrl: process.env.W6W_BASE_URL!,
+    baseUrl: process.env.W6W_BASE_URL, // optional; defaults to https://api.w6w.io, never read from env
     clientId: process.env.W6W_TENANT_CLIENT_ID!,
     clientSecret: process.env.W6W_TENANT_CLIENT_SECRET!, // never sent to the browser
     subject: session.userId,

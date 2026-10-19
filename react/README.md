@@ -44,6 +44,10 @@ function App() {
 }
 ```
 
+`baseUrl` is optional: omit it and the provider targets `https://api.w6w.io` (react's own
+`DEFAULT_BASE_URL`, exported from the package). It never reads `W6W_BASE_URL`, so an omitted prop
+means the default even under Next.js server rendering; pass `baseUrl` to point at another host.
+
 `token` accepts a literal string, or a supplier — sync or **async** — called per
 request (requests in flight at the same time share ONE supplier call; nothing is cached once
 it settles, so memoize an expensive supplier yourself): `() => getCurrentJwt()` or `async () => await getCurrentJwt()` both
