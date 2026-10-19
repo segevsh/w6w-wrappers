@@ -13,7 +13,7 @@ access point and one credential. This page gets you from nothing to a first real
 ## 1. Get access
 
 w6w isn't self-serve yet. [Request access](/) from the homepage and you'll get back an API token (and a base URL, if your
-account lives on its own host) for your account. Calls go to `https://api.w6w.io` by default.
+account lives on its own host). Calls go to `https://api.w6w.io` by default.
 
 ## 2. Install a client
 
