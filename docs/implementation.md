@@ -351,6 +351,7 @@ lanes never read that stored config.
 ```
 library:  constructor argument  >  environment variable  >  default (https://api.w6w.io)
 CLI:      flag (--base-url / --token)  >  environment variable  >  stored config  >  default
+helpers (exchangeToken / embed session):  argument  >  default (never env)
 ```
 
 An explicitly passed empty string is an explicit value, not "unset" — do not

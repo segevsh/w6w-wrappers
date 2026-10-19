@@ -229,9 +229,9 @@ class EmbedSessionClient:
         _required_text(client_id, "client_id", _SESSION)
         _required_text(client_secret, "client_secret", _SESSION)
         _basic_auth_header(client_id, client_secret, _SESSION)
-        base_url = _base_or_default(base_url)
-        resolve_config(base_url=base_url)
-        self._base_url = base_url
+        resolved_base_url: str = _base_or_default(base_url)
+        resolve_config(base_url=resolved_base_url)
+        self._base_url = resolved_base_url
         self._client_id = client_id
         self._client_secret = client_secret
         self._transport = transport

@@ -18,6 +18,15 @@ function authenticate(_req: Request): HostSession | null {
   return null;
 }
 
+/**
+ * Your API origin from `W6W_BASE_URL`, or `undefined` when it is unset or blank so the helper
+ * uses its default (`https://api.w6w.io`). Self-hosted? Set `W6W_BASE_URL`: when omitted, the
+ * tenant client credentials are sent to `https://api.w6w.io`.
+ */
+export function baseUrlFromEnv(env: Env): string | undefined {
+  return env.W6W_BASE_URL?.trim() ? env.W6W_BASE_URL : undefined;
+}
+
 let handler: ((req: Request) => Promise<Response>) | undefined;
 
 export function POST(req: Request): Promise<Response> {
@@ -26,7 +35,7 @@ export function POST(req: Request): Promise<Response> {
       const env = (globalThis as { process?: { env: Env } }).process?.env ?? {};
       handler = createEmbedSessionHandler({
         sessions: createEmbedSessionClient({
-          baseUrl: env.W6W_BASE_URL ?? "",
+          baseUrl: baseUrlFromEnv(env),
           clientId: env.W6W_TENANT_CLIENT_ID ?? "",
           clientSecret: env.W6W_TENANT_CLIENT_SECRET ?? "",
         }),

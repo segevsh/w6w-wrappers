@@ -40,8 +40,8 @@ class Client:
 
     Construction resolves configuration once — explicit arguments first, then
     the environment (`W6W_BASE_URL`, `W6W_TOKEN`) — and never consults the
-    environment again. A missing base URL raises here; a missing token raises on
-    the first request, so a CLI can print `--help` offline.
+    environment again. An omitted base URL falls back to `DEFAULT_BASE_URL` (only an
+    explicit blank one raises here); a missing token raises on the first request, so a CLI can print `--help` offline.
 
     Example::
 
@@ -121,8 +121,8 @@ class Client:
             **base** every per-request `headers` argument builds on: a
             per-request header with the same name wins, and neither can ever
             displace the bearer this transport attaches (`Authorization`).
-        :raises ConfigError: When no base URL is configured, naming
-            `W6W_BASE_URL`.
+        :raises ConfigError: When an explicit ``base_url`` is blank, or the
+            resolved one is relative or not http(s).
         """
         self.config: ResolvedConfig = resolve_config(
             base_url=base_url,

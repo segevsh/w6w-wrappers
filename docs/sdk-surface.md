@@ -472,6 +472,8 @@ and names one of the tenant's end-users via `subject`, minting a short-lived,
 [docs.w6w.io/clients/node/embedding](https://docs.w6w.io/clients/node/embedding/);
 see also the `node` lane's `README.md` "Embedding for enterprise tenants".
 
+**Self-hosting.** Self-hosted deployments must pass their API origin explicitly; when omitted, the helper sends the tenant client credentials to `https://api.w6w.io`. These helpers never read `W6W_BASE_URL`.
+
 **The session client — the recommended embed path.** `createEmbedSessionClient`
 / `EmbedSessionClient` holds one tenant's credentials per instance and mints one
 account-scoped session per `create()`: exactly one `POST /auth/exchange`, made

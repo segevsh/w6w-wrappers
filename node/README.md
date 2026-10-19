@@ -311,7 +311,8 @@ const { token, expiresAt, account } = await sessions.create({ subject: userId, a
 `account` is the server's resolved `acct_…` id. The factory throws in a browser-like runtime.
 
 The lower-level `exchangeToken`, with an optional `account`, stays available from the same entry
-point:
+point. **Self-hosted deployments must pass `baseUrl` explicitly; when omitted, the helper sends the
+tenant client credentials to `https://api.w6w.io`** (neither helper reads `W6W_BASE_URL`):
 
 ```ts
 import { exchangeToken } from "@w6w/sdk/server";

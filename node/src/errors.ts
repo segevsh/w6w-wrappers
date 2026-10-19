@@ -8,7 +8,7 @@
  *   `docs/implementation.md` §3, and raised by exactly the three failure modes
  *   in `src/http.ts`.
  * - {@linkcode ConfigError} — the client was never in a position to make a
- *   request: no base URL, or no token. No HTTP exchange happened, so an
+ *   request: an explicitly blank base URL, or no token. No HTTP exchange happened, so an
  *   `ApiError`'s `status` and `code` would have to be invented; `status: 0` in
  *   particular is already spoken for by `network_error`, and conflating "your
  *   server is unreachable" with "you have not configured a server" is exactly
@@ -74,7 +74,7 @@ export class ApiError extends Error {
 /**
  * The client is not configured well enough to make a request.
  *
- * Raised at construction when there is no base URL, and on the first request
+ * Raised at construction when an explicit base URL is blank or malformed, and on the first request
  * when there is no token — a client with no token can still be *built*, so a
  * CLI's `--help` and `--version` work offline (`docs/implementation.md` §2).
  *

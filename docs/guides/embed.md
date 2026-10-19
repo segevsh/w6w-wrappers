@@ -224,6 +224,8 @@ call but returns the raw `{ token, user, expiresIn }`, and its `account` is opti
 out lands the token in your tenant's default account. Use it when you deliberately want that. For
 anything per-company, use the session client, which has no such fallback.
 
+Self-hosted deployments must pass their API origin explicitly; when omitted, the helper sends the tenant client credentials to `https://api.w6w.io`. Neither helper reads `W6W_BASE_URL`.
+
 OIDC sign-in remains supported as the other way to get a user's token; it is documented with your
 tenant's identity-provider setup.
 

@@ -69,6 +69,8 @@ error that names the variable. The CLI can also keep a login for you: run `w6w a
 once and it remembers the token for the base URL it was saved for (precedence: flag, then
 environment, then that stored login, then the default).
 
+The backend token-minting helpers (`exchangeToken`, `createEmbedSessionClient`, `exchange_token`, `EmbedSessionClient`) never read `W6W_BASE_URL`. Self-hosted deployments must pass their API origin explicitly; when omitted, a helper sends the tenant client credentials to `https://api.w6w.io`.
+
 Every client also accepts the base URL and token as explicit arguments, which win over the
 environment. The React provider is the exception: a browser has no environment, so the token is a prop and
 `baseUrl` is an optional prop that defaults to `https://api.w6w.io`.
@@ -175,7 +177,7 @@ python -c "import w6w; print(w6w.__version__)" # Python
 | `No w6w base URL is configured` | You passed an explicit blank base URL. An unset or empty `W6W_BASE_URL` is not an error: the default `https://api.w6w.io` is used. | Pass a real origin, or omit it. |
 | `… is not an absolute http(s) URL` | The base URL has no scheme or host, such as `api.example.com`. | Include the scheme: `https://<your-host>`. |
 | `No w6w API token is configured` | `W6W_TOKEN` is unset or empty, and none was passed. | Create a token in Studio → **Settings** → **API tokens** and export it (or, in the CLI, `w6w auth login <token>`). |
-| `401 unauthorized` | The token is wrong, disabled or revoked. | Create a new token and re-export `W6W_TOKEN`. |
+| `401 unauthorized` | The token is wrong, disabled or revoked, or `baseUrl` / `base_url` was omitted on a self-hosted deployment when calling a token-minting helper (`exchangeToken`, `createEmbedSessionClient`, `exchange_token`, `EmbedSessionClient`). | Create a new token and re-export `W6W_TOKEN`; for the helpers, pass your API origin explicitly. |
 | Every call is `404` | `W6W_BASE_URL` has a stray path, such as `/api`. | Set it to the bare origin. A path is kept as given, so a wrong one breaks every route. |
 | `network_error` with status `0` | The base URL doesn't resolve or the server is down. | Check the URL in a browser or with `curl`, and check your network. |
 

@@ -133,7 +133,7 @@ class AbsoluteBaseUrlTest(unittest.TestCase):
 
 
 class PrecedenceTest(unittest.TestCase):
-    """Explicit argument > environment variable > (no default)."""
+    """Explicit argument > environment variable > default (`DEFAULT_BASE_URL`; the token has none)."""
 
     def test_the_environment_supplies_the_base_url_and_token(self) -> None:
         config = resolve_config(

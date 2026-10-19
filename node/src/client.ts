@@ -44,8 +44,8 @@ import { WorkflowsApi } from "./workflows.ts";
  *
  * Construction resolves configuration once — explicit arguments first, then the
  * environment (`W6W_BASE_URL`, `W6W_TOKEN`) — and never consults the
- * environment again. A missing base URL raises here; a missing token raises on
- * the first request, so a CLI can print `--help` offline.
+ * environment again. An omitted base URL falls back to `DEFAULT_BASE_URL`
+ * (only an explicit blank one raises here); a missing token raises on the first request, so a CLI can print `--help` offline.
  *
  * @example
  * ```ts
@@ -173,7 +173,7 @@ export class W6WClient {
 
   /**
    * @param options - Explicit configuration; anything omitted falls back to the environment.
-   * @throws {ConfigError} When no base URL is configured, or the host has no `fetch`.
+   * @throws {ConfigError} When an explicit `baseUrl` is blank or malformed, or the host has no `fetch`.
    */
   constructor(options: W6WClientOptions = {}) {
     this.config = resolveConfig(options);
