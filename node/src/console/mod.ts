@@ -172,7 +172,14 @@ export type { StepTest, StepTestRun, StepTestsHost } from "./step-tests.ts";
 export { VaultApi } from "./vault.ts";
 export type { SecretValue, VaultHost, VaultSecretSummary } from "./vault.ts";
 export { TokensApi } from "./tokens.ts";
-export type { ApiToken, ApiTokenStatus, CreateTokenResponse, TokensHost } from "./tokens.ts";
+export type {
+  ApiToken,
+  ApiTokenStatus,
+  CreateTokenOptions,
+  CreateTokenResponse,
+  TokenScopes,
+  TokensHost,
+} from "./tokens.ts";
 export { FunctionsApi, isCallableImpl } from "./functions.ts";
 export type {
   FunctionActionImpl,
