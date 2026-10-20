@@ -79,6 +79,37 @@ export interface ApiToken {
   revokedAt: string | null;
   /** ISO-8601 timestamp of the token's last authenticated use, or `null` while unused. Optional: absent on a server build that predates this field. */
   lastUsedAt?: string | null;
+  /** What the token may do, or `null` for legacy full access (every token created without scopes). */
+  scopes: TokenScopes | null;
+  /** The IP allow-list in canonical `addr/prefix` form. `[]` means any IP. */
+  allowedIps: string[];
+}
+
+/**
+ * A token's scopes (wire version 1). `null` on {@linkcode ApiToken.scopes} means
+ * legacy full access. Reads are always allowed; the server rejects any other
+ * shape with `400 invalid_scopes`.
+ */
+export interface TokenScopes {
+  /** Always `1`. */
+  v: 1;
+  /** Which callables the token may invoke: all, none, or an explicit list of `fn_`/`ep_`/`wf_` ids (1..100). */
+  invoke: "all" | "none" | { callables: string[] };
+  /** Which kinds of definition the token may manage. */
+  manage: { functions: boolean; endpoints: boolean; workflows: boolean };
+}
+
+/** Options for {@linkcode TokensApi.create}. */
+export interface CreateTokenOptions {
+  /** Caller-chosen label. */
+  name: string;
+  /** Scopes; omit for full access. */
+  scopes?: TokenScopes;
+  /**
+   * IP allow-list. A string (comma/whitespace separated) or an array, sent
+   * exactly as given — the server parses and canonicalizes it. Omit for any IP.
+   */
+  allowedIps?: string | string[];
 }
 
 /**
@@ -142,15 +173,45 @@ export class TokensApi {
    * established "no envelope key" pattern. `unwrap()` is deliberately not
    * called here: there is no single key to unwrap.
    *
-   * @param name - Caller-chosen label.
+   * @param nameOrOptions - A label, or `{name, scopes?, allowedIps?}`. The string
+   * form sends exactly `{name}`; undefined options are omitted from the body.
    * @returns The created token's metadata plus its one-time plaintext secret.
-   * @throws {ApiError} `400 invalid_name`.
+   * @throws {ApiError} `400 invalid_name`/`invalid_scopes`/`invalid_allowed_ips`.
    */
-  async create(name: string): Promise<CreateTokenResponse> {
+  async create(nameOrOptions: string | CreateTokenOptions): Promise<CreateTokenResponse> {
+    const body: Record<string, unknown> = typeof nameOrOptions === "string"
+      ? { name: nameOrOptions }
+      : { name: nameOrOptions.name };
+    if (typeof nameOrOptions !== "string") {
+      if (nameOrOptions.scopes !== undefined) body.scopes = nameOrOptions.scopes;
+      if (nameOrOptions.allowedIps !== undefined) body.allowedIps = nameOrOptions.allowedIps;
+    }
     const res = await this.#host.request<CreateTokenResponse>({
       method: "POST",
       path: "/tokens",
-      body: { name },
+      body,
+    });
+    return res.body;
+  }
+
+  /**
+   * Rotate a token: mint a new secret for it. **The old secret stops working
+   * at once.** **Returns the new plaintext secret exactly once** — like
+   * {@linkcode create}, there is no reveal-later route, so a caller that does
+   * not capture it here has permanently lost it.
+   *
+   * No envelope key to peel — the whole body IS `{token, secret}`, so this
+   * returns `res.body` as `create` does, not via `unwrap()`.
+   *
+   * @param id - The token id.
+   * @returns The token's metadata plus its new one-time plaintext secret.
+   * @throws {ApiError} `404 unknown_token`/`unknown_account`.
+   */
+  async rotate(id: string): Promise<CreateTokenResponse> {
+    const res = await this.#host.request<CreateTokenResponse>({
+      method: "POST",
+      path: path`/tokens/${id}/rotate`,
+      body: {},
     });
     return res.body;
   }

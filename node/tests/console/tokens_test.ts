@@ -61,6 +61,8 @@ const TOKEN_A: ApiToken = {
   createdAt: "2026-08-01T00:00:00.000Z",
   updatedAt: "2026-08-01T00:00:00.000Z",
   revokedAt: null,
+  scopes: null,
+  allowedIps: [],
 };
 
 const TOKEN_B: ApiToken = {
@@ -71,6 +73,8 @@ const TOKEN_B: ApiToken = {
   createdAt: "2026-08-02T00:00:00.000Z",
   updatedAt: "2026-08-02T00:00:00.000Z",
   revokedAt: null,
+  scopes: null,
+  allowedIps: [],
 };
 
 /** A client wired to a fake transport. */
@@ -97,6 +101,7 @@ Deno.test(
     assertEquals(typeof c.console.tokens.disable, "function");
     assertEquals(typeof c.console.tokens.enable, "function");
     assertEquals(typeof c.console.tokens.revoke, "function");
+    assertEquals(typeof c.console.tokens.rotate, "function");
   },
 );
 
@@ -193,4 +198,54 @@ Deno.test("console.tokens.revoke percent-encodes id via the `path` tag", async (
   await c.client.console.tokens.revoke("tok 1");
 
   assertEquals(c.calls[0].url, "https://api.example.com/tokens/tok%201/revoke");
+});
+
+Deno.test("console.tokens.create(string) sends exactly {name}", async () => {
+  const c = client(() => json({ token: TOKEN_A, secret: "s" }, 201));
+
+  await c.client.console.tokens.create("ci");
+
+  assertEquals(c.calls[0].method, "POST");
+  assertEquals(c.calls[0].url, "https://api.example.com/tokens");
+  assertEquals(c.calls[0].body, '{"name":"ci"}');
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), { name: "ci" });
+});
+
+Deno.test("console.tokens.create(options) sends scopes and allowedIps unmodified", async () => {
+  const scopes = {
+    v: 1 as const,
+    invoke: { callables: ["fn_abc"] },
+    manage: { functions: true, endpoints: false, workflows: false },
+  };
+  for (const allowedIps of ["1.2.3.4, 10.0.0.0/8", ["1.2.3.4", "10.0.0.0/8"]]) {
+    const c = client(() => json({ token: TOKEN_A, secret: "s" }, 201));
+    await c.client.console.tokens.create({ name: "ci", scopes, allowedIps });
+    assertEquals(JSON.parse(c.calls[0].body ?? "null"), { name: "ci", scopes, allowedIps });
+  }
+});
+
+Deno.test("console.tokens.create(options) omits undefined keys", async () => {
+  const c = client(() => json({ token: TOKEN_A, secret: "s" }, 201));
+
+  await c.client.console.tokens.create({ name: "ci", scopes: undefined, allowedIps: undefined });
+
+  assertEquals(c.calls[0].body, '{"name":"ci"}');
+});
+
+Deno.test("console.tokens.rotate POSTs to /tokens/:id/rotate and returns {token, secret}", async () => {
+  const c = client(() => json({ token: TOKEN_A, secret: "tok_live_new" }));
+
+  const res = await c.client.console.tokens.rotate("tok_1");
+
+  assertEquals(res, { token: TOKEN_A, secret: "tok_live_new" });
+  assertEquals(c.calls[0].method, "POST");
+  assertEquals(c.calls[0].url, "https://api.example.com/tokens/tok_1/rotate");
+});
+
+Deno.test("console.tokens.rotate percent-encodes id via the `path` tag", async () => {
+  const c = client(() => json({ token: TOKEN_A, secret: "s" }));
+
+  await c.client.console.tokens.rotate("tok 1");
+
+  assertEquals(c.calls[0].url, "https://api.example.com/tokens/tok%201/rotate");
 });
