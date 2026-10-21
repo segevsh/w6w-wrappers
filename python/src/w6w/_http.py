@@ -54,6 +54,7 @@ from urllib.request import (
 )
 
 from ._config import ResolvedConfig, require_token
+from ._version import __version__
 from .errors import ApiError
 
 #: How much of a non-JSON error body is quoted back in a `bad_response`
@@ -429,6 +430,11 @@ def _request(
             request_headers["Authorization"] = "Bearer " + token
 
     request = Request(url, data=payload, headers=request_headers, method=method)
+    # Identify the SDK rather than inheriting urllib's generic Python agent,
+    # which API edge filters may reject. Request normalises header casing, so
+    # an explicit caller-supplied agent wins regardless of its original case.
+    if not request.has_header("User-agent"):
+        request.add_header("User-Agent", "w6w-python/" + __version__)
 
     try:
         response = transport(request)

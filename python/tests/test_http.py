@@ -26,6 +26,7 @@ from urllib.request import BaseHandler, Request
 from w6w import _http
 from w6w import ApiError, Client, ConfigError, HttpResponse, path
 from w6w._config import resolve_config
+from w6w._version import __version__
 from w6w._http import (
     _request,
     build_no_redirect_opener,
@@ -103,6 +104,32 @@ def http_error(status: int, body: str, reason: str = "") -> HTTPError:
 
 class SuccessTest(unittest.TestCase):
     """`2xx` outcomes — including the ones a naive client mistakes for errors."""
+
+    def test_sdk_user_agent_is_sent_on_get_and_post(self) -> None:
+        for method in ("GET", "POST"):
+            with self.subTest(method=method):
+                transport = responding({})
+                _request(CONFIG, transport, method, "/example")
+                self.assertEqual(
+                    transport.calls[0].get_header("User-agent"),
+                    "w6w-python/" + __version__,
+                )
+
+    def test_explicit_user_agent_is_preserved(self) -> None:
+        for name in ("User-Agent", "user-agent", "USER-AGENT"):
+            for source in ("client", "request"):
+                with self.subTest(name=name, source=source):
+                    headers = {name: "my-app/1.0"}
+                    config = resolve_config(
+                        base_url="https://api.example.com", token="tok_1",
+                        headers=headers if source == "client" else None,
+                    )
+                    transport = responding({})
+                    _request(config, transport, "GET", "/example",
+                             headers=headers if source == "request" else None)
+                    self.assertEqual(
+                        transport.calls[0].get_header("User-agent"), "my-app/1.0",
+                    )
 
     def test_a_200_returns_the_parsed_body_the_status_and_sends_the_bearer(self) -> None:
         transport = responding({"vars": [{"id": "var_1"}]})
