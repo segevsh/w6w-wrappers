@@ -217,11 +217,20 @@ as no-wait anyway. `variables`, `trigger` and `input` are body fields; `trigger`
 is an **open string**, passed through unvalidated, so a sixth server-side value
 needs no wrapper release. `variables` and `input` are not the same slot:
 `variables` seeds the run's variable scope (`vars.*`); `input` is delivered to
-the entry trigger node's own recorded output (`steps.<triggerId>.output.<key>`)
-— the shape a trigger's declared fields actually arrive in. It returns the wire
-body plus two derived signals: `terminal` (from the run's own status) and
+the entry trigger node's own recorded output (`nodes.<triggerId>.output.<key>`,
+the same value the older `steps.<triggerId>.output.<key>` alias reads) — the
+shape a trigger's declared fields actually arrive in. It returns the wire body
+plus two derived signals: `terminal` (from the run's own status) and
 `httpStatus` (`200` finished, `202` still going) — the body alone cannot tell a
 `?wait=` timeout from a run that was never waited on.
+
+The run body's per-node state is keyed by node id under `nodes`, and repeated
+under `steps`, its alias, with identical records — read either. A failed node's
+error record carries `nodeId`, with `stepId` beside it holding the same id. A
+`202` carries neither map, so both packages normalise the pair to `{}` rather
+than leaving it absent. `RunResult.nodes` is **optional** in the TypeScript type
+(so a `RunResult` built without one still compiles) while `steps` is required;
+at run time both are always populated.
 
 Three rules both operations obey:
 
@@ -262,12 +271,16 @@ Three rules both operations obey:
 | `client.functions.runVersion(id, n, opts?)` | `client.functions.run_version(id, n, ...)` | the Function's output |
 
 **The definition itself is opaque in both languages** —
-`Record<string, unknown>` / `dict`. A workflow's `steps[]` carry node types the
+`Record<string, unknown>` / `dict`. A workflow's `nodes[]` carry node types the
 engine owns and extends, and a Function's `impl` is a union the server extends
 (app Action, another Function, a Workflow); modelling either would make the
 wrapper reject a document a newer server accepts. What the SDKs _do_ model is
 the envelope around it: `WorkflowDetail`, `WorkflowSaveResult`,
 `FunctionDetail`, `FunctionSummary`.
+
+A workflow definition is stored and returned as `nodes[]`. A definition you
+write may use the older `steps[]` name instead — the entries are the same — but
+not both: a body carrying both arrays, or neither, is `400 invalid_workflow`.
 
 Four rules all of them obey:
 

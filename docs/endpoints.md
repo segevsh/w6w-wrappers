@@ -325,7 +325,7 @@ and the run queue executes it.
 | ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `variables` | no       | Object merged into the run's **variable scope**, read by downstream expressions as `vars.*`.                                                                                                     |
 | `trigger`   | no       | A **string**, not an object. Defaults to `manual` server-side when omitted.                                                                                                                      |
-| `input`     | no       | Object delivered to the **entry trigger node's own recorded output**, read by downstream steps as `steps.<triggerId>.output.<key>` — this is the field that reaches a trigger's declared fields. |
+| `input`     | no       | Object delivered to the **entry trigger node's own recorded output**, read by downstream nodes as `nodes.<triggerId>.output.<key>` (`steps.<triggerId>.output.<key>` is the permanent alias for the same value) — this is the field that reaches a trigger's declared fields. |
 | `allowUnpublished` | no | Boolean. Run the **stored** definition even if it was never published (the draft run; a disabled one is still refused). Sent **only when `true`**; it runs the row as last saved, never a submitted body, so save first. Without it the run needs a published workflow (`409 workflow_not_published`); a disabled workflow is refused either way (`409 workflow_disabled`). |
 
 **What a plain run executes.** Without `allowUnpublished`, `run` still executes the **stored** definition
@@ -334,11 +334,12 @@ selector. Edits saved after a publish are what the next plain `run` executes. To
 published, call `runVersion(id, n)`.
 
 **`variables` and `input` are not interchangeable, and reach the workflow
-differently.** `variables` seeds the run's variable scope; a step reads it as
+differently.** `variables` seeds the run's variable scope; a node reads it as
 `vars.email`. `input` is injected into the entry trigger node's own output; a
-step reads it as `steps.<triggerId>.output.email`. A trigger's declared fields
-are only ever reachable through `input` — passing them as `variables` puts them
-in the wrong scope and they never arrive where the workflow expects them.
+node reads it as `nodes.<triggerId>.output.email` (or through the `steps.`
+alias, which addresses the same object). A trigger's declared fields are only
+ever reachable through `input` — passing them as `variables` puts them in the
+wrong scope and they never arrive where the workflow expects them.
 
 **`trigger` is a plain string.** The server reads it as `RunTrigger`, whose
 known values today are `manual`, `schedule`, `webhook`, `event` and `replay`.
@@ -363,6 +364,7 @@ a release to catch up.
   "status": "succeeded",
   "output": {},
   "error": null,
+  "nodes": {},
   "steps": {}
 }
 ```
@@ -372,6 +374,11 @@ a release to catch up.
 ```json
 { "runId": "run_01H…", "status": "running" }
 ```
+
+`nodes` is the per-node state keyed by node id; `steps` is its alias, carrying
+identical records, so read either. A failed node's error carries `nodeId`, with
+`stepId` beside it holding the same id. A `202` carries neither map — the
+wrappers normalise `nodes` to `{}` rather than leaving it absent.
 
 **Response `404`** — `{ "error": { "code": "unknown_workflow", … } }` ·
 **Response `400`** — `invalid_body` (unparseable JSON body).
@@ -975,7 +982,7 @@ there is no key to unwrap, and a wrapper's `unwrap` helper does not apply here.
     "manifestVersion": "2",
     "id": "wf_01H…",
     "name": "welcome-email",
-    "steps": []
+    "nodes": []
   },
   "sourceRef": null,
   "updatedAt": "2026-07-22T18:03:00.000Z"
@@ -985,9 +992,14 @@ there is no key to unwrap, and a wrapper's `unwrap` helper does not apply here.
 `workflow` is the stored definition overlaid with the authoritative `status` and
 `tags` columns, so a freshly created workflow that carries neither inline still
 reports its real lifecycle state. It stays **opaque** in every lane
-(`Record<string, unknown>` in TS, `dict` in Python): `steps[]` carry node types
+(`Record<string, unknown>` in TS, `dict` in Python): `nodes[]` carry node types
 the engine owns and extends, and a wrapper that modelled them would reject a
 workflow a newer server accepts.
+
+A definition is stored and returned as `nodes[]`. `workflows.create` and
+`workflows.update` also accept a body whose array is called `steps[]` — same
+entries, older name — but not both at once: a body carrying both arrays, or
+neither, is `400 invalid_workflow`.
 
 **`updatedAt` is a top-level sibling of `workflow`, never a field inside it.**
 The definition is the portable document — it can be exported, re-imported, or
