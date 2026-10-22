@@ -88,6 +88,7 @@ Deno.test("workflows.run: a 202 queued run is SUCCESS, and hands back the handle
   // A 202 carries no steps; normalised to {} so a caller iterating them never
   // has to branch on which status carried the body.
   assertEquals(run.steps, {});
+  assertEquals(run.nodes, {});
 
   assertEquals(c.calls.length, 1, "exactly one request — no client-side polling");
   assertEquals(c.calls[0].method, "POST");
@@ -104,6 +105,7 @@ Deno.test("workflows.run: ?wait=true returns the terminal 200 result", async () 
       status: "succeeded",
       output: { sent: 3 },
       error: null,
+      nodes: { step_a: { status: "succeeded" } },
       steps: { step_a: { status: "succeeded" } },
     })
   );
@@ -115,6 +117,7 @@ Deno.test("workflows.run: ?wait=true returns the terminal 200 result", async () 
   assertEquals(run.httpStatus, 200);
   assertEquals(run.output, { sent: 3 });
   assertEquals(run.steps, { step_a: { status: "succeeded" } });
+  assertEquals(run.nodes, { step_a: { status: "succeeded" } });
 
   assertEquals(c.calls.length, 1, "the wait happens server-side — one request");
   assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_01HQ/run?wait=true");
@@ -319,4 +322,13 @@ Deno.test("workflows.run: allowUnpublished is in the body only when true", async
   assertEquals(JSON.parse(c.calls[1].body ?? "null"), {}, "false is omitted, never sent");
   assertEquals(JSON.parse(c.calls[2].body ?? "null"), {});
   assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_01HQ/run", "body, not query");
+});
+
+Deno.test("workflows.run: an old steps-only response still parses", async () => {
+  const c = client(() =>
+    json({ runId: "run_01HQ", status: "succeeded", steps: { a: { status: "succeeded" } } })
+  );
+  const run = await c.client.workflows.run("wf_01HQ", { wait: true });
+  assertEquals(run.steps, { a: { status: "succeeded" } });
+  assertEquals(run.nodes, { a: { status: "succeeded" } });
 });

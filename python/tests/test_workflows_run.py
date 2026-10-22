@@ -116,6 +116,7 @@ class QueuedTest(unittest.TestCase):
         # A 202 carries no steps; normalised to {} so a caller iterating them
         # never has to branch on which status carried the body.
         self.assertEqual(run.steps, {})
+        self.assertEqual(run.nodes, {})
 
         self.assertEqual(len(calls), 1, "exactly one request — no client-side polling")
         self.assertEqual(calls[0].get_method(), "POST")
@@ -161,6 +162,7 @@ class WaitTest(unittest.TestCase):
                     "status": "succeeded",
                     "output": {"sent": 3},
                     "error": None,
+                    "nodes": {"step_a": {"status": "succeeded"}},
                     "steps": {"step_a": {"status": "succeeded"}},
                 },
             ),
@@ -173,6 +175,7 @@ class WaitTest(unittest.TestCase):
         self.assertEqual(run.httpStatus, 200)
         self.assertEqual(run.output, {"sent": 3})
         self.assertEqual(run.steps, {"step_a": {"status": "succeeded"}})
+        self.assertEqual(run.nodes, {"step_a": {"status": "succeeded"}})
 
         self.assertEqual(len(calls), 1, "the wait happens server-side — one request")
         self.assertEqual(calls[0].full_url, RUN_URL + "?wait=true")
@@ -202,7 +205,22 @@ class WaitTest(unittest.TestCase):
         self.assertTrue(run.terminal)
         self.assertEqual(run.httpStatus, 200)
         self.assertEqual(run.error, {"code": "step_failed", "message": "sendgrid rejected it"})
-        self.assertEqual(run.stepErrors, [StepError(stepId="step_a", error={"code": "app_error"})])
+        self.assertEqual(run.stepErrors, [StepError(stepId="step_a", nodeId="step_a", error={"code": "app_error"})])
+
+    def test_old_steps_only_response_and_node_id_parse(self) -> None:
+        from w6w.types import RunResult
+
+        old = RunResult.from_wire({"runId": "r", "status": "failed", "steps": {"a": {}}})
+        self.assertEqual(old.nodes, {"a": {}})
+        self.assertEqual(old.steps, {"a": {}})
+        new = RunResult.from_wire(
+            {"runId": "r", "status": "failed", "nodes": {"a": {}},
+             "stepErrors": [{"nodeId": "a", "stepId": "a", "error": "x"}]}
+        )
+        self.assertEqual(new.steps, {"a": {}})
+        assert new.stepErrors is not None
+        self.assertEqual(new.stepErrors[0].nodeId, "a")
+        self.assertEqual(new.stepErrors[0].stepId, "a")
 
     def test_a_wait_timeout_comes_back_as_a_202_with_the_current_status(self) -> None:
         # The server waited up to its own timeout and gave up; the run is still

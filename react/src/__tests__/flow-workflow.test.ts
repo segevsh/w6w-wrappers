@@ -104,10 +104,42 @@ test("a non-array steps is rejected", () => {
   );
 });
 
+test("nodes[] is accepted; canvas and unknown keys survive", () => {
+  const flow = toFlowWorkflow({
+    manifestVersion: "1", id: "w", name: "n",
+    nodes: [{ id: "a", "x-host": 1 }],
+    canvas: { notes: [] },
+  });
+  const rec = flow as unknown as Record<string, unknown>;
+  assert.deepEqual(rec.canvas, { notes: [] });
+  assert.equal((rec.nodes as { id: string }[])[0]?.id, "a");
+  assert.equal(rec.steps, undefined);
+});
+
+test("nodes entries are checked at nodes[i].id", () => {
+  assert.deepEqual(
+    issues({ manifestVersion: "1", id: "w", name: "n", nodes: [{ id: 5 }] }).map((i) => i.path),
+    ["nodes[0].id"],
+  );
+});
+
+test("nodes combined with steps is refused", () => {
+  assert.deepEqual(
+    issues({ manifestVersion: "1", id: "w", name: "n", nodes: [], steps: [] }),
+    [{ path: "nodes", message: "must not be combined with steps" }],
+  );
+});
+
+test("neither nodes nor steps is refused", () => {
+  assert.deepEqual(issues({ manifestVersion: "1", id: "w", name: "n" }), [
+    { path: "nodes", message: "must be an array" },
+  ]);
+});
+
 test("missing steps is rejected alongside other violations", () => {
   assert.deepEqual(
     issues({ manifestVersion: "1", id: "w" }).map((i) => i.path),
-    ["name", "steps"],
+    ["name", "nodes"],
   );
 });
 

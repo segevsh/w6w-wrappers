@@ -214,7 +214,7 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
   // definition, since this lane reads no files.
   "workflows.get": ["w6w workflows get wf_01HQ8N", "w6w workflows get wf_01HQ8N --json"],
   "workflows.create": [
-    `w6w workflows create --definition '{"manifestVersion":"2","name":"nightly","steps":[]}'`,
+    `w6w workflows create --definition '{"manifestVersion":"2","name":"nightly","nodes":[]}'`,
     `w6w workflows create --definition "$(cat workflow.json)" --project prj_01HQ8N`,
   ],
   "workflows.update": [

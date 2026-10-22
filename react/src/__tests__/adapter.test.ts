@@ -418,6 +418,37 @@ test("getWorkflow reaches GET /workflows/:id and reshapes the base definition in
   });
 });
 
+test("getWorkflow reaches GET /workflows/:id and reshapes the base definition into @w6w/ui's WorkflowDetail (nodes[] definition)", async () => {
+  const fake = fakeFetch((call) => {
+    assert.equal(call.url, "https://api.example.com/workflows/wf_1");
+    assert.equal(call.method, "GET");
+    return json({
+      workflow: {
+        id: "wf_1",
+        name: "n",
+        displayName: "N",
+        description: "d",
+        nodes: [
+          { id: "trigger", uses: { app: "@w6w/webhook", action: "trigger" }, with: { a: 1 } },
+        ],
+      },
+      sourceRef: null,
+      updatedAt: "2026-01-01T00:00:00Z",
+    });
+  });
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  const detail = await adapter.getWorkflow("wf_1");
+
+  assert.deepEqual(detail, {
+    id: "wf_1",
+    name: "n",
+    displayName: "N",
+    description: "d",
+    steps: [{ id: "trigger", uses: { app: "@w6w/webhook", action: "trigger" }, with: { a: 1 } }],
+  });
+});
+
 test("runWorkflow always sends ?wait=true and maps a 200 body to terminal: true", async () => {
   const fake = fakeFetch((call) => {
     const url = new URL(call.url);
