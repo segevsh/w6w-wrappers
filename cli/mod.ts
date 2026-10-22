@@ -143,7 +143,7 @@ export interface CommandContext {
   readonly env: EnvReader;
   /** The stored per-user config, read once before the handler runs (nothing stored by default). */
   readonly stored: StoredConfig;
-  /** Where the config is persisted. Only the `auth` commands write through it. */
+  /** Where the config is persisted. Only the `auth` and `config` commands write through it. */
   readonly store: ConfigStore;
   /** Standard input, for `auth login -`. */
   readonly stdin: StdinSource;
