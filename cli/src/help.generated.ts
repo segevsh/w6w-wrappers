@@ -192,6 +192,51 @@ export const HELP_TREE: HelpTree = {
         '--app <id> addresses a connection URN by its app instead of a conn_… id — "w6w run --app sendgrid --action send_email" in place of "w6w run conn_01HQ8N --action send_email". It resolves against `w6w connections list`: one matching connection is used outright, and none or several is a usage error (several lists every candidate with the exact command to run against it). It cannot be combined with a URN argument, and it is CLI-only — there is no equivalent in the node or python wrapper.',
       ],
     },
+    {
+      "operation": "ls",
+      "path": [
+        "ls",
+      ],
+      "name": "ls",
+      "aliases": [],
+      "summary": "List integrations, workflows, functions or endpoints (endpoints is unstable).",
+      "short": "List integrations, workflows, functions or endpoints (endpoints is unstable)",
+      "headline": "list integrations, workflows, functions or endpoints (endpoints is unstable)",
+      "usage": "w6w ls <kind> [options]",
+      "naming": "w6w ls <kind> [--project <id>]",
+      "status": "live",
+      "params": [
+        {
+          "name": "kind",
+          "kind": "argument",
+          "display": "<kind>",
+          "description":
+            "What to list: integrations | workflows | functions | endpoints (endpoints is unstable)",
+          "required": true,
+        },
+        {
+          "name": "project",
+          "kind": "flag",
+          "display": "--project <id>",
+          "description": "Project to scope to (workflows only; other kinds ignore it)",
+          "required": false,
+        },
+        {
+          "name": "json",
+          "kind": "flag",
+          "display": "--json",
+          "description": "Output raw JSON instead of a table",
+          "required": false,
+        },
+      ],
+      "examples": [
+        "w6w ls workflows",
+        "w6w ls integrations --json",
+        "w6w ls workflows --project prj_01HQ8N",
+        "w6w ls endpoints",
+      ],
+      "notes": [],
+    },
   ],
   "groups": [
     {
@@ -2797,6 +2842,87 @@ export const HELP_TREE: HelpTree = {
         "printf '%s' \"$W6W_TOKEN\" | w6w auth login -",
       ],
     },
+    {
+      "name": "config",
+      "summary": "Show and set the API base URL",
+      "headline": "show and set the API base URL",
+      "usage": "w6w config <command> [options]",
+      "commands": [
+        {
+          "operation": "config.get-base-url",
+          "path": [
+            "config",
+            "get-base-url",
+          ],
+          "name": "get-base-url",
+          "aliases": [],
+          "summary": "Show the effective API base URL and where it came from.",
+          "short": "Show the effective API base URL and where it came from",
+          "headline": "show the effective API base URL and where it came from",
+          "usage": "w6w config get-base-url [options]",
+          "naming": "w6w config get-base-url",
+          "status": "live",
+          "params": [
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w config get-base-url",
+            "w6w config get-base-url --json",
+          ],
+          "notes": [],
+        },
+        {
+          "operation": "config.set-base-url",
+          "path": [
+            "config",
+            "set-base-url",
+          ],
+          "name": "set-base-url",
+          "aliases": [],
+          "summary":
+            "Save the API base URL used when no flag or environment variable overrides it.",
+          "short": "Save the API base URL used when no flag or environment variable overrides it",
+          "headline":
+            "save the API base URL used when no flag or environment variable overrides it",
+          "usage": "w6w config set-base-url <url> [options]",
+          "naming": "w6w config set-base-url <url>",
+          "status": "live",
+          "params": [
+            {
+              "name": "url",
+              "kind": "argument",
+              "display": "<url>",
+              "description":
+                "The API origin to save, like https://api.example.com (a trailing slash is dropped)",
+              "required": true,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w config set-base-url https://w6w.example.com",
+            "w6w config set-base-url https://api.w6w.io",
+          ],
+          "notes": [],
+        },
+      ],
+      "options": [],
+      "examples": [
+        "w6w config get-base-url",
+        "w6w config set-base-url https://w6w.example.com",
+      ],
+    },
   ],
   "globalFlags": [
     {
@@ -2868,6 +2994,9 @@ export const COMMAND_PATHS: string[][] = [
   ],
   [
     "run",
+  ],
+  [
+    "ls",
   ],
   [
     "connections",
@@ -3104,6 +3233,14 @@ export const COMMAND_PATHS: string[][] = [
   [
     "auth",
     "status",
+  ],
+  [
+    "config",
+    "get-base-url",
+  ],
+  [
+    "config",
+    "set-base-url",
   ],
 ];
 
