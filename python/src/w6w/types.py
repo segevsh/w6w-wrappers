@@ -765,10 +765,12 @@ class StepError:
     its shape belongs to the app that reported it, not to this client.
     """
 
-    #: Id of the step that failed.
+    #: Id of the step that failed (alias of :attr:`nodeId`).
     stepId: str
     #: Whatever the step reported.
     error: Any
+    #: Id of the node that failed (canonical). Defaults to `""` for hand-built values.
+    nodeId: str = ""
 
     @classmethod
     def from_wire(cls, body: Any) -> "StepError":
@@ -777,8 +779,11 @@ class StepError:
         :param body: One parsed item of the `stepErrors` array.
         :returns: The step failure.
         """
+        node_id = _text(body, "nodeId")
+        step_id = _text(body, "stepId")
         return cls(
-            stepId=_text(body, "stepId"),
+            stepId=step_id or node_id,
+            nodeId=node_id or step_id,
             error=body.get("error") if isinstance(body, dict) else None,
         )
 
@@ -817,6 +822,9 @@ class RunResult:
     error: Any = None
     #: Per-step failures, when the server reports them; `None` when it does not.
     stepErrors: Optional[List[StepError]] = None
+    #: Per-node state, keyed by node id (canonical; :attr:`steps` is its alias).
+    #: `{}` when the server sent none.
+    nodes: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_wire(cls, body: Any) -> "RunResult":
@@ -882,6 +890,11 @@ def _run_fields(body: Any) -> Dict[str, Any]:
     """
     raw_status = body.get("status") if isinstance(body, dict) else None
     raw_steps = body.get("steps") if isinstance(body, dict) else None
+    raw_nodes = body.get("nodes") if isinstance(body, dict) else None
+    if not isinstance(raw_nodes, dict):
+        raw_nodes = raw_steps  # an old server sends only `steps`
+    if not isinstance(raw_steps, dict):
+        raw_steps = raw_nodes
     raw_step_errors = body.get("stepErrors") if isinstance(body, dict) else None
     return {
         "runId": _text(body, "runId"),
@@ -891,6 +904,7 @@ def _run_fields(body: Any) -> Dict[str, Any]:
         "status": raw_status if isinstance(raw_status, str) else "queued",
         # `{}` rather than absent: see the class docstring.
         "steps": dict(raw_steps) if isinstance(raw_steps, dict) else {},
+        "nodes": dict(raw_nodes) if isinstance(raw_nodes, dict) else {},
         "output": body.get("output") if isinstance(body, dict) else None,
         "error": body.get("error") if isinstance(body, dict) else None,
         "stepErrors": (
@@ -1191,7 +1205,7 @@ def mint_id(prefix: str) -> str:
     and never generate one** (`admin/workflows.ts`'s and `admin/functions.ts`'s
     `validateDefinition`: "`id` is required."). The id is synthetic and never
     user-facing — the display name is what a user sees and edits — so a caller
-    writing ``create({"name": ..., "steps": [...]})`` should not have to know
+    writing ``create({"name": ..., "nodes": [...]})`` should not have to know
     that, and every consumer that did know it ended up writing the same helper
     (studio's `newWorkflowId`/`newFunctionId`). This is that helper, once, and
     it is the same shape the `node` lane mints so the two lanes produce

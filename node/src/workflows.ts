@@ -164,7 +164,7 @@ export interface WorkflowRunOptions {
   trigger?: string;
   /**
    * Delivered to the entry trigger node's own recorded output, read downstream
-   * as `steps.<triggerId>.output.<key>` — the shape a trigger's declared fields
+   * as `nodes.<triggerId>.output.<key>` (`steps.` is an alias) — the shape a trigger's declared fields
    * actually arrive in. Not the same slot as {@linkcode variables}, which seeds
    * the run's variable scope (`vars.*`) instead.
    */
@@ -212,7 +212,7 @@ export interface WorkflowRunResult extends RunResult {
  * A workflow definition — the portable document, kept OPAQUE.
  *
  * `Record<string, unknown>` and not a modelled shape, on purpose. A workflow's
- * body is `steps[]` of node types the engine owns and extends
+ * body is `nodes[]` (alias `steps[]`) of node types the engine owns and extends
  * (`rfcs/node-types.md`); a wrapper that froze that shape would reject a
  * workflow a newer server accepts, and would have to ship a release every time
  * a node type gained a field. What the wrapper *does* pin is the envelope
@@ -300,7 +300,7 @@ export interface WorkflowWriteOptions {
  * const { workflow } = await client.workflows.create({
  *   manifestVersion: "2",
  *   name: "Nightly sync",
- *   steps: [],
+ *   nodes: [],
  * });
  * const current = await client.workflows.get(workflow.id);
  * await client.workflows.update(
@@ -352,7 +352,7 @@ export class WorkflowsApi {
    * | Call | HTTP | Body | `terminal` |
    * |---|---|---|---|
    * | no `wait` | `202` | `{runId, status:"queued"}` | `false` |
-   * | `wait: true`, finished in time | `200` | `{runId, status, output, error, steps}` | `true` |
+   * | `wait: true`, finished in time | `200` | `{runId, status, output, error, nodes, steps}` | `true` |
    * | `wait: true`, timed out | `202` | `{runId, status}` | `false` |
    *
    * **A run that failed is the second row, not an error**: `200` with
@@ -436,7 +436,9 @@ export class WorkflowsApi {
       // A `202` carries no `steps`. Normalised to `{}` rather than left absent,
       // so a caller iterating a run's steps never has to branch on which status
       // carried it — the same reason an empty list is `[]` and not `null`.
-      steps: run.steps ?? {},
+      // `nodes` is canonical and `steps` its alias; an old server sends only `steps`.
+      nodes: run.nodes ?? run.steps ?? {},
+      steps: run.steps ?? run.nodes ?? {},
       terminal: isTerminalRunStatus(status),
       httpStatus: res.status,
     };
@@ -509,7 +511,7 @@ export class WorkflowsApi {
    * The server requires an `id` in the body and never generates one
    * (`admin/workflows.ts`'s `validateDefinition`), so a `create` that simply
    * forwarded the caller's object would answer `400 invalid_workflow` for the
-   * most natural call there is — `create({name, steps})`. A caller that wants
+   * most natural call there is — `create({name, nodes})`. A caller that wants
    * to choose its own id still can: an `id` already present is forwarded
    * untouched, which is what makes this method usable for a seeded or
    * imported definition.
@@ -524,7 +526,7 @@ export class WorkflowsApi {
    * @param definition - The whole workflow definition, forwarded verbatim apart from a minted `id`.
    * @param options - `project` scopes the write to one project.
    * @returns The new workflow's id and name, whether a schedule was applied, and the first `updatedAt`.
-   * @throws {ApiError} `400 invalid_workflow` — missing `name`/`steps`, or a wrong `manifestVersion`.
+   * @throws {ApiError} `400 invalid_workflow` — missing `name`/`nodes`, or a wrong `manifestVersion`.
    * @throws {ApiError} `400 unknown_project` — `project` names a project this account does not own.
    * @throws {ApiError} `409 workflow_conflict` — another `(tenant, subject)` already owns that id.
    */
