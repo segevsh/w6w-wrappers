@@ -63,6 +63,7 @@ COMMANDS
   projects               List your projects
   reliability            Health and performance of the apps you use
   auth                   Save, remove and inspect the stored API token
+  config                 Show and set the API base URL
 
 GLOBAL OPTIONS
   --base-url <url>       API base URL (default: https://api.w6w.io) (env: W6W_BASE_URL)
@@ -158,6 +159,38 @@ path.
 shape above, every command that runs (not `--help`/`--version`) exits `1` naming
 the file's path — never its content — and `auth login` refuses to overwrite it.
 Fix or delete it. A missing file simply means nothing is stored.
+
+## `config` — the stored base URL
+
+`w6w config` reads and writes only the stored `baseUrl`. Neither command touches
+the network or prints a token.
+
+| Command | What it does |
+| --- | --- |
+| `w6w config get-base-url` | Print the effective base URL and its source (`flag`, `env`, `config` or `default`), resolved by the same code a real command uses. `--json` prints exactly `{baseUrl, baseUrlSource, configBaseUrl?, configPath}`; `configBaseUrl` is present only when one is stored. |
+| `w6w config set-base-url <url>` | Store the canonical URL (trailing slash stripped) as `baseUrl`. A blank, relative or non-http(s) URL is a usage error (exit `1`) and nothing is written. If `W6W_BASE_URL` is set to something else, a note on stderr says it still wins. |
+
+`set-base-url` never changes `hosts`: no token is copied, moved or re-keyed. A
+token saved for host A is not sent to host B, so after switching hosts run
+`w6w auth login` for the new one (until then commands exit `1` naming
+`w6w auth login`, before any request).
+
+## `ls` — list a kind
+
+`w6w ls <integrations|workflows|functions|endpoints> [--project <id>] [--json]`
+is one root verb over the existing list commands:
+
+| Kind | Same as |
+| --- | --- |
+| `workflows` | `w6w workflows list` (`--project` is forwarded) |
+| `functions` | `w6w functions list` |
+| `integrations` | `w6w connections list` |
+| `endpoints` | lists through the SDK's **unstable** `console.endpoints` namespace; the human output says so, and it is not part of the stable contract |
+
+Request, output and exit code for the first three are the delegate's, byte for
+byte. A missing or unknown kind exits `1`, lists the four kinds and sends no
+request. This root `ls` is distinct from the in-group `ls` alias for `list`
+(`w6w documents ls`); `w6w run ls` still passes `ls` as the positional.
 
 ## Group help
 

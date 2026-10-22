@@ -1780,6 +1780,47 @@
         "status": "live",
         "naming": "w6w auth status",
         "params": []
+      },
+      {
+        "name": "config.get-base-url",
+        "summary": "Show the effective API base URL and where it came from.",
+        "status": "live",
+        "naming": "w6w config get-base-url",
+        "params": []
+      },
+      {
+        "name": "config.set-base-url",
+        "summary": "Save the API base URL used when no flag or environment variable overrides it.",
+        "status": "live",
+        "naming": "w6w config set-base-url <url>",
+        "params": [
+          {
+            "name": "url",
+            "in": "argument",
+            "type": "string",
+            "required": true
+          }
+        ]
+      },
+      {
+        "name": "ls",
+        "summary": "List integrations, workflows, functions or endpoints (endpoints is unstable).",
+        "status": "live",
+        "naming": "w6w ls <kind> [--project <id>]",
+        "params": [
+          {
+            "name": "kind",
+            "in": "argument",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "project",
+            "in": "query",
+            "type": "string",
+            "required": false
+          }
+        ]
       }
     ]
   },

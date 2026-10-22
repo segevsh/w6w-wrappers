@@ -31,6 +31,8 @@ printf '%s' "$W6W_TOKEN" | w6w auth login -   # preferred: keeps the token out o
 w6w auth login <token>                         # also works, but the token lands in history and `ps`
 w6w auth status                                # base URL, where it came from, masked token
 w6w auth logout
+w6w config get-base-url                        # effective base URL and its source
+w6w config set-base-url https://w6w.example.com  # save it (tokens are per host: auth login again)
 ```
 
 The token is stored per user (`~/.config/w6w/config.json`, or `$XDG_CONFIG_HOME/w6w/…`;
@@ -60,6 +62,7 @@ server reachable, which is exactly when people need them most.
 w6w me                        # who am I, and which CLI version is this? (alias: info)
 
 # Discover what you can run — a `conn_…`, `wf_…`, `fn_…` or `ep_…` id.
+w6w ls workflows              # also: ls integrations | functions | endpoints (endpoints is unstable)
 w6w connections list          # short forms: `w6w conn ls`, `w6w wf ls`, `w6w docs ls`
 w6w workflows list
 w6w functions list
