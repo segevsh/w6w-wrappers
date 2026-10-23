@@ -172,12 +172,15 @@ try {
 }
 ```
 
-`toFlowWorkflow` checks that `manifestVersion`, `id` and `name` are strings and that `steps` is
-an array of objects that each have a string `id`. If `edges`, `settings` or `variables` are
-present, they must be an array, an object and an array. When something is wrong, the error's
-`issues` lists every problem, each with a `path` and a `message`. It doesn't look inside a step's
-`uses`. Keys it doesn't know about, such as `retry`, `onError` or your own `x-` fields, pass through
-unchanged in both directions, so converting there and back gives you the same definition.
+`toFlowWorkflow` checks that `manifestVersion`, `id` and `name` are strings and that the
+definition carries exactly one of `nodes` or `steps` — an array of objects that each have a string
+`id`, reported as `nodes[i].id` or `steps[i].id` under whichever is present. Both at once is
+`nodes: must not be combined with steps`; neither is `nodes: must be an array`. If `edges`,
+`settings` or `variables` are present, they must be an array, an object and an array. When
+something is wrong, the error's `issues` lists every problem, each with a `path` and a `message`.
+It doesn't look inside a node's `uses`. Keys it doesn't know about, such as `retry`, `onError`,
+`canvas` or your own `x-` fields, pass through unchanged in both directions, so converting there
+and back gives you the same definition.
 
 `createW6WUiAdapter` is tested at run time against the `@w6w/ui` contract it implements: every
 member is present as a function, forwards its arguments to the expected request, and hands the

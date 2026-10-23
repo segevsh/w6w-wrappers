@@ -55,7 +55,7 @@ The options:
 | Option | What it does |
 | --- | --- |
 | `wait` | `true` waits for the run to finish, up to the server's time limit. Leave it out to queue the run and return straight away with status `queued`. |
-| `input` | The data the workflow's trigger receives. Steps read it from the trigger's output. |
+| `input` | The data the workflow's trigger receives. Nodes read it from the trigger's output, as `nodes.<triggerId>.output`. |
 | `variables` | Values for the run's variables. |
 | `trigger` | What started the run. Defaults to `"manual"`. |
 
@@ -80,8 +80,9 @@ if (!run.terminal) {
 | `terminal` | `true` once the status is `succeeded`, `failed` or `canceled`. |
 | `output` | The workflow's output, when it succeeded. |
 | `error` | Why it failed, when it failed. |
-| `stepErrors` | The steps that failed, each with its `stepId` and `error`. |
-| `steps` | Each step's recorded state, keyed by step id. |
+| `stepErrors` | The nodes that failed, each with its `nodeId` and `error`; the same id is also on `stepId`. |
+| `nodes` | Each node's recorded state, keyed by node id. Optional in the TypeScript type; the SDK always fills it in. |
+| `steps` | The same map under its older name. `nodes` is canonical, `steps` is its alias. |
 | `httpStatus` | `200` when the run finished, `202` when it's queued or still running. |
 
 If the run takes longer than the server will wait, you get it back with `terminal: false` and
@@ -195,6 +196,10 @@ code, for example to keep them in version control.
 
    Deleting a workflow that isn't archived raises `409 workflow_not_archived`.
 
+The definition carries its nodes under `nodes`. A definition you write may put them under `steps`
+instead — the entries are the same — but not both: a body carrying both arrays, or neither, raises
+`400 invalid_workflow`.
+
 `workflows.list`, `create` and `update` take an optional `project`. Without it, they use the
 client's default project, then your account's default project.
 
@@ -274,7 +279,7 @@ const draft = await client.workflows.run("wf_01H…", { allowUnpublished: true, 
 | `run.status` is `"failed"`, no exception | A failed run is returned as data. | Read `run.error` and `run.stepErrors`. |
 | `409 workflow_stale` | The workflow changed after you read it. | Call `get` again, reapply your change, and save with the new `updatedAt`. |
 | `409 workflow_not_archived` | You tried to delete an active workflow. | Call `archive` first. |
-| `400 invalid_workflow` | The definition is missing `name` or `steps`, or is malformed. | Start from `workflows.get()` output rather than writing one from scratch. |
+| `400 invalid_workflow` | The definition is missing `name`, or carries no `nodes`/`steps` array, both of them, or is malformed. | Start from `workflows.get()` output rather than writing one from scratch. |
 | `422 function_incomplete` | The Function has no implementation yet. | Open it in Studio and finish it. |
 | `409 function_not_archived` | You tried to delete an active Function. | Call `functions.archive` first. |
 | `409 workflow_not_published` / `422 function_not_published` | A run needs a published version and there is none. | `publish` it, or pass `allowUnpublished: true` to `run` to use the saved definition. |

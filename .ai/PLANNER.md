@@ -1,6 +1,6 @@
 # PLANNER.md — read this first when planning work in `w6w-wrappers`
 
-> **verified: 2026-10-19** (26-10-18-01-fixes integration tip) — This guide records checked source locations, not a
+> **verified: 2026-10-23** (26-10-22-00-workflow-updates integration tip, `VERSION` 0.9.17 — `cat VERSION`; gate counts below are as of 2026-10-19 and were not re-measured: `deno` is not on this lane's PATH and react's `npm test` fails 11/11 until `node/dist` is built) — Prior: **verified: 2026-10-19** (26-10-18-01-fixes integration tip) — This guide records checked source locations, not a
 > replacement for them. When this guide and the code disagree, **code wins**;
 > correct this guide in the same change.
 
@@ -320,6 +320,16 @@
 - **verified: 2026-10-19** — at the 26-10-18-01-fixes integration tip (`VERSION` 0.9.16, contract
   0.8.0 + `defaultBaseUrl`): node `deno task test` → `ok | 646 passed | 0 failed`; cli 192 passed;
   python unittest 375 OK; react 176 pass (same invocations as above).
+- **verified: 2026-10-23** — workflows are `nodes` on the wire (26-10-22-00-workflow-updates, `VERSION`
+  0.9.17, no `endpoints.json` operation added or removed — `git diff main..HEAD -- endpoints.json`
+  is two lines). The SDK's `RunResult` carries `nodes` (canonical) and `steps` (alias, identical
+  records; an old server's reply with only `steps` fills both: `node/src/workflows.ts`, `run.nodes ??
+  run.steps`); `RunFailure` carries `nodeId` plus its alias `stepId` (`node/src/types.ts`);
+  `create({name, nodes})` is the documented call. Python mirrors it in `python/src/w6w/types.py`.
+  React's `toFlowWorkflow`/`fromFlowWorkflow` validator accepts exactly one of `nodes`/`steps` and
+  rejects both (`react/src/flow-workflow.ts`, tests `react/src/__tests__/flow-workflow.test.ts`).
+  The declared wire shapes are documented in `docs/sdk-surface.md` and `docs/endpoints.md`.
+
 - **verified: 2026-10-06** — React's CI setup builds the sibling SDK, installs
   it locally, then runs `npm test` (`.github/workflows/release.yml:146-161`).
   Use the Node 22 invocation above when reproducing it in this lane.

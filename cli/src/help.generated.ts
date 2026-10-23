@@ -565,7 +565,7 @@ export const HELP_TREE: HelpTree = {
             },
           ],
           "examples": [
-            'w6w workflows create --definition \'{"manifestVersion":"2","name":"nightly","steps":[]}\'',
+            'w6w workflows create --definition \'{"manifestVersion":"2","name":"nightly","nodes":[]}\'',
             'w6w workflows create --definition "$(cat workflow.json)" --project prj_01HQ8N',
           ],
           "notes": [],

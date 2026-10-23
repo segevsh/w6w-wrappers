@@ -270,7 +270,9 @@ export type RunStatus = "queued" | "running" | "succeeded" | "failed" | "cancele
 
 /** One step's failure inside a run. `error` is opaque pass-through. */
 export interface StepError {
-  /** Id of the step that failed. */
+  /** Id of the node that failed (canonical). */
+  nodeId: string;
+  /** Alias of `nodeId`, kept so existing readers keep working. */
   stepId: string;
   /** Whatever the step reported; shape belongs to the app, not to this client. */
   error: unknown;
@@ -280,13 +282,13 @@ export interface StepError {
  * A workflow run: the handle, its state, and the result when it has one.
  *
  * A `202` body carries only `runId` + `status` — the run is queued or still
- * going — while a `200` additionally carries `output`, `error` and `steps`.
+ * going — while a `200` additionally carries `output`, `error`, `nodes` and its alias `steps`.
  * The optional fields are optional for exactly that reason.
  *
  * `output`, `error` and the values in `steps` are **opaque pass-through**
  * (`unknown`): they come from user workflows and vendor apps, and a client that
- * modelled their internals would be wrong for someone. `steps` is a map **keyed
- * by step id**, not an array (`docs/implementation.md` §5).
+ * modelled their internals would be wrong for someone. `nodes` (and its `steps` alias) is a map **keyed
+ * by node id**, not an array (`docs/implementation.md` §5).
  */
 export interface RunResult {
   /** Server-issued run handle, `run_…`. Present on every response, queued included. */
@@ -297,7 +299,11 @@ export interface RunResult {
   output?: unknown;
   /** The run-level error when it failed; absent otherwise. Data, never a raised exception. */
   error?: unknown;
-  /** Per-step state, keyed by step id. `{}` when the server sent none. */
+  /** Per-node state, keyed by node id (canonical). `{}` when the server sent none. */
+  nodes?: Record<string, unknown>;
+  // Optional only so pre-existing `RunResult` literals (tests/surface_test.ts) still type-check;
+  // the client always sets it.
+  /** Alias of `nodes` with identical per-node records. `{}` when the server sent none. */
   steps: Record<string, unknown>;
   /** Per-step failures, when the server reports them. */
   stepErrors?: StepError[];
@@ -538,7 +544,7 @@ export function unwrap<T>(res: HttpResponse<unknown>, key: string): T {
  * and never generate one** (`admin/workflows.ts`'s and `admin/functions.ts`'s
  * `validateDefinition`: "`id` is required."). The id is synthetic and never
  * user-facing — the display name is what a user sees and edits — so a caller
- * writing `create({name: "…", steps: […]})` should not have to know that, and
+ * writing `create({name: "…", nodes: […]})` should not have to know that, and
  * every consumer that does know it has ended up writing the same four lines
  * (studio's `newWorkflowId`/`newFunctionId`, `WorkflowsPage.tsx:141` and
  * `FunctionsPage.tsx:49`). This is that function, once.
