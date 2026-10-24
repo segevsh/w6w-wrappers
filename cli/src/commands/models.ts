@@ -133,7 +133,7 @@ const usage: CommandHandler = async (context) => {
 
 /** The six model commands, keyed by canonical command path. */
 export const MODEL_COMMANDS: CommandRegistry = {
-  "models ls": listModels,
+  "models list": listModels,
   "models get": getModel,
   "model-routes list": listRoutes,
   "model-routes get": getRoute,

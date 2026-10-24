@@ -198,10 +198,12 @@ Deno.test("model-usage: passes groupBy/from/to/route/model/limit/cursor", async 
 });
 
 Deno.test("every model command in the help tree is registered, and no others", () => {
-  const documented = HELP_TREE.groups
-    .filter((g) => ["models", "model-routes", "model-usage"].includes(g.name))
-    .flatMap((g) => g.commands.map((c) => c.path.join(" ")))
-    .sort();
+  const documented = [
+    ...HELP_TREE.groups
+      .filter((g) => ["models", "model-routes"].includes(g.name))
+      .flatMap((g) => g.commands.map((c) => c.path.join(" "))),
+    ...HELP_TREE.commands.filter((c) => c.path[0] === "model-usage").map((c) => c.path.join(" ")),
+  ].sort();
   assertEquals(Object.keys(MODEL_COMMANDS).sort(), documented);
   for (const key of documented) assert(COMMANDS[key] !== undefined, key);
 });
