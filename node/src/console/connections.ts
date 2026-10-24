@@ -58,6 +58,30 @@ export interface ConnectionsHost {
   request<T>(options: RequestOptions): Promise<HttpResponse<T>>;
 }
 
+/** A callable (Function/Endpoint) bound to a connection. */
+export interface ConnectionDependentCallable {
+  id: string;
+  kind: string;
+  key: string;
+  displayName: string;
+  enabled: boolean;
+  sites: unknown[];
+}
+
+/** A trigger subscription bound to a connection. */
+export interface ConnectionDependentSubscription {
+  id: string;
+  appId: string;
+  triggerKey: string;
+  workflowId: string;
+}
+
+/** `GET /connections/:id/dependents` payload (the `dependents` key). */
+export interface ConnectionDependents {
+  callables: ConnectionDependentCallable[];
+  subscriptions: ConnectionDependentSubscription[];
+}
+
 /**
  * `test`'s result — the whole response body, no envelope key
  * (`packages/server/packages/api/admin/connections.ts:151-190`). Three
@@ -228,9 +252,30 @@ export class ConnectionsApi {
    * such value to preserve.
    *
    * @param id - The `conn_…` id.
+   * @param opts - `force: true` sends `?force=true` (disables dependent callables);
+   *   omitted/false sends no query and a 409 `connection_in_use` may be raised.
+   * @throws {ApiError} `404 unknown_connection`; `409 connection_in_use`.
+   */
+  async delete(id: string, opts?: { force?: boolean }): Promise<void> {
+    await this.#host.request<unknown>({
+      method: "DELETE",
+      path: path`/connections/${id}`,
+      query: opts?.force === true ? { force: true } : undefined,
+    });
+  }
+
+  /**
+   * What would a delete touch? `GET /connections/:id/dependents`, unwrapping
+   * `{ dependents }`.
+   *
+   * @param id - The `conn_…` id.
    * @throws {ApiError} `404 unknown_connection` when there is no such id.
    */
-  async delete(id: string): Promise<void> {
-    await this.#host.request<unknown>({ method: "DELETE", path: path`/connections/${id}` });
+  async dependents(id: string): Promise<ConnectionDependents> {
+    const res = await this.#host.request<unknown>({
+      method: "GET",
+      path: path`/connections/${id}/dependents`,
+    });
+    return unwrap<ConnectionDependents>(res, "dependents");
   }
 }

@@ -99,7 +99,7 @@ export interface HelpExitCode {
 /** The command tree, generated from the shared wrapper surface contract. */
 export const HELP_TREE: HelpTree = {
   "binary": "w6w",
-  "contractVersion": "0.8.0",
+  "contractVersion": "0.9.0",
   "tagline": "command-line client for the w6w workflow platform",
   "usage": "w6w <command> [options]",
   "docsUrl": "https://w6w.dev/docs/cli",
@@ -322,7 +322,7 @@ export const HELP_TREE: HelpTree = {
           "short": "Delete a connection",
           "headline": "delete a connection",
           "usage": "w6w connections delete <id> [options]",
-          "naming": "w6w connections delete <id>",
+          "naming": "w6w connections delete <id> [--force]",
           "status": "required",
           "params": [
             {
@@ -331,6 +331,14 @@ export const HELP_TREE: HelpTree = {
               "display": "<id>",
               "description": "Connection id (see: w6w connections list)",
               "required": true,
+            },
+            {
+              "name": "force",
+              "kind": "flag",
+              "display": "--force",
+              "description":
+                "Delete even if Functions/Endpoints still use it; they are disabled, not edited",
+              "required": false,
             },
             {
               "name": "json",
