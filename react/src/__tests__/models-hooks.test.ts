@@ -47,7 +47,8 @@ function withRoot<T>(run: (root: Root) => Promise<T>): Promise<T> {
 const settle = () => act(async () => await new Promise((r) => setTimeout(r, 20)));
 
 function body(url: string): unknown {
-  if (url.includes("/model-usage")) return { totals: {}, totalsTruncated: false, items: [], nextCursor: null };
+  if (url.includes("/model-usage"))
+    return { totals: {}, totalsTruncated: false, items: [], nextCursor: null };
   if (url.includes("/model-routes")) return [{ name: "r1" }];
   return { models: [{ id: "m1" }], nextCursor: null };
 }
@@ -81,7 +82,12 @@ test("hooks fetch their routes with options on the wire and expose data", () =>
     assert.ok(u?.includes("groupBy=day") && u.includes("route=r1"), String(u));
     assert.deepEqual(seen.models, { models: [{ id: "m1" }], nextCursor: null });
     assert.deepEqual(seen.routes, [{ name: "r1" }]);
-    assert.deepEqual(seen.usage, { totals: {}, totalsTruncated: false, items: [], nextCursor: null });
+    assert.deepEqual(seen.usage, {
+      totals: {},
+      totalsTruncated: false,
+      items: [],
+      nextCursor: null,
+    });
   }));
 
 test("distinct options make distinct requests (options are in the key)", () =>
