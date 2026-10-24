@@ -233,3 +233,27 @@ Deno.test("reliability.members: GET /reliability/services/members", async () => 
   );
   assertEquals(c.calls[1].signal, ac.signal);
 });
+
+Deno.test("connections.delete: force sends ?force=true only when true", async () => {
+  const c = client(() => json({ ok: true, disabled: [] }));
+  assertEquals(await c.client.connections.delete("conn_1", { force: true }), undefined);
+  await c.client.connections.delete("conn_1", { force: false });
+  await c.client.connections.delete("conn_1", {});
+  assertEquals(c.calls[0].url, "https://api.example.com/connections/conn_1?force=true");
+  assertEquals(c.calls[1].url, "https://api.example.com/connections/conn_1");
+  assertEquals(c.calls[2].url, "https://api.example.com/connections/conn_1");
+});
+
+Deno.test("connections.delete: 409 connection_in_use carries dependents on the ApiError", async () => {
+  const dependents = { callables: [{ id: "fn_1", kind: "function", key: "k" }], subscriptions: [] };
+  const c = client(() =>
+    json({ error: { code: "connection_in_use", message: "in use", dependents } }, 409)
+  );
+  const err = await assertRejects(() => c.client.connections.delete("conn_1"), ApiError);
+  assertEquals(err.status, 409);
+  assertEquals(err.code, "connection_in_use");
+  assertEquals(
+    (err.raw as { error: { dependents: unknown } }).error.dependents,
+    dependents,
+  );
+});
