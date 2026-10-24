@@ -106,7 +106,9 @@ test("a non-array steps is rejected", () => {
 
 test("nodes[] is accepted; canvas and unknown keys survive", () => {
   const flow = toFlowWorkflow({
-    manifestVersion: "1", id: "w", name: "n",
+    manifestVersion: "1",
+    id: "w",
+    name: "n",
     nodes: [{ id: "a", "x-host": 1 }],
     canvas: { notes: [] },
   });
@@ -124,10 +126,9 @@ test("nodes entries are checked at nodes[i].id", () => {
 });
 
 test("nodes combined with steps is refused", () => {
-  assert.deepEqual(
-    issues({ manifestVersion: "1", id: "w", name: "n", nodes: [], steps: [] }),
-    [{ path: "nodes", message: "must not be combined with steps" }],
-  );
+  assert.deepEqual(issues({ manifestVersion: "1", id: "w", name: "n", nodes: [], steps: [] }), [
+    { path: "nodes", message: "must not be combined with steps" },
+  ]);
 });
 
 test("neither nodes nor steps is refused", () => {
