@@ -1989,7 +1989,7 @@
       "naming": {
         "ts": "client.assets.uploads.create(input, opts?)",
         "python": "client.assets.uploads.create(purpose, idempotency_key, entries, name=None, visibility=None, asset_id=None, target=None)",
-        "cli": "w6w assets upload-create --input <json>"
+        "cli": "w6w assets upload-create --purpose <skill|context|asset> --idempotency-key <key> --entries <json> [--name <n>] [--visibility private|project|account] [--asset-id <id>] [--target <json>]"
       },
       "notes": "`/asset-uploads` routes are principal-scoped: a missing, foreign or other-project id is the one uniform `404 not_found` — never a distinct 403. Body `{purpose, idempotencyKey, entries:[{path, sizeBytes, sha256, mediaType?}], name?, visibility?, assetId?, target?}`: `purpose` is `asset|skill|context`, `visibility` is `private|project|account` (default `private`, ignored when `assetId` names an existing asset), `assetId` publishes a new version of that asset instead of creating one, `target` is purpose-specific destination data persisted verbatim (e.g. `{skillId}` / `{collectionId}`). `entries[].sha256` is lowercase hex and `sizeBytes` a non-negative safe integer; the order of `entries` fixes each entry's `index`. Returns `{upload, entries}` exactly as sent (`AssetUploadStatus`, no unwrap) — `201` when created, `200` when `idempotencyKey` replays the identical request (both are success; the wrapper does not surface which). `archive: true` (ZIP as the single entry) is refused `422 archive_upload_unavailable` until the host wires the zip reader; wrappers do not send it. Errors: `400 invalid_body`, `413 too_many_files`, `413 quota_exceeded`, `422 validation_failed`, `409 conflict`, `503 managed_storage_unavailable`."
     },
@@ -2221,6 +2221,12 @@
           "in": "path",
           "type": "string",
           "required": true
+        },
+        {
+          "name": "out",
+          "in": "query",
+          "type": "string",
+          "required": false
         }
       ],
       "returns": "bytes",
@@ -2254,6 +2260,12 @@
           "in": "path",
           "type": "string",
           "required": true
+        },
+        {
+          "name": "out",
+          "in": "query",
+          "type": "string",
+          "required": false
         }
       ],
       "returns": "bytes",
@@ -2445,6 +2457,44 @@
             "name": "project",
             "in": "query",
             "type": "string",
+            "required": false
+          }
+        ]
+      },
+      {
+        "name": "assets.upload",
+        "summary": "Upload a directory (or a ZIP) as an asset: walk, hash, create, put each entry with progress, finalize.",
+        "status": "live",
+        "naming": "w6w assets upload <path> --purpose <skill|context> [--skill <id>] [--collection <id>] [--retry]",
+        "params": [
+          {
+            "name": "path",
+            "in": "argument",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "purpose",
+            "in": "query",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "skill",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "collection",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "retry",
+            "in": "query",
+            "type": "boolean",
             "required": false
           }
         ]
