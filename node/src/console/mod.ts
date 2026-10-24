@@ -226,6 +226,7 @@ export type {
   ModelBudget,
   ModelBudgetInput,
   ModelBudgetLimits,
+  ModelBudgetPatch,
   ModelBudgetUsage,
   ModelDiscoveryResult,
   ModelFallback,

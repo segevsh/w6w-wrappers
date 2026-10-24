@@ -904,7 +904,9 @@ const budgets = await client.console.models.listBudgets();
 
 The model registry's console-only routes. The six stable operations (`models.list|get`,
 `modelRoutes.list|get|complete`, `modelUsage.query`) are on the root client and in `endpoints.json`
-— see `clients/node/models.md`. Catalog and budget writes need a tenant admin.
+— see `clients/node/models.md`. Catalog and budget writes need a tenant admin. A budget id resolves
+inside `?project=` (the default project when omitted), so every by-id budget method takes
+`{project?}`: a budget in another project answers `404 model_budget_not_found` without it.
 
 | Method                                 | Route                          | Notes                                                      |
 | -------------------------------------- | ------------------------------ | ---------------------------------------------------------- |
@@ -913,10 +915,10 @@ The model registry's console-only routes. The six stable operations (`models.lis
 | `discover(connection)`                 | `POST /models/discover`        | `{added, updated, deprecated}`.                            |
 | `providers()`                          | `GET /models/providers`        | Unwraps `providers`.                                       |
 | `listBudgets({project?})`              | `GET /model-budgets`           | Unwraps `budgets`.                                         |
-| `createBudget(input, {project?})`      | `POST /model-budgets`          | `201`. Unwraps `budget`.                                   |
-| `updateBudget(id, patch)`              | `PATCH /model-budgets/:id`     | Unwraps `budget`.                                          |
-| `deleteBudget(id)`                     | `DELETE /model-budgets/:id`    | Resolves to `undefined`.                                   |
-| `budgetUsage(id)`                      | `GET /model-budgets/:id/usage` | `{budgetId, window, windowStart, limits, used, reserved}`. |
+| `createBudget(input, {project?})`      | `POST /model-budgets`          | `201`. The budget object, sent flat (no envelope).         |
+| `updateBudget(id, patch, {project?})`  | `PATCH /model-budgets/:id`     | `window`/`limits`/`onBreach`. The budget, sent flat.       |
+| `deleteBudget(id, {project?})`         | `DELETE /model-budgets/:id`    | Resolves to `undefined`.                                   |
+| `budgetUsage(id, {project?})`          | `GET /model-budgets/:id/usage` | `{budgetId, window, windowStart, limits, used, reserved}`. |
 | `createRoute(input, {project?})`       | `POST /model-routes`           | `201`; `409 model_route_exists`, `400 invalid_route_name`. |
 | `updateRoute(name, patch, {project?})` | `PATCH /model-routes/:name`    | Unwraps `route`.                                           |
 | `deleteRoute(name, {project?})`        | `DELETE /model-routes/:name`   | Resolves to `undefined`; `404 model_route_not_found`.      |

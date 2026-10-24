@@ -4,7 +4,8 @@
  * no `console.models.complete` — `client.modelRoutes.complete` is the one way.
  */
 
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
+import { ApiError } from "../../src/errors.ts";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 
@@ -69,13 +70,24 @@ Deno.test("providers unwraps `providers`", async () => {
 });
 
 Deno.test("budgets: list, create, update, delete, usage", async () => {
+  // The server answers budget writes FLAT (`c.json(created, 201)`), not under `budget`.
+  const budget = {
+    id: "mbg_1",
+    scopeKind: "project",
+    scopeId: null,
+    window: "month",
+    limits: { costMinor: 500, currency: "USD" },
+    onBreach: "block",
+    createdAt: "2026-10-24T00:00:00.000Z",
+    updatedAt: "2026-10-24T00:00:00.000Z",
+  };
   const { m, calls } = setup((c) => {
-    if (c.method === "DELETE") return { ok: true };
-    if (c.url.endsWith("/usage")) return { budgetId: "b1", used: { requests: 2 } };
-    if (c.method === "GET") return { budgets: [{ id: "b1" }] };
-    return { budget: { id: "b1" } };
+    if (c.method === "DELETE") return null;
+    if (c.url.includes("/usage")) return { budgetId: "mbg_1", used: { requests: 2 } };
+    if (c.method === "GET") return { budgets: [budget] };
+    return budget;
   });
-  assertEquals((await m.listBudgets({ project: "p1" }))[0].id, "b1");
+  assertEquals((await m.listBudgets({ project: "p1" }))[0].id, "mbg_1");
   assertEquals(calls[0].url, "https://api.example.com/model-budgets?project=p1");
   const input = {
     scopeKind: "project",
@@ -83,18 +95,51 @@ Deno.test("budgets: list, create, update, delete, usage", async () => {
     limits: { costMinor: 500, currency: "USD" },
     onBreach: "block",
   };
-  assertEquals((await m.createBudget(input, { project: "p1" })).id, "b1");
+  assertEquals(await m.createBudget(input, { project: "p1" }), budget);
   assertEquals(calls[1].method, "POST");
   assertEquals(calls[1].url, "https://api.example.com/model-budgets?project=p1");
   assertEquals(JSON.parse(calls[1].body!), input);
-  assertEquals((await m.updateBudget("b1", { onBreach: "warn" })).id, "b1");
+  assertEquals(await m.updateBudget("mbg_1", { onBreach: "warn" }, { project: "p1" }), budget);
   assertEquals(calls[2].method, "PATCH");
-  assertEquals(calls[2].url, "https://api.example.com/model-budgets/b1");
-  assertEquals(await m.deleteBudget("b1"), undefined);
+  assertEquals(calls[2].url, "https://api.example.com/model-budgets/mbg_1?project=p1");
+  assertEquals(JSON.parse(calls[2].body!), { onBreach: "warn" });
+  assertEquals(await m.deleteBudget("mbg_1", { project: "p1" }), undefined);
   assertEquals(calls[3].method, "DELETE");
-  const u = await m.budgetUsage("b1");
-  assertEquals(u.budgetId, "b1");
-  assertEquals(calls[4].url, "https://api.example.com/model-budgets/b1/usage");
+  assertEquals(calls[3].url, "https://api.example.com/model-budgets/mbg_1?project=p1");
+  const u = await m.budgetUsage("mbg_1", { project: "p1" });
+  assertEquals(u.budgetId, "mbg_1");
+  assertEquals(calls[4].url, "https://api.example.com/model-budgets/mbg_1/usage?project=p1");
+});
+
+Deno.test("budgets: update/delete/usage omit ?project= when none is given", async () => {
+  const { m, calls } = setup((c) =>
+    c.method === "DELETE" ? null : c.url.includes("/usage") ? { budgetId: "mbg_1" } : {
+      id: "mbg_1",
+    }
+  );
+  await m.updateBudget("mbg_1", { window: "day" });
+  await m.deleteBudget("mbg_1");
+  await m.budgetUsage("mbg_1");
+  assertEquals(calls.map((c) => c.url), [
+    "https://api.example.com/model-budgets/mbg_1",
+    "https://api.example.com/model-budgets/mbg_1",
+    "https://api.example.com/model-budgets/mbg_1/usage",
+  ]);
+});
+
+Deno.test("budgets: a write answered without a budget object is bad_response", async () => {
+  const { m } = setup(() => ({ ok: true }));
+  const err = await assertRejects(
+    () =>
+      m.createBudget({
+        scopeKind: "tenant",
+        window: "day",
+        limits: { requests: 1 },
+        onBreach: "warn",
+      }),
+    ApiError,
+  );
+  assertEquals(err.code, "bad_response");
 });
 
 Deno.test("routes: create, update, delete take project and encode the name", async () => {

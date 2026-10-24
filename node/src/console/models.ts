@@ -16,6 +16,7 @@
  * @module
  */
 
+import { ApiError } from "../errors.ts";
 import { type HttpResponse, path, type RequestOptions } from "../http.ts";
 import type { Model, ModelRoute } from "../models.ts";
 import { unwrap } from "../types.ts";
@@ -72,15 +73,19 @@ export interface ModelBudgetLimits {
   currency?: string;
 }
 
-/** A stored budget. */
+/**
+ * A stored budget, as the server sends it (flat, never under a `budget` key).
+ * The owning project is not on the wire: it is whatever `?project=` resolved to.
+ */
 export interface ModelBudget {
   id: string;
-  project: string;
   scopeKind: string;
   scopeId: string | null;
   window: string;
   limits: ModelBudgetLimits;
   onBreach: string;
+  createdAt: string;
+  updatedAt: string;
   [field: string]: unknown;
 }
 
@@ -92,6 +97,9 @@ export interface ModelBudgetInput {
   limits: ModelBudgetLimits;
   onBreach: string;
 }
+
+/** Body of `updateBudget`: the server only lets `window`, `limits` and `onBreach` change. */
+export type ModelBudgetPatch = Partial<Pick<ModelBudgetInput, "window" | "limits" | "onBreach">>;
 
 /** A budget's live consumption. */
 export interface ModelBudgetUsage {
@@ -120,6 +128,26 @@ export interface ModelRouteInput {
 
 /** Body of `updateRoute`. */
 export type ModelRoutePatch = Partial<Omit<ModelRouteInput, "name">>;
+
+/**
+ * The budget write routes answer the budget object FLAT (`c.json(created, 201)`),
+ * not under a `budget` key. Accept that, and refuse a body that is not one.
+ */
+function budgetBody(res: HttpResponse<unknown>): ModelBudget {
+  const body = res.body;
+  if (
+    typeof body === "object" && body !== null && !Array.isArray(body) &&
+    typeof (body as Record<string, unknown>).id === "string"
+  ) {
+    return body as ModelBudget;
+  }
+  throw new ApiError(
+    res.status,
+    "bad_response",
+    `Server returned a ${res.status} without a budget object in the response body.`,
+    body,
+  );
+}
 
 /**
  * The `console.models` namespace on a `W6WClient`.
@@ -200,29 +228,57 @@ export class ModelsConsoleApi {
       body: input,
       signal: options?.signal,
     });
-    return unwrap<ModelBudget>(res, "budget");
+    return budgetBody(res);
   }
 
-  /** `PATCH /model-budgets/:id` — edit a budget (tenant admin). */
-  async updateBudget(id: string, patch: Partial<ModelBudgetInput>): Promise<ModelBudget> {
+  /**
+   * `PATCH /model-budgets/:id` — edit a budget (tenant admin).
+   *
+   * The id resolves inside `?project=` (the default project when omitted), so a
+   * budget in another project needs `project` here, or the server answers 404.
+   *
+   * @throws {ApiError} `404 model_budget_not_found`.
+   */
+  async updateBudget(
+    id: string,
+    patch: ModelBudgetPatch,
+    options?: ModelsConsoleOptions,
+  ): Promise<ModelBudget> {
     const res = await this.#host.request<unknown>({
       method: "PATCH",
       path: path`/model-budgets/${id}`,
+      query: { project: options?.project },
       body: patch,
+      signal: options?.signal,
     });
-    return unwrap<ModelBudget>(res, "budget");
+    return budgetBody(res);
   }
 
-  /** `DELETE /model-budgets/:id` — delete a budget (tenant admin). Resolves to nothing. */
-  async deleteBudget(id: string): Promise<void> {
-    await this.#host.request<unknown>({ method: "DELETE", path: path`/model-budgets/${id}` });
+  /**
+   * `DELETE /model-budgets/:id` — delete a budget (tenant admin). Resolves to nothing.
+   *
+   * @throws {ApiError} `404 model_budget_not_found` (pass `project` for a non-default project).
+   */
+  async deleteBudget(id: string, options?: ModelsConsoleOptions): Promise<void> {
+    await this.#host.request<unknown>({
+      method: "DELETE",
+      path: path`/model-budgets/${id}`,
+      query: { project: options?.project },
+      signal: options?.signal,
+    });
   }
 
-  /** `GET /model-budgets/:id/usage` — a budget's used/reserved counters. */
-  async budgetUsage(id: string): Promise<ModelBudgetUsage> {
+  /**
+   * `GET /model-budgets/:id/usage` — a budget's used/reserved counters.
+   *
+   * @throws {ApiError} `404 model_budget_not_found` (pass `project` for a non-default project).
+   */
+  async budgetUsage(id: string, options?: ModelsConsoleOptions): Promise<ModelBudgetUsage> {
     const res = await this.#host.request<ModelBudgetUsage>({
       method: "GET",
       path: path`/model-budgets/${id}/usage`,
+      query: { project: options?.project },
+      signal: options?.signal,
     });
     return res.body;
   }
