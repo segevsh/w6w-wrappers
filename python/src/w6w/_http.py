@@ -23,6 +23,16 @@ is a normal outcome on this API (a queued workflow run), not an error — a
 signature that dropped the status would leave the run operations unable to tell
 "finished" from "queued" (§4).
 
+**Byte mode** (contract 0.11.0, `docs/implementation.md` §3). An operation that
+declares `bodyEncoding: "octet-stream"` and/or `responseEncoding:
+"octet-stream"` swaps only the **success** path, and only in these two ways:
+a `bytes` body is sent to the wire untouched with
+`content-type: application/octet-stream` instead of JSON, and
+`response_encoding="octet-stream"` returns the 2xx body as raw `bytes` — read
+once, never decoded as text and never JSON-parsed, so `b"\\xff\\xfe\\x00"`
+survives. A non-2xx response is mapped exactly as before in both modes: the body
+is decoded leniently and the envelope's `code` reaches the caller.
+
 Two things live here rather than at the call sites, and both are mechanism, not
 convenience:
 
@@ -61,6 +71,16 @@ from .errors import ApiError
 #: message. Enough to recognise a Cloudflare page; not enough to paste a
 #: megabyte of HTML into a log.
 SNIPPET_LIMIT: int = 200
+
+#: The `endpoints.json` value that opts a request or a response into raw bytes:
+#: `bodyEncoding: "octet-stream"` / `responseEncoding: "octet-stream"` (contract
+#: 0.11.0). The same string is the content type this module sets for a `bytes`
+#: body, so the two spellings can never drift apart.
+OCTET_STREAM: str = "octet-stream"
+
+#: The content type a byte-mode request carries. Never JSON's, and never
+#: base64 or a text round-trip.
+OCTET_STREAM_CONTENT_TYPE: str = "application/octet-stream"
 
 #: The transport seam.
 #:
@@ -305,20 +325,34 @@ def _reason_of(response: Any) -> str:
     return reason if isinstance(reason, str) else ""
 
 
-def _read_body(response: Any) -> str:
-    """Read a response body exactly once, as text.
+def _read_raw(response: Any) -> bytes:
+    """Read a response body exactly once, as raw bytes.
+
+    **Once** is the load-bearing word: a response body is a single-use stream,
+    so every caller below takes the bytes from here and either returns them
+    (byte mode) or decodes them (JSON mode). Reading it twice would hand the
+    second reader an empty body.
+
+    :param response: The response-like object.
+    :returns: The body, or `b""` when there is none.
+    """
+    read = getattr(response, "read", None)
+    raw = read() if callable(read) else b""
+    if isinstance(raw, (bytes, bytearray, memoryview)):
+        return bytes(raw)
+    return str(raw or "").encode("utf-8")
+
+
+def _decode_text(raw: bytes) -> str:
+    """Decode a response body as text, leniently.
 
     Decoded leniently: a mis-encoded byte in a proxy's error page must not turn
     into a `UnicodeDecodeError` that hides the page.
 
-    :param response: The response-like object.
-    :returns: The body, or `""` when there is none.
+    :param raw: The body bytes.
+    :returns: The body as text.
     """
-    read = getattr(response, "read", None)
-    raw = read() if callable(read) else b""
-    if isinstance(raw, bytes):
-        return raw.decode("utf-8", errors="replace")
-    return str(raw or "")
+    return raw.decode("utf-8", errors="replace")
 
 
 def _request(
@@ -330,6 +364,7 @@ def _request(
     body: Optional[Any] = None,
     headers: Optional[Mapping[str, str]] = None,
     require_auth: bool = True,
+    response_encoding: Optional[str] = None,
 ) -> HttpResponse:
     """Perform one request and map its outcome.
 
@@ -372,8 +407,11 @@ def _request(
         any part of it comes from the caller. Named `url_path` so that the
         encoder is never shadowed inside this function (see :func:`build_url`).
     :param query: Query parameters; `None` values are dropped.
-    :param body: Request body. Serialised as JSON when not `None`; a bodiless
-        request sends no `Content-Type`.
+    :param body: Request body. `bytes` (or `bytearray`/`memoryview`) is **byte
+        mode**: sent to the wire untouched with `Content-Type:
+        application/octet-stream`, never JSON-encoded, quoted or base64'd —
+        `b""` included, because an empty body is still a body. Anything else is
+        serialised as JSON; `None` sends no body and no `Content-Type`.
     :param headers: Extra request headers, for the routes that take a
         precondition. Precedence, low to high: `config.headers` (the client's
         own default) < this argument < the credential, which is re-pinned
@@ -390,7 +428,13 @@ def _request(
         not skipped-but-still-attempted, never called at all — and no
         `Authorization` is set from `config.token`, so a caller-supplied one in
         `headers` reaches the wire untouched and is never re-pinned over.
-    :returns: The status and parsed body.
+    :param response_encoding: `"octet-stream"` makes the **success** path return
+        the 2xx body as raw `bytes` (an operation declaring
+        `responseEncoding: "octet-stream"`). Left `None`, the body is parsed as
+        JSON as always. A non-2xx is the same typed error in both modes — the
+        error envelope is parsed, and a non-JSON body is `bad_response`.
+    :returns: The status and parsed body — a `dict`/`list` for JSON, `bytes` for
+        byte mode.
     :raises ConfigError: When no token is configured and `require_auth` is
         `True` — raised *before* the transport is touched.
     :raises ApiError: On any of the three failure modes above.
@@ -412,8 +456,16 @@ def _request(
         request_headers["Authorization"] = "Bearer " + token
     payload: Optional[bytes] = None
     if body is not None:
-        request_headers["Content-Type"] = "application/json"
-        payload = json.dumps(body).encode("utf-8")
+        if isinstance(body, (bytes, bytearray, memoryview)):
+            # Byte mode (`bodyEncoding: "octet-stream"`): the bytes ARE the body.
+            # No JSON, no quoting, no base64, no text round-trip — a binary
+            # payload that went through any of those would no longer be the
+            # bytes whose sha256 the caller declared.
+            request_headers["Content-Type"] = OCTET_STREAM_CONTENT_TYPE
+            payload = bytes(body)
+        else:
+            request_headers["Content-Type"] = "application/json"
+            payload = json.dumps(body).encode("utf-8")
     if headers:
         request_headers.update(headers)
         if require_auth:
@@ -445,7 +497,7 @@ def _request(
         # `network_error` would report every 404 as "the server is unreachable"
         # and throw the error envelope away. Ordering matters: HTTPError is a
         # subclass of URLError, so this clause has to come first.
-        status, reason, text = _status_of(err), _reason_of(err), _read_body(err)
+        status, reason, raw = _status_of(err), _reason_of(err), _read_raw(err)
     except (URLError, socket.timeout, OSError) as err:
         # URLError and socket.timeout are both OSError subclasses; all three are
         # named so the mapping is legible against §3, and so a bare
@@ -457,9 +509,19 @@ def _request(
             "It may be down or unreachable. ({err})".format(method=method, url=url, err=err),
         ) from err
     else:
-        status, reason, text = _status_of(response), _reason_of(response), _read_body(response)
+        status, reason, raw = _status_of(response), _reason_of(response), _read_raw(response)
 
     ok = 200 <= status < 300
+
+    # Byte mode (`responseEncoding: "octet-stream"`), SUCCESS path only: the
+    # payload is the body, returned exactly as it arrived — never decoded (which
+    # would replace invalid UTF-8) and never JSON-parsed. A non-2xx falls through
+    # to the text/envelope mapping below, so the typed error is identical in
+    # both modes.
+    if ok and response_encoding == OCTET_STREAM:
+        return HttpResponse(status, raw)
+
+    text = _decode_text(raw)
     data: Any = None
     if text:
         try:
@@ -524,6 +586,7 @@ def _request(
                     body=body,
                     headers=headers,
                     require_auth=require_auth,
+                    response_encoding=response_encoding,
                 )
             # No usable refreshed token: no retry — fall through and report
             # the ORIGINAL 401.
