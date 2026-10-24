@@ -171,6 +171,43 @@ Reading works for any member. The rest need the `owner` or `admin` role.
 | `set_role(user_id, role)` | `TeamMember`. `role` is `"member"` or `"admin"`. |
 | `remove_member(user_id)` | `None` |
 
+## `client.models`, `client.model_routes`, `client.model_usage`
+
+The model registry: a catalog of AI models, named **model routes** that pick the model, provider and
+fallbacks for you, and a usage report. See the [Node models page](/clients/node/models/) for the walkthrough. Creating and editing routes is
+not part of the stable surface.
+
+| Method | Returns |
+| --- | --- |
+| `models.list(provider=None, status=None, limit=None, cursor=None)` | The whole page, `{"models": [...], "nextCursor": ...}`. Pass `nextCursor` back as `cursor`. |
+| `models.get(id)` | One catalog entry, by its catalog id (`mdl_…`). |
+| `model_routes.list(project=None)` | `list` of routes. |
+| `model_routes.get(name, project=None)` | One route. |
+| `model_routes.complete(name, input, project=None, dialect=None, response=None)` | The flat envelope exactly as the server sent it, with `invocationId` and `status`. Not unwrapped to `output`. |
+| `model_usage.query(project=None, group_by=None, from_=None, to=None, route=None, model=None, limit=None, cursor=None)` | `{"totals", "totalsTruncated", "groups", "items", "nextCursor"}` as sent. `group_by` is `route`, `model` or `day`. |
+
+`dialect` is `openai`, `anthropic` or `ollama`. `response` is `output`, `raw` or `both`. `project` falls back to the client's `project` setting, then to your account's default
+project.
+
+```python
+import w6w
+
+client = w6w.Client()
+
+page = client.models.list(provider="openai", limit=20)
+route = client.model_routes.get("summarize")
+
+result = client.model_routes.complete(
+    "summarize",
+    {"messages": [{"role": "user", "content": "Summarize this ticket."}]},
+    dialect="openai",
+    response="both",
+)
+print(result["invocationId"], result["status"])
+
+report = client.model_usage.query(group_by="route", from_="2026-10-01", to="2026-10-24")
+```
+
 ## `w6w.server.EmbedSessionClient(...)`
 
 For backends only. The recommended way to mint a short-lived, account-scoped session for one user: `from w6w.server import EmbedSessionClient`. Walkthrough: [Embed w6w in your product](/guides/embed/).

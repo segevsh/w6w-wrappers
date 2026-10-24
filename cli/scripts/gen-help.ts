@@ -123,6 +123,9 @@ const GROUP_SUMMARIES: Record<string, string> = {
   functions: "Run and edit functions",
   endpoints: "Run endpoints by key or id",
   documents: "Create, read, update and delete documents",
+  models: "Browse the model catalog",
+  "model-routes": "List model routes and run completions through them",
+  "model-usage": "Query model usage and cost",
   vars: "Create, read, update and delete variables",
   team: "Invite, list and manage your account's team",
   apps: "Look up apps by id",
@@ -139,6 +142,9 @@ const GROUP_EXAMPLES: Record<string, string[]> = {
   endpoints: ["w6w endpoints run send-email"],
   workflows: ["w6w workflows list", "w6w workflows run wf_01HQ8N --wait"],
   documents: ["w6w documents list", "w6w documents get doc_01HQ8N"],
+  models: ["w6w models ls", "w6w models get mdl_01HQ8N"],
+  "model-routes": ["w6w model-routes list", "w6w model-routes get summarize"],
+  "model-usage": ["w6w model-usage"],
   vars: ["w6w vars list", "w6w vars create greeting --type string --value hello"],
   team: ["w6w team members", "w6w team invite --email new@example.com --role admin"],
   apps: ["w6w apps by-ids sendgrid,slack"],
@@ -268,6 +274,15 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
     "w6w functions run-version send-email 3",
     `w6w functions run-version fn_01HQ8N 3 --payload '{"to":"a@b.com"}'`,
   ],
+  "models.list": ["w6w models ls", "w6w models ls --provider openai"],
+  "models.get": ["w6w models get mdl_01HQ8N"],
+  "modelRoutes.list": ["w6w model-routes list", "w6w model-routes list --project prj_01HQ8N"],
+  "modelRoutes.get": ["w6w model-routes get summarize"],
+  "modelRoutes.complete": [
+    `w6w model-routes complete summarize --input '{"messages":[{"role":"user","content":"Hi"}]}'`,
+    `w6w model-routes complete summarize --input '{"prompt":"Hi"}' --dialect openai --response output`,
+  ],
+  "modelUsage.query": ["w6w model-usage", "w6w model-usage --group-by route --from 2026-10-01"],
   "documents.list": ["w6w documents list", "w6w documents list --project prj_01HQ8N"],
   "documents.get": ["w6w documents get doc_01HQ8N"],
   "documents.getByKey": ["w6w documents get-by-key onboarding-email"],
@@ -365,6 +380,21 @@ const PARAM_HELP: Record<string, string> = {
   "ls.kind":
     "What to list: integrations | workflows | functions | endpoints (endpoints is unstable)",
   "ls.project": "Project to scope to (workflows only; other kinds ignore it)",
+  "models.list.provider": "Only models from this provider (e.g. openai)",
+  "models.list.status": "Only models with this status",
+  "models.get.id": "Catalog model id (mdl_…), not a provider-native id like gpt-4o",
+  "modelRoutes.get.name": "Model route name",
+  "modelRoutes.complete.name": "Model route name",
+  "modelRoutes.complete.input": "The completion input, as a JSON object",
+  "modelRoutes.complete.dialect": "Request dialect: openai | anthropic | ollama",
+  "modelRoutes.complete.response": "Response shape: both | output | raw",
+  "modelUsage.query.groupBy": "Group usage by this dimension",
+  "modelUsage.query.from": "Start of the window (ISO timestamp)",
+  "modelUsage.query.to": "End of the window (ISO timestamp)",
+  "modelUsage.query.route": "Only usage through this model route id (mrt_…)",
+  "modelUsage.query.model": "Only usage of this catalog model id (mdl_…)",
+  "limit": "Maximum number of results per page",
+  "cursor": "Pagination cursor from a previous page",
   // Shared fallbacks, by bare parameter name.
   "project": "Project to scope to (default: the account's default project)",
   "description": "Human-readable description",
@@ -659,6 +689,10 @@ export function commandPathOf(naming: string): string[] {
     if (token.startsWith("<") || token.startsWith("[") || token.startsWith("--")) break;
     path.push(token);
   }
+  // `ls` is the parser's subcommand alias for `list` (args.ts SUBCOMMAND_ALIASES): the
+  // dispatcher rewrites it before matching, so a contract spelling `<group> ls` must be
+  // registered under its canonical `list` path or it is unreachable.
+  if (path.length > 1 && path[path.length - 1] === "ls") path[path.length - 1] = "list";
   return path;
 }
 

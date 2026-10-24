@@ -890,6 +890,42 @@ None of these four methods take a `project` scoping parameter — neither is rea
 route on this domain — so `AliasesHost` needs only the transport, mirroring
 `console.workflows`'s/`console.schedules`'s own host shape.
 
+## `console.models.*`
+
+```ts
+import { W6WClient } from "@w6w/sdk";
+import "@w6w/sdk/console"; // pulls in client.console
+
+const client = new W6WClient();
+await client.console.models.discover("conn_1");
+await client.console.models.createRoute({ name: "chat", model: "mdl_1", connection: "conn_1" });
+const budgets = await client.console.models.listBudgets();
+```
+
+The model registry's console-only routes. The six stable operations (`models.list|get`,
+`modelRoutes.list|get|complete`, `modelUsage.query`) are on the root client and in `endpoints.json`
+— see `clients/node/models.md`. Catalog and budget writes need a tenant admin. A budget id resolves
+inside `?project=` (the default project when omitted), so every by-id budget method takes
+`{project?}`: a budget in another project answers `404 model_budget_not_found` without it.
+
+| Method                                 | Route                          | Notes                                                      |
+| -------------------------------------- | ------------------------------ | ---------------------------------------------------------- |
+| `updateModel(id, patch)`               | `PATCH /models/:id`            | `status`/`displayName`/`limits`. Unwraps `model`.          |
+| `putRates(id, {effectiveFrom, rates})` | `PUT /models/:id/rates`        | `201`. Unwraps `rate`.                                     |
+| `discover(connection)`                 | `POST /models/discover`        | `{added, updated, deprecated}`.                            |
+| `providers()`                          | `GET /models/providers`        | Unwraps `providers`.                                       |
+| `listBudgets({project?})`              | `GET /model-budgets`           | Unwraps `budgets`.                                         |
+| `createBudget(input, {project?})`      | `POST /model-budgets`          | `201`. The budget object, sent flat (no envelope).         |
+| `updateBudget(id, patch, {project?})`  | `PATCH /model-budgets/:id`     | `window`/`limits`/`onBreach`. The budget, sent flat.       |
+| `deleteBudget(id, {project?})`         | `DELETE /model-budgets/:id`    | Resolves to `undefined`.                                   |
+| `budgetUsage(id, {project?})`          | `GET /model-budgets/:id/usage` | `{budgetId, window, windowStart, limits, used, reserved}`. |
+| `createRoute(input, {project?})`       | `POST /model-routes`           | `201`; `409 model_route_exists`, `400 invalid_route_name`. |
+| `updateRoute(name, patch, {project?})` | `PATCH /model-routes/:name`    | Unwraps `route`.                                           |
+| `deleteRoute(name, {project?})`        | `DELETE /model-routes/:name`   | Resolves to `undefined`; `404 model_route_not_found`.      |
+
+**`complete` is deliberately NOT modeled here.** `client.modelRoutes.complete` already reaches it
+and returns the flat envelope as-is; a second method would give a caller two ways to the same route.
+
 ## `console.subscriptions.*`
 
 ```ts

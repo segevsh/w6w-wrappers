@@ -53,6 +53,22 @@ export type {
   DocumentPatch,
   DocumentsHost,
 } from "./src/documents.ts";
+// Model registry. Types only: the namespace classes are reached
+// through `client.models` / `client.modelRoutes` / `client.modelUsage`.
+export type {
+  Model,
+  ModelCompleteOptions,
+  ModelCompletion,
+  ModelDialect,
+  ModelListOptions,
+  ModelPage,
+  ModelResponseMode,
+  ModelRoute,
+  ModelRouteOptions,
+  ModelsHost,
+  ModelUsageOptions,
+  ModelUsageReport,
+} from "./src/models.ts";
 export { VarsApi } from "./src/vars.ts";
 export type { VarCreateInput, VarPatch, VarsHost } from "./src/vars.ts";
 
