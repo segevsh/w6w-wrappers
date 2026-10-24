@@ -186,3 +186,24 @@ export type {
   WorkflowStatus,
   WorkflowSummary,
 } from "./src/types.ts";
+
+// Assets and resumable uploads (contract 0.11.0).
+export { AssetsApi } from "./src/assets.ts";
+export type { AssetsHost } from "./src/assets.ts";
+export type {
+  Asset,
+  AssetFile,
+  AssetFinalizeResult,
+  AssetPurgeResult,
+  AssetReadiness,
+  AssetUpload,
+  AssetUploadCreateInput,
+  AssetUploadEntry,
+  AssetUploadEntryInput,
+  AssetUploadPurpose,
+  AssetUploadState,
+  AssetUploadStatus,
+  AssetVersion,
+  AssetVersionFiles,
+  AssetVisibility,
+} from "./src/types.ts";

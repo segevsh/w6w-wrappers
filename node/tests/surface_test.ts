@@ -83,6 +83,7 @@ const PUBLIC_SURFACE: Record<string, "function" | "string"> = {
   fetchMe: "function",
   ConnectionsApi: "function",
   AppsApi: "function",
+  AssetsApi: "function",
   DashboardApi: "function",
   ProjectsApi: "function",
   ReliabilityApi: "function",

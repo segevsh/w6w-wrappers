@@ -36,6 +36,7 @@ import { type RunInput, runUrn } from "./run.ts";
 import { TeamApi } from "./team.ts";
 import type { Me, RunEnvelope } from "./types.ts";
 import { VarsApi } from "./vars.ts";
+import { AssetsApi } from "./assets.ts";
 import { EndpointsApi } from "./endpoints.ts";
 import { FunctionsApi } from "./functions.ts";
 import { WorkflowsApi } from "./workflows.ts";
@@ -89,6 +90,8 @@ export class W6WClient {
    * so it cannot reach a default scope to send (`docs/implementation.md` §7).
    */
   readonly vars: VarsApi;
+  /** Resumable uploads and stored assets (contract 0.11.0; byte-mode ops). */
+  readonly assets: AssetsApi;
 
   /**
    * Connections: `list`, `get`, `delete`. Creating, updating or testing a
@@ -212,6 +215,7 @@ export class W6WClient {
     this.modelRoutes = new ModelRoutesApi(this);
     this.modelUsage = new ModelUsageApi(this);
     this.vars = new VarsApi(this);
+    this.assets = new AssetsApi(this);
     this.connections = new ConnectionsApi(this);
     this.apps = new AppsApi(this);
     this.dashboard = new DashboardApi(this);
