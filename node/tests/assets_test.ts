@@ -104,3 +104,127 @@ Deno.test("JSON ops hit the right paths and unwrap envelopes", async () => {
     "POST /asset-uploads",
   ]);
 });
+
+// ---------------------------------------------------------------------------
+// `console.storage` — the account's storage bindings and agent-limit settings.
+// Console-only (P-D5): these routes are deliberately absent from
+// `endpoints.json`, so the last case below pins that absence as the contract.
+// ---------------------------------------------------------------------------
+
+/** A binding as the server's allowlist sends it: identity and status, never a destination. */
+const BINDING = {
+  id: "b1",
+  name: "primary",
+  provider: "s3",
+  connectionId: "conn_1",
+  serverDefault: false,
+  status: "active",
+  health: { ok: true, checkedAt: "2026-01-01T00:00:00Z" },
+  activeRevisionId: "rev_1",
+  revision: { id: "rev_1", revision: 1, createdAt: "2026-01-01T00:00:00Z" },
+  createdAt: "2026-01-01T00:00:00Z",
+  updatedAt: "2026-01-01T00:00:00Z",
+  retiredAt: null,
+};
+
+/** The settings wire shape: effective limits, the stored values behind them, a timestamp. */
+const SETTINGS = {
+  limits: { maxFileBytes: 26214400, maxPackageBytes: 104857600, maxFiles: 1000 },
+  settings: {
+    maxFileBytes: null,
+    maxPackageBytes: 104857600,
+    maxFiles: null,
+    retentionDays: 30,
+    storageBindingId: "b1",
+  },
+  updatedAt: "2026-01-01T00:00:00Z",
+};
+
+Deno.test("console.storage.bindings calls the §P6 storage-binding paths", async () => {
+  const { client, calls } = fake((c) => {
+    if (c.url.endsWith("/migrate")) {
+      return json({ bindingId: "b1", toRevisionId: "rev_2", enqueued: 3 }, 202);
+    }
+    if (c.method === "DELETE") return json({ ok: true });
+    if (c.method === "POST") return json(BINDING, 201);
+    if (new URL(c.url).pathname === "/storage-bindings") {
+      return json({ bindings: c.url.includes("includeRetired=true") ? [BINDING] : [] });
+    }
+    return json(BINDING);
+  });
+  const b = client.console.storage.bindings;
+
+  assertEquals(await b.list(), []);
+  assertEquals((await b.list({ includeRetired: true })).length, 1);
+  assertEquals((await b.get("b 1")).id, "b1");
+  const created = await b.create({ connectionId: "conn_1", bucket: "bkt", region: "eu-west-1" });
+  assertEquals(created.id, "b1");
+  await b.delete("b1");
+  const migration = await b.migrate("b1");
+  assertEquals(migration.enqueued, 3);
+  assertEquals(migration.toRevisionId, "rev_2");
+
+  assertEquals(
+    calls.map((c) => `${c.method} ${new URL(c.url).pathname}${new URL(c.url).search}`),
+    [
+      "GET /storage-bindings",
+      "GET /storage-bindings?includeRetired=true",
+      "GET /storage-bindings/b%201",
+      "POST /storage-bindings",
+      "DELETE /storage-bindings/b1",
+      "POST /storage-bindings/b1/migrate",
+    ],
+  );
+  // The destination goes UP only and is never faked: the create body is exactly the input.
+  assertEquals(JSON.parse(calls[3].body as string), {
+    connectionId: "conn_1",
+    bucket: "bkt",
+    region: "eu-west-1",
+  });
+});
+
+Deno.test("console.storage.settings reads and patches /agent-settings", async () => {
+  const { client, calls } = fake(() => json(SETTINGS));
+  const s = client.console.storage.settings;
+
+  assertEquals((await s.get()).limits.maxFiles, 1000);
+  const patched = await s.patch({ maxFileBytes: 1048576, retentionDays: null });
+  assertEquals(patched.settings.retentionDays, 30);
+
+  assertEquals(calls.map((c) => `${c.method} ${new URL(c.url).pathname}`), [
+    "GET /agent-settings",
+    "PATCH /agent-settings",
+  ]);
+  // `null` is a value ("clear back to the default"), so it must survive as `null`.
+  assertEquals(JSON.parse(calls[1].body as string), { maxFileBytes: 1048576, retentionDays: null });
+});
+
+Deno.test("console.storage is console-only: endpoints.json lists none of it", async () => {
+  const text = await Deno.readTextFile(new URL("../../endpoints.json", import.meta.url));
+  const contract = JSON.parse(text) as {
+    operations: { name: string; path?: string; naming?: { ts?: string } }[];
+  };
+  const listed = contract.operations.filter((op) =>
+    (op.path ?? "").includes("/storage-bindings") ||
+    (op.path ?? "").includes("/agent-settings") ||
+    op.name.startsWith("storage.") ||
+    op.name.startsWith("agentSettings.") ||
+    (op.naming?.ts ?? "").includes("console.storage")
+  );
+  assertEquals(listed, []);
+
+  // …and every method DOES resolve on a client, so the absence is a decision, not a hole.
+  const { client } = fake(() => json({}));
+  for (const name of ["list", "create", "get", "delete", "migrate"]) {
+    assertEquals(
+      typeof (client.console.storage.bindings as unknown as Record<string, unknown>)[name],
+      "function",
+    );
+  }
+  for (const name of ["get", "patch"]) {
+    assertEquals(
+      typeof (client.console.storage.settings as unknown as Record<string, unknown>)[name],
+      "function",
+    );
+  }
+});
