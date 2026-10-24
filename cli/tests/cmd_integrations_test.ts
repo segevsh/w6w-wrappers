@@ -68,6 +68,38 @@ Deno.test("connections delete: DELETE /connections/<id>; --json is null", async 
   assertEquals(JSON.parse(r.stdout), null);
 });
 
+Deno.test("connections delete --force: DELETE /connections/<id>?force=true", async () => {
+  const r = await w6w(["connections", "delete", "conn_1", "--force", "--json"], (call) => {
+    assertEquals(call.method, "DELETE");
+    assertEquals(call.url, `${BASE}/connections/conn_1?force=true`);
+    return json(200, { ok: true, disabled: [] });
+  });
+  assertEquals(r.code, 0, r.stderr);
+  assertEquals(JSON.parse(r.stdout), null);
+});
+
+Deno.test("connections delete: a 409 connection_in_use lists dependents on stderr and exits 2", async () => {
+  const r = await w6w(["connections", "delete", "conn_1"], () =>
+    json(409, {
+      error: {
+        code: "connection_in_use",
+        message: "connection is in use",
+        dependents: {
+          callables: [
+            { id: "fn_1", kind: "function", key: "send", displayName: "Send mail", enabled: true },
+            { id: "ep_2", kind: "endpoint", key: "hook", displayName: "Hook", enabled: true },
+          ],
+          subscriptions: [],
+        },
+      },
+    }));
+  assertEquals(r.code, 2, r.stdout);
+  assertStringIncludes(r.stderr, "function Send mail (fn_1)");
+  assertStringIncludes(r.stderr, "endpoint Hook (ep_2)");
+  assertStringIncludes(r.stderr, "--force");
+  assertEquals(r.stdout, "");
+});
+
 Deno.test("connections delete: a 404 exits 2 with the server message", async () => {
   const r = await w6w(
     ["connections", "delete", "conn_x"],
