@@ -20,7 +20,7 @@
  */
 
 import { ApiError } from "./errors.ts";
-import type { HttpResponse } from "./http.ts";
+import type { CallOptions, HttpResponse } from "./http.ts";
 
 /**
  * A document's format hint.
@@ -535,6 +535,190 @@ export function unwrap<T>(res: HttpResponse<unknown>, key: string): T {
     `Server returned a ${res.status} with no "${key}" in the response body.`,
     body,
   );
+}
+
+// ---------------------------------------------------------------------------
+// Assets and resumable uploads (contract 0.11.0, `assets.*`)
+//
+// Transcribed from the host's wire shapes (`/asset-uploads`, `/assets`). The
+// server never sends an object key, storage path or binding coordinate, so no
+// type below has one. Timestamps are ISO strings exactly as sent.
+// ---------------------------------------------------------------------------
+
+/** What an upload becomes at finalize. `skill` / `context` run a purpose handler. */
+export type AssetUploadPurpose = "asset" | "skill" | "context";
+
+/** Who may see an asset. Default `private`. */
+export type AssetVisibility = "private" | "project" | "account";
+
+/** Lifecycle of an upload row. */
+export type AssetUploadState =
+  | "open"
+  | "published"
+  | "pending_sync"
+  | "aborted"
+  | "expired"
+  | "failed";
+
+/** Whether a version's bytes are usable yet. */
+export type AssetReadiness = "pending" | "ready" | "failed";
+
+/** One file the caller declares when reserving an upload. */
+export interface AssetUploadEntryInput {
+  /** Author path inside the package, e.g. `skill/SKILL.md`. Canonicalised by the server. */
+  path: string;
+  /** Exact byte length of the body that will be PUT. */
+  sizeBytes: number;
+  /** Lowercase hex sha256 of that body. */
+  sha256: string;
+  mediaType?: string;
+}
+
+/** Body of `assets.uploads.create`. */
+export interface AssetUploadCreateInput {
+  purpose: AssetUploadPurpose;
+  /** Replays of the same key with the identical request return the same upload. */
+  idempotencyKey: string;
+  /** Position in this array is the entry `index`. */
+  entries: AssetUploadEntryInput[];
+  /** Name of the asset to create at publish; ignored when `assetId` is given. */
+  name?: string;
+  visibility?: AssetVisibility;
+  /** Publish a new version of this existing asset instead of creating one. */
+  assetId?: string | null;
+  /** Purpose-specific destination data, e.g. `{ skillId }` or `{ collectionId }`. */
+  target?: Record<string, unknown>;
+}
+
+/** The upload row. */
+export interface AssetUpload {
+  id: string;
+  purpose: AssetUploadPurpose;
+  visibility: AssetVisibility;
+  project: string | null;
+  assetId: string | null;
+  versionId: string | null;
+  name: string | null;
+  status: AssetUploadState;
+  reservedBytes: number;
+  reservedFiles: number;
+  errorCode: string | null;
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One declared entry and whether its bytes have arrived. */
+export interface AssetUploadEntry {
+  index: number;
+  path: string;
+  sizeBytes: number;
+  sha256: string;
+  state: "pending" | "received";
+  receivedAt: string | null;
+}
+
+/** `assets.uploads.create` / `get` / `abort`: the upload plus its entries, as sent. */
+export interface AssetUploadStatus {
+  upload: AssetUpload;
+  entries: AssetUploadEntry[];
+}
+
+/** `assets.uploads.finalize`: the published version, as sent. */
+export interface AssetFinalizeResult {
+  uploadId: string;
+  assetId: string;
+  versionId: string;
+  version: number;
+  readiness: "ready" | "pending";
+  /** What the purpose handler derived from the staged files; `null` for a plain asset. */
+  derived: unknown;
+  /** `false` when this call found the upload already published. */
+  created: boolean;
+}
+
+/** An asset. */
+export interface Asset {
+  id: string;
+  name: string;
+  kind: string;
+  visibility: AssetVisibility;
+  project: string | null;
+  ownerSubject: string;
+  activeVersionId: string | null;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One immutable version of an asset. */
+export interface AssetVersion {
+  id: string;
+  assetId: string;
+  version: number;
+  inventoryDigest: string;
+  readiness: AssetReadiness;
+  syncState: string;
+  totalBytes: number;
+  fileCount: number;
+  createdBy: string;
+  createdAt: string;
+  readyAt: string | null;
+}
+
+/** One file of a version. */
+export interface AssetFile {
+  id: string;
+  path: string;
+  mediaType: string;
+  sizeBytes: number;
+  sha256: string;
+  createdAt: string;
+}
+
+/** `assets.files`: a version and its files, as sent. */
+export interface AssetVersionFiles {
+  version: AssetVersion;
+  files: AssetFile[];
+}
+
+/** `assets.purge`: what was deleted, as sent. */
+export interface AssetPurgeResult {
+  assetId: string;
+  versionsDeleted: number;
+  objectsDeleted: number;
+}
+
+/**
+ * The `assets` namespace the node client exposes (implemented by S2 in
+ * `src/assets.ts`; named here so the CLI and react lanes can type against it).
+ * `Uint8Array` is the byte type in both directions.
+ */
+export interface AssetsApi {
+  uploads: {
+    create(input: AssetUploadCreateInput, opts?: CallOptions): Promise<AssetUploadStatus>;
+    putEntry(
+      id: string,
+      index: number,
+      bytes: Uint8Array,
+      opts?: CallOptions,
+    ): Promise<AssetUploadEntry>;
+    finalize(id: string, opts?: CallOptions): Promise<AssetFinalizeResult>;
+    get(id: string, opts?: CallOptions): Promise<AssetUploadStatus>;
+    abort(id: string, opts?: CallOptions): Promise<AssetUploadStatus>;
+  };
+  get(id: string, opts?: CallOptions): Promise<Asset>;
+  versions(id: string, opts?: CallOptions): Promise<AssetVersion[]>;
+  files(id: string, versionId: string, opts?: CallOptions): Promise<AssetVersionFiles>;
+  content(
+    id: string,
+    versionId: string,
+    fileId: string,
+    opts?: CallOptions,
+  ): Promise<Uint8Array>;
+  archiveDownload(id: string, versionId: string, opts?: CallOptions): Promise<Uint8Array>;
+  archive(id: string, opts?: CallOptions): Promise<Asset>;
+  purge(id: string, opts?: CallOptions): Promise<AssetPurgeResult>;
 }
 
 /**

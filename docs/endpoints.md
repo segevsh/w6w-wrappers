@@ -58,6 +58,25 @@ nothing it can act on — see the note at the top of
 [implementation.md](./implementation.md), which applies here identically. Verify
 a claim against the API, not against a path you cannot open.
 
+**Binary bodies.** Every operation is JSON in and JSON out unless it says
+otherwise. Two optional fields on an `endpoints.json` operation (added at
+contract `0.11.0`) opt a route into raw bytes:
+
+- `bodyEncoding: "octet-stream"` — the request body is the caller's bytes, sent
+  as-is with `content-type: application/octet-stream`. Never JSON-encoded,
+  quoted or base64'd. The wrapper takes `Uint8Array` (node/cli) or `bytes`
+  (python) and hands them to the HTTP client untouched.
+- `responseEncoding: "octet-stream"` — a **successful** response body is the
+  payload, returned unmodified as `Uint8Array` / `bytes`. It is never decoded as
+  text or JSON, so bytes that are not valid UTF-8 (`\xff\xfe\x00`) survive.
+
+Byte mode changes only the _success_ path. A non-2xx response on a byte route is
+still the JSON error envelope and raises the same typed error with its `code`
+(implementation.md §3); an operation that declares neither field behaves exactly
+as before. The two fields are independent: `assets.uploads.putEntry` declares
+only `bodyEncoding`, `assets.content` and `assets.archiveDownload` only
+`responseEncoding`.
+
 **Naming.** Operation names in `endpoints.json` are the contract. Each language
 renders them in its own idiom but the mapping is mechanical and must not drift.
 This table is generated from each operation's `naming` entry and must match it
@@ -1832,6 +1851,175 @@ Returns `{ totals, totalsTruncated, groups?, items, nextCursor }` as-is. `totals
 
 ---
 
+## 58. `assets.uploads.create` — reserve an upload
+
+```
+POST /asset-uploads
+```
+
+`status: required` · served today
+
+Body
+`{purpose, idempotencyKey, entries:[{path, sizeBytes, sha256, mediaType?}], name?, visibility?, assetId?, target?}`;
+`purpose` is `asset | skill | context`. Declares the files and reserves quota;
+no bytes move yet. Returns `{upload, entries}` as sent — `201` on create, `200`
+when `idempotencyKey` replays the identical request. Entry `index` is its
+position in `entries`. Errors: `400 invalid_body`, `413 too_many_files`,
+`413 quota_exceeded`, `422 validation_failed`,
+`503 managed_storage_unavailable`.
+
+---
+
+## 59. `assets.uploads.putEntry` — send one entry's bytes
+
+```
+PUT /asset-uploads/:id/entries/:index
+```
+
+`status: required` · served today
+
+**Binary in** (`bodyEncoding: "octet-stream"`). The body is the entry's raw
+bytes; the server checks its length and sha256 against the declaration. Returns
+the `AssetUploadEntry` (unwrapped from `{entry}`). Re-sending a received entry
+is allowed. Errors: `409 conflict` (upload not open), `413 payload_too_large`,
+`422 validation_failed` (digest mismatch or unknown index).
+
+---
+
+## 60. `assets.uploads.finalize` — publish an upload
+
+```
+POST /asset-uploads/:id/finalize
+```
+
+`status: required` · served today
+
+Idempotent. Returns
+`{uploadId, assetId, versionId, version, readiness, derived, created}` as sent;
+`readiness` is `ready | pending`, `created` is `false` on a repeat call. Errors:
+`409 conflict`, `413 quota_exceeded`, `422 validation_failed`.
+
+---
+
+## 61. `assets.uploads.get` — read upload status
+
+```
+GET /asset-uploads/:id
+```
+
+`status: required` · served today
+
+Returns `{upload, entries}`; each entry's `state` (`pending | received`) is the
+resume point — a retrying client skips every `received` entry.
+
+---
+
+## 62. `assets.uploads.abort` — abort an upload
+
+```
+DELETE /asset-uploads/:id
+```
+
+`status: required` · served today
+
+Answers `200 {upload, entries}` (the aborted view), not `{ok:true}`. A published
+or already-aborted upload is `409 conflict`.
+
+---
+
+## 63. `assets.get` — fetch one asset
+
+```
+GET /assets/:id
+```
+
+`status: required` · served today
+
+Unwrapped from `{asset}`. A missing, foreign or other-project id is the uniform
+`404 not_found`.
+
+---
+
+## 64. `assets.versions` — list an asset's versions
+
+```
+GET /assets/:id/versions
+```
+
+`status: required` · served today
+
+Unwrapped from `{versions}`; `failed` versions are not listed.
+
+---
+
+## 65. `assets.files` — list a version's files
+
+```
+GET /assets/:id/versions/:vid/files
+```
+
+`status: required` · served today
+
+Returns `{version, files}` as sent. Files never carry an object key or storage
+path.
+
+---
+
+## 66. `assets.content` — download one file's bytes
+
+```
+GET /assets/:id/versions/:vid/files/:fileId/content
+```
+
+`status: required` · served today
+
+**Binary out** (`responseEncoding: "octet-stream"`). The file's exact bytes as
+`Uint8Array` / `bytes`; the server's `content-disposition`/media-type headers
+are ignored. A non-2xx still raises the typed error with the envelope `code`.
+
+---
+
+## 67. `assets.archiveDownload` — download a version as a ZIP
+
+```
+GET /assets/:id/versions/:vid/archive
+```
+
+`status: required` · not served yet
+
+**Binary out.** A store-only ZIP of the version's files, unmodified. Pinned by
+the design but **not served yet** (`serverImplemented: false`); against a host
+without it the call raises the ordinary `404`.
+
+---
+
+## 68. `assets.archive` — archive an asset
+
+```
+POST /assets/:id/archive
+```
+
+`status: required` · served today
+
+Unwrapped from `{asset}`. Retires the asset from listings; bytes are kept. A
+caller who may not manage it gets the uniform `404`.
+
+---
+
+## 69. `assets.purge` — purge an asset
+
+```
+DELETE /assets/:id
+```
+
+`status: required` · served today
+
+Irreversible. Returns `{assetId, versionsDeleted, objectsDeleted}`. Account
+admins only — anyone else gets the uniform `404`. An asset still referenced by a
+skill version or context entry is `409 purge_refused`.
+
+---
+
 ## Explicitly out of scope for this version
 
 Named so nobody adds them ad hoc in one language — this list is the `outOfScope`
@@ -1886,3 +2074,11 @@ They all exist on the API. They are not in the wrappers until they are in
 > notes gained the `routes` dependents and the `brokenRoutes` forced field (§46).
 > The operation count goes from 58 to 64. Catalog edits, rates, discovery, budgets
 > and route create/update/delete are node `console` group only, not in this contract.
+
+> **At contract `0.11.0` the binary-body notion and twelve asset operations were
+> added** (§§58-69): `bodyEncoding` / `responseEncoding` (Conventions, "Binary
+> bodies"), and `assets.uploads.{create,putEntry,finalize,get,abort}` plus
+> `assets.{get,versions,files,content,archiveDownload,archive,purge}`.
+> `assets.archiveDownload` is `serverImplemented: false`. The operation count goes
+> from 64 to 76. The storage-binding and agent-settings admin routes are node
+> `console` group only, not in this contract.

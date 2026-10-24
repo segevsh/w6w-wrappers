@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable surface contract for all w6w wrappers. Source of truth for conformance tests. Keep in sync with docs/endpoints.md.",
-  "contractVersion": "0.10.0",
+  "contractVersion": "0.11.0",
   "$basePathComment": "Empty since 0.2.0: the server serves its routes at the ROOT of its own host (https://api.w6w.io/vars, not .../api/vars). Clients append nothing to the configured origin.",
   "basePath": "",
   "defaultBaseUrl": "https://api.w6w.io",
@@ -1929,6 +1929,396 @@
         "cli": "w6w model-usage [--project <id>] [--group-by route|model|day] [--from <iso>] [--to <iso>] [--route <name>] [--model <id>] [--limit <n>] [--cursor <c>]"
       },
       "notes": "Models are catalog rows; `?project=` resolves like `documents.*` (`400 unknown_project`). Returns the body as-is: `{ totals: { requests, inputTokens, outputTokens, cachedInputTokens, cacheWriteTokens, totalTokens, cost: [{ currency, amountMinor }], unpriced }, totalsTruncated, groups?: [{ key, requests, totalTokens, cost }], items: ModelUsage[], nextCursor }`. `totalsTruncated` is `true` when the server stopped folding the ledger at its aggregate row cap, so `totals`/`groups` cover only part of the window. `groupBy` is `route|model|day` and adds `groups`. The query keys are sent as `groupBy`/`from`/`to`/`route`/`model`/`limit`/`cursor` (python's `group_by`/`from_` are renamed on the wire). Budgets CRUD and `/model-budgets/:id/usage` are node `console` group only."
+    },
+    {
+      "name": "assets.uploads.create",
+      "summary": "Reserve a resumable asset upload (declare the entries; no bytes yet).",
+      "method": "POST",
+      "path": "/asset-uploads",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "purpose",
+          "in": "body",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "idempotencyKey",
+          "in": "body",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "entries",
+          "in": "body",
+          "type": "object[]",
+          "required": true
+        },
+        {
+          "name": "name",
+          "in": "body",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "visibility",
+          "in": "body",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "assetId",
+          "in": "body",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "target",
+          "in": "body",
+          "type": "object",
+          "required": false
+        }
+      ],
+      "returns": "AssetUploadStatus",
+      "successStatuses": [
+        200,
+        201
+      ],
+      "naming": {
+        "ts": "client.assets.uploads.create(input, opts?)",
+        "python": "client.assets.uploads.create(purpose, idempotency_key, entries, name=None, visibility=None, asset_id=None, target=None)",
+        "cli": "w6w assets upload-create --input <json>"
+      },
+      "notes": "`/asset-uploads` routes are principal-scoped: a missing, foreign or other-project id is the one uniform `404 not_found` — never a distinct 403. Body `{purpose, idempotencyKey, entries:[{path, sizeBytes, sha256, mediaType?}], name?, visibility?, assetId?, target?}`: `purpose` is `asset|skill|context`, `visibility` is `private|project|account` (default `private`, ignored when `assetId` names an existing asset), `assetId` publishes a new version of that asset instead of creating one, `target` is purpose-specific destination data persisted verbatim (e.g. `{skillId}` / `{collectionId}`). `entries[].sha256` is lowercase hex and `sizeBytes` a non-negative safe integer; the order of `entries` fixes each entry's `index`. Returns `{upload, entries}` exactly as sent (`AssetUploadStatus`, no unwrap) — `201` when created, `200` when `idempotencyKey` replays the identical request (both are success; the wrapper does not surface which). `archive: true` (ZIP as the single entry) is refused `422 archive_upload_unavailable` until the host wires the zip reader; wrappers do not send it. Errors: `400 invalid_body`, `413 too_many_files`, `413 quota_exceeded`, `422 validation_failed`, `409 conflict`, `503 managed_storage_unavailable`."
+    },
+    {
+      "name": "assets.uploads.putEntry",
+      "summary": "Send one declared entry's raw bytes.",
+      "method": "PUT",
+      "path": "/asset-uploads/{id}/entries/{index}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "index",
+          "in": "path",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "body",
+          "in": "body",
+          "type": "bytes",
+          "required": true
+        }
+      ],
+      "returns": "AssetUploadEntry",
+      "bodyEncoding": "octet-stream",
+      "successStatuses": [
+        200,
+        204
+      ],
+      "naming": {
+        "ts": "client.assets.uploads.putEntry(id, index, bytes, opts?)",
+        "python": "client.assets.uploads.put_entry(id, index, data)",
+        "cli": "w6w assets upload-put <id> <index> --file <path>"
+      },
+      "notes": "`/asset-uploads` routes are principal-scoped: a missing, foreign or other-project id is the one uniform `404 not_found` — never a distinct 403. BYTES IN: the request body is the entry's raw bytes with `content-type: application/octet-stream` — never JSON-encoded, quoted or base64'd (`bodyEncoding: \"octet-stream\"`, docs/endpoints.md Conventions). The server reads at most `min(declared size, effective maxFileBytes)` and verifies the sha256 against the declaration; a mismatch is `422 validation_failed` (an over-cap entry `413`), an oversize body `413 payload_too_large`, an upload no longer `open` `409 conflict`, an unknown `index` `422 validation_failed`. Re-sending an entry already received is allowed (the reserve view's `state` says which are `received`). The server answers `{entry}`; the wrapper unwraps it to the `AssetUploadEntry`."
+    },
+    {
+      "name": "assets.uploads.finalize",
+      "summary": "Publish a fully received upload as an asset version.",
+      "method": "POST",
+      "path": "/asset-uploads/{id}/finalize",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "AssetFinalizeResult",
+      "successStatuses": [
+        200,
+        202
+      ],
+      "naming": {
+        "ts": "client.assets.uploads.finalize(id, opts?)",
+        "python": "client.assets.uploads.finalize(id)",
+        "cli": "w6w assets upload-finalize <id>"
+      },
+      "notes": "`/asset-uploads` routes are principal-scoped: a missing, foreign or other-project id is the one uniform `404 not_found` — never a distinct 403. Idempotent: a second call on an already-published upload returns the same version and charges nothing (`created: false`). Returns the flat `{uploadId, assetId, versionId, version, readiness, derived, created}` as sent — no unwrap. `readiness` is `ready` or `pending` (a version whose bytes are not yet durable at its destination publishes `pending`; poll `assets.versions`). `derived` is what the purpose handler extracted (a skill/context result), or `null`. Errors: `409 conflict` (upload not `open`, expired, or entries missing), `422 validation_failed` (the package failed validation; over-cap packages `413 too_large`), `413 quota_exceeded`."
+    },
+    {
+      "name": "assets.uploads.get",
+      "summary": "Read an upload's status and per-entry state (the resume point).",
+      "method": "GET",
+      "path": "/asset-uploads/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "AssetUploadStatus",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.assets.uploads.get(id, opts?)",
+        "python": "client.assets.uploads.get(id)",
+        "cli": "w6w assets upload-status <id>"
+      },
+      "notes": "`/asset-uploads` routes are principal-scoped: a missing, foreign or other-project id is the one uniform `404 not_found` — never a distinct 403. Returns `{upload, entries}` as sent. Each entry carries `state` (`pending|received`) and `receivedAt`; a client resuming an interrupted upload (`w6w assets upload --retry`) skips every entry already `received`."
+    },
+    {
+      "name": "assets.uploads.abort",
+      "summary": "Abort an open upload and release its reservation.",
+      "method": "DELETE",
+      "path": "/asset-uploads/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "AssetUploadStatus",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.assets.uploads.abort(id, opts?)",
+        "python": "client.assets.uploads.abort(id)",
+        "cli": "w6w assets upload-abort <id>"
+      },
+      "notes": "`/asset-uploads` routes are principal-scoped: a missing, foreign or other-project id is the one uniform `404 not_found` — never a distinct 403. Despite being a `DELETE` this answers `200 {upload, entries}` (the aborted upload's final view), not `{ok:true}`, and the wrapper returns it as-is. Aborting an upload that is already published or aborted is `409 conflict`."
+    },
+    {
+      "name": "assets.get",
+      "summary": "Fetch one asset.",
+      "method": "GET",
+      "path": "/assets/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "Asset",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.assets.get(id, opts?)",
+        "python": "client.assets.get(id)",
+        "cli": "w6w assets get <id>"
+      },
+      "notes": "`/assets` routes are principal-scoped: a missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. The server wraps the body as `{asset}`; the wrapper unwraps. Never carries a storage path, object key or binding coordinate."
+    },
+    {
+      "name": "assets.versions",
+      "summary": "List an asset's versions.",
+      "method": "GET",
+      "path": "/assets/{id}/versions",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "AssetVersion[]",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.assets.versions(id, opts?)",
+        "python": "client.assets.versions(id)",
+        "cli": "w6w assets versions <id>"
+      },
+      "notes": "`/assets` routes are principal-scoped: a missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. The server wraps the body as `{versions}`; the wrapper unwraps. A `failed` version is never listed. `readiness` is `pending|ready`, `syncState` the destination-sync state."
+    },
+    {
+      "name": "assets.files",
+      "summary": "List the files of one asset version.",
+      "method": "GET",
+      "path": "/assets/{id}/versions/{versionId}/files",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "versionId",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "AssetVersionFiles",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.assets.files(id, versionId, opts?)",
+        "python": "client.assets.files(id, version_id)",
+        "cli": "w6w assets files <id> <versionId>"
+      },
+      "notes": "`/assets` routes are principal-scoped: a missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. Returns `{version, files}` as sent (`AssetVersionFiles`, no unwrap). A version that does not belong to the asset is the uniform `404`. Files carry `id, path, mediaType, sizeBytes, sha256, createdAt` and never an object key."
+    },
+    {
+      "name": "assets.content",
+      "summary": "Download one file's raw bytes.",
+      "method": "GET",
+      "path": "/assets/{id}/versions/{versionId}/files/{fileId}/content",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "versionId",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "fileId",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "bytes",
+      "responseEncoding": "octet-stream",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.assets.content(id, versionId, fileId, opts?)",
+        "python": "client.assets.content(id, version_id, file_id)",
+        "cli": "w6w assets content <id> <versionId> <fileId> [--out <path>]"
+      },
+      "notes": "`/assets` routes are principal-scoped: a missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. BYTES OUT (`responseEncoding: \"octet-stream\"`): returns the file's body byte-for-byte as `Uint8Array` (node/cli) / `bytes` (python) — never decoded as text or JSON, so a non-UTF-8 sequence such as `\\xff\\xfe\\x00` survives. The server sends the file's own media type with `content-disposition: attachment` and `nosniff`; the wrapper ignores them. A non-2xx still carries the JSON error envelope and raises the typed error with its `code`. The CLI writes to `--out` or, absent that, stdout."
+    },
+    {
+      "name": "assets.archiveDownload",
+      "summary": "Download one version as a store-only ZIP.",
+      "method": "GET",
+      "path": "/assets/{id}/versions/{versionId}/archive",
+      "status": "required",
+      "serverImplemented": false,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "versionId",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "bytes",
+      "responseEncoding": "octet-stream",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.assets.archiveDownload(id, versionId, opts?)",
+        "python": "client.assets.archive_download(id, version_id)",
+        "cli": "w6w assets archive-download <id> <versionId> [--out <path>]"
+      },
+      "notes": "`/assets` routes are principal-scoped: a missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. BYTES OUT (`responseEncoding: \"octet-stream\"`): a store-only ZIP of the version's files, returned unmodified as `Uint8Array` / `bytes`. Pinned by plan §P6 but NOT yet served by the host (`serverImplemented: false`): against a host without the route the call raises the ordinary `404`. Errors in byte mode parse the JSON envelope like any other route."
+    },
+    {
+      "name": "assets.archive",
+      "summary": "Archive an asset (retire it from listings; bytes are kept).",
+      "method": "POST",
+      "path": "/assets/{id}/archive",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "Asset",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.assets.archive(id, opts?)",
+        "python": "client.assets.archive(id)",
+        "cli": "w6w assets archive <id>"
+      },
+      "notes": "`/assets` routes are principal-scoped: a missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. Returns the archived asset (`archivedAt` set), unwrapped from the server's `{asset}`. Archiving never deletes bytes; that is `assets.purge`. A caller who may not manage the asset gets the uniform `404 not_found`."
+    },
+    {
+      "name": "assets.purge",
+      "summary": "Permanently delete an asset, its versions and their bytes (account admin only).",
+      "method": "DELETE",
+      "path": "/assets/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "AssetPurgeResult",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.assets.purge(id, opts?)",
+        "python": "client.assets.purge(id)",
+        "cli": "w6w assets purge <id>"
+      },
+      "notes": "`/assets` routes are principal-scoped: a missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. Irreversible. Returns `{assetId, versionsDeleted, objectsDeleted}` as sent — no unwrap. Only an account admin may purge — anyone else gets the uniform `404 not_found`, not a 403. An asset still referenced by a skill version or context entry is refused `409 purge_refused` (the envelope also carries `skillVersionIds` and `contextEntryIds`)."
     }
   ],
   "cli": {
