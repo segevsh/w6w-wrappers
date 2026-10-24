@@ -92,6 +92,37 @@ kept once it finishes: a hook that mounts later sends a new request.
 | `useVars()` | Your vars |
 | `useVar(id)` | One var |
 
+### Model hooks
+
+| Hook | Loads |
+| --- | --- |
+| `useModels({ provider?, status?, limit?, cursor? })` | A page of the model catalog, `{ models, nextCursor }` |
+| `useModelRoutes({ project? })` | Your model routes |
+| `useModelUsage({ groupBy?, from?, to?, route?, model?, limit?, cursor?, project? })` | A usage report |
+
+Each takes its options as one object. Different options make different requests, so changing a
+filter reloads. Completing through a route has no hook: call `client.modelRoutes.complete(...)` on
+the client from `useW6WClient()`. See the [Node models page](/clients/node/models/) for the options.
+
+```tsx
+import { useModelRoutes, useModelUsage } from "@w6w/react";
+
+function ModelOverview() {
+  const routes = useModelRoutes();
+  const usage = useModelUsage({ groupBy: "route", from: "2026-10-01" });
+
+  if (routes.loading || usage.loading) return <p>Loading…</p>;
+  if (routes.error || usage.error) return <p>Could not load models.</p>;
+  return (
+    <ul>
+      {routes.data?.map((r) => (
+        <li key={r.name}>{r.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
 ## Mutation hooks
 
 Each returns `{ call, data, error, loading }`. `call` takes the same arguments as the SDK method it

@@ -215,6 +215,34 @@ need the `owner` or `admin` role.
 `w6w team --help` says these commands return `404` because the server route isn't live. That note
 is out of date: the team commands work.
 
+## Models
+
+The model registry: a catalog of AI models and named **model routes** that pick the model, provider
+and fallbacks for you. These commands are `planned` in the wrappers contract. See the
+[Node models page](/clients/node/models/) for the walkthrough. Every command takes `--project` to
+use a project other than your account's default.
+
+| Command | What it does |
+| --- | --- |
+| `w6w models ls [--provider <p>] [--status <s>] [--limit <n>] [--cursor <c>]` | List the catalog. When there is another page, the output ends with the `--cursor` to pass next. |
+| `w6w models get <id>` | Show one catalog entry. |
+| `w6w model-routes list` | List routes. |
+| `w6w model-routes get <name>` | Show one route. |
+| `w6w model-routes complete <name> --input <json> [--dialect <d>] [--response <r>]` | Run a completion through a route. `--input` must be a JSON object. |
+| `w6w model-usage [--groupBy route\|model\|day] [--from <date>] [--to <date>] [--route <r>] [--model <m>] [--limit <n>] [--cursor <c>]` | Query recorded usage. |
+
+`complete` prints the flat envelope exactly as the server sent it, including `invocationId` and
+`status`. `--dialect` is `openai`, `anthropic`, `ollama` or `structured`; `--response` is `output`,
+`raw` or `both`.
+
+```bash
+w6w models ls --provider openai --limit 20
+w6w model-routes complete summarize \
+  --input '{"messages":[{"role":"user","content":"Summarize this ticket."}]}' \
+  --response both
+w6w model-usage --groupBy route --from 2026-10-01 --to 2026-10-24
+```
+
 ## Where to next
 
 - **[CLI](/clients/cli/)**: setup, scripting, exit codes and known limitations.
