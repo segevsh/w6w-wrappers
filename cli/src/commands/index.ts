@@ -34,6 +34,7 @@ import { AUTH_COMMANDS } from "./auth.ts";
 import { CONFIG_COMMANDS } from "./config.ts";
 import { LS_COMMANDS } from "./ls.ts";
 import { MODEL_COMMANDS } from "./models.ts";
+import { ASSET_COMMANDS } from "./assets.ts";
 
 export { DOCUMENT_COMMANDS } from "./documents.ts";
 export { VAR_COMMANDS } from "./vars.ts";
@@ -52,11 +53,13 @@ export { AUTH_COMMANDS } from "./auth.ts";
 export { CONFIG_COMMANDS } from "./config.ts";
 export { LS_COMMANDS } from "./ls.ts";
 export { MODEL_COMMANDS } from "./models.ts";
+export { ASSET_COMMANDS } from "./assets.ts";
 
 /** Every wired command, keyed by canonical command path. */
 export const COMMANDS: CommandRegistry = {
   ...DOCUMENT_COMMANDS,
   ...MODEL_COMMANDS,
+  ...ASSET_COMMANDS,
   ...VAR_COMMANDS,
   ...ME_COMMANDS,
   ...CONNECTION_COMMANDS,
