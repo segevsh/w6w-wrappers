@@ -24,7 +24,7 @@
 
 import { assert, assertEquals, assertStringIncludes } from "@std/assert";
 import type { FetchLike } from "@w6w/sdk";
-import { createOutput, HELP_TREE, main } from "../mod.ts";
+import { HELP_TREE, main } from "../mod.ts";
 import { COMMANDS, MODEL_COMMANDS } from "../src/commands/index.ts";
 import type { EnvReader } from "../mod.ts";
 
