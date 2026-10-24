@@ -115,6 +115,22 @@ class ConnectionsTest(unittest.TestCase):
         self.assertEqual((calls[0].get_method(), calls[0].full_url), ("DELETE", f"{BASE}/connections/conn_1"))
         self.assertIsNone(calls[0].data)
 
+    def test_delete_force_sends_query_only_when_true(self) -> None:
+        c, calls = client((200, {"ok": True, "disabled": []}), (200, {"ok": True}))
+        self.assertIsNone(c.connections.delete("conn_1", force=True))
+        self.assertIsNone(c.connections.delete("conn_1", force=False))
+        self.assertEqual(calls[0].full_url, f"{BASE}/connections/conn_1?force=true")
+        self.assertEqual(calls[1].full_url, f"{BASE}/connections/conn_1")
+
+    def test_delete_409_exposes_dependents(self) -> None:
+        deps = {"callables": [{"id": "fn_1", "kind": "function"}], "subscriptions": []}
+        body = {"error": {"code": "connection_in_use", "message": "in use", "dependents": deps}}
+        c, _ = client(http_error(409, body))
+        with self.assertRaises(ApiError) as caught:
+            c.connections.delete("conn_1")
+        self.assertEqual((caught.exception.status, caught.exception.code), (409, "connection_in_use"))
+        self.assertEqual(caught.exception.raw["error"]["dependents"], deps)
+
     def test_get_and_delete_keep_the_server_error_intact(self) -> None:
         body = {"error": {"code": "unknown_connection", "message": "No such connection."}}
         for op in ("get", "delete"):

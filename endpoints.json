@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable surface contract for all w6w wrappers. Source of truth for conformance tests. Keep in sync with docs/endpoints.md.",
-  "contractVersion": "0.8.0",
+  "contractVersion": "0.9.0",
   "$basePathComment": "Empty since 0.2.0: the server serves its routes at the ROOT of its own host (https://api.w6w.io/vars, not .../api/vars). Clients append nothing to the configured origin.",
   "basePath": "",
   "defaultBaseUrl": "https://api.w6w.io",
@@ -81,6 +81,12 @@
           "in": "path",
           "type": "string",
           "required": true
+        },
+        {
+          "name": "force",
+          "in": "query",
+          "type": "boolean",
+          "required": false
         }
       ],
       "returns": "void",
@@ -88,11 +94,11 @@
         200
       ],
       "naming": {
-        "ts": "client.connections.delete(id)",
-        "python": "client.connections.delete(id)",
-        "cli": "w6w connections delete <id>"
+        "ts": "client.connections.delete(id, { force })",
+        "python": "client.connections.delete(id, force=False)",
+        "cli": "w6w connections delete <id> [--force]"
       },
-      "notes": "The server returns `{ok: true}` and the wrapper unwraps it to NOTHING (`void` / `None` / exit code), same pin as `documents.delete`. Keeps the server's authorization: the connection must be owned by the caller's account; another account's id is the uniform `404 unknown_connection` and destroys nothing, and so is a `zerocred:` built-in row (it is not stored). Not idempotent: a second delete is `404`. Before the row is removed the server tears down every trigger subscription bound to the connection (the vendor webhook is removed while the credential can still sign the call). Creating, updating, testing and OAuth-connecting a connection are NOT in this contract."
+      "notes": "The server returns `{ok: true}` and the wrapper unwraps it to NOTHING (`void` / `None` / exit code), same pin as `documents.delete`. Keeps the server's authorization: the connection must be owned by the caller's account; another account's id is the uniform `404 unknown_connection` and destroys nothing, and so is a `zerocred:` built-in row (it is not stored). Not idempotent: a second delete is `404`. Before the row is removed the server tears down every trigger subscription bound to the connection (the vendor webhook is removed while the credential can still sign the call). While live callables (Functions/Endpoints) still use the connection the server refuses with `409 connection_in_use`, body `{ error: { code, message, dependents } }` where `dependents = { callables: [{ id, kind, key, displayName, enabled, sites }], subscriptions: [{ id, appId, triggerKey, workflowId }] }`; it surfaces as the lane's ordinary API error and the caller reads `dependents` from its parsed body. `force` is sent as `?force=true` ONLY when true (false/omitted sends no query string): a forced delete disables the dependent callables (never edits them) and still succeeds; the success body then carries `{ ok: true, disabled: [...] }` and the wrapper still unwraps to nothing. Subscriptions are torn down either way and never cause the 409. Creating, updating, testing and OAuth-connecting a connection are NOT in this contract."
     },
     {
       "name": "workflows.list",

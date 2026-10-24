@@ -162,7 +162,13 @@ export type {
   UpsertOAuthConfigInput,
 } from "./apps.ts";
 export { ConnectionsApi } from "./connections.ts";
-export type { ConnectionsHost, ConnectionTestResult } from "./connections.ts";
+export type {
+  ConnectionDependentCallable,
+  ConnectionDependents,
+  ConnectionDependentSubscription,
+  ConnectionsHost,
+  ConnectionTestResult,
+} from "./connections.ts";
 export { WorkflowsApi } from "./workflows.ts";
 export type { RunState, RunSummary, WorkflowsHost } from "./workflows.ts";
 export { SavedTestsApi } from "./saved-tests.ts";

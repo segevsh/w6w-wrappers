@@ -1653,6 +1653,17 @@ the row is removed the server **tears down every trigger subscription** bound to
 the connection, so the vendor webhook is removed while the credential can still
 sign that call.
 
+**`force` (optional, boolean, query).** While live callables (Functions / Endpoints)
+still use the connection, the server refuses with `409 connection_in_use`; the body is
+`{ "error": { "code", "message", "dependents" } }` with
+`dependents = { callables: [{ id, kind, key, displayName, enabled, sites }], subscriptions: [{ id, appId, triggerKey, workflowId }] }`.
+It surfaces as the lane's ordinary API error (no new error class); read `dependents`
+from its parsed body. `force` is sent as `?force=true` **only when true** — `false` or
+omitted sends no query string. A forced delete **disables** the dependent callables
+(it never edits them) and succeeds; the success body then carries
+`{ "ok": true, "disabled": [...] }` and the wrapper still unwraps to nothing.
+Subscriptions are torn down either way and never cause the `409`.
+
 Connection create, update, test and OAuth are **not** in the contract (see
 "Explicitly out of scope").
 
@@ -1783,3 +1794,8 @@ They all exist on the API. They are not in the wrappers until they are in
 > `409 function_stale`), and `functions.create`, `functions.update` and `functions.get`
 > now return `updatedAt`, the value to send back as that token. The operation count
 > stays 58.
+
+> **At contract `0.9.0` `connections.delete` gained an optional `force` query
+> parameter** and the `409 connection_in_use` refusal is documented (§46). The
+> operation count stays 58; the dependents read (`GET /connections/:id/dependents`)
+> is console-only and not in this contract.

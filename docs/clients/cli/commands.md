@@ -83,7 +83,7 @@ A saved token is used only for the base URL it was saved for. See the [CLI](/cli
 | --- | --- |
 | `w6w connections list` | List your connections: id, app, state and name. |
 | `w6w connections get <id>` | Print one connection. |
-| `w6w connections delete <id>` | Delete a connection. There is no confirmation prompt. Another account's id answers 404 (exit `2`). |
+| `w6w connections delete <id> [--force]` | Delete a connection. There is no confirmation prompt. Another account's id answers 404 (exit `2`). While Functions/Endpoints still use it the server refuses with `409 connection_in_use`: the CLI prints one `<kind> <displayName> (<id>)` line per dependent callable to stderr plus a hint, and exits `2`. `--force` deletes anyway (`?force=true`); the dependent callables are disabled, never edited. |
 
 Creating, testing and reconnecting a connection are not in the CLI.
 

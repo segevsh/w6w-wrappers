@@ -276,3 +276,25 @@ Deno.test("console.connections.delete percent-encodes id via the `path` tag", as
 
   assertEquals(c.calls[0].url, "https://api.example.com/connections/conn%201");
 });
+
+Deno.test("console.connections.delete: force sends ?force=true only when true", async () => {
+  const c = client(() => json({ ok: true, disabled: [] }));
+  await c.client.console.connections.delete("conn_1", { force: true });
+  await c.client.console.connections.delete("conn_1", { force: false });
+  await c.client.console.connections.delete("conn_1");
+  assertEquals(c.calls[0].url, "https://api.example.com/connections/conn_1?force=true");
+  assertEquals(c.calls[1].url, "https://api.example.com/connections/conn_1");
+  assertEquals(c.calls[2].url, "https://api.example.com/connections/conn_1");
+});
+
+Deno.test("console.connections.dependents: GET /connections/:id/dependents unwraps {dependents}", async () => {
+  const dependents = {
+    callables: [],
+    subscriptions: [{ id: "s", appId: "a", triggerKey: "t", workflowId: "w" }],
+  };
+  const c = client(() => json({ dependents }));
+  const res = await c.client.console.connections.dependents("conn 1");
+  assertEquals(res, dependents);
+  assertEquals(c.calls[0].method, "GET");
+  assertEquals(c.calls[0].url, "https://api.example.com/connections/conn%201/dependents");
+});

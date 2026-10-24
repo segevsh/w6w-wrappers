@@ -430,14 +430,15 @@ comment block — field-for-field, not redesigned. `listConnections` (the sevent
 deliberately NOT relocated here: it already has a home on the pre-existing BASE namespace,
 `client.connections.list()` (`src/connections.ts:47-64`), and this domain does not duplicate it.
 
-| Method                | Route                        | Notes                                                                                                                                 |
-| --------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `listForApp(appId)`   | `GET /apps/:id/connections`  | `unwrap<ConnectionSummary[]>(res, "connections")`.                                                                                    |
-| `get(id)`             | `GET /connections/:id`       | `unwrap<ConnectionSummary>(res, "connection")`. No 404 special-casing — propagates as `ApiError`, unlike `console.schedules.get`.     |
-| `create(appId, body)` | `POST /apps/:id/connections` | Body `{authKey, credential, displayName?, profile?}` forwarded verbatim. `unwrap<ConnectionSummary>(res, "connection")` (`201`).      |
-| `update(id, body)`    | `PATCH /connections/:id`     | Body `{displayName?, credential?}` forwarded verbatim, not pre-validated client-side. `unwrap<ConnectionSummary>(res, "connection")`. |
-| `test(id)`            | `POST /connections/:id/test` | **No envelope key — see below.**                                                                                                      |
-| `delete(id)`          | `DELETE /connections/:id`    | Returns nothing; discards `{ok: true}`, same convention as `console.projects.delete`/`console.schedules.delete`.                      |
+| Method                 | Route                                  | Notes                                                                                                                                                                               |
+| ---------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `listForApp(appId)`    | `GET /apps/:id/connections`            | `unwrap<ConnectionSummary[]>(res, "connections")`.                                                                                                                                  |
+| `get(id)`              | `GET /connections/:id`                 | `unwrap<ConnectionSummary>(res, "connection")`. No 404 special-casing — propagates as `ApiError`, unlike `console.schedules.get`.                                                   |
+| `create(appId, body)`  | `POST /apps/:id/connections`           | Body `{authKey, credential, displayName?, profile?}` forwarded verbatim. `unwrap<ConnectionSummary>(res, "connection")` (`201`).                                                    |
+| `update(id, body)`     | `PATCH /connections/:id`               | Body `{displayName?, credential?}` forwarded verbatim, not pre-validated client-side. `unwrap<ConnectionSummary>(res, "connection")`.                                               |
+| `test(id)`             | `POST /connections/:id/test`           | **No envelope key — see below.**                                                                                                                                                    |
+| `delete(id, {force}?)` | `DELETE /connections/:id[?force=true]` | Returns nothing; discards `{ok: true}` (and a forced delete's `disabled`). `?force=true` is sent only when `force` is true; without it a `409 connection_in_use` raises `ApiError`. |
+| `dependents(id)`       | `GET /connections/:id/dependents`      | `unwrap<ConnectionDependents>(res, "dependents")` — `{callables, subscriptions}`. Console only; not in `endpoints.json`.                                                            |
 
 **`test`'s response has no envelope key — the whole body IS the `ConnectionTestResult`**, mirroring
 `console.reliability.list`'s pattern (`packages/server/packages/api/admin/connections.ts:151-190`
