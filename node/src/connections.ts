@@ -102,13 +102,17 @@ export class ConnectionsApi {
    * row, answers `404` and destroys nothing.
    *
    * @param id - The `conn_…` id.
-   * @param options - Optional per-call transport options (`signal` to abort).
-   * @throws {ApiError} `404 unknown_connection` for an unknown, foreign or built-in id.
+   * @param options - `force` (send `?force=true`; only when true) and `signal` to abort.
+   *   A forced delete disables dependent callables (never edits them); still resolves void.
+   * @throws {ApiError} `404 unknown_connection` for an unknown, foreign or built-in id;
+   *   `409 connection_in_use` when enabled callables depend on it and `force` is not set —
+   *   the `dependents` object is on `err.raw.error.dependents`.
    */
-  async delete(id: string, options?: CallOptions): Promise<void> {
+  async delete(id: string, options?: CallOptions & { force?: boolean }): Promise<void> {
     await this.#host.request<unknown>({
       method: "DELETE",
       path: path`/connections/${id}`,
+      query: options?.force === true ? { force: true } : undefined,
       signal: options?.signal,
     });
   }

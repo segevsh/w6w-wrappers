@@ -122,7 +122,7 @@ class ConnectionsApi:
         response = self._request("GET", path("/connections/{id}", id=id))
         return ConnectionSummary.from_wire(unwrap_object(response, "connection"))
 
-    def delete(self, id: str) -> None:
+    def delete(self, id: str, force: bool = False) -> None:
         """Delete a connection. Returns nothing.
 
         Keeps the server's authorization: the connection must be owned by the
@@ -131,8 +131,18 @@ class ConnectionsApi:
         built-in row. Not idempotent: a second delete is `404`. The server tears
         down every trigger subscription bound to the connection first.
 
+        If callables depend on the connection the server refuses with
+        `409 connection_in_use`; the dependents are on
+        `err.raw["error"]["dependents"]`. `force=True` sends `?force=true`,
+        which deletes anyway and disables (never edits) dependent callables.
+
         :param id: The `conn_…` id.
+        :param force: Delete despite dependents; sent only when true.
         :raises ConfigError: When no token is configured.
-        :raises ApiError: `404 unknown_connection`.
+        :raises ApiError: `404 unknown_connection`; `409 connection_in_use`.
         """
-        self._request("DELETE", path("/connections/{id}", id=id))
+        self._request(
+            "DELETE",
+            path("/connections/{id}", id=id),
+            query={"force": "true"} if force else None,
+        )

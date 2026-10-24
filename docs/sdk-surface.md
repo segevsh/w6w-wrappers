@@ -182,7 +182,7 @@ no client-side paging loop.
 
 `connections.get(id)` and `connections.delete(id)` address one such id: `get`
 returns one `ConnectionSummary`, `delete` returns nothing, and both answer a
-uniform `404` for another account's id or a built-in `zerocred:` row. The list can
+uniform `404` for another account's id or a built-in `zerocred:` row. `delete(id, { force })` / `delete(id, force=False)` takes an optional `force`, sent as `?force=true` only when true: without it, a connection still used by live callables is refused with `409 connection_in_use` (the error carries `dependents`); with it, the dependents are disabled and the delete proceeds. The list can
 include that built-in row, flagged `builtIn: true` (optional — an older server
 omits it); it is never fetchable or deletable.
 

@@ -1,5 +1,5 @@
 /**
- * `w6w connections list | get | delete` — find a connection, read one, remove one.
+ * `w6w connections list | get | delete [--force]` — find a connection, read one, remove one.
  *
  * `list` exists so a caller can find a `conn_…` id to pass to `w6w run`; it has
  * no filters and no pagination. `get` and `delete` address one by that id.
@@ -14,6 +14,7 @@
  */
 
 import type { CommandHandler, CommandRegistry } from "../../mod.ts";
+import { ApiError } from "@w6w/sdk";
 import type { ConnectionSummary } from "@w6w/sdk";
 import type { Styles } from "../output.ts";
 import { argument, noExtraArguments, table } from "./shared.ts";
@@ -47,10 +48,37 @@ const get: CommandHandler = async (context) => {
     ].join("\n"));
 };
 
+/** One dependent callable from a `connection_in_use` body, as `<kind> <displayName> (<id>)`. */
+function dependentLines(raw: unknown): string[] {
+  const callables = (raw as { error?: { dependents?: { callables?: unknown } } } | null)
+    ?.error?.dependents?.callables;
+  if (!Array.isArray(callables)) return [];
+  return callables.map((c: { kind?: string; displayName?: string; id?: string }) =>
+    `${c.kind} ${c.displayName} (${c.id})`
+  );
+}
+
 const remove: CommandHandler = async (context) => {
   const id = argument(context, 0, "a connection id (see: `w6w connections list`)");
   noExtraArguments(context, 1);
-  await context.client().connections.delete(id);
+  const force = context.invocation.options.force === true;
+  try {
+    await context.client().connections.delete(id, { force });
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 409 && err.code === "connection_in_use") {
+      const lines = dependentLines(err.raw);
+      if (lines.length > 0) {
+        context.out.error(
+          [
+            `Connection ${id} is in use by:`,
+            ...lines.map((line) => `  ${line}`),
+            "Re-run with --force to delete it anyway (the callables above are disabled, not edited).",
+          ].join("\n"),
+        );
+      }
+    }
+    throw err;
+  }
   // `null`: the SDK unwraps a delete to nothing; `--json` must not invent a body.
   context.out.emit(null, (styles) => styles.dim(`Deleted ${id}.`));
 };
