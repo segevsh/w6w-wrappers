@@ -579,7 +579,11 @@ export interface AssetUploadCreateInput {
   purpose: AssetUploadPurpose;
   /** Replays of the same key with the identical request return the same upload. */
   idempotencyKey: string;
-  /** Position in this array is the entry `index`. */
+  /**
+   * The entries to send. Their position here is NOT the entry `index`: the server assigns
+   * each entry's `index` (by its own path ordering) and returns it in the response —
+   * address each `putEntry` by the returned `index` for that `path`.
+   */
   entries: AssetUploadEntryInput[];
   /** Name of the asset to create at publish; ignored when `assetId` is given. */
   name?: string;
@@ -635,6 +639,12 @@ export interface AssetFinalizeResult {
   derived: unknown;
   /** `false` when this call found the upload already published. */
   created: boolean;
+  /** A `skill` upload only: the skill the package was published into. */
+  skill?: Skill;
+  /** A `skill` upload only: the new skill version (not the asset `version` number above). */
+  skillVersion?: SkillVersion;
+  /** A `context` upload only: the linked entry, with its new `revision`. */
+  entry?: ContextEntryView;
 }
 
 /** An asset. */

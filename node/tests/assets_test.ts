@@ -228,3 +228,51 @@ Deno.test("console.storage is console-only: endpoints.json lists none of it", as
     );
   }
 });
+
+Deno.test("assets.uploads.create/finalize pass the server's index and the linked skill/entry through untouched", async () => {
+  // The server, not the caller, assigns each entry's `index`: a response may list entries
+  // in an order unlike the request's, and finalize may carry the linked skill or entry.
+  const created = {
+    upload: { id: "up_1", status: "open" },
+    entries: [
+      { index: 0, path: "a.txt", sizeBytes: 1, sha256: "aa", state: "pending", receivedAt: null },
+      {
+        index: 1,
+        path: "SKILL.md",
+        sizeBytes: 2,
+        sha256: "bb",
+        state: "pending",
+        receivedAt: null,
+      },
+    ],
+  };
+  const finalized = {
+    uploadId: "up_1",
+    assetId: "as_1",
+    versionId: "av_1",
+    version: 1,
+    readiness: "ready",
+    derived: null,
+    created: true,
+    skill: { id: "sk_1", name: "demo" },
+    skillVersion: { id: "sv_1", skillId: "sk_1", version: 1 },
+  };
+  const { client, calls } = fake((call) =>
+    call.url.endsWith("/finalize") ? json(finalized) : json(created)
+  );
+  const st = await client.assets.uploads.create({
+    purpose: "skill",
+    idempotencyKey: "k",
+    entries: [
+      { path: "SKILL.md", sizeBytes: 2, sha256: "bb" },
+      { path: "a.txt", sizeBytes: 1, sha256: "aa" },
+    ],
+  });
+  // Request order is SKILL.md, a.txt; the server's indexes are the reverse.
+  assertEquals(JSON.parse(calls[0].body as string).entries[0].path, "SKILL.md");
+  assertEquals(st.entries.map((e) => [e.path, e.index]), [["a.txt", 0], ["SKILL.md", 1]]);
+  const fin = await client.assets.uploads.finalize("up_1");
+  assertEquals(fin.skill?.id, "sk_1");
+  assertEquals(fin.skillVersion?.id, "sv_1");
+  assertEquals(fin.entry, undefined);
+});
