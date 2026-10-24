@@ -403,6 +403,8 @@ const PARAM_HELP: Record<string, string> = {
     "Refuse the write if the workflow changed since this updatedAt (see: w6w workflows get)",
   "connections.get.id": "Connection id (see: w6w connections list)",
   "connections.delete.id": "Connection id (see: w6w connections list)",
+  "connections.delete.force":
+    "Delete even if Functions/Endpoints still use it; they are disabled, not edited",
   "apps.byIds.ids": "Comma-separated app ids (e.g. sendgrid,slack); duplicates are dropped",
   "dashboard.stats.from": "Start of the window, ISO-8601 (default: the server's)",
   "dashboard.stats.to": "End of the window, ISO-8601 (default: the server's)",
