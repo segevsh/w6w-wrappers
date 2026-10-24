@@ -41,6 +41,13 @@ import type {
   FunctionDetail,
   FunctionSummary,
   Me,
+  Model,
+  ModelListOptions,
+  ModelPage,
+  ModelRoute,
+  ModelRouteOptions,
+  ModelUsageOptions,
+  ModelUsageReport,
   RunEnvelope,
   RunInput,
   Var,
@@ -314,6 +321,45 @@ export function useWorkflows(options?: WorkflowListOptions): ReadResult<Workflow
     [client, project],
   );
   return useAsync(JSON.stringify(["workflows.list", project ?? null]), fetcher, client, ready);
+}
+
+/** The model catalog page (`client.models.list`). Options are part of the cache key. */
+export function useModels(options?: Omit<ModelListOptions, "signal">): ReadResult<ModelPage> {
+  const { client, ready } = useW6WProviderContext();
+  const key = JSON.stringify(["models.list", options ?? null]);
+  const fetcher = useCallback(
+    (signal: AbortSignal) => client.models.list({ ...(JSON.parse(key)[1] ?? undefined), signal }),
+    [client, key],
+  );
+  return useAsync(key, fetcher, client, ready);
+}
+
+/** Model routes (`client.modelRoutes.list`), optionally scoped to a project. */
+export function useModelRoutes(
+  options?: Omit<ModelRouteOptions, "signal">,
+): ReadResult<ModelRoute[]> {
+  const { client, ready } = useW6WProviderContext();
+  const key = JSON.stringify(["modelRoutes.list", options ?? null]);
+  const fetcher = useCallback(
+    (signal: AbortSignal) =>
+      client.modelRoutes.list({ ...(JSON.parse(key)[1] ?? undefined), signal }),
+    [client, key],
+  );
+  return useAsync(key, fetcher, client, ready);
+}
+
+/** Model usage report (`client.modelUsage.query`). The query is part of the cache key. */
+export function useModelUsage(
+  query?: Omit<ModelUsageOptions, "signal">,
+): ReadResult<ModelUsageReport> {
+  const { client, ready } = useW6WProviderContext();
+  const key = JSON.stringify(["modelUsage.query", query ?? null]);
+  const fetcher = useCallback(
+    (signal: AbortSignal) =>
+      client.modelUsage.query({ ...(JSON.parse(key)[1] ?? undefined), signal }),
+    [client, key],
+  );
+  return useAsync(key, fetcher, client, ready);
 }
 
 /**

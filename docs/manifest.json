@@ -32,6 +32,13 @@
       "order": 20
     },
     {
+      "path": "clients/node/models.md",
+      "slug": "node/models",
+      "section": "clients",
+      "title": "Models",
+      "order": 25
+    },
+    {
       "path": "clients/node/reference.md",
       "slug": "node/reference",
       "section": "clients",

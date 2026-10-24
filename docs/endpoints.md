@@ -1664,6 +1664,13 @@ omitted sends no query string. A forced delete **disables** the dependent callab
 `{ "ok": true, "disabled": [...] }` and the wrapper still unwraps to nothing.
 Subscriptions are torn down either way and never cause the `409`.
 
+**Model routes (contract `0.10.0`).** `dependents` also carries
+`routes: [{ id, name, project, status }]` — the model routes bound to the connection —
+and a routes-only dependent refuses with the same `409 connection_in_use`. A forced
+delete marks those routes `broken` (it never edits or deletes them), and the success
+body then also carries `brokenRoutes: string[]` (the route names):
+`{ "ok": true, "disabled": [...], "brokenRoutes": [...] }`. The wrapper still unwraps to nothing.
+
 Connection create, update, test and OAuth are **not** in the contract (see
 "Explicitly out of scope").
 
@@ -1753,6 +1760,78 @@ to feed, at most ten at a time, to §50. `project` is required.
 
 ---
 
+## 52. `models.list — list the model catalog`
+
+```
+GET /models?provider=&status=&limit=&cursor=
+```
+
+`status: required` · served today
+
+Keyset-paged. The server answers `{ "models": Model[], "nextCursor": string | null }` and the wrapper returns that page object as-is. `status` is `active | deprecated | blocked`. Errors: `400 invalid_limit`, `400 invalid_cursor`.
+
+---
+
+## 53. `models.get — fetch one catalog model`
+
+```
+GET /models/:id
+```
+
+`status: required` · served today
+
+Addressed by the server-issued catalog id (`mdl_…`), not a provider-native model id such as `gpt-4o`. The server wraps the body as `{ "model": Model }`; the wrapper unwraps. `Model.currentRate` is the effective `ModelRate` or `null`. An unknown id is the uniform `404`.
+
+---
+
+## 54. `modelRoutes.list — list model routes`
+
+```
+GET /model-routes?project=
+```
+
+`status: required` · served today
+
+Project-scoped like the `documents.*` operations: optional `?project=`, else the default project; unknown project is `400 unknown_project`. The server wraps the body as `{ "routes": ModelRoute[] }`; the wrapper unwraps.
+
+---
+
+## 55. `modelRoutes.get — fetch one model route`
+
+```
+GET /model-routes/:name?project=
+```
+
+`status: required` · served today
+
+Addressed by route `name`. The server wraps the body as `{ "route": ModelRoute }`; the wrapper unwraps. A missing name is `404 model_route_not_found`.
+
+---
+
+## 56. `modelRoutes.complete — run a completion through a route`
+
+```
+POST /model-routes/:name/complete?project=&dialect=&response=
+```
+
+`status: required` · served today
+
+Body is a `BridgeInput`, sent as-is. The result is the **flat envelope** `{ provider, key, model, dialect, output?, usage, raw?, meta, invocationId, status, startedAt, finishedAt, durationMs }` returned exactly as sent — **no unwrap to `output`** (`key` is the answering connection id). `dialect` is `openai | anthropic | ollama`; `response` is `both | output | raw` (`output` omits `raw`, `raw` omits `output`). Each query key is sent only when given. Errors: `429 model_budget_exceeded`, `424 model_provider_failed`, `409 model_route_broken`, `403 model_egress_denied`, `404 model_route_not_found`.
+
+---
+
+## 57. `modelUsage.query — query recorded model usage`
+
+```
+GET /model-usage?project=&groupBy=&from=&to=&route=&model=&limit=&cursor=
+```
+
+`status: required` · served today
+
+Returns `{ totals, totalsTruncated, groups?, items, nextCursor }` as-is. `totals` = `{ requests, inputTokens, outputTokens, cachedInputTokens, cacheWriteTokens, totalTokens, cost: [{ currency, amountMinor }], unpriced }`. `groupBy` is `route | model | day` and adds `groups`. `totalsTruncated` is `true` when the server stopped folding the ledger at its aggregate row cap, so `totals` and `groups` cover only part of the window.
+
+---
+
 ## Explicitly out of scope for this version
 
 Named so nobody adds them ad hoc in one language — this list is the `outOfScope`
@@ -1799,3 +1878,11 @@ They all exist on the API. They are not in the wrappers until they are in
 > parameter** and the `409 connection_in_use` refusal is documented (§46). The
 > operation count stays 58; the dependents read (`GET /connections/:id/dependents`)
 > is console-only and not in this contract.
+
+> **At contract `0.10.0` six model operations were added** (§§52-57), first as
+> `planned` and flipped to `required` once the server routes landed on the same branch:
+> `models.list`, `models.get`, `modelRoutes.list`, `modelRoutes.get`,
+> `modelRoutes.complete` and `modelUsage.query`, and the `connections.delete`
+> notes gained the `routes` dependents and the `brokenRoutes` forced field (§46).
+> The operation count goes from 58 to 64. Catalog edits, rates, discovery, budgets
+> and route create/update/delete are node `console` group only, not in this contract.

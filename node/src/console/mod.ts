@@ -28,6 +28,7 @@ import { ConnectionsApi } from "./connections.ts";
 import { DashboardApi } from "./dashboard.ts";
 import { EndpointsApi } from "./endpoints.ts";
 import { FunctionsApi } from "./functions.ts";
+import { ModelsConsoleApi } from "./models.ts";
 import { OtpApi } from "./otp.ts";
 import { PasskeysApi } from "./passkeys.ts";
 import { ReliabilityApi } from "./reliability.ts";
@@ -220,6 +221,23 @@ export type {
 } from "./endpoints.ts";
 export { AliasesApi } from "./aliases.ts";
 export type { AliasDef, AliasesHost, AliasSummary } from "./aliases.ts";
+export { ModelsConsoleApi } from "./models.ts";
+export type {
+  ModelBudget,
+  ModelBudgetInput,
+  ModelBudgetLimits,
+  ModelBudgetPatch,
+  ModelBudgetUsage,
+  ModelDiscoveryResult,
+  ModelFallback,
+  ModelPatch,
+  ModelProvider,
+  ModelRate,
+  ModelRouteInput,
+  ModelRoutePatch,
+  ModelsConsoleHost,
+  ModelsConsoleOptions,
+} from "./models.ts";
 export { SubscriptionsApi } from "./subscriptions.ts";
 export type {
   Subscription,
@@ -302,6 +320,8 @@ export class ConsoleApi {
   readonly endpoints: EndpointsApi;
   /** `console.aliases.*`. */
   readonly aliases: AliasesApi;
+  /** `console.models.*` — catalog edits, rates, discovery, budgets, route writes. */
+  readonly models: ModelsConsoleApi;
   /** `console.subscriptions.*`. */
   readonly subscriptions: SubscriptionsApi;
   /** `console.apiCalls.*`. */
@@ -335,6 +355,7 @@ export class ConsoleApi {
     this.functions = new FunctionsApi(host);
     this.endpoints = new EndpointsApi(host);
     this.aliases = new AliasesApi(host);
+    this.models = new ModelsConsoleApi(host);
     this.subscriptions = new SubscriptionsApi(host);
     this.apiCalls = new ApiCallsApi(host);
     this.tenantOAuthApps = new TenantOAuthAppsApi(host);

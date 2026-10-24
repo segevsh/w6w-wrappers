@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable surface contract for all w6w wrappers. Source of truth for conformance tests. Keep in sync with docs/endpoints.md.",
-  "contractVersion": "0.9.0",
+  "contractVersion": "0.10.0",
   "$basePathComment": "Empty since 0.2.0: the server serves its routes at the ROOT of its own host (https://api.w6w.io/vars, not .../api/vars). Clients append nothing to the configured origin.",
   "basePath": "",
   "defaultBaseUrl": "https://api.w6w.io",
@@ -98,7 +98,7 @@
         "python": "client.connections.delete(id, force=False)",
         "cli": "w6w connections delete <id> [--force]"
       },
-      "notes": "The server returns `{ok: true}` and the wrapper unwraps it to NOTHING (`void` / `None` / exit code), same pin as `documents.delete`. Keeps the server's authorization: the connection must be owned by the caller's account; another account's id is the uniform `404 unknown_connection` and destroys nothing, and so is a `zerocred:` built-in row (it is not stored). Not idempotent: a second delete is `404`. Before the row is removed the server tears down every trigger subscription bound to the connection (the vendor webhook is removed while the credential can still sign the call). While live callables (Functions/Endpoints) still use the connection the server refuses with `409 connection_in_use`, body `{ error: { code, message, dependents } }` where `dependents = { callables: [{ id, kind, key, displayName, enabled, sites }], subscriptions: [{ id, appId, triggerKey, workflowId }] }`; it surfaces as the lane's ordinary API error and the caller reads `dependents` from its parsed body. `force` is sent as `?force=true` ONLY when true (false/omitted sends no query string): a forced delete disables the dependent callables (never edits them) and still succeeds; the success body then carries `{ ok: true, disabled: [...] }` and the wrapper still unwraps to nothing. Subscriptions are torn down either way and never cause the 409. Creating, updating, testing and OAuth-connecting a connection are NOT in this contract."
+      "notes": "The server returns `{ok: true}` and the wrapper unwraps it to NOTHING (`void` / `None` / exit code), same pin as `documents.delete`. Keeps the server's authorization: the connection must be owned by the caller's account; another account's id is the uniform `404 unknown_connection` and destroys nothing, and so is a `zerocred:` built-in row (it is not stored). Not idempotent: a second delete is `404`. Before the row is removed the server tears down every trigger subscription bound to the connection (the vendor webhook is removed while the credential can still sign the call). While live callables (Functions/Endpoints) still use the connection the server refuses with `409 connection_in_use`, body `{ error: { code, message, dependents } }` where `dependents = { callables: [{ id, kind, key, displayName, enabled, sites }], subscriptions: [{ id, appId, triggerKey, workflowId }], routes: [{ id, name, project, status }] }` (`routes` are model routes bound to the connection; a routes-only dependent also refuses); it surfaces as the lane's ordinary API error and the caller reads `dependents` from its parsed body. `force` is sent as `?force=true` ONLY when true (false/omitted sends no query string): a forced delete disables the dependent callables (never edits them) and still succeeds; it also marks dependent model routes `broken`, and the success body then carries `{ ok: true, disabled: [...], brokenRoutes: string[] }` and the wrapper still unwraps to nothing. Subscriptions are torn down either way and never cause the 409. Creating, updating, testing and OAuth-connecting a connection are NOT in this contract."
     },
     {
       "name": "workflows.list",
@@ -1698,6 +1698,237 @@
         "cli": "w6w run <urn> [--action <a>] [--payload <json>]"
       },
       "notes": "D3 — `RunEnvelope` is kind-discriminated with exactly three arms: `{kind:\"action\", value}` | `{kind:\"function\", output}` | `{kind:\"workflow\", runId, status}`. The action and function arms return 200; the workflow arm returns 202, and 202 is a NORMAL outcome, not an error — the run is queued, and `runId` is how the caller follows it. Wrappers must switch on `kind` and must tolerate an unknown future `kind` rather than crashing. `action` is optional because a workflow, function or endpoint URN has no action; it is required in practice for a `conn_…` URN. `urn` resolves over the `conn_`, `wf_`, `fn_` and `ep_` arms (D16), and, additionally, an account-scoped alias name (kebab-slug, `_`-free, which is why no flag is needed to disambiguate the two); `doc_` and `var_` are NOT URN arms in v0.1.0 and are addressed by the `documents.*` / `vars.*` operations above. This is deliberately narrower than `workflows.run`: `?wait=`, `variables` and `trigger` have no slot in the three-field `{urn, action, payload}` shape (D4). Server-implemented 2026-07-28: a third sibling BLL service dispatching to the same runners the dedicated invoke routes use — no new execution path, no change to core Callable. INVOCATION FRAME (server, 2026-08-20): every arm of this envelope now also carries `invocationId` (an `inv_…` id for THIS attempt), `status`, `startedAt`, `finishedAt` and `durationMs`, and the two synchronous arms carry `output` — on the action arm alongside the existing `value`, which is now a DEPRECATED MIRROR of it and keeps the same meaning. Every one of those fields is ADDITIVE: no field was renamed, removed or re-typed, so an installed wrapper written against the three-arm shape keeps working unchanged. `status` is the PLATFORM's verdict on the attempt (`succeeded` | `failed` | `queued`) and must not be confused with a status the target itself reported inside `output`. `invocationId` and `runId` are DIFFERENT ids and neither replaces the other: `invocationId` names the attempt and resolves through `GET /invocations/{id}`; `runId` stays the queued workflow run on the workflow arm alone. A FAILED call's 4xx body carries the same frame fields beside its `error`, so the attempt is still lookup-able. New callers should read `output` on every arm."
+    },
+    {
+      "name": "models.list",
+      "summary": "List the model catalog (keyset-paged).",
+      "method": "GET",
+      "path": "/models",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "provider",
+          "in": "query",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "number",
+          "required": false
+        },
+        {
+          "name": "cursor",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "{ models: Model[], nextCursor: string | null }",
+      "naming": {
+        "ts": "client.models.list(opts?)",
+        "python": "client.models.list(provider=None, status=None, limit=None, cursor=None)",
+        "cli": "w6w models ls [--provider <id>] [--status <s>] [--limit <n>] [--cursor <c>]"
+      },
+      "notes": "Server answers `{ models: Model[], nextCursor }`; the wrapper returns that page object as-is (a keyset page, so the cursor is not discarded). `status` is `active|deprecated|blocked`. Errors: `400 invalid_limit`, `400 invalid_cursor`. Catalog PATCH, rates, discover and `/models/providers` are node `console` group only."
+    },
+    {
+      "name": "models.get",
+      "summary": "Fetch one catalog model by id.",
+      "method": "GET",
+      "path": "/models/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "Model",
+      "naming": {
+        "ts": "client.models.get(id)",
+        "python": "client.models.get(id)",
+        "cli": "w6w models get <id>"
+      },
+      "notes": "Addressed by the server-issued catalog id (`mdl_…`), not by a provider-native model id such as `gpt-4o`. Server wraps the body as `{ model: Model }`; the wrapper unwraps. `Model` carries `currentRate` (`ModelRate | null`). Unknown id is the uniform `404`."
+    },
+    {
+      "name": "modelRoutes.list",
+      "summary": "List the caller's model routes in a project.",
+      "method": "GET",
+      "path": "/model-routes",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "ModelRoute[]",
+      "naming": {
+        "ts": "client.modelRoutes.list(opts?)",
+        "python": "client.model_routes.list(project=None)",
+        "cli": "w6w model-routes list [--project <id>]"
+      },
+      "notes": "Models are catalog rows; `?project=` resolves like `documents.*` (`400 unknown_project`). Server wraps the body as `{ routes: ModelRoute[] }`; the wrapper unwraps. Route create/update/delete are node `console` group only."
+    },
+    {
+      "name": "modelRoutes.get",
+      "summary": "Fetch one model route by name.",
+      "method": "GET",
+      "path": "/model-routes/{name}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "name",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "ModelRoute",
+      "naming": {
+        "ts": "client.modelRoutes.get(name, opts?)",
+        "python": "client.model_routes.get(name, project=None)",
+        "cli": "w6w model-routes get <name> [--project <id>]"
+      },
+      "notes": "Models are catalog rows; `?project=` resolves like `documents.*` (`400 unknown_project`). Addressed by route `name`. Server wraps the body as `{ route: ModelRoute }`; the wrapper unwraps. Missing name is `404 model_route_not_found`."
+    },
+    {
+      "name": "modelRoutes.complete",
+      "summary": "Run a completion through a model route.",
+      "method": "POST",
+      "path": "/model-routes/{name}/complete",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "name",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "input",
+          "in": "body",
+          "type": "object",
+          "required": true
+        },
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "dialect",
+          "in": "query",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "response",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "ModelCompletion",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.modelRoutes.complete(name, input, opts?)",
+        "python": "client.model_routes.complete(name, input, project=None, dialect=None, response=None)",
+        "cli": "w6w model-routes complete <name> --input <json> [--project <id>] [--dialect <d>] [--response <r>]"
+      },
+      "notes": "POSTs the `BridgeInput` body as-is. Returns the FLAT envelope `{ provider, key, model, dialect, output?, usage, raw?, meta, invocationId, status, startedAt, finishedAt, durationMs }` exactly as the server sends it: NO unwrap to `output` (`key` is the answering connection id, `invocationId`/`status` are the standard invocation frame). `dialect` is `openai|anthropic|ollama` and `response` is `both|output|raw` (typed unions in node, documented in python); `response=output` omits `raw`, `response=raw` omits `output`. Each is sent only when given. Errors: `429 model_budget_exceeded`, `424 model_provider_failed`, `409 model_route_broken`, `403 model_egress_denied`, `404 model_route_not_found`. A provider failure that the server reports as an invocation frame is the lane's ordinary API error."
+    },
+    {
+      "name": "modelUsage.query",
+      "summary": "Query recorded model usage, optionally grouped.",
+      "method": "GET",
+      "path": "/model-usage",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "groupBy",
+          "in": "query",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "from",
+          "in": "query",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "to",
+          "in": "query",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "route",
+          "in": "query",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "model",
+          "in": "query",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "number",
+          "required": false
+        },
+        {
+          "name": "cursor",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "ModelUsageReport",
+      "naming": {
+        "ts": "client.modelUsage.query(opts?)",
+        "python": "client.model_usage.query(project=None, group_by=None, from_=None, to=None, route=None, model=None, limit=None, cursor=None)",
+        "cli": "w6w model-usage [--project <id>] [--group-by route|model|day] [--from <iso>] [--to <iso>] [--route <name>] [--model <id>] [--limit <n>] [--cursor <c>]"
+      },
+      "notes": "Models are catalog rows; `?project=` resolves like `documents.*` (`400 unknown_project`). Returns the body as-is: `{ totals: { requests, inputTokens, outputTokens, cachedInputTokens, cacheWriteTokens, totalTokens, cost: [{ currency, amountMinor }], unpriced }, totalsTruncated, groups?: [{ key, requests, totalTokens, cost }], items: ModelUsage[], nextCursor }`. `totalsTruncated` is `true` when the server stopped folding the ledger at its aggregate row cap, so `totals`/`groups` cover only part of the window. `groupBy` is `route|model|day` and adds `groups`. The query keys are sent as `groupBy`/`from`/`to`/`route`/`model`/`limit`/`cursor` (python's `group_by`/`from_` are renamed on the wire). Budgets CRUD and `/model-budgets/:id/usage` are node `console` group only."
     }
   ],
   "cli": {

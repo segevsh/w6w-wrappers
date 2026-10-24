@@ -29,6 +29,7 @@ import { DocumentsApi } from "./documents.ts";
 import { ConfigError } from "./errors.ts";
 import { type CallOptions, type HttpResponse, request, type RequestOptions } from "./http.ts";
 import { fetchMe } from "./me.ts";
+import { ModelRoutesApi, ModelsApi, ModelUsageApi } from "./models.ts";
 import { ProjectsApi } from "./projects.ts";
 import { ReliabilityApi } from "./reliability.ts";
 import { type RunInput, runUrn } from "./run.ts";
@@ -71,6 +72,15 @@ export class W6WClient {
    * overrides this client's default.
    */
   readonly documents: DocumentsApi;
+
+  /** The model catalog: `list`, `get`. Planned op — see `endpoints.json`. */
+  readonly models: ModelsApi;
+
+  /** Named model routes: `list`, `get`, `complete` (flat envelope, no unwrap). */
+  readonly modelRoutes: ModelRoutesApi;
+
+  /** Recorded model usage: `query`. */
+  readonly modelUsage: ModelUsageApi;
 
   /**
    * Typed variables: `list`, `get`, `getByName`, `create`, `update`, `delete`.
@@ -198,6 +208,9 @@ export class W6WClient {
     // additionally see the configuration, because they are the project-scoped
     // half of the surface and have a default project to apply.
     this.documents = new DocumentsApi(this);
+    this.models = new ModelsApi(this);
+    this.modelRoutes = new ModelRoutesApi(this);
+    this.modelUsage = new ModelUsageApi(this);
     this.vars = new VarsApi(this);
     this.connections = new ConnectionsApi(this);
     this.apps = new AppsApi(this);
