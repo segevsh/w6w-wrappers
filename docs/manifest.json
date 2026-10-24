@@ -116,6 +116,13 @@
       "order": 90
     },
     {
+      "path": "guides/agents-studio.md",
+      "slug": "agents-studio",
+      "section": "guides",
+      "title": "Skills, context and agent drafts",
+      "order": 95
+    },
+    {
       "path": "../README.md",
       "slug": "wrappers",
       "section": "reference-packages",
