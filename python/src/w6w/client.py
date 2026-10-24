@@ -19,6 +19,7 @@ from typing import Any, Callable, Dict, Mapping, Optional, Union
 from ._config import ResolvedConfig, TokenProvider, resolve_config
 from ._http import HttpResponse, Transport, _request, default_transport
 from ._vars import VarsApi
+from .agents_studio import AgentsApi, ContextApi, SkillsApi
 from .apps import AppsApi
 from .assets import AssetsApi
 from .connections import ConnectionsApi
@@ -177,6 +178,16 @@ class Client:
         #: (``put_entry`` in, ``content``/``archive_download`` out) carry
         #: ``bytes`` in both directions (contract 0.11.0).
         self.assets: AssetsApi = AssetsApi(self)
+        #: Uploaded skills, read-only: ``skills.list/get/versions/archive``. A
+        #: skill is created by an upload with ``purpose="skill"``, never here.
+        self.skills: SkillsApi = SkillsApi(self)
+        #: Context collections and their text entries:
+        #: ``context.list/create/get/update/archive`` and
+        #: ``context.entries.list/create/update``.
+        self.context: ContextApi = ContextApi(self)
+        #: Agent DRAFTS: ``agents.list/create/get/update/archive``. Every answer
+        #: is ``runnable: false`` — no Agent runtime exists (A22).
+        self.agents: AgentsApi = AgentsApi(self)
 
     def me(self) -> Me:
         """Fetch the caller's identity, plus the versions that answered.
