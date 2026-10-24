@@ -205,7 +205,7 @@ export const HELP_TREE: HelpTree = {
       "usage": "w6w model-usage [options]",
       "naming":
         "w6w model-usage [--project <id>] [--group-by route|model|day] [--from <iso>] [--to <iso>] [--route <name>] [--model <id>] [--limit <n>] [--cursor <c>]",
-      "status": "planned",
+      "status": "required",
       "params": [
         {
           "name": "project",
@@ -239,14 +239,14 @@ export const HELP_TREE: HelpTree = {
           "name": "route",
           "kind": "flag",
           "display": "--route <name>",
-          "description": "Only usage through this model route",
+          "description": "Only usage through this model route id (mrt_…)",
           "required": false,
         },
         {
           "name": "model",
           "kind": "flag",
           "display": "--model <id>",
-          "description": "Only usage of this model",
+          "description": "Only usage of this catalog model id (mdl_…)",
           "required": false,
         },
         {
@@ -275,9 +275,7 @@ export const HELP_TREE: HelpTree = {
         "w6w model-usage",
         "w6w model-usage --group-by route --from 2026-10-01",
       ],
-      "notes": [
-        'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
-      ],
+      "notes": [],
     },
     {
       "operation": "ls",
@@ -2844,7 +2842,7 @@ export const HELP_TREE: HelpTree = {
           "headline": "list the model catalog (keyset-paged)",
           "usage": "w6w models list [options]",
           "naming": "w6w models ls [--provider <id>] [--status <s>] [--limit <n>] [--cursor <c>]",
-          "status": "planned",
+          "status": "required",
           "params": [
             {
               "name": "provider",
@@ -2886,9 +2884,7 @@ export const HELP_TREE: HelpTree = {
             "w6w models ls",
             "w6w models ls --provider openai",
           ],
-          "notes": [
-            'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
-          ],
+          "notes": [],
         },
         {
           "operation": "models.get",
@@ -2903,13 +2899,13 @@ export const HELP_TREE: HelpTree = {
           "headline": "fetch one catalog model by id",
           "usage": "w6w models get <id> [options]",
           "naming": "w6w models get <id>",
-          "status": "planned",
+          "status": "required",
           "params": [
             {
               "name": "id",
               "kind": "argument",
               "display": "<id>",
-              "description": "Model id",
+              "description": "Catalog model id (mdl_…), not a provider-native id like gpt-4o",
               "required": true,
             },
             {
@@ -2921,17 +2917,15 @@ export const HELP_TREE: HelpTree = {
             },
           ],
           "examples": [
-            "w6w models get gpt-4o",
+            "w6w models get mdl_01HQ8N",
           ],
-          "notes": [
-            'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
-          ],
+          "notes": [],
         },
       ],
       "options": [],
       "examples": [
         "w6w models ls",
-        "w6w models get gpt-4o",
+        "w6w models get mdl_01HQ8N",
       ],
     },
     {
@@ -2953,7 +2947,7 @@ export const HELP_TREE: HelpTree = {
           "headline": "list the caller's model routes in a project",
           "usage": "w6w model-routes list [options]",
           "naming": "w6w model-routes list [--project <id>]",
-          "status": "planned",
+          "status": "required",
           "params": [
             {
               "name": "project",
@@ -2974,9 +2968,7 @@ export const HELP_TREE: HelpTree = {
             "w6w model-routes list",
             "w6w model-routes list --project prj_01HQ8N",
           ],
-          "notes": [
-            'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
-          ],
+          "notes": [],
         },
         {
           "operation": "modelRoutes.get",
@@ -2991,7 +2983,7 @@ export const HELP_TREE: HelpTree = {
           "headline": "fetch one model route by name",
           "usage": "w6w model-routes get <name> [options]",
           "naming": "w6w model-routes get <name> [--project <id>]",
-          "status": "planned",
+          "status": "required",
           "params": [
             {
               "name": "name",
@@ -3018,9 +3010,7 @@ export const HELP_TREE: HelpTree = {
           "examples": [
             "w6w model-routes get summarize",
           ],
-          "notes": [
-            'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
-          ],
+          "notes": [],
         },
         {
           "operation": "modelRoutes.complete",
@@ -3036,7 +3026,7 @@ export const HELP_TREE: HelpTree = {
           "usage": "w6w model-routes complete <name> --input <json> [options]",
           "naming":
             "w6w model-routes complete <name> --input <json> [--project <id>] [--dialect <d>] [--response <r>]",
-          "status": "planned",
+          "status": "required",
           "params": [
             {
               "name": "name",
@@ -3063,7 +3053,7 @@ export const HELP_TREE: HelpTree = {
               "name": "dialect",
               "kind": "flag",
               "display": "--dialect <d>",
-              "description": "Request dialect: openai | anthropic | ollama | structured",
+              "description": "Request dialect: openai | anthropic | ollama",
               "required": false,
             },
             {
@@ -3085,9 +3075,7 @@ export const HELP_TREE: HelpTree = {
             'w6w model-routes complete summarize --input \'{"messages":[{"role":"user","content":"Hi"}]}\'',
             'w6w model-routes complete summarize --input \'{"prompt":"Hi"}\' --dialect openai --response output',
           ],
-          "notes": [
-            'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
-          ],
+          "notes": [],
         },
       ],
       "options": [

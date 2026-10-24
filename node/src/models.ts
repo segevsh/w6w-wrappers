@@ -2,8 +2,7 @@
  * `client.models.*`, `client.modelRoutes.*` and `client.modelUsage.*` — the model
  * registry: the catalog, named routes, and the completion gateway.
  *
- * Six operations, one HTTP call each (`endpoints.json`, status `planned` until
- * the server lands). The rest of the model surface (catalog edits, rates,
+ * Six operations, one HTTP call each (`endpoints.json`). The rest of the model surface (catalog edits, rates,
  * budgets, route writes) lives in the unstable `client.console.models` group.
  *
  * **`modelRoutes.complete` returns the flat gateway envelope as-is** —
@@ -26,7 +25,7 @@ export interface ModelsHost {
 }
 
 /** The wire dialect a completion is spoken in. */
-export type ModelDialect = "openai" | "anthropic" | "ollama" | "structured";
+export type ModelDialect = "openai" | "anthropic" | "ollama";
 /** How much of the gateway response a completion returns. */
 export type ModelResponseMode = "both" | "output" | "raw";
 
@@ -63,6 +62,11 @@ export interface ModelCompletion {
 /** The result of `modelUsage.query`. */
 export interface ModelUsageReport {
   totals: Record<string, unknown>;
+  /**
+   * `true` when the server stopped folding the ledger at its aggregate row cap,
+   * so `totals` and `groups` cover only part of the filtered window.
+   */
+  totalsTruncated: boolean;
   groups?: Record<string, unknown>[];
   items: Record<string, unknown>[];
   nextCursor: string | null;
@@ -133,7 +137,7 @@ export class ModelsApi {
     return res.body as ModelPage;
   }
 
-  /** Read one catalog entry by id. */
+  /** Read one catalog entry by its catalog id (`mdl_…`), not a provider-native model id. */
   async get(id: string, options?: CallOptions): Promise<Model> {
     const res = await this.#host.request<unknown>({
       method: "GET",

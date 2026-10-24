@@ -80,7 +80,7 @@ class ModelsTest(unittest.TestCase):
         self.assertEqual(query(calls[0]), {"provider": ["openai"], "limit": ["5"]})
 
     def test_usage_query_params(self) -> None:
-        report = {"totals": {}, "items": [], "nextCursor": None}
+        report = {"totals": {}, "totalsTruncated": False, "items": [], "nextCursor": None}
         client, calls = make(report)
         out = client.model_usage.query(
             project="p", group_by="route", from_="2026-01-01", to="2026-02-01",

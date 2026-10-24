@@ -6,7 +6,7 @@ Six operations, one HTTP call each. ``model_routes.complete`` returns the
 
 ``complete`` accepts two query selectors:
 
-- ``dialect``: ``"openai" | "anthropic" | "ollama" | "structured"``
+- ``dialect``: ``"openai" | "anthropic" | "ollama"``
 - ``response``: ``"both" | "output" | "raw"``
 
 Routes and usage are project-scoped: per-call ``project``, then the client's
@@ -67,7 +67,7 @@ class ModelsApi:
         return response.body  # type: ignore[no-any-return]
 
     def get(self, id: str) -> Dict[str, Any]:
-        """Read one catalog entry by id."""
+        """Read one catalog entry by its catalog id (``mdl_…``), not a provider-native id."""
         response = self._host.request("GET", path("/models/{id}", id=id))
         return _pick(response, "model")  # type: ignore[no-any-return]
 
@@ -107,7 +107,7 @@ class ModelRoutesApi:
     ) -> Dict[str, Any]:
         """POST `input` to ``/model-routes/{name}/complete``.
 
-        :param dialect: ``"openai"``, ``"anthropic"``, ``"ollama"`` or ``"structured"``.
+        :param dialect: ``"openai"``, ``"anthropic"`` or ``"ollama"``.
         :param response: ``"both"``, ``"output"`` or ``"raw"``.
         :returns: The flat envelope as sent, ``invocationId``/``status``/``key``
             included. Not unwrapped.
@@ -142,7 +142,10 @@ class ModelUsageApi:
         limit: Optional[int] = None,
         cursor: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Query usage; ``{totals, groups?, items, nextCursor}`` as sent.
+        """Query usage; ``{totals, totalsTruncated, groups?, items, nextCursor}`` as sent.
+
+        ``totalsTruncated`` is ``True`` when the server stopped folding the ledger
+        at its aggregate row cap, so ``totals``/``groups`` cover only part of it.
 
         ``group_by`` goes on the wire as ``groupBy``; ``from_`` as ``from``.
         """

@@ -1766,7 +1766,7 @@ to feed, at most ten at a time, to §50. `project` is required.
 GET /models?provider=&status=&limit=&cursor=
 ```
 
-`status: planned` · not served yet (the lane implements it ahead of the server)
+`status: required` · served today
 
 Keyset-paged. The server answers `{ "models": Model[], "nextCursor": string | null }` and the wrapper returns that page object as-is. `status` is `active | deprecated | blocked`. Errors: `400 invalid_limit`, `400 invalid_cursor`.
 
@@ -1778,9 +1778,9 @@ Keyset-paged. The server answers `{ "models": Model[], "nextCursor": string | nu
 GET /models/:id
 ```
 
-`status: planned` · not served yet (the lane implements it ahead of the server)
+`status: required` · served today
 
-The server wraps the body as `{ "model": Model }`; the wrapper unwraps. `Model.currentRate` is the effective `ModelRate` or `null`. An unknown id is the uniform `404`.
+Addressed by the server-issued catalog id (`mdl_…`), not a provider-native model id such as `gpt-4o`. The server wraps the body as `{ "model": Model }`; the wrapper unwraps. `Model.currentRate` is the effective `ModelRate` or `null`. An unknown id is the uniform `404`.
 
 ---
 
@@ -1790,7 +1790,7 @@ The server wraps the body as `{ "model": Model }`; the wrapper unwraps. `Model.c
 GET /model-routes?project=
 ```
 
-`status: planned` · not served yet (the lane implements it ahead of the server)
+`status: required` · served today
 
 Project-scoped like the `documents.*` operations: optional `?project=`, else the default project; unknown project is `400 unknown_project`. The server wraps the body as `{ "routes": ModelRoute[] }`; the wrapper unwraps.
 
@@ -1802,7 +1802,7 @@ Project-scoped like the `documents.*` operations: optional `?project=`, else the
 GET /model-routes/:name?project=
 ```
 
-`status: planned` · not served yet (the lane implements it ahead of the server)
+`status: required` · served today
 
 Addressed by route `name`. The server wraps the body as `{ "route": ModelRoute }`; the wrapper unwraps. A missing name is `404 model_route_not_found`.
 
@@ -1814,9 +1814,9 @@ Addressed by route `name`. The server wraps the body as `{ "route": ModelRoute }
 POST /model-routes/:name/complete?project=&dialect=&response=
 ```
 
-`status: planned` · not served yet (the lane implements it ahead of the server)
+`status: required` · served today
 
-Body is a `BridgeInput`, sent as-is. The result is the **flat envelope** `{ provider, key, model, dialect, output?, usage, raw?, meta, invocationId, status, startedAt, finishedAt, durationMs }` returned exactly as sent — **no unwrap to `output`** (`key` is the answering connection id). `dialect` is `openai | anthropic | ollama | structured`; `response` is `both | output | raw` (`output` omits `raw`, `raw` omits `output`). Each query key is sent only when given. Errors: `429 model_budget_exceeded`, `424 model_provider_failed`, `409 model_route_broken`, `403 model_egress_denied`, `404 model_route_not_found`.
+Body is a `BridgeInput`, sent as-is. The result is the **flat envelope** `{ provider, key, model, dialect, output?, usage, raw?, meta, invocationId, status, startedAt, finishedAt, durationMs }` returned exactly as sent — **no unwrap to `output`** (`key` is the answering connection id). `dialect` is `openai | anthropic | ollama`; `response` is `both | output | raw` (`output` omits `raw`, `raw` omits `output`). Each query key is sent only when given. Errors: `429 model_budget_exceeded`, `424 model_provider_failed`, `409 model_route_broken`, `403 model_egress_denied`, `404 model_route_not_found`.
 
 ---
 
@@ -1826,9 +1826,9 @@ Body is a `BridgeInput`, sent as-is. The result is the **flat envelope** `{ prov
 GET /model-usage?project=&groupBy=&from=&to=&route=&model=&limit=&cursor=
 ```
 
-`status: planned` · not served yet (the lane implements it ahead of the server)
+`status: required` · served today
 
-Returns `{ totals, groups?, items, nextCursor }` as-is. `totals` = `{ requests, inputTokens, outputTokens, cachedInputTokens, cacheWriteTokens, totalTokens, cost: [{ currency, amountMinor }], unpriced }`. `groupBy` is `route | model | day` and adds `groups`.
+Returns `{ totals, totalsTruncated, groups?, items, nextCursor }` as-is. `totals` = `{ requests, inputTokens, outputTokens, cachedInputTokens, cacheWriteTokens, totalTokens, cost: [{ currency, amountMinor }], unpriced }`. `groupBy` is `route | model | day` and adds `groups`. `totalsTruncated` is `true` when the server stopped folding the ledger at its aggregate row cap, so `totals` and `groups` cover only part of the window.
 
 ---
 
@@ -1879,7 +1879,8 @@ They all exist on the API. They are not in the wrappers until they are in
 > operation count stays 58; the dependents read (`GET /connections/:id/dependents`)
 > is console-only and not in this contract.
 
-> **At contract `0.10.0` six model operations were added as `planned`** (§§52-57):
+> **At contract `0.10.0` six model operations were added** (§§52-57), first as
+> `planned` and flipped to `required` once the server routes landed on the same branch:
 > `models.list`, `models.get`, `modelRoutes.list`, `modelRoutes.get`,
 > `modelRoutes.complete` and `modelUsage.query`, and the `connections.delete`
 > notes gained the `routes` dependents and the `brokenRoutes` forced field (§46).

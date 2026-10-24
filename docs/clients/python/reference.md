@@ -174,21 +174,19 @@ Reading works for any member. The rest need the `owner` or `admin` role.
 ## `client.models`, `client.model_routes`, `client.model_usage`
 
 The model registry: a catalog of AI models, named **model routes** that pick the model, provider and
-fallbacks for you, and a usage report. These operations are `planned` in the wrappers contract. See
-the [Node models page](/clients/node/models/) for the walkthrough. Creating and editing routes is
+fallbacks for you, and a usage report. See the [Node models page](/clients/node/models/) for the walkthrough. Creating and editing routes is
 not part of the stable surface.
 
 | Method | Returns |
 | --- | --- |
 | `models.list(provider=None, status=None, limit=None, cursor=None)` | The whole page, `{"models": [...], "nextCursor": ...}`. Pass `nextCursor` back as `cursor`. |
-| `models.get(id)` | One catalog entry. |
+| `models.get(id)` | One catalog entry, by its catalog id (`mdl_…`). |
 | `model_routes.list(project=None)` | `list` of routes. |
 | `model_routes.get(name, project=None)` | One route. |
 | `model_routes.complete(name, input, project=None, dialect=None, response=None)` | The flat envelope exactly as the server sent it, with `invocationId` and `status`. Not unwrapped to `output`. |
-| `model_usage.query(project=None, group_by=None, from_=None, to=None, route=None, model=None, limit=None, cursor=None)` | `{"totals", "groups", "items", "nextCursor"}` as sent. `group_by` is `route`, `model` or `day`. |
+| `model_usage.query(project=None, group_by=None, from_=None, to=None, route=None, model=None, limit=None, cursor=None)` | `{"totals", "totalsTruncated", "groups", "items", "nextCursor"}` as sent. `group_by` is `route`, `model` or `day`. |
 
-`dialect` is `openai`, `anthropic`, `ollama` or `structured`. `response` is `output`, `raw` or
-`both`. `project` falls back to the client's `project` setting, then to your account's default
+`dialect` is `openai`, `anthropic` or `ollama`. `response` is `output`, `raw` or `both`. `project` falls back to the client's `project` setting, then to your account's default
 project.
 
 ```python

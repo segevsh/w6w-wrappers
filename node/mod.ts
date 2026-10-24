@@ -53,7 +53,7 @@ export type {
   DocumentPatch,
   DocumentsHost,
 } from "./src/documents.ts";
-// Model registry (planned ops). Types only: the namespace classes are reached
+// Model registry. Types only: the namespace classes are reached
 // through `client.models` / `client.modelRoutes` / `client.modelUsage`.
 export type {
   Model,

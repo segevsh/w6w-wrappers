@@ -181,7 +181,7 @@ Deno.test("model-usage: passes groupBy/from/to/route/model/limit/cursor", async 
       "c1",
       "--json",
     ],
-    () => json(200, { totals: {}, items: [], nextCursor: null }),
+    () => json(200, { totals: {}, totalsTruncated: false, items: [], nextCursor: null }),
   );
   assertEquals(r.code, 0, r.stderr);
   const url = new URL(r.calls[0].url);

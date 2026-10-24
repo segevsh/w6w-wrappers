@@ -20,8 +20,7 @@ updatedAt: null
 
 w6w keeps a catalog of AI models and lets you call them through **model routes**: named entry
 points that pick the model, the provider and the fallbacks for you. This page shows how to read the
-catalog, read routes, run a completion and query usage from the Node SDK. These operations are
-`planned` in the wrappers contract.
+catalog, read routes, run a completion and query usage from the Node SDK.
 
 ## Before you start
 
@@ -72,8 +71,8 @@ console.log(result.invocationId, result.status);
 exactly as the server sent it, including `invocationId`, `status` and `key`. The SDK does not
 unwrap it to `output`. Two options shape the call:
 
-- `dialect`: the wire format your input and the provider reply use: `openai`, `anthropic`,
-  `ollama` or `structured`.
+- `dialect`: the wire format your input and the provider reply use: `openai`, `anthropic` or
+  `ollama`.
 - `response`: how much comes back: `output` (the model's answer), `raw` (the provider's reply) or
   `both`.
 

@@ -77,7 +77,7 @@ Deno.test("modelRoutes.complete rejects bad unions at type level", async () => {
 });
 
 Deno.test("modelUsage.query passes every filter", async () => {
-  const rep = { totals: {}, items: [], nextCursor: null };
+  const rep = { totals: {}, totalsTruncated: false, items: [], nextCursor: null };
   const { client, calls } = setup(rep);
   assertEquals(
     await client.modelUsage.query({
