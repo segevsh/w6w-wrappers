@@ -92,8 +92,8 @@ function isObject(v: unknown): v is Record<string, unknown> {
 
 /**
  * Validate an opaque `WorkflowDefinition` and return it as a
- * {@link FlowWorkflowShape}. Requires string `manifestVersion`/`id`/`name`; a
- * `steps` array of objects each with a string `id`; and, when present,
+ * {@link FlowWorkflowShape}. Requires string `manifestVersion`/`id`/`name`; exactly one of a
+ * `nodes`/`steps` array of objects each with a string `id`; and, when present,
  * `edges` an array, `settings` an object, `variables` an array. Anything else
  * throws a {@link WorkflowShapeError} listing every violation. The result is a
  * copy (top level and each step) that keeps every unknown key.
@@ -107,15 +107,20 @@ export function toFlowWorkflow(def: WorkflowDefinition): FlowWorkflowShape {
   for (const key of ["manifestVersion", "id", "name"]) {
     if (typeof input[key] !== "string") issues.push({ path: key, message: "must be a string" });
   }
-  const steps = input.steps;
-  if (!Array.isArray(steps)) {
-    issues.push({ path: "steps", message: "must be an array" });
+  const hasNodes = input.nodes !== undefined;
+  const hasSteps = input.steps !== undefined;
+  const key = hasSteps && !hasNodes ? "steps" : "nodes";
+  const list = input[key];
+  if (hasNodes && hasSteps) {
+    issues.push({ path: "nodes", message: "must not be combined with steps" });
+  } else if (!Array.isArray(list)) {
+    issues.push({ path: key, message: "must be an array" });
   } else {
-    steps.forEach((step: unknown, i) => {
-      if (!isObject(step)) {
-        issues.push({ path: `steps[${i}]`, message: "must be an object" });
-      } else if (typeof step.id !== "string") {
-        issues.push({ path: `steps[${i}].id`, message: "must be a string" });
+    list.forEach((entry: unknown, i) => {
+      if (!isObject(entry)) {
+        issues.push({ path: `${key}[${i}]`, message: "must be an object" });
+      } else if (typeof entry.id !== "string") {
+        issues.push({ path: `${key}[${i}].id`, message: "must be a string" });
       }
     });
   }
@@ -132,7 +137,7 @@ export function toFlowWorkflow(def: WorkflowDefinition): FlowWorkflowShape {
 
   return {
     ...input,
-    steps: (steps as Record<string, unknown>[]).map((s) => ({ ...s })),
+    [key]: (list as Record<string, unknown>[]).map((s) => ({ ...s })),
   } as unknown as FlowWorkflowShape;
 }
 
@@ -143,5 +148,10 @@ export function toFlowWorkflow(def: WorkflowDefinition): FlowWorkflowShape {
  * caller cast is needed.
  */
 export function fromFlowWorkflow(flow: FlowWorkflowShape): WorkflowDefinition {
-  return { ...flow, steps: flow.steps.map((s) => ({ ...s })) };
+  const out: WorkflowDefinition = { ...flow };
+  for (const key of ["nodes", "steps"]) {
+    const list = (flow as unknown as Record<string, unknown>)[key];
+    if (Array.isArray(list)) out[key] = list.map((s) => ({ ...s }));
+  }
+  return out;
 }

@@ -51,6 +51,19 @@ expect a JSON value in one shell argument. Wrap it in single quotes, or read it 
 
 A saved token is used only for the base URL it was saved for. See the [CLI](/clients/cli/) page.
 
+## Config
+
+| Command | What it does |
+| --- | --- |
+| `w6w config get-base-url` | Show the effective base URL and where it came from (`flag`, `env`, `config`, `default`). |
+| `w6w config set-base-url <url>` | Save the base URL (trailing slash dropped). Tokens are not moved: run `w6w auth login` for the new host. A set `W6W_BASE_URL` still wins and is called out. |
+
+## List
+
+| Command | What it does |
+| --- | --- |
+| `w6w ls <integrations\|workflows\|functions\|endpoints> [--project <id>]` | Same as `connections list`, `workflows list` and `functions list` for the first three; `endpoints` is **unstable** (console API). Distinct from the in-group `ls` alias for `list`. |
+
 ## Identity
 
 | Command | What it does |

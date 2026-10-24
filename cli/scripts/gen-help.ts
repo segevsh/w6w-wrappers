@@ -130,6 +130,7 @@ const GROUP_SUMMARIES: Record<string, string> = {
   projects: "List your projects",
   reliability: "Health and performance of the apps you use",
   auth: "Save, remove and inspect the stored API token",
+  config: "Show and set the API base URL",
 };
 
 const GROUP_EXAMPLES: Record<string, string[]> = {
@@ -148,6 +149,7 @@ const GROUP_EXAMPLES: Record<string, string[]> = {
     "w6w reliability list --project prj_01HQ8N --apps sendgrid,slack",
   ],
   auth: ["w6w auth status", "printf '%s' \"$W6W_TOKEN\" | w6w auth login -"],
+  config: ["w6w config get-base-url", "w6w config set-base-url https://w6w.example.com"],
 };
 
 /** At least one runnable example per command — the part people actually copy. */
@@ -159,6 +161,17 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
   ],
   "auth.logout": ["w6w auth logout", "w6w auth logout --base-url https://w6w.example.com"],
   "auth.status": ["w6w auth status", "w6w auth status --json"],
+  "config.get-base-url": ["w6w config get-base-url", "w6w config get-base-url --json"],
+  "config.set-base-url": [
+    "w6w config set-base-url https://w6w.example.com",
+    "w6w config set-base-url https://api.w6w.io",
+  ],
+  "ls": [
+    "w6w ls workflows",
+    "w6w ls integrations --json",
+    "w6w ls workflows --project prj_01HQ8N",
+    "w6w ls endpoints",
+  ],
   "me": ["w6w me", "w6w info"],
   "connections.list": ["w6w connections list", "w6w connections list --json"],
   "connections.get": ["w6w connections get conn_01HQ8N", "w6w connections get conn_01HQ8N --json"],
@@ -201,7 +214,7 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
   // definition, since this lane reads no files.
   "workflows.get": ["w6w workflows get wf_01HQ8N", "w6w workflows get wf_01HQ8N --json"],
   "workflows.create": [
-    `w6w workflows create --definition '{"manifestVersion":"2","name":"nightly","steps":[]}'`,
+    `w6w workflows create --definition '{"manifestVersion":"2","name":"nightly","nodes":[]}'`,
     `w6w workflows create --definition "$(cat workflow.json)" --project prj_01HQ8N`,
   ],
   "workflows.update": [
@@ -347,6 +360,11 @@ const COMMAND_NOTES: Record<string, string[]> = {
 const PARAM_HELP: Record<string, string> = {
   "auth.login.token":
     "The API token to save, or `-` to read it from standard input (default when input is piped)",
+  "config.set-base-url.url":
+    "The API origin to save, like https://api.example.com (a trailing slash is dropped)",
+  "ls.kind":
+    "What to list: integrations | workflows | functions | endpoints (endpoints is unstable)",
+  "ls.project": "Project to scope to (workflows only; other kinds ignore it)",
   // Shared fallbacks, by bare parameter name.
   "project": "Project to scope to (default: the account's default project)",
   "description": "Human-readable description",

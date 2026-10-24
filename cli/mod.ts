@@ -111,7 +111,7 @@ export type {
  * The explicit `: string` annotation is required, not decorative: JSR publishes
  * this file as TypeScript source and rejects inferred public types.
  */
-export const VERSION: string = "0.9.16";
+export const VERSION: string = "0.9.17";
 
 /** `w6w help <command>` is accepted as an alias for `w6w <command> --help`. */
 const HELP_COMMAND = "help";
@@ -143,7 +143,7 @@ export interface CommandContext {
   readonly env: EnvReader;
   /** The stored per-user config, read once before the handler runs (nothing stored by default). */
   readonly stored: StoredConfig;
-  /** Where the config is persisted. Only the `auth` commands write through it. */
+  /** Where the config is persisted. Only the `auth` and `config` commands write through it. */
   readonly store: ConfigStore;
   /** Standard input, for `auth login -`. */
   readonly stdin: StdinSource;

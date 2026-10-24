@@ -544,6 +544,7 @@ export function createW6WUiAdapter(client: W6WClient): W6WApi {
           name: string;
           displayName?: string;
           description?: string;
+          nodes?: WorkflowStepSummary[];
           steps?: WorkflowStepSummary[];
         };
         return {
@@ -551,7 +552,7 @@ export function createW6WUiAdapter(client: W6WClient): W6WApi {
           name: def.name,
           displayName: def.displayName,
           description: def.description,
-          steps: def.steps ?? [],
+          steps: def.nodes ?? def.steps ?? [],
         };
       }),
 

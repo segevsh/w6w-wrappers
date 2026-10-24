@@ -31,6 +31,8 @@ import { DASHBOARD_COMMANDS } from "./dashboard.ts";
 import { PROJECT_COMMANDS } from "./projects.ts";
 import { RELIABILITY_COMMANDS } from "./reliability.ts";
 import { AUTH_COMMANDS } from "./auth.ts";
+import { CONFIG_COMMANDS } from "./config.ts";
+import { LS_COMMANDS } from "./ls.ts";
 
 export { DOCUMENT_COMMANDS } from "./documents.ts";
 export { VAR_COMMANDS } from "./vars.ts";
@@ -46,6 +48,8 @@ export { DASHBOARD_COMMANDS } from "./dashboard.ts";
 export { PROJECT_COMMANDS } from "./projects.ts";
 export { RELIABILITY_COMMANDS } from "./reliability.ts";
 export { AUTH_COMMANDS } from "./auth.ts";
+export { CONFIG_COMMANDS } from "./config.ts";
+export { LS_COMMANDS } from "./ls.ts";
 
 /** Every wired command, keyed by canonical command path. */
 export const COMMANDS: CommandRegistry = {
@@ -63,4 +67,6 @@ export const COMMANDS: CommandRegistry = {
   ...PROJECT_COMMANDS,
   ...RELIABILITY_COMMANDS,
   ...AUTH_COMMANDS,
+  ...CONFIG_COMMANDS,
+  ...LS_COMMANDS,
 };

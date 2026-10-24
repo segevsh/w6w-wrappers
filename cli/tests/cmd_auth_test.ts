@@ -301,7 +301,14 @@ Deno.test("a malformed config fails every dispatched command, naming the path, n
   const text =
     `{"version":1,"baseUrl":"${CLOUD}","hosts":{"${CLOUD}":{"token":"${secret}"}},"junk":`;
   for (
-    const argv of [["auth", "status"], ["auth", "login", CLOUD_TOK], ["auth", "logout"], ["me"]]
+    const argv of [
+      ["auth", "status"],
+      ["auth", "login", CLOUD_TOK],
+      ["auth", "logout"],
+      ["me"],
+      ["config", "get-base-url"],
+      ["config", "set-base-url", LOCAL],
+    ]
   ) {
     const { store, state } = memoryStore(text);
     const result = await run(argv, { store, env: { W6W_TOKEN: "t" } });
@@ -319,7 +326,17 @@ Deno.test("help and --version never read the store", async () => {
     read: () => Promise.reject(new Error("the store was read")),
     write: () => Promise.reject(new Error("the store was written")),
   };
-  for (const argv of [["--help"], ["auth", "--help"], ["auth", "login", "--help"], ["--version"]]) {
+  for (
+    const argv of [
+      ["--help"],
+      ["auth", "--help"],
+      ["auth", "login", "--help"],
+      ["config", "--help"],
+      ["config", "set-base-url", "--help"],
+      ["ls", "--help"],
+      ["--version"],
+    ]
+  ) {
     const result = await run(argv, { store });
     assertEquals(result.code, 0, `${argv.join(" ")}: ${result.stderr}`);
   }
