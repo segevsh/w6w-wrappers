@@ -2331,6 +2331,628 @@
         "cli": "w6w assets purge <id>"
       },
       "notes": "`/assets` routes are principal-scoped: a missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. Irreversible. Returns `{assetId, versionsDeleted, objectsDeleted}` as sent — no unwrap. Only an account admin may purge — anyone else gets the uniform `404 not_found`, not a 403. An asset still referenced by a skill version or context entry is refused `409 purge_refused` (the envelope also carries `skillVersionIds` and `contextEntryIds`)."
+    },
+    {
+      "name": "skills.list",
+      "summary": "List skills visible to the caller.",
+      "method": "GET",
+      "path": "/skills",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "includeArchived",
+          "in": "query",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "number",
+          "required": false
+        }
+      ],
+      "returns": "Skill[]",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.skills.list(opts?)",
+        "python": "client.skills.list(include_archived=None, limit=None)",
+        "cli": "w6w skills list [--include-archived] [--limit <n>]"
+      },
+      "notes": "Principal-scoped. The server wraps the body as `{skills}`; the wrapper unwraps. Archived skills are omitted unless `includeArchived` is true. Never carries a storage path or object key. Skills are CREATED by uploading with `assets.uploads.create` and `purpose: \"skill\"` — there is no `skills.create`."
+    },
+    {
+      "name": "skills.get",
+      "summary": "Fetch one skill.",
+      "method": "GET",
+      "path": "/skills/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "Skill",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.skills.get(id, opts?)",
+        "python": "client.skills.get(id)",
+        "cli": "w6w skills get <id>"
+      },
+      "notes": "A missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. The server wraps the body as `{skill}`; the wrapper unwraps. `activeVersionId` is the version new pins should target; existing agent pins are unaffected by a new version."
+    },
+    {
+      "name": "skills.versions",
+      "summary": "List a skill's versions.",
+      "method": "GET",
+      "path": "/skills/{id}/versions",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "SkillVersion[]",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.skills.versions(id, opts?)",
+        "python": "client.skills.versions(id)",
+        "cli": "w6w skills versions <id>"
+      },
+      "notes": "A missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. The server wraps the body as `{versions}`; the wrapper unwraps. A `SkillVersion.id` is what an agent's `skills[].skillVersionId` pins."
+    },
+    {
+      "name": "skills.archive",
+      "summary": "Archive a skill (retire it from listings).",
+      "method": "POST",
+      "path": "/skills/{id}/archive",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "Skill",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.skills.archive(id, opts?)",
+        "python": "client.skills.archive(id)",
+        "cli": "w6w skills archive <id>"
+      },
+      "notes": "A missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. Returns the archived skill (`archivedAt` set), unwrapped from `{skill}`. A caller who may not manage the skill gets the uniform `404`. Archiving never deletes bytes."
+    },
+    {
+      "name": "context.list",
+      "summary": "List context collections visible to the caller.",
+      "method": "GET",
+      "path": "/context-collections",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "includeArchived",
+          "in": "query",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "number",
+          "required": false
+        }
+      ],
+      "returns": "ContextCollection[]",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.context.list(opts?)",
+        "python": "client.context.list(include_archived=None, limit=None)",
+        "cli": "w6w context list [--include-archived] [--limit <n>]"
+      },
+      "notes": "Principal-scoped. The server wraps the body as `{collections}`; the wrapper unwraps. Archived collections are omitted unless `includeArchived` is true."
+    },
+    {
+      "name": "context.create",
+      "summary": "Create a context collection.",
+      "method": "POST",
+      "path": "/context-collections",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "name",
+          "in": "body",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "description",
+          "in": "body",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "tags",
+          "in": "body",
+          "type": "string[]",
+          "required": false
+        },
+        {
+          "name": "visibility",
+          "in": "body",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "ContextCollection",
+      "successStatuses": [
+        201
+      ],
+      "naming": {
+        "ts": "client.context.create(input, opts?)",
+        "python": "client.context.create(name, description=None, tags=None, visibility=None)",
+        "cli": "w6w context create <name> [--description <d>] [--tags <t,t>] [--visibility private|project|account]"
+      },
+      "notes": "`visibility` is `private|project|account`; anything else is `400 invalid_body`. The server wraps the body as `{collection}`; the wrapper unwraps. A collection starts empty — add entries with `context.entries.create` or upload files with `assets.uploads.create` and `purpose: \"context\"`."
+    },
+    {
+      "name": "context.get",
+      "summary": "Fetch one context collection.",
+      "method": "GET",
+      "path": "/context-collections/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "ContextCollection",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.context.get(id, opts?)",
+        "python": "client.context.get(id)",
+        "cli": "w6w context get <id>"
+      },
+      "notes": "A missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. Unwrapped from `{collection}`."
+    },
+    {
+      "name": "context.update",
+      "summary": "Patch a context collection's name, description or tags.",
+      "method": "PATCH",
+      "path": "/context-collections/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "name",
+          "in": "body",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "description",
+          "in": "body",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "tags",
+          "in": "body",
+          "type": "string[]",
+          "required": false
+        }
+      ],
+      "returns": "ContextCollection",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.context.update(id, patch, opts?)",
+        "python": "client.context.update(id, name=None, description=None, tags=None)",
+        "cli": "w6w context update <id> [--name <n>] [--description <d>] [--tags <t,t>]"
+      },
+      "notes": "A missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. Every body field is optional; an omitted field is left alone. `visibility` is NOT patchable here. Unlike the entry and agent writes, a collection patch carries NO precondition and NO `revision` (last-write-wins). Unwrapped from `{collection}`."
+    },
+    {
+      "name": "context.archive",
+      "summary": "Archive a context collection.",
+      "method": "POST",
+      "path": "/context-collections/{id}/archive",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "ContextCollection",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.context.archive(id, opts?)",
+        "python": "client.context.archive(id)",
+        "cli": "w6w context archive <id>"
+      },
+      "notes": "A missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. Returns the archived collection (`archivedAt` set), unwrapped from `{collection}`."
+    },
+    {
+      "name": "context.entries.list",
+      "summary": "List the entries of a context collection.",
+      "method": "GET",
+      "path": "/context-collections/{id}/entries",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "includeArchived",
+          "in": "query",
+          "type": "boolean",
+          "required": false
+        }
+      ],
+      "returns": "ContextEntry[]",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.context.entries.list(id, opts?)",
+        "python": "client.context.entries.list(id, include_archived=None)",
+        "cli": "w6w context entries-list <id> [--include-archived]"
+      },
+      "notes": "A missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. `id` is the COLLECTION id. The server wraps the body as `{entries}`; the wrapper unwraps. A listed entry carries NO `revision` and NO `previewable` — those ride only on the `ContextEntryView` that `context.entries.create` / `context.entries.update` answer. `assetVersionId` is the pin id an agent's `context[].assetVersionId` attaches."
+    },
+    {
+      "name": "context.entries.create",
+      "summary": "Add a text entry to a context collection.",
+      "method": "POST",
+      "path": "/context-collections/{id}/entries",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "name",
+          "in": "body",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "text",
+          "in": "body",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "ContextEntryView",
+      "successStatuses": [
+        201
+      ],
+      "naming": {
+        "ts": "client.context.entries.create(id, input, opts?)",
+        "python": "client.context.entries.create(id, name, text)",
+        "cli": "w6w context entries-create <id> <name> --text <text>"
+      },
+      "notes": "A missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. `id` is the COLLECTION id. Both `name` and `text` must be strings (`400 invalid_body`); the text is size-capped by the server. Answers the new entry as a `ContextEntryView` (with `revision`, the token for the first `context.entries.update`), unwrapped from `{entry}`. Binary entries are uploads (`assets.uploads.create`, `purpose: \"context\"`), not this op."
+    },
+    {
+      "name": "context.entries.update",
+      "summary": "Replace a text entry's content.",
+      "method": "PUT",
+      "path": "/context-collections/{id}/entries/{entryId}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "entryId",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "text",
+          "in": "body",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "revision",
+          "in": "body",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "ifUnmodifiedSince",
+          "in": "header",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "ContextEntryView",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.context.entries.update(id, entryId, input, opts?)",
+        "python": "client.context.entries.update(id, entry_id, text, revision, if_unmodified_since=None)",
+        "cli": "w6w context entries-update <id> <entryId> --text <text> --revision <n> [--if-unmodified-since <ts>]"
+      },
+      "notes": "A missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. A FULL REPLACEMENT of the text, not a patch. `id` is the COLLECTION id; an entry that does not belong to it is the uniform `404`. Body `revision` (a positive integer — the entry's last-seen revision) is REQUIRED and is passed through unchanged; a non-integer or `< 1` is `400 invalid_body`. `ifUnmodifiedSince` is the optimistic-concurrency precondition, sent as the `x-w6w-if-unmodified-since` HEADER (not a query param) and ONLY when a value was given — never as an empty or \"null\" string, which the server answers `400 invalid_precondition`. Pass the exact `updatedAt` last read. THE SERVER REQUIRES IT on this route: omitted, the answer is `428 precondition_required` (a typed precondition error, never a silent last-write-wins), so a wrapper must not default it. A stale `revision` or a stale `updatedAt` is `409 conflict` (recoverable: re-read and re-send); wrappers surface it as a typed conflict error, the 428 as a typed precondition error. Answers the new `ContextEntryView` (with the bumped `revision`), unwrapped from `{entry}`."
+    },
+    {
+      "name": "agents.list",
+      "summary": "List agent drafts visible to the caller.",
+      "method": "GET",
+      "path": "/agents",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "includeArchived",
+          "in": "query",
+          "type": "boolean",
+          "required": false
+        }
+      ],
+      "returns": "Agent[]",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.agents.list(opts?)",
+        "python": "client.agents.list(include_archived=None)",
+        "cli": "w6w agents list [--include-archived]"
+      },
+      "notes": "Principal-scoped. The server wraps the body as `{agents}`; the wrapper unwraps. **Every Agent answers `runnable: false`** — an Agent here is a saved DRAFT; no Agent runtime, RAG or chat history exists (A22), and no op in this group runs one."
+    },
+    {
+      "name": "agents.create",
+      "summary": "Create an agent draft.",
+      "method": "POST",
+      "path": "/agents",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "name",
+          "in": "body",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "instructions",
+          "in": "body",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "modelRouteId",
+          "in": "body",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "skills",
+          "in": "body",
+          "type": "object[]",
+          "required": false
+        },
+        {
+          "name": "context",
+          "in": "body",
+          "type": "object[]",
+          "required": false
+        },
+        {
+          "name": "visibility",
+          "in": "body",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "project",
+          "in": "body",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "Agent",
+      "successStatuses": [
+        201
+      ],
+      "naming": {
+        "ts": "client.agents.create(input, opts?)",
+        "python": "client.agents.create(name=None, instructions=None, model_route_id=None, skills=None, context=None, visibility=None, project=None)",
+        "cli": "w6w agents create [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>]"
+      },
+      "notes": "Saving an INCOMPLETE draft is allowed: every field is optional, and `validation` on the answer lists what is missing or disallowed. `skills` is `[{skillId, skillVersionId}]` and `context` is `[{collectionId, entryId?, assetVersionId}]` — pins to immutable VERSIONS, so a later skill upload never changes an existing pin. `instructions` is capped at 64 KiB, at most 100 pins. A malformed body is `422 validation_failed` (the envelope carries `issues`). The server wraps the body as `{agent}`; the wrapper unwraps. **`runnable` is always `false`** (A22)."
+    },
+    {
+      "name": "agents.get",
+      "summary": "Fetch one agent draft.",
+      "method": "GET",
+      "path": "/agents/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "Agent",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.agents.get(id, opts?)",
+        "python": "client.agents.get(id)",
+        "cli": "w6w agents get <id>"
+      },
+      "notes": "A missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. Unwrapped from `{agent}`. Carries `revision` and `updatedAt` — the two tokens `agents.update` needs — and `runnable: false` (A22)."
+    },
+    {
+      "name": "agents.update",
+      "summary": "Patch an agent draft.",
+      "method": "PATCH",
+      "path": "/agents/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "name",
+          "in": "body",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "instructions",
+          "in": "body",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "modelRouteId",
+          "in": "body",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "skills",
+          "in": "body",
+          "type": "object[]",
+          "required": false
+        },
+        {
+          "name": "context",
+          "in": "body",
+          "type": "object[]",
+          "required": false
+        },
+        {
+          "name": "visibility",
+          "in": "body",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "project",
+          "in": "body",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "revision",
+          "in": "body",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "ifUnmodifiedSince",
+          "in": "header",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "Agent",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.agents.update(id, patch, opts?)",
+        "python": "client.agents.update(id, revision, name=None, instructions=None, model_route_id=None, skills=None, context=None, visibility=None, project=None, if_unmodified_since=None)",
+        "cli": "w6w agents update <id> --revision <n> [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>] [--if-unmodified-since <ts>]"
+      },
+      "notes": "A missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. A partial update: an omitted field is left alone. Body `revision` (a positive integer — the draft's last-seen `revision`) is REQUIRED and is passed through unchanged; `< 1` or non-integer is `400 invalid_body`. `ifUnmodifiedSince` is the optimistic-concurrency precondition, sent as the `x-w6w-if-unmodified-since` HEADER (not a query param) and ONLY when a value was given — never as an empty or \"null\" string, which the server answers `400 invalid_precondition`. Pass the exact `updatedAt` last read. THE SERVER REQUIRES IT on this route: omitted, the answer is `428 precondition_required` (a typed precondition error, never a silent last-write-wins), so a wrapper must not default it. A stale `revision` or `updatedAt` is `409 conflict` carrying `currentRevision` in the error envelope (`{error:{code,message,currentRevision}}`) — recoverable by re-reading and re-sending; wrappers surface it as a typed conflict error carrying that revision, the 428 as a typed precondition error. A disallowed pin is `422 validation_failed` (a uniform 422, `issues` in the envelope). Unwrapped from `{agent}`; `runnable` stays `false` (A22)."
+    },
+    {
+      "name": "agents.archive",
+      "summary": "Archive an agent draft.",
+      "method": "POST",
+      "path": "/agents/{id}/archive",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "Agent",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.agents.archive(id, opts?)",
+        "python": "client.agents.archive(id)",
+        "cli": "w6w agents archive <id>"
+      },
+      "notes": "A missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. Returns the archived draft (`archived: true`), unwrapped from `{agent}`. There is no agent delete or purge op."
     }
   ],
   "cli": {
