@@ -337,8 +337,7 @@ Deno.test("assets upload --retry: a uniform 404 from the status read is exit 2, 
           : json(404, { error: { code: "not_found", message: "not found" } }),
     );
     assertEquals(r.code, 2);
-    assertStringIncludes(r.stderr, "not_found");
-    assertEquals(r.stderr.includes("    at "), false);
+    assertEquals(r.stderr.trim(), "w6w: not found");
   });
 });
 
@@ -348,8 +347,7 @@ Deno.test("assets upload-status: a uniform 404 is a not-found API error, not a s
     () => json(404, { error: { code: "not_found", message: "not found" } }),
   );
   assertEquals(r.code, 2);
-  assertStringIncludes(r.stderr, "not_found");
-  assertEquals(r.stderr.includes("    at "), false);
+  assertEquals(r.stderr.trim(), "w6w: not found");
 });
 
 Deno.test("assets content: exact bytes (non-UTF-8) to --out and to stdout; a 404 raises the typed error", async () => {
@@ -381,7 +379,7 @@ Deno.test("assets content: exact bytes (non-UTF-8) to --out and to stdout; a 404
     () => json(404, { error: { code: "not_found", message: "no" } }),
   );
   assertEquals(missing.code, 2);
-  assertStringIncludes(missing.stderr, "not_found");
+  assertEquals(missing.stderr.trim(), "w6w: no");
 });
 
 Deno.test("assets get/versions/files/archive/purge: paths and unwrapping", async () => {
