@@ -23,6 +23,7 @@ from .apps import AppsApi
 from .connections import ConnectionsApi
 from .dashboard import DashboardApi
 from .documents import DocumentsApi
+from .models import ModelRoutesApi, ModelsApi, ModelUsageApi
 from .errors import ApiError
 from .me import fetch_me
 from .projects import ProjectsApi
@@ -141,6 +142,10 @@ class Client:
         # and have a default project to apply; `vars` and `connections` are
         # handed the transport alone, so neither holds a default to send.
         self.documents: DocumentsApi = DocumentsApi(self)
+        #: Model registry: ``models``, ``model_routes`` (incl. ``complete``), ``model_usage``.
+        self.models: ModelsApi = ModelsApi(self)
+        self.model_routes: ModelRoutesApi = ModelRoutesApi(self)
+        self.model_usage: ModelUsageApi = ModelUsageApi(self)
         self.vars: VarsApi = VarsApi(self.request)
         self.connections: ConnectionsApi = ConnectionsApi(self.request)
         self.workflows: WorkflowsApi = WorkflowsApi(self)
