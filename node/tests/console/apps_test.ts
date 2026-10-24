@@ -298,6 +298,9 @@ Deno.test("console.apps.listPage forwards every supplied option under its own wi
   await c.client.console.apps.listPage({
     q: "sendgrid",
     category: "email",
+    modelProvider: true,
+    modelType: "llm",
+    modelFamily: "transformer",
     maturity: "stable",
     visibility: "public",
     sort: "-recent",
@@ -311,6 +314,9 @@ Deno.test("console.apps.listPage forwards every supplied option under its own wi
   assertEquals(url.pathname, "/apps");
   assertEquals(url.searchParams.get("q"), "sendgrid");
   assertEquals(url.searchParams.get("category"), "email");
+  assertEquals(url.searchParams.get("modelProvider"), "true");
+  assertEquals(url.searchParams.get("modelType"), "llm");
+  assertEquals(url.searchParams.get("modelFamily"), "transformer");
   assertEquals(url.searchParams.get("maturity"), "stable");
   assertEquals(url.searchParams.get("visibility"), "public");
   assertEquals(url.searchParams.get("sort"), "-recent");

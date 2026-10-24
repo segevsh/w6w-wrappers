@@ -63,9 +63,21 @@ Deno.test("discover POSTs {connection} and returns the body", async () => {
 
 Deno.test("providers unwraps `providers`", async () => {
   const { m, calls } = setup(() => ({
-    providers: [{ appId: "io.w6w.openai", provider: "openai", installed: true }],
+    providers: [{
+      appId: "io.w6w.openai",
+      provider: "openai",
+      installed: true,
+      designation: { modelTypes: ["llm"] },
+      designationSource: "manifest",
+      operations: {
+        discover: { supported: true },
+        complete: { supported: false, reason: "no adapter" },
+      },
+    }],
   }));
-  assertEquals((await m.providers())[0].provider, "openai");
+  const rows = await m.providers();
+  assertEquals(rows[0].provider, "openai");
+  assertEquals(rows[0].operations?.complete.reason, "no adapter");
   assertEquals(calls[0].url, "https://api.example.com/models/providers");
 });
 
