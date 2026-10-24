@@ -12,6 +12,8 @@ import { type Root, createRoot } from "react-dom/client";
 import { W6WProvider } from "../W6WProvider.tsx";
 import { useModelRoutes, useModelUsage, useModels } from "../hooks.ts";
 
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
 function fakeFetch(respond: (url: string) => unknown) {
   const urls: string[] = [];
   const fetch: FetchLike = (input) => {

@@ -219,8 +219,8 @@ is out of date: the team commands work.
 
 The model registry: a catalog of AI models and named **model routes** that pick the model, provider
 and fallbacks for you. These commands are `planned` in the wrappers contract. See the
-[Node models page](/clients/node/models/) for the walkthrough. Every command takes `--project` to
-use a project other than your account's default.
+[Node models page](/clients/node/models/) for the walkthrough. `model-routes` and `model-usage` take `--project` to
+use a project other than your account's default; the `models` catalog is not project-scoped.
 
 | Command | What it does |
 | --- | --- |
@@ -229,7 +229,7 @@ use a project other than your account's default.
 | `w6w model-routes list` | List routes. |
 | `w6w model-routes get <name>` | Show one route. |
 | `w6w model-routes complete <name> --input <json> [--dialect <d>] [--response <r>]` | Run a completion through a route. `--input` must be a JSON object. |
-| `w6w model-usage [--groupBy route\|model\|day] [--from <date>] [--to <date>] [--route <r>] [--model <m>] [--limit <n>] [--cursor <c>]` | Query recorded usage. |
+| `w6w model-usage [--group-by route\|model\|day] [--from <date>] [--to <date>] [--route <r>] [--model <m>] [--limit <n>] [--cursor <c>]` | Query recorded usage. |
 
 `complete` prints the flat envelope exactly as the server sent it, including `invocationId` and
 `status`. `--dialect` is `openai`, `anthropic`, `ollama` or `structured`; `--response` is `output`,
@@ -240,7 +240,7 @@ w6w models ls --provider openai --limit 20
 w6w model-routes complete summarize \
   --input '{"messages":[{"role":"user","content":"Summarize this ticket."}]}' \
   --response both
-w6w model-usage --groupBy route --from 2026-10-01 --to 2026-10-24
+w6w model-usage --group-by route --from 2026-10-01 --to 2026-10-24
 ```
 
 ## Where to next
