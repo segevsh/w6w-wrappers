@@ -326,22 +326,43 @@ function printJson(context: CommandContext, value: unknown): void {
   context.out.emit(value, () => JSON.stringify(value, null, 2));
 }
 
+/** A flag whose value must be a JSON value of the given shape. */
+function jsonFlag(context: CommandContext, name: string, array: boolean): unknown {
+  const raw = textFlag(context, name);
+  if (raw === undefined) return undefined;
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    throw usageError(context, `\`--${name}\` must be valid JSON.`);
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value) !== array) {
+    throw usageError(context, `\`--${name}\` must be a JSON ${array ? "array" : "object"}.`);
+  }
+  return value;
+}
+
+/**
+ * `assets upload-create` — the reserve call, one flag per contract parameter.
+ * (`assets upload` is the command that builds this from a directory.)
+ */
 const uploadCreate: CommandHandler = async (context) => {
   noExtraArguments(context, 0);
-  const raw = requiredFlag(context, "input", "--input <json>");
-  let input: unknown;
-  try {
-    input = JSON.parse(raw);
-  } catch {
-    throw usageError(context, "`--input` must be valid JSON.");
-  }
-  if (typeof input !== "object" || input === null || Array.isArray(input)) {
-    throw usageError(context, "`--input` must be a JSON object.");
-  }
-  printJson(
-    context,
-    await context.client().assets.uploads.create(input as AssetUploadCreateInput),
-  );
+  const purpose = requiredFlag(context, "purpose", "--purpose asset|skill|context");
+  const idempotencyKey = requiredFlag(context, "idempotencyKey", "--idempotency-key <key>");
+  const entries = jsonFlag(context, "entries", true);
+  if (entries === undefined) throw usageError(context, "needs `--entries <json>`.");
+  const input = {
+    purpose,
+    idempotencyKey,
+    entries,
+    name: textFlag(context, "name"),
+    visibility: textFlag(context, "visibility"),
+    assetId: textFlag(context, "assetId"),
+    target: jsonFlag(context, "target", false),
+  };
+  // `undefined` fields drop out of the JSON body: an absent flag sends nothing.
+  printJson(context, await context.client().assets.uploads.create(input as AssetUploadCreateInput));
 };
 
 const uploadPut: CommandHandler = async (context) => {
