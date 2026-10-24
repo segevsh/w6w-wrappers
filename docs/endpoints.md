@@ -111,21 +111,19 @@ intake keeps working at the command line.
 Every CLI command must also answer `--help` at group and command level,
 generated from `endpoints.json` — see [cli.md](./cli.md).
 
-**Status field.** `endpoints.json` holds fifty-one operations, all of them
+**Status field.** `endpoints.json` holds ninety-three operations, all of them
 `"status": "required"` (the six `team.*` operations' `/me/account/...` routes
-are live server-side). Changing `status` regenerates
-the CLI's help (see [cli.md](./cli.md)). This catalog does not yet describe the
-`team.*` wire shapes; `endpoints.json`'s own `notes` for them are the reference
-until it does.
+are live server-side). Changing `status` regenerates the CLI's help (see
+[cli.md](./cli.md)). This catalog does not yet describe the `team.*` wire
+shapes; `endpoints.json`'s own `notes` for them are the reference until it does.
 `documents.getByKey`, `vars.getByName` and `run` were implemented server-side
 2026-07-28; `me` was fixed the same day to call the server's real `/auth/me`
 route directly rather than wait on a never-built `/me` alias. `me`'s
 `serverImplemented` stays `"partial"` — identity is fully live, but the optional
 `versions` block does not exist server-side yet, and every wrapper tolerates its
 absence. `status` records **server** readiness, not wrapper obligation — all
-fifty-one are implemented and tested against a mocked transport in every
-wrapper (see
-[implementation.md §10](./implementation.md#10-conformance-runner)).
+fifty-one are implemented and tested against a mocked transport in every wrapper
+(see [implementation.md §10](./implementation.md#10-conformance-runner)).
 
 ---
 
@@ -2017,6 +2015,275 @@ DELETE /assets/:id
 Irreversible. Returns `{assetId, versionsDeleted, objectsDeleted}`. Account
 admins only — anyone else gets the uniform `404`. An asset still referenced by a
 skill version or context entry is `409 purge_refused`.
+
+---
+
+## Skills, context collections and agent drafts (§70–§86)
+
+Seventeen operations over `/skills`, `/context-collections` and `/agents`. All
+are JSON (no binary transport) and all unwrap the server's single-key envelope
+(`{skills}`, `{collection}`, `{entry}`, `{agent}`, …) to the bare value. They
+share the principal-scoped caller of `assets.*`: the acting project is the
+account's default, and every foreign or absent id is the one uniform `404`.
+
+**Skills are uploaded, not created here.** A skill (and a context file) is
+published with `assets.uploads.create` and `purpose: "skill"` / `"context"` (§58
+onward; the CLI wrapper is `w6w assets upload --purpose skill`). This group
+reads and archives what that produced.
+
+**An Agent is a draft.** Every `agents.*` answer carries `runnable: false` — the
+SDK types it as the literal `false`. No Agent runtime, RAG or chat history
+exists; nothing in this group runs an Agent. An agent _pins_ immutable skill
+versions and context asset versions, so uploading a new skill version never
+changes an existing pin.
+
+**Concurrency on the two edits.** `agents.update` and `context.entries.update`
+carry BOTH a body `revision` (the last-seen revision, a positive integer, passed
+through unchanged) and the `ifUnmodifiedSince` precondition, sent as the
+`x-w6w-if-unmodified-since` header only when a value is given. The server
+requires the header: omitted is `428 precondition_required`, a typed
+precondition error (never a silent last-write-wins). A stale `revision` or
+`updatedAt` is `409 conflict` — a typed conflict error; for `agents.update` the
+envelope carries `currentRevision`. `context.update` (the collection patch) has
+neither: it is last-write-wins.
+
+## 70. `skills.list` — list skills
+
+```
+GET /skills
+```
+
+`status: required` · served today
+
+Unwrapped from `{skills}`. `includeArchived` and `limit` are optional query
+params. Principal-scoped: a missing, foreign, private-to-someone-else or
+other-project id is the one uniform `404 not_found`.
+
+---
+
+## 71. `skills.get` — fetch one skill
+
+```
+GET /skills/:id
+```
+
+`status: required` · served today
+
+Unwrapped from `{skill}`. `activeVersionId` is the version new pins should
+target. Principal-scoped: a missing, foreign, private-to-someone-else or
+other-project id is the one uniform `404 not_found`.
+
+---
+
+## 72. `skills.versions` — list a skill's versions
+
+```
+GET /skills/:id/versions
+```
+
+`status: required` · served today
+
+Unwrapped from `{versions}`. A `SkillVersion.id` is what `agents.*` pins as
+`skillVersionId`. Principal-scoped: a missing, foreign, private-to-someone-else
+or other-project id is the one uniform `404 not_found`.
+
+---
+
+## 73. `skills.archive` — archive a skill
+
+```
+POST /skills/:id/archive
+```
+
+`status: required` · served today
+
+Unwrapped from `{skill}`; `archivedAt` set. Bytes are kept. Principal-scoped: a
+missing, foreign, private-to-someone-else or other-project id is the one uniform
+`404 not_found`.
+
+---
+
+## 74. `context.list` — list context collections
+
+```
+GET /context-collections
+```
+
+`status: required` · served today
+
+Unwrapped from `{collections}`. `includeArchived` and `limit` are optional query
+params.
+
+---
+
+## 75. `context.create` — create a context collection
+
+```
+POST /context-collections
+```
+
+`status: required` · served today
+
+`name` required; `description`, `tags`, `visibility` (`private|project|account`)
+optional. Answers `201`, unwrapped from `{collection}`. A collection starts
+empty.
+
+---
+
+## 76. `context.get` — fetch one context collection
+
+```
+GET /context-collections/:id
+```
+
+`status: required` · served today
+
+Unwrapped from `{collection}`. Principal-scoped: a missing, foreign,
+private-to-someone-else or other-project id is the one uniform `404 not_found`.
+
+---
+
+## 77. `context.update` — patch a context collection
+
+```
+PATCH /context-collections/:id
+```
+
+`status: required` · served today
+
+`name`, `description`, `tags`, each optional; `visibility` is not patchable. No
+precondition and no `revision` — last-write-wins. Principal-scoped: a missing,
+foreign, private-to-someone-else or other-project id is the one uniform
+`404 not_found`.
+
+---
+
+## 78. `context.archive` — archive a context collection
+
+```
+POST /context-collections/:id/archive
+```
+
+`status: required` · served today
+
+Unwrapped from `{collection}`; `archivedAt` set. Principal-scoped: a missing,
+foreign, private-to-someone-else or other-project id is the one uniform
+`404 not_found`.
+
+---
+
+## 79. `context.entries.list` — list a collection's entries
+
+```
+GET /context-collections/:id/entries
+```
+
+`status: required` · served today
+
+`id` is the collection id. Unwrapped from `{entries}`. A listed `ContextEntry`
+has no `revision` and no `previewable`; those arrive on the `ContextEntryView`
+answered by create and update. `assetVersionId` is what an agent's `context[]`
+pin attaches.
+
+---
+
+## 80. `context.entries.create` — add a text entry
+
+```
+POST /context-collections/:id/entries
+```
+
+`status: required` · served today
+
+`name` and `text`, both strings. Answers `201` with a `ContextEntryView`
+(carrying `revision`), unwrapped from `{entry}`. Binary entries are uploads, not
+this op.
+
+---
+
+## 81. `context.entries.update` — replace a text entry's content
+
+```
+PUT /context-collections/:id/entries/:entryId
+```
+
+`status: required` · served today
+
+A full replacement of `text`. Body `revision` and the `ifUnmodifiedSince` header
+are both required; `409 conflict` on a stale one, `428` without the header. An
+entry outside the collection in the path is the uniform `404`. Answers the new
+`ContextEntryView`.
+
+---
+
+## 82. `agents.list` — list agent drafts
+
+```
+GET /agents
+```
+
+`status: required` · served today
+
+Unwrapped from `{agents}`. Every element has `runnable: false`.
+
+---
+
+## 83. `agents.create` — create an agent draft
+
+```
+POST /agents
+```
+
+`status: required` · served today
+
+Every field optional (an incomplete draft saves; `validation` lists what is
+missing): `name`, `instructions` (64 KiB cap), `modelRouteId`, `skills`
+(`[{skillId, skillVersionId}]`), `context`
+(`[{collectionId, entryId?, assetVersionId}]`), `visibility`, `project`. Answers
+`201`; `422 validation_failed` carries `issues`. `runnable: false`.
+
+---
+
+## 84. `agents.get` — fetch one agent draft
+
+```
+GET /agents/:id
+```
+
+`status: required` · served today
+
+Unwrapped from `{agent}`; carries the `revision` and `updatedAt` that
+`agents.update` needs. Principal-scoped: a missing, foreign,
+private-to-someone-else or other-project id is the one uniform `404 not_found`.
+
+---
+
+## 85. `agents.update` — patch an agent draft
+
+```
+PATCH /agents/:id
+```
+
+`status: required` · served today
+
+Body `revision` plus the `ifUnmodifiedSince` header, both required.
+`409 conflict` carries `currentRevision`; `428` without the header; a disallowed
+pin is `422 validation_failed`. Omitted body fields are left alone. `runnable`
+stays `false`.
+
+---
+
+## 86. `agents.archive` — archive an agent draft
+
+```
+POST /agents/:id/archive
+```
+
+`status: required` · served today
+
+Unwrapped from `{agent}`; `archived: true`. There is no agent delete or purge.
+Principal-scoped: a missing, foreign, private-to-someone-else or other-project
+id is the one uniform `404 not_found`.
 
 ---
 

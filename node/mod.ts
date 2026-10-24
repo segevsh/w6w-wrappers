@@ -190,6 +190,13 @@ export type {
 // Assets and resumable uploads (contract 0.11.0).
 export { AssetsApi } from "./src/assets.ts";
 export type { AssetsHost } from "./src/assets.ts";
+// Skills, context collections and agent drafts (contract 0.11.0).
+export { SkillsApi } from "./src/skills.ts";
+export type { SkillsHost } from "./src/skills.ts";
+export { ContextApi } from "./src/context.ts";
+export type { ContextHost } from "./src/context.ts";
+export { AgentsApi } from "./src/agents.ts";
+export type { AgentsHost } from "./src/agents.ts";
 export type {
   Asset,
   AssetFile,

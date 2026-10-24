@@ -721,6 +721,260 @@ export interface AssetsApi {
   purge(id: string, opts?: CallOptions): Promise<AssetPurgeResult>;
 }
 
+// ---------------------------------------------------------------------------
+// Skills, context collections and agent drafts (`skills.*`, `context.*`,
+// `agents.*` — all JSON; skills and context files are UPLOADED through
+// `assets.uploads.*`, never created here)
+//
+// Transcribed from the host's wire shapes (`/skills`, `/context-collections`,
+// `/agents`). The server wraps each body in a single-key envelope (`{skills}`,
+// `{collection}`, `{entry}`, `{agent}`, …); the namespaces unwrap it.
+// ---------------------------------------------------------------------------
+
+/**
+ * Options of a write whose route requires the optimistic-concurrency
+ * precondition (`agents.update`, `context.entries.update`).
+ *
+ * `ifUnmodifiedSince` is the `updatedAt` last read, sent as the
+ * `x-w6w-if-unmodified-since` header and ONLY when given — never as an empty or
+ * `"null"` string. The server requires it on these routes: omitted, the call
+ * fails `428 precondition_required` (a typed precondition error), it is never a
+ * silent last-write-wins.
+ */
+export interface PreconditionOptions extends CallOptions {
+  ifUnmodifiedSince?: string;
+}
+
+/** Options of a list that hides archived rows by default. */
+export interface ListArchivedOptions extends CallOptions {
+  /** Include archived rows. Default `false`. */
+  includeArchived?: boolean;
+}
+
+/** `skills.list` / `context.list` options. */
+export interface ListPagedOptions extends ListArchivedOptions {
+  /** Cap on rows returned. */
+  limit?: number;
+}
+
+/** A skill. */
+export interface Skill {
+  id: string;
+  name: string;
+  description: string | null;
+  visibility: AssetVisibility;
+  project: string | null;
+  ownerSubject: string;
+  /** The version new pins should target; `null` before the first publish. */
+  activeVersionId: string | null;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One immutable version of a skill. Its `id` is what an agent pins. */
+export interface SkillVersion {
+  id: string;
+  skillId: string;
+  version: number;
+  entryPath: string;
+  metadata: Record<string, unknown>;
+  createdBy: string;
+  createdAt: string;
+}
+
+/** A context collection. */
+export interface ContextCollection {
+  id: string;
+  name: string;
+  description: string | null;
+  tags: string[];
+  visibility: AssetVisibility;
+  project: string | null;
+  ownerSubject: string;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One entry of a collection, as `context.entries.list` answers it. It has NO
+ * `revision` and NO `previewable` — those ride on {@linkcode ContextEntryView}.
+ */
+export interface ContextEntry {
+  id: string;
+  collectionId: string;
+  /** The pin id an agent's {@linkcode ContextPin} attaches. */
+  assetVersionId: string;
+  name: string;
+  mediaType: string;
+  tags: string[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt: string | null;
+}
+
+/**
+ * An entry as `context.entries.create` / `context.entries.update` answer it:
+ * the entry plus the `revision` the next `context.entries.update` sends back.
+ */
+export interface ContextEntryView extends ContextEntry {
+  revision: number;
+  previewable: boolean;
+}
+
+/** Body of `context.create`. */
+export interface CreateContextCollectionInput {
+  name: string;
+  description?: string;
+  tags?: string[];
+  visibility?: AssetVisibility;
+}
+
+/**
+ * Body of `context.update`: every field optional, an omitted one is left alone.
+ * No `visibility`, no `revision`, no precondition (last-write-wins).
+ */
+export interface UpdateContextCollectionInput {
+  name?: string;
+  description?: string;
+  tags?: string[];
+}
+
+/** Body of `context.entries.create`. */
+export interface CreateContextEntryInput {
+  name: string;
+  text: string;
+}
+
+/**
+ * Body of `context.entries.update`: a full replacement of the text. `revision`
+ * is the entry's last-seen revision, passed through unchanged.
+ */
+export interface UpdateContextEntryInput {
+  text: string;
+  revision: number;
+}
+
+/** A pin of an agent to one immutable skill version. */
+export interface SkillPin {
+  skillId: string;
+  skillVersionId: string;
+}
+
+/** A pin of an agent to one context asset version. */
+export interface ContextPin {
+  collectionId: string;
+  entryId?: string;
+  assetVersionId: string;
+}
+
+/** One finding of an agent draft's validation. */
+export interface AgentValidationIssue {
+  field: string;
+  code: string;
+  message: string;
+}
+
+/** Who may see an agent draft. */
+export type AgentVisibility = "private" | "project" | "account";
+
+/**
+ * An agent DRAFT. **`runnable` is always the literal `false`**: no Agent
+ * runtime, RAG or chat history exists, and no operation runs an Agent (A22).
+ * `revision` and `updatedAt` are the two tokens `agents.update` needs.
+ */
+export interface Agent {
+  id: string;
+  name: string;
+  instructions: string;
+  modelRouteId: string | null;
+  skills: SkillPin[];
+  context: ContextPin[];
+  visibility: AgentVisibility;
+  project: string | null;
+  revision: number;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+  validation: AgentValidationIssue[];
+  runnable: false;
+}
+
+/** Body of `agents.create`: every field optional (an incomplete draft saves). */
+export interface CreateAgentInput {
+  name?: string;
+  /** Capped at 64 KiB by the server. */
+  instructions?: string;
+  modelRouteId?: string | null;
+  skills?: SkillPin[];
+  context?: ContextPin[];
+  visibility?: AgentVisibility;
+  project?: string | null;
+}
+
+/**
+ * Body of `agents.update`: a partial update plus the REQUIRED last-seen
+ * `revision`, passed through unchanged. A stale one is a typed conflict error
+ * carrying the current revision.
+ */
+export interface UpdateAgentInput extends CreateAgentInput {
+  revision: number;
+}
+
+/**
+ * The `skills` namespace the node client exposes (implemented by S2 in
+ * `src/skills.ts`; named here so the CLI and react lanes can type against it).
+ * There is no `create`: a skill is uploaded via `assets.uploads` with
+ * `purpose: "skill"`.
+ */
+export interface SkillsApi {
+  list(opts?: ListPagedOptions): Promise<Skill[]>;
+  get(id: string, opts?: CallOptions): Promise<Skill>;
+  versions(id: string, opts?: CallOptions): Promise<SkillVersion[]>;
+  archive(id: string, opts?: CallOptions): Promise<Skill>;
+}
+
+/** The `context` namespace (implemented by S3 in `src/context.ts`). */
+export interface ContextApi {
+  list(opts?: ListPagedOptions): Promise<ContextCollection[]>;
+  create(input: CreateContextCollectionInput, opts?: CallOptions): Promise<ContextCollection>;
+  get(id: string, opts?: CallOptions): Promise<ContextCollection>;
+  update(
+    id: string,
+    patch: UpdateContextCollectionInput,
+    opts?: CallOptions,
+  ): Promise<ContextCollection>;
+  archive(id: string, opts?: CallOptions): Promise<ContextCollection>;
+  entries: {
+    /** `id` is the COLLECTION id. */
+    list(id: string, opts?: ListArchivedOptions): Promise<ContextEntry[]>;
+    create(
+      id: string,
+      input: CreateContextEntryInput,
+      opts?: CallOptions,
+    ): Promise<ContextEntryView>;
+    /** `id` is the COLLECTION id. Needs `revision` and the precondition (428 without it). */
+    update(
+      id: string,
+      entryId: string,
+      input: UpdateContextEntryInput,
+      opts?: PreconditionOptions,
+    ): Promise<ContextEntryView>;
+  };
+}
+
+/** The `agents` namespace (implemented by S4 in `src/agents.ts`). */
+export interface AgentsApi {
+  list(opts?: ListArchivedOptions): Promise<Agent[]>;
+  create(input?: CreateAgentInput, opts?: CallOptions): Promise<Agent>;
+  get(id: string, opts?: CallOptions): Promise<Agent>;
+  /** Needs `patch.revision` and the precondition (428 without it); a stale one is a 409. */
+  update(id: string, patch: UpdateAgentInput, opts?: PreconditionOptions): Promise<Agent>;
+  archive(id: string, opts?: CallOptions): Promise<Agent>;
+}
+
 /**
  * Mint a client-side id for a definition the caller is creating.
  *
