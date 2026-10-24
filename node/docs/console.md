@@ -430,15 +430,15 @@ comment block — field-for-field, not redesigned. `listConnections` (the sevent
 deliberately NOT relocated here: it already has a home on the pre-existing BASE namespace,
 `client.connections.list()` (`src/connections.ts:47-64`), and this domain does not duplicate it.
 
-| Method                | Route                        | Notes                                                                                                                                 |
-| --------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `listForApp(appId)`   | `GET /apps/:id/connections`  | `unwrap<ConnectionSummary[]>(res, "connections")`.                                                                                    |
-| `get(id)`             | `GET /connections/:id`       | `unwrap<ConnectionSummary>(res, "connection")`. No 404 special-casing — propagates as `ApiError`, unlike `console.schedules.get`.     |
-| `create(appId, body)` | `POST /apps/:id/connections` | Body `{authKey, credential, displayName?, profile?}` forwarded verbatim. `unwrap<ConnectionSummary>(res, "connection")` (`201`).      |
-| `update(id, body)`    | `PATCH /connections/:id`     | Body `{displayName?, credential?}` forwarded verbatim, not pre-validated client-side. `unwrap<ConnectionSummary>(res, "connection")`. |
-| `test(id)`            | `POST /connections/:id/test` | **No envelope key — see below.**                                                                                                      |
+| Method                 | Route                                  | Notes                                                                                                                                                                               |
+| ---------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `listForApp(appId)`    | `GET /apps/:id/connections`            | `unwrap<ConnectionSummary[]>(res, "connections")`.                                                                                                                                  |
+| `get(id)`              | `GET /connections/:id`                 | `unwrap<ConnectionSummary>(res, "connection")`. No 404 special-casing — propagates as `ApiError`, unlike `console.schedules.get`.                                                   |
+| `create(appId, body)`  | `POST /apps/:id/connections`           | Body `{authKey, credential, displayName?, profile?}` forwarded verbatim. `unwrap<ConnectionSummary>(res, "connection")` (`201`).                                                    |
+| `update(id, body)`     | `PATCH /connections/:id`               | Body `{displayName?, credential?}` forwarded verbatim, not pre-validated client-side. `unwrap<ConnectionSummary>(res, "connection")`.                                               |
+| `test(id)`             | `POST /connections/:id/test`           | **No envelope key — see below.**                                                                                                                                                    |
 | `delete(id, {force}?)` | `DELETE /connections/:id[?force=true]` | Returns nothing; discards `{ok: true}` (and a forced delete's `disabled`). `?force=true` is sent only when `force` is true; without it a `409 connection_in_use` raises `ApiError`. |
-| `dependents(id)`      | `GET /connections/:id/dependents` | `unwrap<ConnectionDependents>(res, "dependents")` — `{callables, subscriptions}`. Console only; not in `endpoints.json`. |
+| `dependents(id)`       | `GET /connections/:id/dependents`      | `unwrap<ConnectionDependents>(res, "dependents")` — `{callables, subscriptions}`. Console only; not in `endpoints.json`.                                                            |
 
 **`test`'s response has no envelope key — the whole body IS the `ConnectionTestResult`**, mirroring
 `console.reliability.list`'s pattern (`packages/server/packages/api/admin/connections.ts:151-190`
@@ -889,6 +889,40 @@ NOT re-wrapping base `run`.
 None of these four methods take a `project` scoping parameter — neither is reachable via any HTTP
 route on this domain — so `AliasesHost` needs only the transport, mirroring
 `console.workflows`'s/`console.schedules`'s own host shape.
+
+## `console.models.*`
+
+```ts
+import { W6WClient } from "@w6w/sdk";
+import "@w6w/sdk/console"; // pulls in client.console
+
+const client = new W6WClient();
+await client.console.models.discover("conn_1");
+await client.console.models.createRoute({ name: "chat", model: "mdl_1", connection: "conn_1" });
+const budgets = await client.console.models.listBudgets();
+```
+
+The model registry's console-only routes. The six stable operations (`models.list|get`,
+`modelRoutes.list|get|complete`, `modelUsage.query`) are on the root client and in `endpoints.json`
+— see `clients/node/models.md`. Catalog and budget writes need a tenant admin.
+
+| Method                                 | Route                          | Notes                                                      |
+| -------------------------------------- | ------------------------------ | ---------------------------------------------------------- |
+| `updateModel(id, patch)`               | `PATCH /models/:id`            | `status`/`displayName`/`limits`. Unwraps `model`.          |
+| `putRates(id, {effectiveFrom, rates})` | `PUT /models/:id/rates`        | `201`. Unwraps `rate`.                                     |
+| `discover(connection)`                 | `POST /models/discover`        | `{added, updated, deprecated}`.                            |
+| `providers()`                          | `GET /models/providers`        | Unwraps `providers`.                                       |
+| `listBudgets({project?})`              | `GET /model-budgets`           | Unwraps `budgets`.                                         |
+| `createBudget(input, {project?})`      | `POST /model-budgets`          | `201`. Unwraps `budget`.                                   |
+| `updateBudget(id, patch)`              | `PATCH /model-budgets/:id`     | Unwraps `budget`.                                          |
+| `deleteBudget(id)`                     | `DELETE /model-budgets/:id`    | Resolves to `undefined`.                                   |
+| `budgetUsage(id)`                      | `GET /model-budgets/:id/usage` | `{budgetId, window, windowStart, limits, used, reserved}`. |
+| `createRoute(input, {project?})`       | `POST /model-routes`           | `201`; `409 model_route_exists`, `400 invalid_route_name`. |
+| `updateRoute(name, patch, {project?})` | `PATCH /model-routes/:name`    | Unwraps `route`.                                           |
+| `deleteRoute(name, {project?})`        | `DELETE /model-routes/:name`   | Resolves to `undefined`; `404 model_route_not_found`.      |
+
+**`complete` is deliberately NOT modeled here.** `client.modelRoutes.complete` already reaches it
+and returns the flat envelope as-is; a second method would give a caller two ways to the same route.
 
 ## `console.subscriptions.*`
 
