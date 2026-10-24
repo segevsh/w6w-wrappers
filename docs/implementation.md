@@ -557,6 +557,32 @@ This is still a world away from the studio's redirect: nothing here navigates
 anywhere, retries anything other than the one bearer-carrying request that just
 failed, or runs without the caller explicitly opting in.
 
+### Byte-mode requests (contract 0.11.0)
+
+An operation that declares `bodyEncoding: "octet-stream"` and/or
+`responseEncoding: "octet-stream"` in `endpoints.json` changes the transport's
+_success_ handling only, identically in node and python:
+
+- **Bytes in.** The caller's `Uint8Array` / `bytes` is the request body, passed
+  to the HTTP client untouched with `content-type: application/octet-stream`.
+  There is no JSON encoding, quoting, base64 or text round-trip. An empty body
+  (zero bytes) is still a body and is sent as such.
+- **Bytes out.** On a 2xx the response body is read once as raw bytes
+  (`arrayBuffer()` / `response.content`) and returned as `Uint8Array` / `bytes`.
+  It is never decoded as text and never JSON-parsed, so a non-UTF-8 payload such
+  as `ff fe 00` is returned unmodified. The returned status is still carried
+  alongside (§4's `HttpResponse`).
+- **Errors are unchanged.** A non-2xx response in either mode is read as text
+  and mapped by §3's three failure modes: a JSON envelope raises the typed
+  `ApiError` with its `code`; a non-JSON body raises `bad_response`. Byte mode
+  must never surface raw bytes as an error message, and must never skip the
+  envelope parse.
+- The transport sets `content-type` after the caller's headers and the client
+  default, as for JSON; neither can override it. The 401-recovery policy applies
+  to a byte request exactly as to a JSON one.
+
+The two fields are independent; an operation may declare either or both.
+
 ---
 
 ## 4. Outcomes that are not errors

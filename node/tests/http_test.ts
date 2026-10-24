@@ -25,6 +25,8 @@ interface Call {
   method: string | undefined;
   headers: Headers;
   body: string | null;
+  /** The body when the transport was handed raw bytes; `null` otherwise. */
+  bytes: Uint8Array | null;
 }
 
 /**
@@ -41,6 +43,7 @@ function fakeFetch(
       method: init?.method,
       headers: new Headers(init?.headers),
       body: typeof init?.body === "string" ? init.body : null,
+      bytes: init?.body instanceof Uint8Array ? init.body : null,
     };
     calls.push(call);
     return Promise.resolve(respond(call));
@@ -468,4 +471,170 @@ Deno.test("the client defaults to globalThis.fetch, and says so when there is no
   } finally {
     globalThis.fetch = original;
   }
+});
+
+// ---------------------------------------------------------------------------
+// Byte mode (contract 0.11.0: bodyEncoding / responseEncoding "octet-stream")
+// ---------------------------------------------------------------------------
+
+/** Lowercase hex sha256, to compare what was sent with what the caller hashed. */
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", bytes as BufferSource);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Bytes that are not valid UTF-8, and that a JSON or text round-trip would corrupt. */
+const NON_UTF8 = new Uint8Array([0xff, 0xfe, 0x00, 0x7b, 0x22, 0x80, 0xc3, 0x28, 0x0a]);
+
+Deno.test("a Uint8Array body is sent as exact bytes with application/octet-stream", async () => {
+  const { fetch, calls } = fakeFetch(() => new Response(null, { status: 204 }));
+  const res = await request<null>(CONFIG, fetch, {
+    method: "PUT",
+    path: "/asset-uploads/up_1/entries/0",
+    body: NON_UTF8,
+  });
+  assertEquals(res.status, 204);
+  assertEquals(calls[0].headers.get("content-type"), "application/octet-stream");
+  assertEquals(calls[0].headers.get("authorization"), "Bearer tok_1");
+  // Not stringified: the transport saw bytes, and the bytes hash identically.
+  assertEquals(calls[0].body, null);
+  assertEquals(calls[0].bytes !== null, true);
+  assertEquals(await sha256Hex(calls[0].bytes!), await sha256Hex(NON_UTF8));
+  assertEquals([...calls[0].bytes!], [...NON_UTF8]);
+});
+
+Deno.test("a bytes body wins over a caller or client content-type header", async () => {
+  const cfg = resolveConfig({
+    baseUrl: "https://api.example.com",
+    token: "tok_1",
+    headers: { "content-type": "text/plain" },
+  });
+  const { fetch, calls } = fakeFetch(() => new Response(null, { status: 204 }));
+  await request<null>(cfg, fetch, {
+    method: "PUT",
+    path: "/x",
+    body: new Uint8Array([1, 2, 3]),
+    headers: { "content-type": "application/json" },
+  });
+  assertEquals(calls[0].headers.get("content-type"), "application/octet-stream");
+});
+
+Deno.test("an empty Uint8Array is still a body (octet-stream, zero bytes)", async () => {
+  const { fetch, calls } = fakeFetch(() => new Response(null, { status: 204 }));
+  await request<null>(CONFIG, fetch, { method: "PUT", path: "/x", body: new Uint8Array(0) });
+  assertEquals(calls[0].headers.get("content-type"), "application/octet-stream");
+  assertEquals(calls[0].bytes?.byteLength, 0);
+});
+
+Deno.test("a non-bytes body is still JSON-encoded (byte mode is opt-in by type)", async () => {
+  const { fetch, calls } = fakeFetch(() => json({ ok: true }));
+  await request(CONFIG, fetch, { method: "POST", path: "/x", body: { a: [1, 2] } });
+  assertEquals(calls[0].headers.get("content-type"), "application/json");
+  assertEquals(calls[0].body, '{"a":[1,2]}');
+  assertEquals(calls[0].bytes, null);
+});
+
+Deno.test("responseType bytes returns the exact bytes, non-UTF-8 included, with the status", async () => {
+  const { fetch, calls } = fakeFetch(() =>
+    new Response(NON_UTF8 as BodyInit, {
+      status: 200,
+      headers: { "content-type": "application/octet-stream" },
+    })
+  );
+  const res = await request<Uint8Array>(CONFIG, fetch, {
+    method: "GET",
+    path: "/assets/a_1/versions/v_1/files/f_1/content",
+    responseType: "bytes",
+  });
+  assertEquals(res.status, 200);
+  assertInstanceOf(res.body, Uint8Array);
+  assertEquals([...res.body], [...NON_UTF8]);
+  assertEquals(await sha256Hex(res.body), await sha256Hex(NON_UTF8));
+  assertEquals(calls[0].headers.get("content-type"), null);
+});
+
+Deno.test("responseType bytes does not try to parse a JSON-looking payload", async () => {
+  const payload = new TextEncoder().encode('{"error":{"code":"nope"}}');
+  const { fetch } = fakeFetch(() => new Response(payload as BodyInit, { status: 200 }));
+  const res = await request<Uint8Array>(CONFIG, fetch, {
+    method: "GET",
+    path: "/x",
+    responseType: "bytes",
+  });
+  assertInstanceOf(res.body, Uint8Array);
+  assertEquals(new TextDecoder().decode(res.body), '{"error":{"code":"nope"}}');
+});
+
+Deno.test("responseType bytes on an empty 200 yields an empty Uint8Array, not null", async () => {
+  const { fetch } = fakeFetch(() => new Response(null, { status: 200 }));
+  const res = await request<Uint8Array>(CONFIG, fetch, {
+    method: "GET",
+    path: "/x",
+    responseType: "bytes",
+  });
+  assertInstanceOf(res.body, Uint8Array);
+  assertEquals(res.body.byteLength, 0);
+});
+
+Deno.test("a non-2xx in byte-response mode still raises the typed error with the envelope code", async () => {
+  const { fetch } = fakeFetch(() =>
+    json({ error: { code: "not_found", message: "not found" } }, 404, "Not Found")
+  );
+  const err = await assertRejects(
+    () =>
+      request<Uint8Array>(CONFIG, fetch, {
+        method: "GET",
+        path: "/assets/a_1/versions/v_1/files/f_1/content",
+        responseType: "bytes",
+      }),
+    ApiError,
+  );
+  assertEquals(err.status, 404);
+  assertEquals(err.code, "not_found");
+  assertEquals(err.message, "not found");
+  assertEquals(err.raw, { error: { code: "not_found", message: "not found" } });
+});
+
+Deno.test("a non-JSON non-2xx in byte-response mode is bad_response, never bytes", async () => {
+  const { fetch } = fakeFetch(() =>
+    new Response("<html>bad gateway</html>", { status: 502, statusText: "Bad Gateway" })
+  );
+  const err = await assertRejects(
+    () => request<Uint8Array>(CONFIG, fetch, { method: "GET", path: "/x", responseType: "bytes" }),
+    ApiError,
+  );
+  assertEquals(err.status, 502);
+  assertEquals(err.code, "bad_response");
+  assertStringIncludes(err.message, "bad gateway");
+});
+
+Deno.test("a non-2xx for a bytes-body request still parses the envelope", async () => {
+  const { fetch } = fakeFetch(() =>
+    json({ error: { code: "validation_failed", message: "digest mismatch" } }, 422)
+  );
+  const err = await assertRejects(
+    () => request(CONFIG, fetch, { method: "PUT", path: "/x", body: NON_UTF8 }),
+    ApiError,
+  );
+  assertEquals(err.status, 422);
+  assertEquals(err.code, "validation_failed");
+});
+
+Deno.test("401 recovery re-sends the identical bytes body once", async () => {
+  let n = 0;
+  const { fetch, calls } = fakeFetch(() =>
+    ++n === 1
+      ? json({ error: { code: "unauthorized", message: "expired" } }, 401)
+      : new Response(null, { status: 204 })
+  );
+  const cfg = resolveConfig({
+    baseUrl: "https://api.example.com",
+    token: (ctx?: { forceRefresh?: boolean }) => (ctx?.forceRefresh ? "tok_2" : "tok_1"),
+    refreshOnUnauthorized: true,
+  });
+  const res = await request<null>(cfg, fetch, { method: "PUT", path: "/x", body: NON_UTF8 });
+  assertEquals(res.status, 204);
+  assertEquals(calls.length, 2);
+  assertEquals(calls[1].headers.get("authorization"), "Bearer tok_2");
+  assertEquals([...calls[1].bytes!], [...NON_UTF8]);
 });
