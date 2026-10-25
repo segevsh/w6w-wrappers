@@ -1,6 +1,6 @@
 # PLANNER.md — read this first when planning work in `w6w-wrappers`
 
-> **verified: 2026-10-23** (26-10-22-00-workflow-updates integration tip, `VERSION` 0.9.17 — `cat VERSION`; gate counts below are as of 2026-10-19 and were not re-measured: `deno` is not on this lane's PATH and react's `npm test` fails 11/11 until `node/dist` is built) — Prior: **verified: 2026-10-19** (26-10-18-01-fixes integration tip) — This guide records checked source locations, not a
+> **verified: 2026-10-25** (26-10-24-02-agents-studio-foundations integration tip wrappers@7075b2a, `VERSION` 0.9.20, contract `0.11.0` — `cat VERSION`; `grep -m1 contractVersion endpoints.json`; traps 3, 15–17 and the 2026-10-24 gate row updated from that project's evals) — Prior: **verified: 2026-10-23** (26-10-22-00-workflow-updates integration tip, `VERSION` 0.9.17; react's `npm test` fails 11/11 until `node/dist` is built) — Prior: **verified: 2026-10-19** (26-10-18-01-fixes integration tip) — This guide records checked source locations, not a
 > replacement for them. When this guide and the code disagree, **code wins**;
 > correct this guide in the same change.
 
@@ -25,6 +25,8 @@
 | release order, version bumps, or CI gates                   | `docs/release.md`, `.github/workflows/ci.yml` | **verified: 2026-10-14** — `docs/release.md:124-158`; `.github/workflows/ci.yml` `on:` block |
 | public docs or publication eligibility                      | `docs/README.md` and `docs/manifest.json`    | **verified: 2026-10-06** — `docs/README.md:1-6`             |
 | a `console.*` (`@w6w/sdk/console`) type or route            | `node/docs/console.md`, then trap 6 below    | **verified: 2026-10-13** — `node/src/console/mod.ts` header |
+| a byte (non-JSON) body or response                          | `docs/implementation.md` (the `bodyEncoding`/`responseEncoding: "octet-stream"` section), trap 15 | **verified: 2026-10-25** — `grep -n octet-stream docs/implementation.md` |
+| assets, skills, context or agent drafts                     | `docs/guides/agents-studio.md`, `docs/endpoints.md`, trap 16 | **verified: 2026-10-25** — `docs/manifest.json` lists the guide |
 
 ## Things that bite people who skip this
 
@@ -77,8 +79,10 @@
    `client.request`, handwritten lifecycle URLs, `as unknown as` workflow casts) lives under
    `react/src/__tests__/fixtures/` with its own `react/tsconfig.embed-fixture.json`.
 
-   **verified: 2026-10-14** — contract `0.7.0` has **58** operations; `node/tests/conformance_test.ts`
-   pins the count, so a contract op change must update that literal in the same commit.
+   **verified: 2026-10-25** — contract `0.11.0` has **93** operations (64 at `0.10.0`;
+   `python3 -c "import json;print(len(json.load(open('endpoints.json'))['operations']))"`);
+   `node/tests/conformance_test.ts` pins the count (`assertEquals(contract.operations.length, 93, …)`),
+   so a contract op change must update that literal in the same commit.
    A plain `workflows.run` / `functions.run` executes the **stored** row as last saved; a publish is
    only a precondition (server `run-workflow.ts` / `bll/invoke-function.ts` gate on
    `currentPublishedVersion === null`). Only `runVersion(id, n)` executes a published snapshot —
@@ -274,6 +278,63 @@
    end-to-end probe (both runtimes, local capture server) lives in the 26-10-18-01-fixes project
    record (`artifacts/probes/cli-auth-probe.sh`). The SDK, python and react never read this store.
 
+15. **Byte mode: an operation opts in with `bodyEncoding`/`responseEncoding: "octet-stream"`.**
+
+   **verified: 2026-10-25** — contract `0.11.0` added it for asset entry PUTs and downloads
+   (`docs/implementation.md`, "Bytes in." / "Bytes out."). Node: a `Uint8Array` `body` is sent untouched
+   with `content-type: application/octet-stream`, and `responseType: "bytes"` reads a 2xx once through
+   `arrayBuffer()` (`node/src/http.ts` `RequestOptions`). Python mirrors it in `python/src/w6w/_http.py`
+   (`_read_raw`). A non-2xx is still the JSON error envelope in both modes. Never route bytes through
+   `text()`/`json()` or JSON-encode them: mutants doing each died in node and python
+   (26-10-24-02 `evals/T4.1.3.eval.md` mutants a–c). `assets.content`/`archiveDownload` declare an `out`
+   query param that only the CLI help tree uses; node and python never send it (same eval, disclosed).
+
+16. **Agents Studio surface (`VERSION` 0.9.20): resource classes per lane, console-only storage.**
+
+   **verified: 2026-10-25** — wrappers@7075b2a.
+   - Contract resources `client.assets`/`skills`/`context`/`agents`: node `node/src/{assets,skills,context,agents}.ts`
+     (exported from `node/mod.ts`), python `python/src/w6w/{assets,agents_studio}.py`, CLI
+     `cli/src/commands/{assets,agents-studio}.ts` (regenerate `cli/src/help.generated.ts` with `deno task gen:help`, trap 5).
+     `w6w assets upload <dir|zip>` walks and hashes the files, and a symlink aborts the whole upload before
+     the first request (`cli/src/commands/assets.ts` header). React adds read-only hooks `useAgents`,
+     `useAgent`, `useSkills` and `useContextCollections` (`react/src/hooks.ts`), which derive their types
+     from `Client` with `ReturnType`.
+   - `agents.update` and `context.entries.update` send the `x-w6w-if-unmodified-since` header only when the
+     caller gives it, and pass body `revision` through. The server answers `428 precondition_required` when
+     the header is absent and `400 invalid_precondition` when it is empty, so a lane must never default it
+     or send `""` (`node/src/agents.ts` `PRECONDITION_HEADER`; `python/tests/test_agents_studio.py` header;
+     header-drop mutants died, `evals/T4.1.4.eval.md`).
+   - Upload finalize returns a `skill`/`skillVersion`/`entry` superset, and the entry index is
+     server-assigned (`node/src/types.ts`, wrappers `94b3d17`). Address entries by the server's index.
+   - `console.storage.{bindings,settings}` (`node/src/console/storage.ts`: `StorageBindingsApi`,
+     `AgentSettingsApi`) and the `console.apps` `modelProvider`/`modelType`/`modelFamily` filters
+     (`node/src/console/apps.ts`) are console-only (server ruling P-D5), with no `endpoints.json` row.
+     **Gap:** neither has a `node/docs/console.md` row (`grep -n -i storage node/docs/console.md` → no
+     match), which trap 6 requires. The SDK root does not re-export `Agent`, `SkillPin` or `ContextPin`
+     (defined in `node/src/types.ts`; `grep -n 'Agent\b' node/mod.ts` → none), so Studio's embed derives
+     local aliases (project FOLLOWUPS).
+
+17. **Lane setup: `node/dist` is gitignored and absent in a fresh lane; python needs no pytest.**
+
+   **verified: 2026-10-25** — every consumer that resolves `@w6w/sdk` through `link:` (studio, embed, react,
+   cli build) or `server/e2e/embed_sdk_e2e_test.ts` measures `node/dist`, which a new lane lacks. With no
+   network, build it with `pnpm install --offline --ignore-scripts` + `tsc -p tsconfig.build.json` in
+   `node/` (26-10-24-02 `artifacts/evidence.md` "S2b environment note"). `python/tests/test_agents_studio.py`
+   is plain `unittest` and runs under the normal discover command (`Ran 443 … OK`, `evals/T4.1.4.eval.md`).
+   The project FOLLOWUPS line saying it needs pytest is wrong. Harness note: deepseek-assigned slices in this repo returned empty
+   handback summaries although their commits had landed (T4.1.4 `outcomes/T4.1.4.outcome.md`). Read the
+   slice branch's `git log` rather than the summary.
+
+18. **Every type in a public signature must be re-exported from `node/mod.ts`.**
+
+   **verified: 2026-10-25** — contract 0.11.0 shipped `skills.*`/`context.*`/`agents.*` with `Agent`,
+   `Skill`, `ContextEntry`, the pins and the create/update inputs reachable only via `dist/src/types`.
+   `deno check`, lint and every node/cli/react/python test stayed green; the first thing to see it was
+   a consumer emitting declarations — `@w6w/embed`'s `vite-plugin-dts` failed with 38 TS2742 ("cannot be
+   named without a reference to `.../@w6w/sdk/dist/src/types`"). Fixed at closeout in `e8b7b1c` (the
+   `export type { Agent, … }` block after the `Asset*` one in `mod.ts`). When adding an op, grep its
+   argument and return types in `mod.ts`, not just the namespace class.
+
 ## Gate baselines
 
 - **verified: 2026-10-06** — The release test job runs Python's unittest command
@@ -329,6 +390,11 @@
   React's `toFlowWorkflow`/`fromFlowWorkflow` validator accepts exactly one of `nodes`/`steps` and
   rejects both (`react/src/flow-workflow.ts`, tests `react/src/__tests__/flow-workflow.test.ts`).
   The declared wire shapes are documented in `docs/sdk-surface.md` and `docs/endpoints.md`.
+
+- **verified: 2026-10-24** — at the T4.1.4 merge of 26-10-24-02-agents-studio-foundations (wrappers@8ec5002,
+  contract 0.11.0, before the 0.9.20 bump): node `deno task test` → `695 passed | 0 failed`; cli 236 passed
+  (`gen:help` byte-identical); python `unittest discover` → `Ran 443 … OK`; react `npm test` 187 pass / 0 fail
+  (`evals/T4.1.4.eval.md`). At T5.1.5 (finalize superset): node 696/696, cli 236/236 (`evals/T5.1.5.eval.md`).
 
 - **verified: 2026-10-06** — React's CI setup builds the sibling SDK, installs
   it locally, then runs `npm test` (`.github/workflows/release.yml:146-161`).

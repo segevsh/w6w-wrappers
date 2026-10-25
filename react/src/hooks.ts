@@ -53,6 +53,7 @@ import type {
   Var,
   VarCreateInput,
   VarPatch,
+  W6WClient,
   WorkflowDefinition,
   WorkflowDetail,
   WorkflowListOptions,
@@ -394,6 +395,93 @@ export function useFunction(id: string): ReadResult<FunctionDetail> {
     [client, id],
   );
   return useAsync(JSON.stringify(["functions.get", id]), fetcher, client, ready);
+}
+
+/**
+ * ── Agent studio reads ──
+ *
+ * The read side of `skills.*`, `context.list` and `agents.*` (contract
+ * `0.11.0`). Every one of these is a plain JSON read on the public surface, so
+ * they sit on {@linkcode useAsync} like every other read hook here: fetch on
+ * mount, on a `client`/`ready` change, and on `refetch()`, and expose
+ * `{data, error, loading}`.
+ *
+ * `agents.*` answers a DRAFT: `runnable` is the literal `false` on every row —
+ * no Agent runtime, RAG or chat history exists, and no hook here claims
+ * otherwise (A22). `agents.update` needs a precondition, so it is a mutation
+ * hook; the reads below only hand `revision`/`updatedAt` to the caller.
+ *
+ * The SDK barrel does not re-export the agent-studio model types, so they are
+ * derived from the client's own method signatures: they cannot drift from it
+ * (same idiom as the CLI).
+ */
+type Client = W6WClient;
+/** One agent draft, as `agents.list`/`agents.get` answer it (`runnable: false`). */
+export type Agent = Awaited<ReturnType<Client["agents"]["get"]>>;
+/** One skill, as `skills.list` answers it. */
+export type Skill = Awaited<ReturnType<Client["skills"]["list"]>>[number];
+/** One context collection, as `context.list` answers it. */
+export type ContextCollection = Awaited<ReturnType<Client["context"]["get"]>>;
+
+/** Options of {@linkcode useAgents}: include archived drafts, plus the call's `signal`. */
+export type AgentListOptions = Omit<NonNullable<Parameters<Client["agents"]["list"]>[0]>, "signal">;
+/** Options of {@linkcode useSkills}: a row cap and archived skills, plus the call's `signal`. */
+export type SkillListOptions = Omit<NonNullable<Parameters<Client["skills"]["list"]>[0]>, "signal">;
+/** Options of {@linkcode useContextCollections}: a row cap, plus the call's `signal`. */
+export type ContextListOptions = Omit<
+  NonNullable<Parameters<Client["context"]["list"]>[0]>,
+  "signal"
+>;
+
+/**
+ * Agent drafts (`client.agents.list`), archived ones hidden by default.
+ * Options are part of the cache key: distinct options never share a flight.
+ */
+export function useAgents(options?: AgentListOptions): ReadResult<Agent[]> {
+  const { client, ready } = useW6WProviderContext();
+  const key = JSON.stringify(["agents.list", options ?? null]);
+  const fetcher = useCallback(
+    (signal: AbortSignal) => client.agents.list({ ...(JSON.parse(key)[1] ?? undefined), signal }),
+    [client, key],
+  );
+  return useAsync(key, fetcher, client, ready);
+}
+
+/**
+ * One agent draft (`client.agents.get`). Its `revision` is the token
+ * `agents.update` sends back: re-read only when you mean to start over.
+ */
+export function useAgent(id: string): ReadResult<Agent> {
+  const { client, ready } = useW6WProviderContext();
+  const fetcher = useCallback(
+    (signal: AbortSignal) => client.agents.get(id, { signal }),
+    [client, id],
+  );
+  return useAsync(JSON.stringify(["agents.get", id]), fetcher, client, ready);
+}
+
+/** Skills (`client.skills.list`). A skill is uploaded, never created here. */
+export function useSkills(options?: SkillListOptions): ReadResult<Skill[]> {
+  const { client, ready } = useW6WProviderContext();
+  const key = JSON.stringify(["skills.list", options ?? null]);
+  const fetcher = useCallback(
+    (signal: AbortSignal) => client.skills.list({ ...(JSON.parse(key)[1] ?? undefined), signal }),
+    [client, key],
+  );
+  return useAsync(key, fetcher, client, ready);
+}
+
+/** Context collections (`client.context.list`). Archived ones hidden by default. */
+export function useContextCollections(
+  options?: ContextListOptions,
+): ReadResult<ContextCollection[]> {
+  const { client, ready } = useW6WProviderContext();
+  const key = JSON.stringify(["context.list", options ?? null]);
+  const fetcher = useCallback(
+    (signal: AbortSignal) => client.context.list({ ...(JSON.parse(key)[1] ?? undefined), signal }),
+    [client, key],
+  );
+  return useAsync(key, fetcher, client, ready);
 }
 
 // ── mutations ────────────────────────────────────────────────────────────

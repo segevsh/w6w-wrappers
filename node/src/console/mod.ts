@@ -36,6 +36,7 @@ import { ProjectsApi } from "./projects.ts";
 import { SavedTestsApi } from "./saved-tests.ts";
 import { SchedulesApi } from "./schedules.ts";
 import { StepTestsApi } from "./step-tests.ts";
+import { StorageConsoleApi } from "./storage.ts";
 import { SubscriptionsApi } from "./subscriptions.ts";
 import { TenantLoginFlagsApi } from "./tenant-login-flags.ts";
 import { TenantOAuthAppsApi } from "./tenant-oauth-apps.ts";
@@ -238,6 +239,21 @@ export type {
   ModelsConsoleHost,
   ModelsConsoleOptions,
 } from "./models.ts";
+export { AgentSettingsApi, StorageBindingsApi, StorageConsoleApi } from "./storage.ts";
+export type {
+  AgentLimits,
+  AgentSettings,
+  AgentSettingsPatch,
+  AgentSettingsValues,
+  CreateStorageBindingInput,
+  ListStorageBindingsOptions,
+  StorageBinding,
+  StorageBindingHealth,
+  StorageBindingRevisionRef,
+  StorageConsoleHost,
+  StorageConsoleOptions,
+  StorageMigration,
+} from "./storage.ts";
 export { SubscriptionsApi } from "./subscriptions.ts";
 export type {
   Subscription,
@@ -334,6 +350,8 @@ export class ConsoleApi {
   readonly otp: OtpApi;
   /** `console.tenantLoginFlags.*` — the caller's OWN tenant, never a tenant of its choosing. */
   readonly tenantLoginFlags: TenantLoginFlagsApi;
+  /** `console.storage.*` — the account's storage bindings and agent-limit settings. */
+  readonly storage: StorageConsoleApi;
 
   /**
    * @param host - The client this namespace group issues requests through.
@@ -362,5 +380,6 @@ export class ConsoleApi {
     this.passkeys = new PasskeysApi(host);
     this.otp = new OtpApi(host);
     this.tenantLoginFlags = new TenantLoginFlagsApi(host);
+    this.storage = new StorageConsoleApi(host);
   }
 }

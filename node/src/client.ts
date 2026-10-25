@@ -36,6 +36,10 @@ import { type RunInput, runUrn } from "./run.ts";
 import { TeamApi } from "./team.ts";
 import type { Me, RunEnvelope } from "./types.ts";
 import { VarsApi } from "./vars.ts";
+import { AgentsApi } from "./agents.ts";
+import { AssetsApi } from "./assets.ts";
+import { ContextApi } from "./context.ts";
+import { SkillsApi } from "./skills.ts";
 import { EndpointsApi } from "./endpoints.ts";
 import { FunctionsApi } from "./functions.ts";
 import { WorkflowsApi } from "./workflows.ts";
@@ -89,6 +93,14 @@ export class W6WClient {
    * so it cannot reach a default scope to send (`docs/implementation.md` §7).
    */
   readonly vars: VarsApi;
+  /** Resumable uploads and stored assets (contract 0.11.0; byte-mode ops). */
+  readonly assets: AssetsApi;
+  /** Skills (read/archive; upload via `assets.uploads` with `purpose: "skill"`). */
+  readonly skills: SkillsApi;
+  /** Context collections and text entries. */
+  readonly context: ContextApi;
+  /** Agent drafts (never runnable). */
+  readonly agents: AgentsApi;
 
   /**
    * Connections: `list`, `get`, `delete`. Creating, updating or testing a
@@ -212,6 +224,10 @@ export class W6WClient {
     this.modelRoutes = new ModelRoutesApi(this);
     this.modelUsage = new ModelUsageApi(this);
     this.vars = new VarsApi(this);
+    this.assets = new AssetsApi(this);
+    this.skills = new SkillsApi(this);
+    this.context = new ContextApi(this);
+    this.agents = new AgentsApi(this);
     this.connections = new ConnectionsApi(this);
     this.apps = new AppsApi(this);
     this.dashboard = new DashboardApi(this);

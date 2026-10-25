@@ -124,6 +124,10 @@ const GROUP_SUMMARIES: Record<string, string> = {
   endpoints: "Run endpoints by key or id",
   documents: "Create, read, update and delete documents",
   models: "Browse the model catalog",
+  assets: "Upload, inspect and download versioned assets (skills, context files)",
+  skills: "List, inspect and archive skills (upload them with: w6w assets upload --purpose skill)",
+  context: "Create and edit context collections and their text entries",
+  agents: "Create and edit agent drafts (drafts only: no agent runtime exists yet)",
   "model-routes": "List model routes and run completions through them",
   "model-usage": "Query model usage and cost",
   vars: "Create, read, update and delete variables",
@@ -143,6 +147,10 @@ const GROUP_EXAMPLES: Record<string, string[]> = {
   workflows: ["w6w workflows list", "w6w workflows run wf_01HQ8N --wait"],
   documents: ["w6w documents list", "w6w documents get doc_01HQ8N"],
   models: ["w6w models ls", "w6w models get mdl_01HQ8N"],
+  assets: ["w6w assets upload ./my-skill --purpose skill", "w6w assets get ast_01HQ8N"],
+  skills: ["w6w skills list", "w6w skills versions sk_01HQ8N"],
+  context: ["w6w context list", "w6w context entries-list cc_01HQ8N"],
+  agents: ["w6w agents list", "w6w agents get ag_01HQ8N"],
   "model-routes": ["w6w model-routes list", "w6w model-routes get summarize"],
   "model-usage": ["w6w model-usage"],
   vars: ["w6w vars list", "w6w vars create greeting --type string --value hello"],
@@ -160,6 +168,100 @@ const GROUP_EXAMPLES: Record<string, string[]> = {
 
 /** At least one runnable example per command — the part people actually copy. */
 const COMMAND_EXAMPLES: Record<string, string[]> = {
+  "assets.upload": [
+    "w6w assets upload ./my-skill --purpose skill --skill sk_01HQ8N",
+    "w6w assets upload ./docs --purpose context --collection cc_01HQ8N --retry",
+  ],
+  "assets.uploads.create": [
+    'w6w assets upload-create --purpose skill --idempotency-key k1 --entries \'[{"path":"SKILL.md","sizeBytes":12,"sha256":"<hex>"}]\'',
+  ],
+  "assets.uploads.putEntry": [
+    "w6w assets upload-put up_01HQ8N 0 --file ./SKILL.md",
+  ],
+  "assets.uploads.finalize": [
+    "w6w assets upload-finalize up_01HQ8N",
+  ],
+  "assets.uploads.get": [
+    "w6w assets upload-status up_01HQ8N",
+  ],
+  "assets.uploads.abort": [
+    "w6w assets upload-abort up_01HQ8N",
+  ],
+  "assets.get": [
+    "w6w assets get ast_01HQ8N",
+  ],
+  "assets.versions": [
+    "w6w assets versions ast_01HQ8N",
+  ],
+  "assets.files": [
+    "w6w assets files ast_01HQ8N ver_01HQ8N",
+  ],
+  "assets.content": [
+    "w6w assets content ast_01HQ8N ver_01HQ8N fil_01HQ8N --out ./SKILL.md",
+  ],
+  "assets.archiveDownload": [
+    "w6w assets archive-download ast_01HQ8N ver_01HQ8N --out ./asset.zip",
+  ],
+  "assets.archive": [
+    "w6w assets archive ast_01HQ8N",
+  ],
+  "assets.purge": [
+    "w6w assets purge ast_01HQ8N",
+  ],
+  "skills.list": [
+    "w6w skills list",
+    "w6w skills list --include-archived --limit 20",
+  ],
+  "skills.get": [
+    "w6w skills get sk_01HQ8N",
+  ],
+  "skills.versions": [
+    "w6w skills versions sk_01HQ8N",
+  ],
+  "skills.archive": [
+    "w6w skills archive sk_01HQ8N",
+  ],
+  "context.list": [
+    "w6w context list",
+    "w6w context list --include-archived",
+  ],
+  "context.create": [
+    'w6w context create handbook --description "Team handbook" --tags docs,hr',
+  ],
+  "context.get": [
+    "w6w context get cc_01HQ8N",
+  ],
+  "context.update": [
+    'w6w context update cc_01HQ8N --description "Updated handbook"',
+  ],
+  "context.archive": [
+    "w6w context archive cc_01HQ8N",
+  ],
+  "context.entries.list": [
+    "w6w context entries-list cc_01HQ8N",
+  ],
+  "context.entries.create": [
+    'w6w context entries-create cc_01HQ8N welcome --text "Welcome aboard"',
+  ],
+  "context.entries.update": [
+    'w6w context entries-update cc_01HQ8N ent_01HQ8N --text "Hello again" --revision 1 --if-unmodified-since 2026-10-24T09:00:00.000Z',
+  ],
+  "agents.list": [
+    "w6w agents list",
+    "w6w agents list --include-archived",
+  ],
+  "agents.create": [
+    'w6w agents create --name triage --instructions "Route support mail" --model-route-id mr_01HQ8N',
+  ],
+  "agents.get": [
+    "w6w agents get ag_01HQ8N",
+  ],
+  "agents.update": [
+    'w6w agents update ag_01HQ8N --revision 3 --instructions "Be brief" --if-unmodified-since 2026-10-24T09:00:00.000Z',
+  ],
+  "agents.archive": [
+    "w6w agents archive ag_01HQ8N",
+  ],
   "auth.login": [
     "printf '%s' \"$W6W_TOKEN\" | w6w auth login -",
     "w6w auth login <token>",
@@ -373,6 +475,33 @@ const COMMAND_NOTES: Record<string, string[]> = {
  * added to the contract cannot reach help undescribed.
  */
 const PARAM_HELP: Record<string, string> = {
+  out: "Write the bytes to this file instead of standard output",
+  purpose: "What the upload is for: skill | context (asset for upload-create)",
+  idempotencyKey: "A caller-chosen key; replaying it with the same entries returns the same upload",
+  entries: "The declared entries, as a JSON array of {path, sizeBytes, sha256, mediaType?}",
+  visibility: "Who can see the asset: private | project | account (default private)",
+  assetId: "Publish a new version of this existing asset instead of creating one",
+  target: 'Purpose-specific destination, as a JSON object like {"skillId":"sk_…"}',
+  index: "Zero-based index of the declared entry",
+  versionId: "Asset version id",
+  fileId: "File id within the asset version (see: `w6w assets files`)",
+  skill: "Attach the uploaded files to this skill id",
+  collection: "Attach the uploaded files to this context collection id",
+  retry: "Resume an interrupted upload: skip entries the server already received",
+  "assets.uploads.create.name": "Display name for a new asset",
+  "assets.uploads.putEntry.body": "Path of the file whose bytes are sent as the entry",
+  "assets.upload.path": "A directory to upload (or a .zip file, sent as a single archive)",
+  "assets.uploads.putEntry.id": "Upload id (see: `w6w assets upload-create`)",
+  "assets.uploads.finalize.id": "Upload id (up_…)",
+  "assets.uploads.get.id": "Upload id (up_…)",
+  "assets.uploads.abort.id": "Upload id (up_…)",
+  "assets.get.id": "Asset id",
+  "assets.versions.id": "Asset id",
+  "assets.files.id": "Asset id",
+  "assets.content.id": "Asset id",
+  "assets.archiveDownload.id": "Asset id",
+  "assets.archive.id": "Asset id",
+  "assets.purge.id": "Asset id",
   "auth.login.token":
     "The API token to save, or `-` to read it from standard input (default when input is piped)",
   "config.set-base-url.url":
@@ -428,6 +557,39 @@ const PARAM_HELP: Record<string, string> = {
   // The definition lifecycle. `definition` is the same word in both domains and
   // means the same thing, so it is a bare fallback; the id help differs per
   // domain because the two point a caller at different list commands.
+  "skills.get.id": "Skill id (see: w6w skills list)",
+  "skills.versions.id": "Skill id (see: w6w skills list)",
+  "skills.archive.id": "Skill id (see: w6w skills list)",
+  "context.get.id": "Context collection id (see: w6w context list)",
+  "context.update.id": "Context collection id (see: w6w context list)",
+  "context.archive.id": "Context collection id (see: w6w context list)",
+  "context.entries.list.id": "Context collection id (see: w6w context list)",
+  "context.entries.create.id": "Context collection id (see: w6w context list)",
+  "context.entries.update.id": "Context collection id (see: w6w context list)",
+  "agents.get.id": "Agent id (see: w6w agents list)",
+  "agents.update.id": "Agent id (see: w6w agents list)",
+  "agents.archive.id": "Agent id (see: w6w agents list)",
+  "includeArchived": "Include archived rows (default: hidden)",
+  "tags": "Tags, comma-separated or a JSON array of strings",
+  "text": "The entry's text content",
+  "revision":
+    "The revision you last read (from the entry/agent you are editing); a stale one is refused with a conflict",
+  "entryId": "Entry id (see: w6w context entries-list)",
+  "instructions": "The agent's instructions (up to 64 KiB)",
+  "modelRouteId": "Model route the agent runs through (see: w6w model-routes list)",
+  "skills": 'Pinned skill versions, as a JSON array of {"skillId":"…","skillVersionId":"…"}',
+  "context":
+    'Pinned context versions, as a JSON array of {"collectionId":"…","entryId":"…","assetVersionId":"…"}',
+  "name": "Display name",
+  "context.create.visibility": "Who can see the collection: private | project | account",
+  "agents.create.visibility": "Who can see the agent: private | project | account",
+  "agents.update.visibility": "Who can see the agent: private | project | account",
+  "agents.update.ifUnmodifiedSince":
+    "Refuse the write if the agent changed since this updatedAt (see: w6w agents get); the server requires it",
+  "context.entries.update.ifUnmodifiedSince":
+    "Refuse the write if the entry changed since this updatedAt (see: w6w context entries-list); the server requires it",
+  "context.create.name": "Collection name",
+  "context.update.name": "New collection name",
   "definition": "The whole definition, as a JSON object",
   "ifUnmodifiedSince":
     "Refuse the write if the workflow changed since this updatedAt (see: w6w workflows get)",
@@ -518,6 +680,7 @@ export const POSITIONAL_ALIASES: Readonly<Record<string, string>> = {
  * CLI spellings that differ from the contract's parameter name.
  */
 const FLAG_OVERRIDES: Record<string, { flag: string; placeholder: string | null }> = {
+  "assets.uploads.putEntry.body": { flag: "--file", placeholder: "<path>" },
   // Kebab-case, so the flag reads like every other one; the contract's own
   // parameter name is camelCase because that is the HEADER it maps to. Without
   // this entry the two spellings do not match and the placeholder silently

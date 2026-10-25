@@ -191,6 +191,10 @@ export interface AppSummary {
    * an older host, and declaring it required would break both.
    */
   owner?: { tenant: string; subject: string };
+  /** Model-provider designation; absent when the app does not declare one. */
+  modelProvider?: { modelTypes: string[]; modelFamilies?: string[] };
+  /** Derived: `modelProvider !== undefined`. */
+  isModelProvider?: boolean;
 }
 
 /**
@@ -565,6 +569,12 @@ export interface ListAppsOptions {
   /** Full-text search. */
   q?: string;
   category?: string;
+  /** Only apps declaring `modelProvider` (`true`) or not (`false`). */
+  modelProvider?: boolean;
+  /** Only providers serving this model type. */
+  modelType?: string;
+  /** Only providers serving this model family. */
+  modelFamily?: string;
   maturity?: string;
   /** One visibility tier — not a CSV list. */
   visibility?: string;
@@ -712,6 +722,9 @@ export class AppsApi {
       query: {
         q: rest.q,
         category: rest.category,
+        modelProvider: rest.modelProvider,
+        modelType: rest.modelType,
+        modelFamily: rest.modelFamily,
         maturity: rest.maturity,
         visibility: rest.visibility,
         sort: rest.sort,
