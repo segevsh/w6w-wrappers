@@ -59,8 +59,21 @@ export interface RequestOptions {
   path: string;
   /** Query parameters, if any. */
   query?: QueryParams;
-  /** Request body. Serialised as JSON when present; omit it for a bodiless request. */
+  /**
+   * Request body; omit it for a bodiless request. A `Uint8Array` is **bytes
+   * mode**: sent untouched with `content-type: application/octet-stream` — no
+   * JSON encoding, quoting or base64 (an `endpoints.json` operation declaring
+   * `bodyEncoding: "octet-stream"`). Anything else is serialised as JSON.
+   */
   body?: unknown;
+  /**
+   * How to read a **successful** response. `"bytes"` returns the body as a
+   * `Uint8Array`, read once via `arrayBuffer()` and never decoded or
+   * JSON-parsed (an operation declaring `responseEncoding: "octet-stream"`).
+   * Omitted, the body is parsed as JSON as always. A non-2xx response is the
+   * JSON error envelope in **both** modes and raises exactly as before.
+   */
+  responseType?: "json" | "bytes";
   /**
    * Extra headers to send with this request. Precedence, low to high: the
    * client's own `headers` default < this option < the bearer
@@ -220,6 +233,11 @@ export function buildUrl(config: ResolvedConfig, options: RequestOptions): strin
  * check is false by construction. `config.onUnauthorized` is invoked with
  * whichever `401`/`unauthorized` error turns out to be terminal.
  *
+ * **Byte mode** (contract `0.11.0`): a `Uint8Array` `options.body` and/or
+ * `options.responseType: "bytes"` swap only the success-path encoding — see
+ * {@linkcode RequestOptions.body} and {@linkcode RequestOptions.responseType}.
+ * The three failure modes and the 401 recovery above apply unchanged.
+ *
  * @param config - Resolved configuration (base URL and credential).
  * @param fetchImpl - The transport to use; injected, never read from a module global.
  * @param options - The request.
@@ -251,14 +269,21 @@ export async function request<T>(
   }
 
   const hasBody = options.body !== undefined;
-  if (hasBody) headers.set("content-type", "application/json");
+  const bytesBody = options.body instanceof Uint8Array;
+  if (hasBody) {
+    headers.set("content-type", bytesBody ? "application/octet-stream" : "application/json");
+  }
 
   let res: Response;
   try {
     res = await fetchImpl(url, {
       method: options.method,
       headers,
-      body: hasBody ? JSON.stringify(options.body) : undefined,
+      body: !hasBody
+        ? undefined
+        : bytesBody
+        ? (options.body as BodyInit)
+        : JSON.stringify(options.body),
       signal: options.signal,
     });
   } catch (err) {
@@ -284,6 +309,14 @@ export async function request<T>(
       `Could not reach the w6w server (${options.method} ${url}). ` +
         `It may be down or unreachable. (${err instanceof Error ? err.message : String(err)})`,
     );
+  }
+
+  // Bytes mode, success path only: the payload is the body. Read it once as raw
+  // bytes — never through `text()` (which would replace invalid UTF-8) or
+  // `json()`. A non-2xx falls through to the text/envelope handling below, so
+  // the typed error is identical in both modes.
+  if (res.ok && options.responseType === "bytes") {
+    return { status: res.status, body: new Uint8Array(await res.arrayBuffer()) as T };
   }
 
   // Read the body exactly once, as text, then parse it guardedly — a response

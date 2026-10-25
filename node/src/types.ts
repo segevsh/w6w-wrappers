@@ -20,7 +20,7 @@
  */
 
 import { ApiError } from "./errors.ts";
-import type { HttpResponse } from "./http.ts";
+import type { CallOptions, HttpResponse } from "./http.ts";
 
 /**
  * A document's format hint.
@@ -535,6 +535,454 @@ export function unwrap<T>(res: HttpResponse<unknown>, key: string): T {
     `Server returned a ${res.status} with no "${key}" in the response body.`,
     body,
   );
+}
+
+// ---------------------------------------------------------------------------
+// Assets and resumable uploads (contract 0.11.0, `assets.*`)
+//
+// Transcribed from the host's wire shapes (`/asset-uploads`, `/assets`). The
+// server never sends an object key, storage path or binding coordinate, so no
+// type below has one. Timestamps are ISO strings exactly as sent.
+// ---------------------------------------------------------------------------
+
+/** What an upload becomes at finalize. `skill` / `context` run a purpose handler. */
+export type AssetUploadPurpose = "asset" | "skill" | "context";
+
+/** Who may see an asset. Default `private`. */
+export type AssetVisibility = "private" | "project" | "account";
+
+/** Lifecycle of an upload row. */
+export type AssetUploadState =
+  | "open"
+  | "published"
+  | "pending_sync"
+  | "aborted"
+  | "expired"
+  | "failed";
+
+/** Whether a version's bytes are usable yet. */
+export type AssetReadiness = "pending" | "ready" | "failed";
+
+/** One file the caller declares when reserving an upload. */
+export interface AssetUploadEntryInput {
+  /** Author path inside the package, e.g. `skill/SKILL.md`. Canonicalised by the server. */
+  path: string;
+  /** Exact byte length of the body that will be PUT. */
+  sizeBytes: number;
+  /** Lowercase hex sha256 of that body. */
+  sha256: string;
+  mediaType?: string;
+}
+
+/** Body of `assets.uploads.create`. */
+export interface AssetUploadCreateInput {
+  purpose: AssetUploadPurpose;
+  /** Replays of the same key with the identical request return the same upload. */
+  idempotencyKey: string;
+  /**
+   * The entries to send. Their position here is NOT the entry `index`: the server assigns
+   * each entry's `index` (by its own path ordering) and returns it in the response —
+   * address each `putEntry` by the returned `index` for that `path`.
+   */
+  entries: AssetUploadEntryInput[];
+  /** Name of the asset to create at publish; ignored when `assetId` is given. */
+  name?: string;
+  visibility?: AssetVisibility;
+  /** Publish a new version of this existing asset instead of creating one. */
+  assetId?: string | null;
+  /** Purpose-specific destination data, e.g. `{ skillId }` or `{ collectionId }`. */
+  target?: Record<string, unknown>;
+}
+
+/** The upload row. */
+export interface AssetUpload {
+  id: string;
+  purpose: AssetUploadPurpose;
+  visibility: AssetVisibility;
+  project: string | null;
+  assetId: string | null;
+  versionId: string | null;
+  name: string | null;
+  status: AssetUploadState;
+  reservedBytes: number;
+  reservedFiles: number;
+  errorCode: string | null;
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One declared entry and whether its bytes have arrived. */
+export interface AssetUploadEntry {
+  index: number;
+  path: string;
+  sizeBytes: number;
+  sha256: string;
+  state: "pending" | "received";
+  receivedAt: string | null;
+}
+
+/** `assets.uploads.create` / `get` / `abort`: the upload plus its entries, as sent. */
+export interface AssetUploadStatus {
+  upload: AssetUpload;
+  entries: AssetUploadEntry[];
+}
+
+/** `assets.uploads.finalize`: the published version, as sent. */
+export interface AssetFinalizeResult {
+  uploadId: string;
+  assetId: string;
+  versionId: string;
+  version: number;
+  readiness: "ready" | "pending";
+  /** What the purpose handler derived from the staged files; `null` for a plain asset. */
+  derived: unknown;
+  /** `false` when this call found the upload already published. */
+  created: boolean;
+  /** A `skill` upload only: the skill the package was published into. */
+  skill?: Skill;
+  /** A `skill` upload only: the new skill version (not the asset `version` number above). */
+  skillVersion?: SkillVersion;
+  /** A `context` upload only: the linked entry, with its new `revision`. */
+  entry?: ContextEntryView;
+}
+
+/** An asset. */
+export interface Asset {
+  id: string;
+  name: string;
+  kind: string;
+  visibility: AssetVisibility;
+  project: string | null;
+  ownerSubject: string;
+  activeVersionId: string | null;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One immutable version of an asset. */
+export interface AssetVersion {
+  id: string;
+  assetId: string;
+  version: number;
+  inventoryDigest: string;
+  readiness: AssetReadiness;
+  syncState: string;
+  totalBytes: number;
+  fileCount: number;
+  createdBy: string;
+  createdAt: string;
+  readyAt: string | null;
+}
+
+/** One file of a version. */
+export interface AssetFile {
+  id: string;
+  path: string;
+  mediaType: string;
+  sizeBytes: number;
+  sha256: string;
+  createdAt: string;
+}
+
+/** `assets.files`: a version and its files, as sent. */
+export interface AssetVersionFiles {
+  version: AssetVersion;
+  files: AssetFile[];
+}
+
+/** `assets.purge`: what was deleted, as sent. */
+export interface AssetPurgeResult {
+  assetId: string;
+  versionsDeleted: number;
+  objectsDeleted: number;
+}
+
+/**
+ * The `assets` namespace the node client exposes (implemented by S2 in
+ * `src/assets.ts`; named here so the CLI and react lanes can type against it).
+ * `Uint8Array` is the byte type in both directions.
+ */
+export interface AssetsApi {
+  uploads: {
+    create(input: AssetUploadCreateInput, opts?: CallOptions): Promise<AssetUploadStatus>;
+    putEntry(
+      id: string,
+      index: number,
+      bytes: Uint8Array,
+      opts?: CallOptions,
+    ): Promise<AssetUploadEntry>;
+    finalize(id: string, opts?: CallOptions): Promise<AssetFinalizeResult>;
+    get(id: string, opts?: CallOptions): Promise<AssetUploadStatus>;
+    abort(id: string, opts?: CallOptions): Promise<AssetUploadStatus>;
+  };
+  get(id: string, opts?: CallOptions): Promise<Asset>;
+  versions(id: string, opts?: CallOptions): Promise<AssetVersion[]>;
+  files(id: string, versionId: string, opts?: CallOptions): Promise<AssetVersionFiles>;
+  content(
+    id: string,
+    versionId: string,
+    fileId: string,
+    opts?: CallOptions,
+  ): Promise<Uint8Array>;
+  archiveDownload(id: string, versionId: string, opts?: CallOptions): Promise<Uint8Array>;
+  archive(id: string, opts?: CallOptions): Promise<Asset>;
+  purge(id: string, opts?: CallOptions): Promise<AssetPurgeResult>;
+}
+
+// ---------------------------------------------------------------------------
+// Skills, context collections and agent drafts (`skills.*`, `context.*`,
+// `agents.*` — all JSON; skills and context files are UPLOADED through
+// `assets.uploads.*`, never created here)
+//
+// Transcribed from the host's wire shapes (`/skills`, `/context-collections`,
+// `/agents`). The server wraps each body in a single-key envelope (`{skills}`,
+// `{collection}`, `{entry}`, `{agent}`, …); the namespaces unwrap it.
+// ---------------------------------------------------------------------------
+
+/**
+ * Options of a write whose route requires the optimistic-concurrency
+ * precondition (`agents.update`, `context.entries.update`).
+ *
+ * `ifUnmodifiedSince` is the `updatedAt` last read, sent as the
+ * `x-w6w-if-unmodified-since` header and ONLY when given — never as an empty or
+ * `"null"` string. The server requires it on these routes: omitted, the call
+ * fails `428 precondition_required` (a typed precondition error), it is never a
+ * silent last-write-wins.
+ */
+export interface PreconditionOptions extends CallOptions {
+  ifUnmodifiedSince?: string;
+}
+
+/** Options of a list that hides archived rows by default. */
+export interface ListArchivedOptions extends CallOptions {
+  /** Include archived rows. Default `false`. */
+  includeArchived?: boolean;
+}
+
+/** `skills.list` / `context.list` options. */
+export interface ListPagedOptions extends ListArchivedOptions {
+  /** Cap on rows returned. */
+  limit?: number;
+}
+
+/** A skill. */
+export interface Skill {
+  id: string;
+  name: string;
+  description: string | null;
+  visibility: AssetVisibility;
+  project: string | null;
+  ownerSubject: string;
+  /** The version new pins should target; `null` before the first publish. */
+  activeVersionId: string | null;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One immutable version of a skill. Its `id` is what an agent pins. */
+export interface SkillVersion {
+  id: string;
+  skillId: string;
+  version: number;
+  entryPath: string;
+  metadata: Record<string, unknown>;
+  createdBy: string;
+  createdAt: string;
+}
+
+/** A context collection. */
+export interface ContextCollection {
+  id: string;
+  name: string;
+  description: string | null;
+  tags: string[];
+  visibility: AssetVisibility;
+  project: string | null;
+  ownerSubject: string;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One entry of a collection, as `context.entries.list` answers it. It has NO
+ * `revision` and NO `previewable` — those ride on {@linkcode ContextEntryView}.
+ */
+export interface ContextEntry {
+  id: string;
+  collectionId: string;
+  /** The pin id an agent's {@linkcode ContextPin} attaches. */
+  assetVersionId: string;
+  name: string;
+  mediaType: string;
+  tags: string[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt: string | null;
+}
+
+/**
+ * An entry as `context.entries.create` / `context.entries.update` answer it:
+ * the entry plus the `revision` the next `context.entries.update` sends back.
+ */
+export interface ContextEntryView extends ContextEntry {
+  revision: number;
+  previewable: boolean;
+}
+
+/** Body of `context.create`. */
+export interface CreateContextCollectionInput {
+  name: string;
+  description?: string;
+  tags?: string[];
+  visibility?: AssetVisibility;
+}
+
+/**
+ * Body of `context.update`: every field optional, an omitted one is left alone.
+ * No `visibility`, no `revision`, no precondition (last-write-wins).
+ */
+export interface UpdateContextCollectionInput {
+  name?: string;
+  description?: string;
+  tags?: string[];
+}
+
+/** Body of `context.entries.create`. */
+export interface CreateContextEntryInput {
+  name: string;
+  text: string;
+}
+
+/**
+ * Body of `context.entries.update`: a full replacement of the text. `revision`
+ * is the entry's last-seen revision, passed through unchanged.
+ */
+export interface UpdateContextEntryInput {
+  text: string;
+  revision: number;
+}
+
+/** A pin of an agent to one immutable skill version. */
+export interface SkillPin {
+  skillId: string;
+  skillVersionId: string;
+}
+
+/** A pin of an agent to one context asset version. */
+export interface ContextPin {
+  collectionId: string;
+  entryId?: string;
+  assetVersionId: string;
+}
+
+/** One finding of an agent draft's validation. */
+export interface AgentValidationIssue {
+  field: string;
+  code: string;
+  message: string;
+}
+
+/** Who may see an agent draft. */
+export type AgentVisibility = "private" | "project" | "account";
+
+/**
+ * An agent DRAFT. **`runnable` is always the literal `false`**: no Agent
+ * runtime, RAG or chat history exists, and no operation runs an Agent (A22).
+ * `revision` and `updatedAt` are the two tokens `agents.update` needs.
+ */
+export interface Agent {
+  id: string;
+  name: string;
+  instructions: string;
+  modelRouteId: string | null;
+  skills: SkillPin[];
+  context: ContextPin[];
+  visibility: AgentVisibility;
+  project: string | null;
+  revision: number;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+  validation: AgentValidationIssue[];
+  runnable: false;
+}
+
+/** Body of `agents.create`: every field optional (an incomplete draft saves). */
+export interface CreateAgentInput {
+  name?: string;
+  /** Capped at 64 KiB by the server. */
+  instructions?: string;
+  modelRouteId?: string | null;
+  skills?: SkillPin[];
+  context?: ContextPin[];
+  visibility?: AgentVisibility;
+  project?: string | null;
+}
+
+/**
+ * Body of `agents.update`: a partial update plus the REQUIRED last-seen
+ * `revision`, passed through unchanged. A stale one is a typed conflict error
+ * carrying the current revision.
+ */
+export interface UpdateAgentInput extends CreateAgentInput {
+  revision: number;
+}
+
+/**
+ * The `skills` namespace the node client exposes (implemented by S2 in
+ * `src/skills.ts`; named here so the CLI and react lanes can type against it).
+ * There is no `create`: a skill is uploaded via `assets.uploads` with
+ * `purpose: "skill"`.
+ */
+export interface SkillsApi {
+  list(opts?: ListPagedOptions): Promise<Skill[]>;
+  get(id: string, opts?: CallOptions): Promise<Skill>;
+  versions(id: string, opts?: CallOptions): Promise<SkillVersion[]>;
+  archive(id: string, opts?: CallOptions): Promise<Skill>;
+}
+
+/** The `context` namespace (implemented by S3 in `src/context.ts`). */
+export interface ContextApi {
+  list(opts?: ListPagedOptions): Promise<ContextCollection[]>;
+  create(input: CreateContextCollectionInput, opts?: CallOptions): Promise<ContextCollection>;
+  get(id: string, opts?: CallOptions): Promise<ContextCollection>;
+  update(
+    id: string,
+    patch: UpdateContextCollectionInput,
+    opts?: CallOptions,
+  ): Promise<ContextCollection>;
+  archive(id: string, opts?: CallOptions): Promise<ContextCollection>;
+  entries: {
+    /** `id` is the COLLECTION id. */
+    list(id: string, opts?: ListArchivedOptions): Promise<ContextEntry[]>;
+    create(
+      id: string,
+      input: CreateContextEntryInput,
+      opts?: CallOptions,
+    ): Promise<ContextEntryView>;
+    /** `id` is the COLLECTION id. Needs `revision` and the precondition (428 without it). */
+    update(
+      id: string,
+      entryId: string,
+      input: UpdateContextEntryInput,
+      opts?: PreconditionOptions,
+    ): Promise<ContextEntryView>;
+  };
+}
+
+/** The `agents` namespace (implemented by S4 in `src/agents.ts`). */
+export interface AgentsApi {
+  list(opts?: ListArchivedOptions): Promise<Agent[]>;
+  create(input?: CreateAgentInput, opts?: CallOptions): Promise<Agent>;
+  get(id: string, opts?: CallOptions): Promise<Agent>;
+  /** Needs `patch.revision` and the precondition (428 without it); a stale one is a 409. */
+  update(id: string, patch: UpdateAgentInput, opts?: PreconditionOptions): Promise<Agent>;
+  archive(id: string, opts?: CallOptions): Promise<Agent>;
 }
 
 /**

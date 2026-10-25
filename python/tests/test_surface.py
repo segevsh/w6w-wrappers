@@ -283,6 +283,27 @@ class NoExtraOperationsTest(unittest.TestCase):
             with self.subTest(namespace=namespace):
                 self.assertEqual(_public_callables(getattr(client, namespace)), operations)
 
+    def test_each_nested_namespace_exposes_exactly_its_contracted_operations(self) -> None:
+        # `context.entries.*` is three levels deep, so the case above — which
+        # walks `naming.python` for a two-level path — never looks inside it. An
+        # `entries` method nobody contracted would be invisible there; this is
+        # the same both-directions check one level down.
+        expected: Dict[str, Dict[str, Set[str]]] = {}
+        for _name, _naming, attributes in _operations():
+            if len(attributes) == 3:
+                expected.setdefault(attributes[0], {}).setdefault(attributes[1], set()).add(
+                    attributes[2]
+                )
+
+        client = _client()
+        for namespace, children in expected.items():
+            for child, operations in children.items():
+                with self.subTest(namespace="{0}.{1}".format(namespace, child)):
+                    self.assertEqual(
+                        _public_callables(getattr(getattr(client, namespace), child)),
+                        operations,
+                    )
+
     def test_the_client_exposes_the_root_operations_plus_the_transport_seam(self) -> None:
         # `me` and `run` are methods on the client itself (that is what their
         # `naming.python` says). Two non-operation callables are allowed and

@@ -19,7 +19,9 @@ from typing import Any, Callable, Dict, Mapping, Optional, Union
 from ._config import ResolvedConfig, TokenProvider, resolve_config
 from ._http import HttpResponse, Transport, _request, default_transport
 from ._vars import VarsApi
+from .agents_studio import AgentsApi, ContextApi, SkillsApi
 from .apps import AppsApi
+from .assets import AssetsApi
 from .connections import ConnectionsApi
 from .dashboard import DashboardApi
 from .documents import DocumentsApi
@@ -171,6 +173,21 @@ class Client:
         self.projects: ProjectsApi = ProjectsApi(self)
         #: Reliability board and membership: ``reliability.list(...)``.
         self.reliability: ReliabilityApi = ReliabilityApi(self)
+        #: Assets and resumable uploads: ``assets.get``, ``assets.content``,
+        #: ``assets.uploads.create/put_entry/finalize``. The byte operations
+        #: (``put_entry`` in, ``content``/``archive_download`` out) carry
+        #: ``bytes`` in both directions (contract 0.11.0).
+        self.assets: AssetsApi = AssetsApi(self)
+        #: Uploaded skills, read-only: ``skills.list/get/versions/archive``. A
+        #: skill is created by an upload with ``purpose="skill"``, never here.
+        self.skills: SkillsApi = SkillsApi(self)
+        #: Context collections and their text entries:
+        #: ``context.list/create/get/update/archive`` and
+        #: ``context.entries.list/create/update``.
+        self.context: ContextApi = ContextApi(self)
+        #: Agent DRAFTS: ``agents.list/create/get/update/archive``. Every answer
+        #: is ``runnable: false`` — no Agent runtime exists (A22).
+        self.agents: AgentsApi = AgentsApi(self)
 
     def me(self) -> Me:
         """Fetch the caller's identity, plus the versions that answered.
@@ -240,6 +257,7 @@ class Client:
         query: Optional[Mapping[str, Any]] = None,
         body: Optional[Any] = None,
         headers: Optional[Mapping[str, str]] = None,
+        response_encoding: Optional[str] = None,
     ) -> HttpResponse:
         """Perform one request against this client's server, with its credential.
 
@@ -255,13 +273,23 @@ class Client:
         :param method: `GET`, `POST`, `PATCH` or `DELETE`.
         :param path: Base-relative path with a leading slash.
         :param query: Query parameters; `None` values are dropped.
-        :param body: Request body, serialised as JSON when not `None`.
+        :param body: Request body, serialised as JSON when not `None`. A `bytes`
+            body is **byte mode** instead: sent untouched as
+            `application/octet-stream`, which is what an operation declaring
+            `bodyEncoding: "octet-stream"` requires.
         :param headers: Extra request headers, for the routes that take a
             precondition. Beats this client's own `headers` default for a
             same-named entry; `Authorization` cannot be overridden through
             this argument either way — the client's own credential is always
             the one sent.
-        :returns: The status and parsed body.
+        :param response_encoding: Pass `"octet-stream"` to get the successful
+            response body back as raw `bytes` rather than parsed JSON — the
+            wrapper's counterpart of an operation declaring
+            `responseEncoding: "octet-stream"` (`client.assets.content` and
+            `client.assets.archive_download` use it). Non-2xx is unchanged: the
+            typed :class:`ApiError` carries the envelope's `code`.
+        :returns: The status and parsed body — `bytes` when
+            `response_encoding="octet-stream"`.
         :raises ConfigError: When no token is configured, naming `W6W_TOKEN`.
         :raises ApiError: On a transport failure, a non-JSON error body, or an
             error envelope.
@@ -274,4 +302,5 @@ class Client:
             query=query,
             body=body,
             headers=headers,
+            response_encoding=response_encoding,
         )

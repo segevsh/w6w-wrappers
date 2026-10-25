@@ -186,3 +186,52 @@ export type {
   WorkflowStatus,
   WorkflowSummary,
 } from "./src/types.ts";
+
+// Assets and resumable uploads (contract 0.11.0).
+export { AssetsApi } from "./src/assets.ts";
+export type { AssetsHost } from "./src/assets.ts";
+// Skills, context collections and agent drafts (contract 0.11.0).
+export { SkillsApi } from "./src/skills.ts";
+export type { SkillsHost } from "./src/skills.ts";
+export { ContextApi } from "./src/context.ts";
+export type { ContextHost } from "./src/context.ts";
+export { AgentsApi } from "./src/agents.ts";
+export type { AgentsHost } from "./src/agents.ts";
+export type {
+  Asset,
+  AssetFile,
+  AssetFinalizeResult,
+  AssetPurgeResult,
+  AssetReadiness,
+  AssetUpload,
+  AssetUploadCreateInput,
+  AssetUploadEntry,
+  AssetUploadEntryInput,
+  AssetUploadPurpose,
+  AssetUploadState,
+  AssetUploadStatus,
+  AssetVersion,
+  AssetVersionFiles,
+  AssetVisibility,
+} from "./src/types.ts";
+export type {
+  Agent,
+  AgentValidationIssue,
+  AgentVisibility,
+  ContextCollection,
+  ContextEntry,
+  ContextEntryView,
+  ContextPin,
+  CreateAgentInput,
+  CreateContextCollectionInput,
+  CreateContextEntryInput,
+  ListArchivedOptions,
+  ListPagedOptions,
+  PreconditionOptions,
+  Skill,
+  SkillPin,
+  SkillVersion,
+  UpdateAgentInput,
+  UpdateContextCollectionInput,
+  UpdateContextEntryInput,
+} from "./src/types.ts";

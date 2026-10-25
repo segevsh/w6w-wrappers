@@ -61,8 +61,26 @@ export interface ModelDiscoveryResult {
 /** One provider the host can speak to. */
 export interface ModelProvider {
   appId: string;
-  provider: string;
+  /** Adapter key; `null` for a designated provider with no adapter. */
+  provider: string | null;
   installed: boolean;
+  /** The app's model-provider designation (absent on an older host). */
+  designation?: ModelProviderDesignation | null;
+  designationSource?: "manifest" | "compat";
+  /** Per-operation support; an unsupported row carries a `reason`. */
+  operations?: { discover: ModelOperationSupport; complete: ModelOperationSupport };
+}
+
+/** Declared model types and (optionally) families of a provider. */
+export interface ModelProviderDesignation {
+  modelTypes: string[];
+  modelFamilies?: string[];
+}
+
+/** Whether the host can perform one operation for a provider, and why not. */
+export interface ModelOperationSupport {
+  supported: boolean;
+  reason?: string;
 }
 
 /** Spend/usage caps of a budget. */
