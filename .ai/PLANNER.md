@@ -325,6 +325,16 @@
    handback summaries although their commits had landed (T4.1.4 `outcomes/T4.1.4.outcome.md`). Read the
    slice branch's `git log` rather than the summary.
 
+18. **Every type in a public signature must be re-exported from `node/mod.ts`.**
+
+   **verified: 2026-10-25** — contract 0.11.0 shipped `skills.*`/`context.*`/`agents.*` with `Agent`,
+   `Skill`, `ContextEntry`, the pins and the create/update inputs reachable only via `dist/src/types`.
+   `deno check`, lint and every node/cli/react/python test stayed green; the first thing to see it was
+   a consumer emitting declarations — `@w6w/embed`'s `vite-plugin-dts` failed with 38 TS2742 ("cannot be
+   named without a reference to `.../@w6w/sdk/dist/src/types`"). Fixed at closeout in `e8b7b1c` (the
+   `export type { Agent, … }` block after the `Asset*` one in `mod.ts`). When adding an op, grep its
+   argument and return types in `mod.ts`, not just the namespace class.
+
 ## Gate baselines
 
 - **verified: 2026-10-06** — The release test job runs Python's unittest command
