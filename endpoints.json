@@ -2901,7 +2901,7 @@
           "required": true
         }
       ],
-      "returns": "ContextEntryView",
+      "returns": "ContextEntry",
       "successStatuses": [
         200
       ],

@@ -230,13 +230,13 @@ export class ContextEntriesApi {
   }
 
   /** Archive an entry. */
-  async archive(id: string, opts?: CallOptions): Promise<ContextEntryView> {
+  async archive(id: string, opts?: CallOptions): Promise<ContextEntry> {
     const res = await this.#host.request<unknown>({
       method: "POST",
       path: path`/context-entries/${id}/archive`,
       signal: opts?.signal,
     });
-    return unwrap<ContextEntryView>(res, "entry");
+    return unwrap<ContextEntry>(res, "entry");
   }
 
   /** Add an entry to a collection (idempotent). */
