@@ -86,6 +86,7 @@ const PUBLIC_SURFACE: Record<string, "function" | "string"> = {
   AssetsApi: "function",
   SkillsApi: "function",
   ContextApi: "function",
+  ContextEntriesApi: "function",
   AgentsApi: "function",
   DashboardApi: "function",
   ProjectsApi: "function",
