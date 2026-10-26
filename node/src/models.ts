@@ -25,7 +25,7 @@ export interface ModelsHost {
 }
 
 /** The wire dialect a completion is spoken in. */
-export type ModelDialect = "openai" | "anthropic" | "ollama";
+export type ModelDialect = "bridge" | "openai" | "anthropic" | "ollama";
 /** How much of the gateway response a completion returns. */
 export type ModelResponseMode = "both" | "output" | "raw";
 
@@ -49,11 +49,31 @@ export interface ModelPage {
   nextCursor: string | null;
 }
 
+/** Where a `usageSummary`'s counts came from. */
+export type ModelUsageSource = "reported" | "partial" | "estimated" | "unknown" | "legacy";
+
+/** Provider-neutral token counts; each is `null` when the provider did not report it. */
+export interface ModelUsageSummary {
+  inclusiveInputTokens: number | null;
+  freshInputTokens: number | null;
+  cacheReadTokens: number | null;
+  cacheWriteTokens: number | null;
+  outputTokens: number | null;
+  reasoningTokens: number | null;
+  totalTokens: number | null;
+  source: ModelUsageSource;
+}
+
 /** The flat completion envelope, returned without unwrapping. */
 export interface ModelCompletion {
   invocationId: string;
   status: string;
+  contractVersion?: 1;
+  /** The requested route name; `null` on the direct-model path. */
+  route?: string | null;
   key?: string;
+  usageSummary?: ModelUsageSummary;
+  meta?: { usageRecorded?: boolean; [field: string]: unknown };
   output?: unknown;
   raw?: unknown;
   [field: string]: unknown;
