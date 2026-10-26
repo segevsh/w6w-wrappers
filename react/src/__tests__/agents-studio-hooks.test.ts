@@ -11,7 +11,13 @@ import { JSDOM } from "jsdom";
 import { act, createElement } from "react";
 import { type Root, createRoot } from "react-dom/client";
 import { W6WProvider } from "../W6WProvider.tsx";
-import { useAgent, useAgents, useContextCollections, useContextEntries, useSkills } from "../hooks.ts";
+import {
+  useAgent,
+  useAgents,
+  useContextCollections,
+  useContextEntries,
+  useSkills,
+} from "../hooks.ts";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
