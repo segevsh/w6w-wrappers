@@ -326,6 +326,113 @@ const entriesUpdate: CommandHandler = async (context) => {
   );
 };
 
+// ------------------------------------------------------- context-entries
+
+const topEntryRow = (e: { id: string; name: string; mediaType?: string; revision?: number }) => [
+  e.id,
+  e.name,
+  cell(e.mediaType),
+  cell(e.revision),
+];
+const TOP_ENTRY_HEAD = ["ID", "NAME", "TYPE", "REVISION"];
+
+const ceList: CommandHandler = async (context) => {
+  noExtraArguments(context, 0);
+  const rows = await context.client().contextEntries.list({
+    ...includeArchived(context),
+    collectionId: textFlag(context, "collectionId"),
+    project: textFlag(context, "project"),
+  });
+  context.out.emit(
+    rows,
+    (styles) =>
+      rows.length === 0
+        ? styles.dim("No context entries.")
+        : table(TOP_ENTRY_HEAD, rows.map(topEntryRow), styles),
+  );
+};
+
+const ceCreate: CommandHandler = async (context) => {
+  const name = argument(context, 0, "an entry name");
+  noExtraArguments(context, 1);
+  const ids = textFlag(context, "collectionId");
+  const collectionIds = ids === undefined
+    ? undefined
+    : ids.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+  const entry = await context.client().contextEntries.create({
+    name,
+    text: requiredFlag(context, "text", "--text <text>"),
+    visibility: visibility(context),
+    ...(collectionIds ? { collectionIds } : {}),
+  });
+  context.out.emit(
+    entry,
+    (styles) =>
+      `Created ${styles.bold(entry.name)} ${
+        styles.dim(`(${entry.id}, revision ${entry.revision})`)
+      }`,
+  );
+};
+
+const ceGet: CommandHandler = async (context) => {
+  const id = argument(context, 0, "an entry id (see: `w6w context-entries list`)");
+  noExtraArguments(context, 1);
+  const entry = await context.client().contextEntries.get(id);
+  context.out.emit(entry, (styles) => table(TOP_ENTRY_HEAD, [topEntryRow(entry)], styles));
+};
+
+const ceUpdate: CommandHandler = async (context) => {
+  const id = argument(context, 0, "an entry id (see: `w6w context-entries list`)");
+  noExtraArguments(context, 1);
+  const text = requiredFlag(context, "text", "--text <text>");
+  const rev = revision(context);
+  const entry = await guarded(
+    "the entry",
+    `w6w context-entries get ${id}`,
+    () =>
+      context.client().contextEntries.update(id, { text, revision: rev }, precondition(context)),
+  );
+  context.out.emit(
+    entry,
+    (styles) =>
+      `Updated ${styles.bold(entry.name)} ${
+        styles.dim(`(${entry.id}, revision ${entry.revision})`)
+      }`,
+  );
+};
+
+const ceArchive: CommandHandler = async (context) => {
+  const id = argument(context, 0, "an entry id (see: `w6w context-entries list`)");
+  noExtraArguments(context, 1);
+  const entry = await context.client().contextEntries.archive(id);
+  context.out.emit(
+    entry,
+    (styles) => `Archived ${styles.bold(entry.name)} ${styles.dim(`(${id})`)}`,
+  );
+};
+
+const ceAdd: CommandHandler = async (context) => {
+  const id = argument(context, 0, "an entry id (see: `w6w context-entries list`)");
+  const collection = argument(context, 1, "a collection id (see: `w6w context list`)");
+  noExtraArguments(context, 2);
+  const entry = await context.client().contextEntries.addToCollection(id, collection);
+  context.out.emit(
+    entry,
+    (styles) => `Added ${styles.bold(entry.name)} to ${styles.dim(collection)}`,
+  );
+};
+
+const ceRemove: CommandHandler = async (context) => {
+  const id = argument(context, 0, "an entry id (see: `w6w context-entries list`)");
+  const collection = argument(context, 1, "a collection id (see: `w6w context list`)");
+  noExtraArguments(context, 2);
+  const entry = await context.client().contextEntries.removeFromCollection(id, collection);
+  context.out.emit(
+    entry,
+    (styles) => `Removed ${styles.bold(entry.name)} from ${styles.dim(collection)}`,
+  );
+};
+
 // ---------------------------------------------------------------- agents
 
 const agentRow = (a: Agent) => [
@@ -436,6 +543,13 @@ export const AGENT_STUDIO_COMMANDS: CommandRegistry = {
   "context entries-list": entriesList,
   "context entries-create": entriesCreate,
   "context entries-update": entriesUpdate,
+  "context-entries list": ceList,
+  "context-entries create": ceCreate,
+  "context-entries get": ceGet,
+  "context-entries update": ceUpdate,
+  "context-entries archive": ceArchive,
+  "context-entries add-to-collection": ceAdd,
+  "context-entries remove-from-collection": ceRemove,
   "agents list": agentsList,
   "agents create": agentsCreate,
   "agents get": agentsGet,

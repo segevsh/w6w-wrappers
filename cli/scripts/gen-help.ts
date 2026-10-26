@@ -127,6 +127,7 @@ const GROUP_SUMMARIES: Record<string, string> = {
   assets: "Upload, inspect and download versioned assets (skills, context files)",
   skills: "List, inspect and archive skills (upload them with: w6w assets upload --purpose skill)",
   context: "Create and edit context collections and their text entries",
+  "context-entries": "Create and edit context entries independent of any collection",
   agents: "Create and edit agent drafts (drafts only: no agent runtime exists yet)",
   "model-routes": "List model routes and run completions through them",
   "model-usage": "Query model usage and cost",
@@ -150,6 +151,7 @@ const GROUP_EXAMPLES: Record<string, string[]> = {
   assets: ["w6w assets upload ./my-skill --purpose skill", "w6w assets get ast_01HQ8N"],
   skills: ["w6w skills list", "w6w skills versions sk_01HQ8N"],
   context: ["w6w context list", "w6w context entries-list cc_01HQ8N"],
+  "context-entries": ["w6w context-entries list", "w6w context-entries get ent_01HQ8N"],
   agents: ["w6w agents list", "w6w agents get ag_01HQ8N"],
   "model-routes": ["w6w model-routes list", "w6w model-routes get summarize"],
   "model-usage": ["w6w model-usage"],
@@ -236,6 +238,22 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
   ],
   "context.archive": [
     "w6w context archive cc_01HQ8N",
+  ],
+  "contextEntries.list": [
+    "w6w context-entries list",
+    "w6w context-entries list --collection-id cc_01HQ8N --include-archived",
+  ],
+  "contextEntries.create": [
+    'w6w context-entries create welcome --text "Welcome aboard" --visibility account',
+  ],
+  "contextEntries.get": ["w6w context-entries get ent_01HQ8N"],
+  "contextEntries.update": [
+    'w6w context-entries update ent_01HQ8N --text "Hello again" --revision 1 --if-unmodified-since 2026-10-24T09:00:00.000Z',
+  ],
+  "contextEntries.archive": ["w6w context-entries archive ent_01HQ8N"],
+  "contextEntries.addToCollection": ["w6w context-entries add-to-collection ent_01HQ8N cc_01HQ8N"],
+  "contextEntries.removeFromCollection": [
+    "w6w context-entries remove-from-collection ent_01HQ8N cc_01HQ8N",
   ],
   "context.entries.list": [
     "w6w context entries-list cc_01HQ8N",
@@ -588,6 +606,21 @@ const PARAM_HELP: Record<string, string> = {
     "Refuse the write if the agent changed since this updatedAt (see: w6w agents get); the server requires it",
   "context.entries.update.ifUnmodifiedSince":
     "Refuse the write if the entry changed since this updatedAt (see: w6w context entries-list); the server requires it",
+  "contextEntries.list.collectionId": "Only entries that are members of this collection id",
+  "contextEntries.create.collectionIds":
+    "Make the entry a member of this collection id (comma-separate several)",
+  "contextEntries.create.visibility": "Who can see the entry: private | project | account",
+  "contextEntries.create.name": "Entry name",
+  "contextEntries.get.id": "Context entry id (see: w6w context-entries list)",
+  "contextEntries.update.id": "Context entry id (see: w6w context-entries list)",
+  "contextEntries.archive.id": "Context entry id (see: w6w context-entries list)",
+  "contextEntries.addToCollection.id": "Context entry id (see: w6w context-entries list)",
+  "contextEntries.removeFromCollection.id": "Context entry id (see: w6w context-entries list)",
+  "contextEntries.addToCollection.collectionId": "Context collection id (see: w6w context list)",
+  "contextEntries.removeFromCollection.collectionId":
+    "Context collection id (see: w6w context list)",
+  "contextEntries.update.ifUnmodifiedSince":
+    "Refuse the write if the entry changed since this updatedAt (see: w6w context-entries get); the server requires it",
   "context.create.name": "Collection name",
   "context.update.name": "New collection name",
   "definition": "The whole definition, as a JSON object",
@@ -690,6 +723,8 @@ const FLAG_OVERRIDES: Record<string, { flag: string; placeholder: string | null 
   // the contract's `inputs` / `input` body field.
   "functions.run.inputs": { flag: "--payload", placeholder: "<json>" },
   "endpoints.run.input": { flag: "--payload", placeholder: "<json>" },
+  // Singular, as the contract's `naming.cli` spells it; the handler splits a comma list.
+  "contextEntries.create.collectionIds": { flag: "--collection-id", placeholder: "<id>" },
   "workflows.update.ifUnmodifiedSince": {
     flag: "--if-unmodified-since",
     placeholder: "<ts>",
