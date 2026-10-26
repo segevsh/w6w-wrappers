@@ -87,6 +87,7 @@ const getRoute: CommandHandler = async (context) => {
  * `w6w model-routes complete <name> --input <json>` — the flat envelope, as-is.
  * `--dialect` and `--response` are the **server's** enums; they are passed
  * through untouched so a value the server starts accepting is not refused here.
+ * `--dialect` is `bridge|openai|anthropic|ollama`; the envelope carries `usageSummary`.
  */
 const complete: CommandHandler = async (context) => {
   const name = argument(context, 0, "a route name (see: `w6w model-routes list`)");
