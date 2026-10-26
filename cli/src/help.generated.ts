@@ -3639,7 +3639,7 @@ export const HELP_TREE: HelpTree = {
             "upload a directory (or a ZIP) as an asset: walk, hash, create, put each entry with progress, finalize",
           "usage": "w6w assets upload <path> --purpose <skill|context> [options]",
           "naming":
-            "w6w assets upload <path> --purpose <skill|context> [--skill <id>] [--collection <id>] [--retry]",
+            "w6w assets upload <path> --purpose <skill|context> [--skill <id>] [--collection <id>] [--visibility <v>] [--retry]",
           "status": "live",
           "params": [
             {
@@ -3668,6 +3668,13 @@ export const HELP_TREE: HelpTree = {
               "kind": "flag",
               "display": "--collection <id>",
               "description": "Attach the uploaded files to this context collection id",
+              "required": false,
+            },
+            {
+              "name": "visibility",
+              "kind": "flag",
+              "display": "--visibility <v>",
+              "description": "Who can see the uploaded context: private | project | account",
               "required": false,
             },
             {
@@ -4649,7 +4656,7 @@ export const HELP_TREE: HelpTree = {
           "headline": "create an agent draft",
           "usage": "w6w agents create [options]",
           "naming":
-            "w6w agents create [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>]",
+            "w6w agents create [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>] [--temperature <n>] [--top-p <n>] [--max-output-tokens <n>] [--stop <text>]...",
           "status": "required",
           "params": [
             {
@@ -4704,6 +4711,34 @@ export const HELP_TREE: HelpTree = {
               "required": false,
             },
             {
+              "name": "temperature",
+              "kind": "flag",
+              "display": "--temperature <n>",
+              "description": "Sampling temperature, 0 to 2",
+              "required": false,
+            },
+            {
+              "name": "topP",
+              "kind": "flag",
+              "display": "--top-p <n>",
+              "description": "Nucleus sampling, 0 to 1",
+              "required": false,
+            },
+            {
+              "name": "maxOutputTokens",
+              "kind": "flag",
+              "display": "--max-output-tokens <n>",
+              "description": "Cap on generated tokens (integer, 1 to 1000000)",
+              "required": false,
+            },
+            {
+              "name": "stop",
+              "kind": "flag",
+              "display": "--stop <text>",
+              "description": "Stop sequence; repeat the flag for more (at most 4)",
+              "required": false,
+            },
+            {
               "name": "json",
               "kind": "flag",
               "display": "--json",
@@ -4713,6 +4748,7 @@ export const HELP_TREE: HelpTree = {
           ],
           "examples": [
             'w6w agents create --name triage --instructions "Route support mail" --model-route-id mr_01HQ8N',
+            'w6w agents create --name triage --temperature 0.2 --stop END --stop "###"',
           ],
           "notes": [],
         },
@@ -4764,7 +4800,7 @@ export const HELP_TREE: HelpTree = {
           "headline": "patch an agent draft",
           "usage": "w6w agents update <id> --revision <n> [options]",
           "naming":
-            "w6w agents update <id> --revision <n> [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>] [--if-unmodified-since <ts>]",
+            "w6w agents update <id> --revision <n> [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>] [--if-unmodified-since <ts>] [--temperature <n>] [--top-p <n>] [--max-output-tokens <n>] [--stop <text>]...",
           "status": "required",
           "params": [
             {
@@ -4839,6 +4875,34 @@ export const HELP_TREE: HelpTree = {
               "display": "--if-unmodified-since <value>",
               "description":
                 "Refuse the write if the agent changed since this updatedAt (see: w6w agents get); the server requires it",
+              "required": false,
+            },
+            {
+              "name": "temperature",
+              "kind": "flag",
+              "display": "--temperature <n>",
+              "description": "Sampling temperature, 0 to 2",
+              "required": false,
+            },
+            {
+              "name": "topP",
+              "kind": "flag",
+              "display": "--top-p <n>",
+              "description": "Nucleus sampling, 0 to 1",
+              "required": false,
+            },
+            {
+              "name": "maxOutputTokens",
+              "kind": "flag",
+              "display": "--max-output-tokens <n>",
+              "description": "Cap on generated tokens (integer, 1 to 1000000)",
+              "required": false,
+            },
+            {
+              "name": "stop",
+              "kind": "flag",
+              "display": "--stop <text>",
+              "description": "Stop sequence; repeat the flag for more (at most 4)",
               "required": false,
             },
             {

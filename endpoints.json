@@ -3051,6 +3051,12 @@
           "in": "body",
           "type": "string",
           "required": false
+        },
+        {
+          "name": "modelOptions",
+          "in": "body",
+          "type": "object",
+          "required": false
         }
       ],
       "returns": "Agent",
@@ -3059,8 +3065,8 @@
       ],
       "naming": {
         "ts": "client.agents.create(input, opts?)",
-        "python": "client.agents.create(name=None, instructions=None, model_route_id=None, skills=None, context=None, visibility=None, project=None)",
-        "cli": "w6w agents create [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>]"
+        "python": "client.agents.create(name=None, instructions=None, model_route_id=None, skills=None, context=None, visibility=None, project=None, model_options=None)",
+        "cli": "w6w agents create [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>] [--temperature <n>] [--top-p <n>] [--max-output-tokens <n>] [--stop <text>]..."
       },
       "notes": "Saving an INCOMPLETE draft is allowed: every field is optional, and `validation` on the answer lists what is missing or disallowed. `skills` is `[{skillId, skillVersionId}]` and `context` is `[{collectionId, entryId?, assetVersionId}]` — pins to immutable VERSIONS, so a later skill upload never changes an existing pin. `instructions` is capped at 64 KiB, at most 100 pins. A malformed body is `422 validation_failed` (the envelope carries `issues`). The server wraps the body as `{agent}`; the wrapper unwraps. **`runnable` is always `false`** (A22)."
     },
@@ -3157,6 +3163,12 @@
           "in": "header",
           "type": "string",
           "required": false
+        },
+        {
+          "name": "modelOptions",
+          "in": "body",
+          "type": "object",
+          "required": false
         }
       ],
       "returns": "Agent",
@@ -3165,8 +3177,8 @@
       ],
       "naming": {
         "ts": "client.agents.update(id, patch, opts?)",
-        "python": "client.agents.update(id, revision, name=None, instructions=None, model_route_id=None, skills=None, context=None, visibility=None, project=None, if_unmodified_since=None)",
-        "cli": "w6w agents update <id> --revision <n> [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>] [--if-unmodified-since <ts>]"
+        "python": "client.agents.update(id, revision, name=None, instructions=None, model_route_id=None, skills=None, context=None, visibility=None, project=None, if_unmodified_since=None, model_options=None)",
+        "cli": "w6w agents update <id> --revision <n> [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>] [--if-unmodified-since <ts>] [--temperature <n>] [--top-p <n>] [--max-output-tokens <n>] [--stop <text>]..."
       },
       "notes": "A missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. A partial update: an omitted field is left alone. Body `revision` (a positive integer — the draft's last-seen `revision`) is REQUIRED and is passed through unchanged; `< 1` or non-integer is `400 invalid_body`. `ifUnmodifiedSince` is the optimistic-concurrency precondition, sent as the `x-w6w-if-unmodified-since` HEADER (not a query param) and ONLY when a value was given — never as an empty or \"null\" string, which the server answers `400 invalid_precondition`. Pass the exact `updatedAt` last read. THE SERVER REQUIRES IT on this route: omitted, the answer is `428 precondition_required` (a typed precondition error, never a silent last-write-wins), so a wrapper must not default it. A stale `revision` or `updatedAt` is `409 conflict` carrying `currentRevision` in the error envelope (`{error:{code,message,currentRevision}}`) — recoverable by re-reading and re-sending; wrappers surface it as a typed conflict error carrying that revision, the 428 as a typed precondition error. A disallowed pin is `422 validation_failed` (a uniform 422, `issues` in the envelope). Unwrapped from `{agent}`; `runnable` stays `false` (A22)."
     },
@@ -3329,7 +3341,7 @@
         "name": "assets.upload",
         "summary": "Upload a directory (or a ZIP) as an asset: walk, hash, create, put each entry with progress, finalize.",
         "status": "live",
-        "naming": "w6w assets upload <path> --purpose <skill|context> [--skill <id>] [--collection <id>] [--retry]",
+        "naming": "w6w assets upload <path> --purpose <skill|context> [--skill <id>] [--collection <id>] [--visibility <v>] [--retry]",
         "params": [
           {
             "name": "path",
@@ -3351,6 +3363,12 @@
           },
           {
             "name": "collection",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "visibility",
             "in": "query",
             "type": "string",
             "required": false

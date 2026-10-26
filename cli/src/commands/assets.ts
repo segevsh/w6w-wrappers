@@ -249,6 +249,10 @@ const upload: CommandHandler = async (context) => {
   if (collection !== undefined && purpose !== "context") {
     throw usageError(context, "`--collection` only applies to `--purpose context`.");
   }
+  const visibility = textFlag(context, "visibility");
+  if (visibility !== undefined && purpose !== "context") {
+    throw usageError(context, "`--visibility` only applies to `--purpose context`.");
+  }
   const retry = context.invocation.options.retry === true;
 
   // Everything that can refuse does so here — before a client exists, so before a request.
@@ -263,6 +267,9 @@ const upload: CommandHandler = async (context) => {
       sha256: e.sha256,
     })),
     name: basename(target.replace(/\.zip$/i, "")),
+    ...(visibility !== undefined
+      ? { visibility: visibility as AssetUploadCreateInput["visibility"] }
+      : {}),
     ...(skill !== undefined
       ? { target: { skillId: skill } }
       : collection !== undefined

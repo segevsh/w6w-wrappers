@@ -139,13 +139,19 @@ Deno.test("command help names every parameter the contract gives the command", a
       // Only the explicit hidden set is exempt (handler never reads them); an
       // aliased parameter keeps its contract name, so it is still checked.
       if (HIDDEN_PARAMS.has(`${operation.name}.${param.name}`)) continue;
-      const entry = resolution.command.params.find((candidate) => candidate.name === param.name);
-      assert(
-        entry,
-        `parameter \`${param.name}\` of \`${operation.name}\` is missing from its help`,
-      );
-      assertStringIncludes(help, entry.display);
-      assert(entry.description.length > 0, `parameter \`${param.name}\` has no description`);
+      // `modelOptions` is one contract object, spelled as four flags on the CLI.
+      const names = param.name === "modelOptions"
+        ? ["temperature", "topP", "maxOutputTokens", "stop"]
+        : [param.name];
+      for (const name of names) {
+        const entry = resolution.command.params.find((candidate) => candidate.name === name);
+        assert(
+          entry,
+          `parameter \`${name}\` of \`${operation.name}\` is missing from its help`,
+        );
+        assertStringIncludes(help, entry.display);
+        assert(entry.description.length > 0, `parameter \`${name}\` has no description`);
+      }
     }
     // Every command's help carries at least one runnable example.
     assertStringIncludes(help, "EXAMPLES");

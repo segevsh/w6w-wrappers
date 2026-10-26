@@ -472,7 +472,40 @@ function agentFields(context: CommandContext): CreateAgentInput {
   if (vis !== undefined) fields.visibility = vis;
   const project = textFlag(context, "project");
   if (project !== undefined) fields.project = project;
+  const modelOptions = modelOptionFlags(context);
+  if (modelOptions !== undefined) fields.modelOptions = modelOptions;
   return fields;
+}
+
+/** `--temperature`, `--top-p`, `--max-output-tokens` and the repeatable `--stop`. */
+function modelOptionFlags(
+  context: CommandContext,
+): NonNullable<CreateAgentInput["modelOptions"]> | undefined {
+  const options: NonNullable<CreateAgentInput["modelOptions"]> = {};
+  const number = (name: string, min: number, max: number, integer: boolean) => {
+    const raw = textFlag(context, name);
+    if (raw === undefined) return undefined;
+    const value = Number(raw);
+    if (
+      raw.trim() === "" || !Number.isFinite(value) || value < min || value > max ||
+      (integer && !Number.isInteger(value))
+    ) {
+      throw usageError(
+        context,
+        `\`--${name}\` must be ${integer ? "an integer" : "a number"} from ${min} to ${max}.`,
+      );
+    }
+    return value;
+  };
+  const temperature = number("temperature", 0, 2, false);
+  if (temperature !== undefined) options.temperature = temperature;
+  const topP = number("topP", 0, 1, false);
+  if (topP !== undefined) options.topP = topP;
+  const max = number("maxOutputTokens", 1, 1_000_000, true);
+  if (max !== undefined) options.maxOutputTokens = max;
+  const stop = context.invocation.lists?.stop;
+  if (stop !== undefined) options.stop = stop;
+  return Object.keys(options).length > 0 ? options : undefined;
 }
 
 const agentsCreate: CommandHandler = async (context) => {

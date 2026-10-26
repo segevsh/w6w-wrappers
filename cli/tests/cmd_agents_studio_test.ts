@@ -380,3 +380,53 @@ Deno.test("context-entries add-to-collection / remove-from-collection are PUT / 
   assertEquals(rm.calls[0].method, "DELETE");
   assertEquals(new URL(rm.calls[0].url).pathname, "/context-entries/ent_2/collections/cc_9");
 });
+
+Deno.test("agents create/update send modelOptions from flags; --stop repeats", async () => {
+  const created = await w6w(
+    [
+      "agents",
+      "create",
+      "--name",
+      "a",
+      "--temperature",
+      "0.2",
+      "--top-p",
+      "0.9",
+      "--max-output-tokens",
+      "512",
+      "--stop",
+      "END",
+      "--stop",
+      "###",
+    ],
+    () => json(201, { agent: AGENT }),
+  );
+  assertEquals(created.code, 0, created.stderr);
+  assertEquals(created.calls[0].body, {
+    name: "a",
+    modelOptions: { temperature: 0.2, topP: 0.9, maxOutputTokens: 512, stop: ["END", "###"] },
+  });
+
+  const updated = await w6w(
+    ["agents", "update", "ag_1", "--revision", "1", "--stop", "X"],
+    () => json(200, { agent: AGENT }),
+  );
+  assertEquals(updated.calls[0].body, { revision: 1, modelOptions: { stop: ["X"] } });
+
+  const bad = await w6w(
+    ["agents", "create", "--temperature", "9"],
+    () => json(201, { agent: AGENT }),
+  );
+  assertEquals(bad.code, 1);
+  assertEquals(bad.calls.length, 0);
+});
+
+Deno.test("assets upload accepts --visibility (context only)", async () => {
+  const ran = await w6w(
+    ["assets", "upload", ".", "--purpose", "skill", "--visibility", "private"],
+    () => json(200, {}),
+  );
+  assertEquals(ran.code, 1);
+  assertStringIncludes(ran.stderr, "--visibility");
+  assertEquals(ran.calls.length, 0);
+});

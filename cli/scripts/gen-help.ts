@@ -270,6 +270,7 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
   ],
   "agents.create": [
     'w6w agents create --name triage --instructions "Route support mail" --model-route-id mr_01HQ8N',
+    'w6w agents create --name triage --temperature 0.2 --stop END --stop "###"',
   ],
   "agents.get": [
     "w6w agents get ag_01HQ8N",
@@ -600,6 +601,11 @@ const PARAM_HELP: Record<string, string> = {
     'Pinned context versions, as a JSON array of {"collectionId":"…","entryId":"…","assetVersionId":"…"}',
   "name": "Display name",
   "context.create.visibility": "Who can see the collection: private | project | account",
+  "modelOptions.temperature": "Sampling temperature, 0 to 2",
+  "modelOptions.topP": "Nucleus sampling, 0 to 1",
+  "modelOptions.maxOutputTokens": "Cap on generated tokens (integer, 1 to 1000000)",
+  "modelOptions.stop": "Stop sequence; repeat the flag for more (at most 4)",
+  "assets.upload.visibility": "Who can see the uploaded context: private | project | account",
   "agents.create.visibility": "Who can see the agent: private | project | account",
   "agents.update.visibility": "Who can see the agent: private | project | account",
   "agents.update.ifUnmodifiedSince":
@@ -734,6 +740,14 @@ const FLAG_OVERRIDES: Record<string, { flag: string; placeholder: string | null 
     placeholder: "<ts>",
   },
 };
+
+/** The CLI flags `modelOptions` expands to: member, flag, placeholder. */
+const MODEL_OPTION_FLAGS: readonly (readonly [string, string, string])[] = [
+  ["temperature", "--temperature", "<n>"],
+  ["topP", "--top-p", "<n>"],
+  ["maxOutputTokens", "--max-output-tokens", "<n>"],
+  ["stop", "--stop", "<text>"],
+];
 
 /** Descriptions and value placeholders for the contract's global flags. */
 const GLOBAL_FLAG_HELP: Record<string, { placeholder: string | null; description: string }> = {
@@ -983,6 +997,19 @@ function buildParams(
   for (const param of operation.params) {
     const key = `${operation.name}.${param.name}`;
     if (HIDDEN_PARAMS.has(key)) continue;
+    // The contract carries one `modelOptions` object; the CLI spells its members as flags.
+    if (param.name === "modelOptions") {
+      for (const [member, flag, placeholder] of MODEL_OPTION_FLAGS) {
+        params.push({
+          name: member,
+          kind: "flag",
+          display: `${flag} ${placeholder}`,
+          description: PARAM_HELP[`modelOptions.${member}`],
+          required: false,
+        });
+      }
+      continue;
+    }
     const override = FLAG_OVERRIDES[key];
     const description = describeParam(operation.name, param.name);
     const positional = POSITIONAL_ALIASES[key] ?? param.name;
