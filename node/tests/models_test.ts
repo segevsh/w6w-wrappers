@@ -104,3 +104,37 @@ Deno.test("modelUsage.query passes every filter", async () => {
     })
   ) assertEquals(q.get(k), v);
 });
+
+Deno.test("modelRoutes.complete sends dialect=bridge and types usageSummary", async () => {
+  const env = {
+    contractVersion: 1,
+    route: null,
+    invocationId: "i",
+    status: "ok",
+    usageSummary: {
+      inclusiveInputTokens: 10,
+      freshInputTokens: null,
+      cacheReadTokens: null,
+      cacheWriteTokens: null,
+      outputTokens: 2,
+      reasoningTokens: null,
+      totalTokens: 12,
+      source: "partial",
+    },
+    meta: { usageRecorded: true },
+  };
+  const { client, calls } = setup(env);
+  const out: ModelCompletion = await client.modelRoutes.complete("chat", {}, {
+    dialect: "bridge",
+  });
+  assertEquals(new URL(calls[0].url).searchParams.get("dialect"), "bridge");
+  assertEquals(out.usageSummary?.source, "partial");
+  const nul: ModelCompletion = {
+    invocationId: "i",
+    status: "ok",
+    contractVersion: 1,
+    route: null,
+    usageSummary: { ...env.usageSummary, inclusiveInputTokens: null, source: "unknown" },
+  };
+  assertEquals(nul.route, null);
+});
