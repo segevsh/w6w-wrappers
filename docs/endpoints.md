@@ -2287,6 +2287,90 @@ id is the one uniform `404 not_found`.
 
 ---
 
+## 87. `contextEntries.list` — list entries across collections
+
+```
+GET /context-entries
+```
+
+`status: required` · served today
+
+Top-level and collection-independent: an entry need not belong to any collection. Query `collectionId` (filter to one collection's members), `includeArchived`, `project`. Unwrapped from `{entries}`. A listed entry carries `collectionIds` (sorted ascending) and never `collectionId`.
+
+---
+
+## 88. `contextEntries.create` — create a text entry
+
+```
+POST /context-entries
+```
+
+`status: required` · served today
+
+Body `name` and `text` (strings, required), `visibility` (defaults to the creator's default) and `collectionIds` (the entry becomes a member of each). Answers `201` with a `ContextEntryView`, unwrapped from `{entry}`.
+
+---
+
+## 89. `contextEntries.get` — fetch one entry
+
+```
+GET /context-entries/:id
+```
+
+`status: required` · served today
+
+A missing, foreign, invisible or other-project entry (or collection) is the one uniform `404 not_found`. Answers a `ContextEntryView`, unwrapped from `{entry}`.
+
+---
+
+## 90. `contextEntries.update` — replace an entry's content
+
+```
+PUT /context-entries/:id
+```
+
+`status: required` · served today
+
+A full replacement of `text`. Body `revision` and the `ifUnmodifiedSince` header are both required; `428 precondition_required` without the header, `409 conflict` on a stale one. A missing, foreign, invisible or other-project entry (or collection) is the one uniform `404 not_found`.
+
+---
+
+## 91. `contextEntries.archive` — archive an entry
+
+```
+POST /context-entries/:id/archive
+```
+
+`status: required` · served today
+
+A missing, foreign, invisible or other-project entry (or collection) is the one uniform `404 not_found`. Answers the archived `ContextEntryView` (`archivedAt` set), unwrapped from `{entry}`.
+
+---
+
+## 92. `contextEntries.addToCollection` — add an entry to a collection
+
+```
+PUT /context-entries/:id/collections/:collectionId
+```
+
+`status: required` · served today
+
+A missing, foreign, invisible or other-project entry (or collection) is the one uniform `404 not_found`. Idempotent. Answers the entry with its updated `collectionIds`, unwrapped from `{entry}`.
+
+---
+
+## 93. `contextEntries.removeFromCollection` — remove an entry from a collection
+
+```
+DELETE /context-entries/:id/collections/:collectionId
+```
+
+`status: required` · served today
+
+A missing, foreign, invisible or other-project entry (or collection) is the one uniform `404 not_found`. Idempotent. Answers the entry with its updated `collectionIds`, unwrapped from `{entry}`.
+
+---
+
 ## Explicitly out of scope for this version
 
 Named so nobody adds them ad hoc in one language — this list is the `outOfScope`

@@ -99,7 +99,7 @@ export interface HelpExitCode {
 /** The command tree, generated from the shared wrapper surface contract. */
 export const HELP_TREE: HelpTree = {
   "binary": "w6w",
-  "contractVersion": "0.11.0",
+  "contractVersion": "0.12.0",
   "tagline": "command-line client for the w6w workflow platform",
   "usage": "w6w <command> [options]",
   "docsUrl": "https://w6w.dev/docs/cli",
@@ -3639,7 +3639,7 @@ export const HELP_TREE: HelpTree = {
             "upload a directory (or a ZIP) as an asset: walk, hash, create, put each entry with progress, finalize",
           "usage": "w6w assets upload <path> --purpose <skill|context> [options]",
           "naming":
-            "w6w assets upload <path> --purpose <skill|context> [--skill <id>] [--collection <id>] [--retry]",
+            "w6w assets upload <path> --purpose <skill|context> [--skill <id>] [--collection <id>] [--visibility <v>] [--retry]",
           "status": "live",
           "params": [
             {
@@ -3668,6 +3668,13 @@ export const HELP_TREE: HelpTree = {
               "kind": "flag",
               "display": "--collection <id>",
               "description": "Attach the uploaded files to this context collection id",
+              "required": false,
+            },
+            {
+              "name": "visibility",
+              "kind": "flag",
+              "display": "--visibility <v>",
+              "description": "Who can see the uploaded context: private | project | account",
               "required": false,
             },
             {
@@ -4260,6 +4267,341 @@ export const HELP_TREE: HelpTree = {
       ],
     },
     {
+      "name": "context-entries",
+      "summary": "Create and edit context entries independent of any collection",
+      "headline": "create and edit context entries independent of any collection",
+      "usage": "w6w context-entries <command> [options]",
+      "commands": [
+        {
+          "operation": "contextEntries.list",
+          "path": [
+            "context-entries",
+            "list",
+          ],
+          "name": "list",
+          "aliases": [],
+          "summary": "List context entries visible to the caller, across collections.",
+          "short": "List context entries visible to the caller, across collections",
+          "headline": "list context entries visible to the caller, across collections",
+          "usage": "w6w context-entries list [options]",
+          "naming":
+            "w6w context-entries list [--collection-id <id>] [--include-archived] [--project <p>]",
+          "status": "required",
+          "params": [
+            {
+              "name": "collectionId",
+              "kind": "flag",
+              "display": "--collection-id <value>",
+              "description": "Only entries that are members of this collection id",
+              "required": false,
+            },
+            {
+              "name": "includeArchived",
+              "kind": "flag",
+              "display": "--include-archived",
+              "description": "Include archived rows (default: hidden)",
+              "required": false,
+            },
+            {
+              "name": "project",
+              "kind": "flag",
+              "display": "--project <p>",
+              "description": "Project to scope to (default: the account's default project)",
+              "required": false,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w context-entries list",
+            "w6w context-entries list --collection-id cc_01HQ8N --include-archived",
+          ],
+          "notes": [],
+        },
+        {
+          "operation": "contextEntries.create",
+          "path": [
+            "context-entries",
+            "create",
+          ],
+          "name": "create",
+          "aliases": [],
+          "summary": "Create a text entry, optionally in collections.",
+          "short": "Create a text entry, optionally in collections",
+          "headline": "create a text entry, optionally in collections",
+          "usage": "w6w context-entries create <name> --text <text> [options]",
+          "naming":
+            "w6w context-entries create <name> --text <text> [--visibility <v>] [--collection-id <id>...]",
+          "status": "required",
+          "params": [
+            {
+              "name": "name",
+              "kind": "argument",
+              "display": "<name>",
+              "description": "Entry name",
+              "required": true,
+            },
+            {
+              "name": "text",
+              "kind": "flag",
+              "display": "--text <text>",
+              "description": "The entry's text content",
+              "required": true,
+            },
+            {
+              "name": "visibility",
+              "kind": "flag",
+              "display": "--visibility <v>",
+              "description": "Who can see the entry: private | project | account",
+              "required": false,
+            },
+            {
+              "name": "collectionIds",
+              "kind": "flag",
+              "display": "--collection-id <id>",
+              "description":
+                "Make the entry a member of this collection id (comma-separate several)",
+              "required": false,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            'w6w context-entries create welcome --text "Welcome aboard" --visibility account',
+          ],
+          "notes": [],
+        },
+        {
+          "operation": "contextEntries.get",
+          "path": [
+            "context-entries",
+            "get",
+          ],
+          "name": "get",
+          "aliases": [],
+          "summary": "Fetch one context entry.",
+          "short": "Fetch one context entry",
+          "headline": "fetch one context entry",
+          "usage": "w6w context-entries get <id> [options]",
+          "naming": "w6w context-entries get <id>",
+          "status": "required",
+          "params": [
+            {
+              "name": "id",
+              "kind": "argument",
+              "display": "<id>",
+              "description": "Context entry id (see: w6w context-entries list)",
+              "required": true,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w context-entries get ent_01HQ8N",
+          ],
+          "notes": [],
+        },
+        {
+          "operation": "contextEntries.update",
+          "path": [
+            "context-entries",
+            "update",
+          ],
+          "name": "update",
+          "aliases": [],
+          "summary": "Replace a text entry's content.",
+          "short": "Replace a text entry's content",
+          "headline": "replace a text entry's content",
+          "usage": "w6w context-entries update <id> --text <text> --revision <n> [options]",
+          "naming":
+            "w6w context-entries update <id> --text <text> --revision <n> [--if-unmodified-since <ts>]",
+          "status": "required",
+          "params": [
+            {
+              "name": "id",
+              "kind": "argument",
+              "display": "<id>",
+              "description": "Context entry id (see: w6w context-entries list)",
+              "required": true,
+            },
+            {
+              "name": "text",
+              "kind": "flag",
+              "display": "--text <text>",
+              "description": "The entry's text content",
+              "required": true,
+            },
+            {
+              "name": "revision",
+              "kind": "flag",
+              "display": "--revision <n>",
+              "description":
+                "The revision you last read (from the entry/agent you are editing); a stale one is refused with a conflict",
+              "required": true,
+            },
+            {
+              "name": "ifUnmodifiedSince",
+              "kind": "flag",
+              "display": "--if-unmodified-since <value>",
+              "description":
+                "Refuse the write if the entry changed since this updatedAt (see: w6w context-entries get); the server requires it",
+              "required": false,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            'w6w context-entries update ent_01HQ8N --text "Hello again" --revision 1 --if-unmodified-since 2026-10-24T09:00:00.000Z',
+          ],
+          "notes": [],
+        },
+        {
+          "operation": "contextEntries.archive",
+          "path": [
+            "context-entries",
+            "archive",
+          ],
+          "name": "archive",
+          "aliases": [],
+          "summary": "Archive a context entry.",
+          "short": "Archive a context entry",
+          "headline": "archive a context entry",
+          "usage": "w6w context-entries archive <id> [options]",
+          "naming": "w6w context-entries archive <id>",
+          "status": "required",
+          "params": [
+            {
+              "name": "id",
+              "kind": "argument",
+              "display": "<id>",
+              "description": "Context entry id (see: w6w context-entries list)",
+              "required": true,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w context-entries archive ent_01HQ8N",
+          ],
+          "notes": [],
+        },
+        {
+          "operation": "contextEntries.addToCollection",
+          "path": [
+            "context-entries",
+            "add-to-collection",
+          ],
+          "name": "add-to-collection",
+          "aliases": [],
+          "summary": "Add an entry to a collection.",
+          "short": "Add an entry to a collection",
+          "headline": "add an entry to a collection",
+          "usage": "w6w context-entries add-to-collection <id> <collectionId> [options]",
+          "naming": "w6w context-entries add-to-collection <id> <collectionId>",
+          "status": "required",
+          "params": [
+            {
+              "name": "id",
+              "kind": "argument",
+              "display": "<id>",
+              "description": "Context entry id (see: w6w context-entries list)",
+              "required": true,
+            },
+            {
+              "name": "collectionId",
+              "kind": "argument",
+              "display": "<collectionId>",
+              "description": "Context collection id (see: w6w context list)",
+              "required": true,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w context-entries add-to-collection ent_01HQ8N cc_01HQ8N",
+          ],
+          "notes": [],
+        },
+        {
+          "operation": "contextEntries.removeFromCollection",
+          "path": [
+            "context-entries",
+            "remove-from-collection",
+          ],
+          "name": "remove-from-collection",
+          "aliases": [],
+          "summary": "Remove an entry from a collection.",
+          "short": "Remove an entry from a collection",
+          "headline": "remove an entry from a collection",
+          "usage": "w6w context-entries remove-from-collection <id> <collectionId> [options]",
+          "naming": "w6w context-entries remove-from-collection <id> <collectionId>",
+          "status": "required",
+          "params": [
+            {
+              "name": "id",
+              "kind": "argument",
+              "display": "<id>",
+              "description": "Context entry id (see: w6w context-entries list)",
+              "required": true,
+            },
+            {
+              "name": "collectionId",
+              "kind": "argument",
+              "display": "<collectionId>",
+              "description": "Context collection id (see: w6w context list)",
+              "required": true,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w context-entries remove-from-collection ent_01HQ8N cc_01HQ8N",
+          ],
+          "notes": [],
+        },
+      ],
+      "options": [],
+      "examples": [
+        "w6w context-entries list",
+        "w6w context-entries get ent_01HQ8N",
+      ],
+    },
+    {
       "name": "agents",
       "summary": "Create and edit agent drafts (drafts only: no agent runtime exists yet)",
       "headline": "create and edit agent drafts (drafts only: no agent runtime exists yet)",
@@ -4314,7 +4656,7 @@ export const HELP_TREE: HelpTree = {
           "headline": "create an agent draft",
           "usage": "w6w agents create [options]",
           "naming":
-            "w6w agents create [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>]",
+            "w6w agents create [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>] [--temperature <n>] [--top-p <n>] [--max-output-tokens <n>] [--stop <text>]...",
           "status": "required",
           "params": [
             {
@@ -4369,6 +4711,34 @@ export const HELP_TREE: HelpTree = {
               "required": false,
             },
             {
+              "name": "temperature",
+              "kind": "flag",
+              "display": "--temperature <n>",
+              "description": "Sampling temperature, 0 to 2",
+              "required": false,
+            },
+            {
+              "name": "topP",
+              "kind": "flag",
+              "display": "--top-p <n>",
+              "description": "Nucleus sampling, 0 to 1",
+              "required": false,
+            },
+            {
+              "name": "maxOutputTokens",
+              "kind": "flag",
+              "display": "--max-output-tokens <n>",
+              "description": "Cap on generated tokens (integer, 1 to 1000000)",
+              "required": false,
+            },
+            {
+              "name": "stop",
+              "kind": "flag",
+              "display": "--stop <text>",
+              "description": "Stop sequence; repeat the flag for more (at most 4)",
+              "required": false,
+            },
+            {
               "name": "json",
               "kind": "flag",
               "display": "--json",
@@ -4378,6 +4748,7 @@ export const HELP_TREE: HelpTree = {
           ],
           "examples": [
             'w6w agents create --name triage --instructions "Route support mail" --model-route-id mr_01HQ8N',
+            'w6w agents create --name triage --temperature 0.2 --stop END --stop "###"',
           ],
           "notes": [],
         },
@@ -4429,7 +4800,7 @@ export const HELP_TREE: HelpTree = {
           "headline": "patch an agent draft",
           "usage": "w6w agents update <id> --revision <n> [options]",
           "naming":
-            "w6w agents update <id> --revision <n> [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>] [--if-unmodified-since <ts>]",
+            "w6w agents update <id> --revision <n> [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>] [--if-unmodified-since <ts>] [--temperature <n>] [--top-p <n>] [--max-output-tokens <n>] [--stop <text>]...",
           "status": "required",
           "params": [
             {
@@ -4504,6 +4875,34 @@ export const HELP_TREE: HelpTree = {
               "display": "--if-unmodified-since <value>",
               "description":
                 "Refuse the write if the agent changed since this updatedAt (see: w6w agents get); the server requires it",
+              "required": false,
+            },
+            {
+              "name": "temperature",
+              "kind": "flag",
+              "display": "--temperature <n>",
+              "description": "Sampling temperature, 0 to 2",
+              "required": false,
+            },
+            {
+              "name": "topP",
+              "kind": "flag",
+              "display": "--top-p <n>",
+              "description": "Nucleus sampling, 0 to 1",
+              "required": false,
+            },
+            {
+              "name": "maxOutputTokens",
+              "kind": "flag",
+              "display": "--max-output-tokens <n>",
+              "description": "Cap on generated tokens (integer, 1 to 1000000)",
+              "required": false,
+            },
+            {
+              "name": "stop",
+              "kind": "flag",
+              "display": "--stop <text>",
+              "description": "Stop sequence; repeat the flag for more (at most 4)",
               "required": false,
             },
             {
@@ -5175,6 +5574,34 @@ export const COMMAND_PATHS: string[][] = [
   [
     "context",
     "entries-update",
+  ],
+  [
+    "context-entries",
+    "list",
+  ],
+  [
+    "context-entries",
+    "create",
+  ],
+  [
+    "context-entries",
+    "get",
+  ],
+  [
+    "context-entries",
+    "update",
+  ],
+  [
+    "context-entries",
+    "archive",
+  ],
+  [
+    "context-entries",
+    "add-to-collection",
+  ],
+  [
+    "context-entries",
+    "remove-from-collection",
   ],
   [
     "agents",

@@ -156,3 +156,81 @@ Deno.test("409 is a typed conflict carrying the current revision; 428 a typed pr
   );
   assertEquals(e428b.status, 428);
 });
+
+const ENTRY = { id: "e/1", collectionIds: ["c1"], visibility: "private", project: null };
+
+Deno.test("contextEntries.list sends GET /context-entries with collectionId, includeArchived, project", async () => {
+  const s = setup(() => json({ entries: [ENTRY] }));
+  assertEquals(
+    await s.client.contextEntries.list({
+      collectionId: "c 1",
+      includeArchived: true,
+      project: "p1",
+    }),
+    [ENTRY] as never,
+  );
+  const u = new URL(s.calls[0].url);
+  assertEquals([s.calls[0].method, u.pathname], ["GET", "/context-entries"]);
+  assertEquals(Object.fromEntries(u.searchParams), {
+    collectionId: "c 1",
+    includeArchived: "true",
+    project: "p1",
+  });
+  await s.client.contextEntries.list();
+  assertEquals(new URL(s.calls[1].url).search, "");
+});
+
+Deno.test("contextEntries.create sends POST /context-entries with the body", async () => {
+  const s = setup(() => json({ entry: ENTRY }, 201));
+  const input = { name: "doc", text: "hi", collectionIds: ["c1"], visibility: "private" } as never;
+  assertEquals(await s.client.contextEntries.create(input), ENTRY as never);
+  assertEquals([s.calls[0].method, new URL(s.calls[0].url).pathname], ["POST", "/context-entries"]);
+  assertEquals(s.calls[0].body, input);
+});
+
+Deno.test("contextEntries.get sends GET /context-entries/:id, id URL-encoded", async () => {
+  const s = setup(() => json({ entry: ENTRY }));
+  assertEquals(await s.client.contextEntries.get("e/1"), ENTRY as never);
+  assertEquals(s.calls[0].method, "GET");
+  assertEquals(new URL(s.calls[0].url).pathname, "/context-entries/e%2F1");
+});
+
+Deno.test("contextEntries.update sends PUT with body and precondition header", async () => {
+  const s = setup(() => json({ entry: ENTRY }));
+  await s.client.contextEntries.update("e/1", { text: "t", revision: 2 }, {
+    ifUnmodifiedSince: TOKEN,
+  });
+  await s.client.contextEntries.update("e1", { text: "t", revision: 1 });
+  assertEquals(s.calls[0].method, "PUT");
+  assertEquals(new URL(s.calls[0].url).pathname, "/context-entries/e%2F1");
+  assertEquals(s.calls[0].body, { text: "t", revision: 2 });
+  assertEquals(s.calls[0].headers.get(H), TOKEN);
+  assertEquals(s.calls[1].headers.get(H), null);
+});
+
+Deno.test("contextEntries.archive sends POST /context-entries/:id/archive", async () => {
+  const s = setup(() => json({ entry: ENTRY }));
+  assertEquals(await s.client.contextEntries.archive("e/1"), ENTRY as never);
+  assertEquals(s.calls[0].method, "POST");
+  assertEquals(new URL(s.calls[0].url).pathname, "/context-entries/e%2F1/archive");
+});
+
+Deno.test("contextEntries.addToCollection sends PUT /context-entries/:id/collections/:cid", async () => {
+  const s = setup(() => json({ entry: ENTRY }));
+  assertEquals(await s.client.contextEntries.addToCollection("e/1", "c/2"), ENTRY as never);
+  assertEquals(s.calls[0].method, "PUT");
+  assertEquals(new URL(s.calls[0].url).pathname, "/context-entries/e%2F1/collections/c%2F2");
+});
+
+Deno.test("contextEntries.removeFromCollection sends DELETE /context-entries/:id/collections/:cid", async () => {
+  const s = setup(() => json({ entry: ENTRY }));
+  assertEquals(await s.client.contextEntries.removeFromCollection("e/1", "c/2"), ENTRY as never);
+  assertEquals(s.calls[0].method, "DELETE");
+  assertEquals(new URL(s.calls[0].url).pathname, "/context-entries/e%2F1/collections/c%2F2");
+});
+
+Deno.test("ContextPin without collectionId and modelOptions typecheck", () => {
+  const pin: import("../mod.ts").ContextPin = { entryId: "e1", assetVersionId: "v1" };
+  const opts: import("../mod.ts").ModelOptions = { temperature: 0.2, stop: ["x"] };
+  assertEquals([pin.collectionId, opts.temperature], [undefined, 0.2]);
+});

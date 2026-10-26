@@ -47,9 +47,26 @@ The same is available as `assets.uploads.*` in the SDK and Python client. The
 | `skills` | `list`, `get`, `versions`, `archive` |
 | `context` | `list`, `create`, `get`, `update`, `archive` |
 | `context.entries` | `list`, `create`, `update` |
+| `contextEntries` | `list`, `create`, `get`, `update`, `archive`, `addToCollection`, `removeFromCollection` |
 | `agents` | `list`, `create`, `get`, `update`, `archive` |
 
 Every foreign or absent id is the same uniform `404 not_found`.
+
+## Documents without a collection
+
+A context entry does not have to belong to a collection. `contextEntries.*`
+(`/context-entries`) works on entries directly: create one with no
+`collectionIds`, list across collections, or filter with `collectionId`. An
+entry can belong to several collections; `addToCollection` and
+`removeFromCollection` change membership. A top-level entry carries
+`collectionIds` (sorted), and a pin's `collectionId` is optional. The nested
+`context.entries.*` operations are unchanged.
+
+## Model options
+
+An agent can carry `modelOptions`: `temperature`, `topP`, `maxOutputTokens`
+and `stop`, all optional. Pass them to `agents.create` or `agents.update` and
+read them back on the agent.
 
 ## SDK
 
@@ -114,4 +131,4 @@ Entry listings carry no `revision`; take the token for a first
 ## React
 
 `@w6w/react` exposes `useAgents`, `useAgent`, `useSkills` and
-`useContextCollections`, each returning loading, error and data.
+`useContextCollections` and `useContextEntries`, each returning loading, error and data.

@@ -127,6 +127,7 @@ const GROUP_SUMMARIES: Record<string, string> = {
   assets: "Upload, inspect and download versioned assets (skills, context files)",
   skills: "List, inspect and archive skills (upload them with: w6w assets upload --purpose skill)",
   context: "Create and edit context collections and their text entries",
+  "context-entries": "Create and edit context entries independent of any collection",
   agents: "Create and edit agent drafts (drafts only: no agent runtime exists yet)",
   "model-routes": "List model routes and run completions through them",
   "model-usage": "Query model usage and cost",
@@ -150,6 +151,7 @@ const GROUP_EXAMPLES: Record<string, string[]> = {
   assets: ["w6w assets upload ./my-skill --purpose skill", "w6w assets get ast_01HQ8N"],
   skills: ["w6w skills list", "w6w skills versions sk_01HQ8N"],
   context: ["w6w context list", "w6w context entries-list cc_01HQ8N"],
+  "context-entries": ["w6w context-entries list", "w6w context-entries get ent_01HQ8N"],
   agents: ["w6w agents list", "w6w agents get ag_01HQ8N"],
   "model-routes": ["w6w model-routes list", "w6w model-routes get summarize"],
   "model-usage": ["w6w model-usage"],
@@ -237,6 +239,22 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
   "context.archive": [
     "w6w context archive cc_01HQ8N",
   ],
+  "contextEntries.list": [
+    "w6w context-entries list",
+    "w6w context-entries list --collection-id cc_01HQ8N --include-archived",
+  ],
+  "contextEntries.create": [
+    'w6w context-entries create welcome --text "Welcome aboard" --visibility account',
+  ],
+  "contextEntries.get": ["w6w context-entries get ent_01HQ8N"],
+  "contextEntries.update": [
+    'w6w context-entries update ent_01HQ8N --text "Hello again" --revision 1 --if-unmodified-since 2026-10-24T09:00:00.000Z',
+  ],
+  "contextEntries.archive": ["w6w context-entries archive ent_01HQ8N"],
+  "contextEntries.addToCollection": ["w6w context-entries add-to-collection ent_01HQ8N cc_01HQ8N"],
+  "contextEntries.removeFromCollection": [
+    "w6w context-entries remove-from-collection ent_01HQ8N cc_01HQ8N",
+  ],
   "context.entries.list": [
     "w6w context entries-list cc_01HQ8N",
   ],
@@ -252,6 +270,7 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
   ],
   "agents.create": [
     'w6w agents create --name triage --instructions "Route support mail" --model-route-id mr_01HQ8N',
+    'w6w agents create --name triage --temperature 0.2 --stop END --stop "###"',
   ],
   "agents.get": [
     "w6w agents get ag_01HQ8N",
@@ -582,12 +601,32 @@ const PARAM_HELP: Record<string, string> = {
     'Pinned context versions, as a JSON array of {"collectionId":"…","entryId":"…","assetVersionId":"…"}',
   "name": "Display name",
   "context.create.visibility": "Who can see the collection: private | project | account",
+  "modelOptions.temperature": "Sampling temperature, 0 to 2",
+  "modelOptions.topP": "Nucleus sampling, 0 to 1",
+  "modelOptions.maxOutputTokens": "Cap on generated tokens (integer, 1 to 1000000)",
+  "modelOptions.stop": "Stop sequence; repeat the flag for more (at most 4)",
+  "assets.upload.visibility": "Who can see the uploaded context: private | project | account",
   "agents.create.visibility": "Who can see the agent: private | project | account",
   "agents.update.visibility": "Who can see the agent: private | project | account",
   "agents.update.ifUnmodifiedSince":
     "Refuse the write if the agent changed since this updatedAt (see: w6w agents get); the server requires it",
   "context.entries.update.ifUnmodifiedSince":
     "Refuse the write if the entry changed since this updatedAt (see: w6w context entries-list); the server requires it",
+  "contextEntries.list.collectionId": "Only entries that are members of this collection id",
+  "contextEntries.create.collectionIds":
+    "Make the entry a member of this collection id (comma-separate several)",
+  "contextEntries.create.visibility": "Who can see the entry: private | project | account",
+  "contextEntries.create.name": "Entry name",
+  "contextEntries.get.id": "Context entry id (see: w6w context-entries list)",
+  "contextEntries.update.id": "Context entry id (see: w6w context-entries list)",
+  "contextEntries.archive.id": "Context entry id (see: w6w context-entries list)",
+  "contextEntries.addToCollection.id": "Context entry id (see: w6w context-entries list)",
+  "contextEntries.removeFromCollection.id": "Context entry id (see: w6w context-entries list)",
+  "contextEntries.addToCollection.collectionId": "Context collection id (see: w6w context list)",
+  "contextEntries.removeFromCollection.collectionId":
+    "Context collection id (see: w6w context list)",
+  "contextEntries.update.ifUnmodifiedSince":
+    "Refuse the write if the entry changed since this updatedAt (see: w6w context-entries get); the server requires it",
   "context.create.name": "Collection name",
   "context.update.name": "New collection name",
   "definition": "The whole definition, as a JSON object",
@@ -690,6 +729,8 @@ const FLAG_OVERRIDES: Record<string, { flag: string; placeholder: string | null 
   // the contract's `inputs` / `input` body field.
   "functions.run.inputs": { flag: "--payload", placeholder: "<json>" },
   "endpoints.run.input": { flag: "--payload", placeholder: "<json>" },
+  // Singular, as the contract's `naming.cli` spells it; the handler splits a comma list.
+  "contextEntries.create.collectionIds": { flag: "--collection-id", placeholder: "<id>" },
   "workflows.update.ifUnmodifiedSince": {
     flag: "--if-unmodified-since",
     placeholder: "<ts>",
@@ -699,6 +740,14 @@ const FLAG_OVERRIDES: Record<string, { flag: string; placeholder: string | null 
     placeholder: "<ts>",
   },
 };
+
+/** The CLI flags `modelOptions` expands to: member, flag, placeholder. */
+const MODEL_OPTION_FLAGS: readonly (readonly [string, string, string])[] = [
+  ["temperature", "--temperature", "<n>"],
+  ["topP", "--top-p", "<n>"],
+  ["maxOutputTokens", "--max-output-tokens", "<n>"],
+  ["stop", "--stop", "<text>"],
+];
 
 /** Descriptions and value placeholders for the contract's global flags. */
 const GLOBAL_FLAG_HELP: Record<string, { placeholder: string | null; description: string }> = {
@@ -948,6 +997,19 @@ function buildParams(
   for (const param of operation.params) {
     const key = `${operation.name}.${param.name}`;
     if (HIDDEN_PARAMS.has(key)) continue;
+    // The contract carries one `modelOptions` object; the CLI spells its members as flags.
+    if (param.name === "modelOptions") {
+      for (const [member, flag, placeholder] of MODEL_OPTION_FLAGS) {
+        params.push({
+          name: member,
+          kind: "flag",
+          display: `${flag} ${placeholder}`,
+          description: PARAM_HELP[`modelOptions.${member}`],
+          required: false,
+        });
+      }
+      continue;
+    }
     const override = FLAG_OVERRIDES[key];
     const description = describeParam(operation.name, param.name);
     const positional = POSITIONAL_ALIASES[key] ?? param.name;

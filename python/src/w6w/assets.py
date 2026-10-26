@@ -106,6 +106,7 @@ class AssetUploadsApi:
         visibility: Optional[AssetVisibility] = None,
         asset_id: Optional[str] = None,
         target: Optional[Mapping[str, Any]] = None,
+        collection_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Reserve an upload: declare every entry, send no bytes yet.
 
@@ -133,6 +134,9 @@ class AssetUploadsApi:
             creating one.
         :param target: Purpose-specific destination, e.g. `{"skillId": "skl_…"}`
             or `{"collectionId": "ctx_…"}`.
+        :param collection_id: Optional collection for a ``context`` upload
+            (shorthand for ``target={"collectionId": ...}``); omit it for a
+            collection-less entry.
         :returns: The upload and its entries, as sent.
         :raises ConfigError: When no token is configured.
         :raises ApiError: On any non-2xx, e.g. `409 idempotency_key_conflict`
@@ -151,6 +155,8 @@ class AssetUploadsApi:
             body["assetId"] = asset_id
         if target is not None:
             body["target"] = target
+        elif collection_id is not None:
+            body["target"] = {"collectionId": collection_id}
         return self._host.request("POST", "/asset-uploads", body=body).body
 
     def put_entry(
