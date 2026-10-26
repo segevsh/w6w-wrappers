@@ -11,7 +11,7 @@ import { JSDOM } from "jsdom";
 import { act, createElement } from "react";
 import { type Root, createRoot } from "react-dom/client";
 import { W6WProvider } from "../W6WProvider.tsx";
-import { useAgent, useAgents, useContextCollections, useSkills } from "../hooks.ts";
+import { useAgent, useAgents, useContextCollections, useContextEntries, useSkills } from "../hooks.ts";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -201,4 +201,31 @@ test("a rejected read lands in `error`, never thrown out of the render", () =>
     assert.equal(seen.loading, false);
     assert.ok(seen.error instanceof Error, String(seen.error));
     assert.equal((seen.error as { status?: number }).status, 404);
+  }));
+
+test("useContextEntries sends its options to the SDK call", () =>
+  withRoot(async (root) => {
+    const fake = fakeFetch(() => ({ body: { entries: [{ id: "e1" }] } }));
+    const seen: Record<string, unknown> = {};
+    function Probe() {
+      const r = useContextEntries({ collectionId: "c 1", includeArchived: true, project: "p1" });
+      seen.data = r.data;
+      return null;
+    }
+    await act(async () => {
+      root.render(
+        createElement(
+          W6WProvider,
+          { baseUrl: "https://x.test", token: "t", fetch: fake.fetch },
+          createElement(Probe),
+        ),
+      );
+    });
+    await settle();
+    assert.equal(fake.urls.length, 1);
+    const u = fake.urls[0] ?? "";
+    assert.ok(u.includes("/context-entries?"), u);
+    assert.ok(u.includes("collectionId=c%201") || u.includes("collectionId=c+1"), u);
+    assert.ok(u.includes("includeArchived=true") && u.includes("project=p1"), u);
+    assert.deepEqual(seen.data, [{ id: "e1" }]);
   }));

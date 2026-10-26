@@ -421,6 +421,11 @@ export type Agent = Awaited<ReturnType<Client["agents"]["get"]>>;
 /** One skill, as `skills.list` answers it. */
 export type Skill = Awaited<ReturnType<Client["skills"]["list"]>>[number];
 /** One context collection, as `context.list` answers it. */
+export type ContextEntryListOptions = Omit<
+  NonNullable<Parameters<Client["contextEntries"]["list"]>[0]>,
+  "signal"
+>;
+export type ContextEntryItem = Awaited<ReturnType<Client["contextEntries"]["list"]>>[number];
 export type ContextCollection = Awaited<ReturnType<Client["context"]["get"]>>;
 
 /** Options of {@linkcode useAgents}: include archived drafts, plus the call's `signal`. */
@@ -479,6 +484,20 @@ export function useContextCollections(
   const key = JSON.stringify(["context.list", options ?? null]);
   const fetcher = useCallback(
     (signal: AbortSignal) => client.context.list({ ...(JSON.parse(key)[1] ?? undefined), signal }),
+    [client, key],
+  );
+  return useAsync(key, fetcher, client, ready);
+}
+
+/** Context documents (`client.contextEntries.list`), filterable by collection and project. */
+export function useContextEntries(
+  options?: ContextEntryListOptions,
+): ReadResult<ContextEntryItem[]> {
+  const { client, ready } = useW6WProviderContext();
+  const key = JSON.stringify(["contextEntries.list", options ?? null]);
+  const fetcher = useCallback(
+    (signal: AbortSignal) =>
+      client.contextEntries.list({ ...(JSON.parse(key)[1] ?? undefined), signal }),
     [client, key],
   );
   return useAsync(key, fetcher, client, ready);
