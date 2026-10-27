@@ -408,3 +408,14 @@
 - **verified: 2026-10-13** — Keep the routing table and the traps in sync
   with the release workflow, `docs/parity.md`, `docs/implementation.md`, and
   `docs/release.md` named above.
+
+## 26-10-27-01-unified-credentials-service-accounts update
+
+**verified: 2026-10-27** — against wrappers `main` @ `a08b9df` (`VERSION` 0.9.23, contract `0.13.0`).
+- `client.console.credentials.{list,get,create,update,rotate,disable,enable,test,dependents,delete}`
+  (`node/src/console/credentials.ts`, console-only — not in `endpoints.json` operations). `ConnectionSummary.credentialId:
+  string | null` is REQUIRED in node (`null` = no stored credential) and read by python. A 409 `credential_in_use`
+  carries dependents under `error.dependents`.
+- **Trap — pytest is not installed here**: CI's command is `PYTHONPATH=src python3 -m unittest discover -s tests -t .`
+  (from `python/`). cli and react need `npm ci` first; react tests need `NODE_OPTIONS=--experimental-strip-types`.
+- Baseline: `deno task --config node/deno.json test` → **725 passed, 0 failed**.
