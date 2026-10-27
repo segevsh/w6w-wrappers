@@ -1,6 +1,6 @@
 {
   "name": "@w6w/cli",
-  "version": "0.9.21",
+  "version": "0.9.22",
   "description": "The w6w command-line client. Thin transport over the w6w HTTP API, with help generated from the shared wrapper contract.",
   "license": "MIT",
   "repository": {
@@ -32,7 +32,7 @@
     "build": "tsc -p tsconfig.build.json && node scripts/fix-shebang.mjs"
   },
   "dependencies": {
-    "@w6w/sdk": "^0.9.21"
+    "@w6w/sdk": "^0.9.22"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
