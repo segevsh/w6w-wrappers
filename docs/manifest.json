@@ -32,6 +32,13 @@
       "order": 20
     },
     {
+      "path": "clients/node/credentials.md",
+      "slug": "node/credentials",
+      "section": "clients",
+      "title": "Credentials",
+      "order": 26
+    },
+    {
       "path": "clients/node/models.md",
       "slug": "node/models",
       "section": "clients",

@@ -25,6 +25,7 @@ import { AppsApi } from "./apps.ts";
 import { AuthApi } from "./auth.ts";
 import { CommerceApi } from "./commerce.ts";
 import { ConnectionsApi } from "./connections.ts";
+import { CredentialsApi } from "./credentials.ts";
 import { DashboardApi } from "./dashboard.ts";
 import { EndpointsApi } from "./endpoints.ts";
 import { FunctionsApi } from "./functions.ts";
@@ -165,12 +166,24 @@ export type {
 } from "./apps.ts";
 export { ConnectionsApi } from "./connections.ts";
 export type {
+  ConnectionBinding,
+  ConnectionCreateInput,
   ConnectionDependentCallable,
   ConnectionDependents,
   ConnectionDependentSubscription,
   ConnectionsHost,
   ConnectionTestResult,
 } from "./connections.ts";
+export { CredentialsApi } from "./credentials.ts";
+export type {
+  CredentialDependents,
+  CredentialErrorCode,
+  CredentialListFilter,
+  CredentialsHost,
+  CredentialStatus,
+  CredentialSummary,
+  CredentialTestResult,
+} from "./credentials.ts";
 export { WorkflowsApi } from "./workflows.ts";
 export type { RunState, RunSummary, WorkflowsHost } from "./workflows.ts";
 export { SavedTestsApi } from "./saved-tests.ts";
@@ -320,6 +333,8 @@ export class ConsoleApi {
   readonly apps: AppsApi;
   /** `console.connections.*`. */
   readonly connections: ConnectionsApi;
+  /** `console.credentials.*`. */
+  readonly credentials: CredentialsApi;
   /** `console.workflows.*`. */
   readonly workflows: WorkflowsApi;
   /** `console.savedTests.*`. */
@@ -365,6 +380,7 @@ export class ConsoleApi {
     this.schedules = new SchedulesApi(host);
     this.apps = new AppsApi(host);
     this.connections = new ConnectionsApi(host);
+    this.credentials = new CredentialsApi(host);
     this.workflows = new WorkflowsApi(host);
     this.savedTests = new SavedTestsApi(host);
     this.stepTests = new StepTestsApi(host);
