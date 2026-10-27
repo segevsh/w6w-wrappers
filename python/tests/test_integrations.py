@@ -147,6 +147,19 @@ class ConnectionsTest(unittest.TestCase):
         self.assertIs(ConnectionSummary.from_wire({**CONN, "builtIn": True}).built_in, True)
         self.assertIsNone(ConnectionSummary.from_wire(CONN).built_in)
 
+    def test_credential_id_reads_a_string_and_collapses_null_absent_and_non_string(self) -> None:
+        self.assertEqual(
+            ConnectionSummary.from_wire({**CONN, "credentialId": "cred_1"}).credentialId, "cred_1"
+        )
+        self.assertIsNone(ConnectionSummary.from_wire({**CONN, "credentialId": None}).credentialId)
+        self.assertIsNone(ConnectionSummary.from_wire(CONN).credentialId)
+        self.assertIsNone(ConnectionSummary.from_wire({**CONN, "credentialId": 7}).credentialId)
+
+    def test_credential_id_rides_through_list(self) -> None:
+        c, _ = client((200, {"connections": [{**CONN, "credentialId": "cred_1"}, CONN]}))
+        rows = c.connections.list()
+        self.assertEqual([r.credentialId for r in rows], ["cred_1", None])
+
     def test_built_in_rides_through_list(self) -> None:
         c, _ = client((200, {"connections": [{**CONN, "id": "zerocred:x", "builtIn": True}, CONN]}))
         rows = c.connections.list()

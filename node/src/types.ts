@@ -180,6 +180,11 @@ export interface ConnectionSummary {
   /** ISO-8601 timestamp. */
   updatedAt: string;
   /**
+   * The stored credential this connection uses. `null` = no stored credential
+   * (tenantAuth, jit, none, or a zero-credential row).
+   */
+  credentialId: string | null;
+  /**
    * The connection's app, inlined so a list needs no second fetch for names and icons.
    * `null` means the server found no app row; absent means an older server.
    */

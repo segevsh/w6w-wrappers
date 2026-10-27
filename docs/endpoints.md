@@ -245,6 +245,7 @@ the array.
       "lastTestedAt": "2026-07-20T09:14:00.000Z",
       "createdAt": "2026-07-01T12:00:00.000Z",
       "updatedAt": "2026-07-20T09:14:00.000Z",
+      "credentialId": "cred_01H…",
       "app": {
         "displayName": "SendGrid",
         "iconSvg": "data:image/svg+xml;base64,…",
@@ -262,6 +263,13 @@ flattened into the row), so a list needs no second fetch for names and icons.
 Only `displayName` is always present inside it. `app` is `null` when the server
 found no app row, and absent from an older server; the TypeScript wrappers keep
 those two apart, Python reads both as `None`.
+
+`credentialId` (contract `0.13.0`) is the id of the stored credential the
+connection uses. It is `string | null`, and `null` means no stored credential
+(tenantAuth, jit, none, or a zero-credential row). It is additive and
+read-only here: creating and managing credentials is console-only
+(`client.console.credentials.*`, see [parity.md](./parity.md)), so this contract
+gains no credential operation.
 
 Shape is `ConnectionSummary` (fields pinned in
 [implementation.md §5](./implementation.md#5-wire-types)) — the stored
@@ -1643,7 +1651,7 @@ GET /connections/:id
 
 **Response `200`** — envelope key `connection`; the wrapper unwraps and returns
 one `ConnectionSummary` (the same redacted projection as §2, including the
-optional `app` and `builtIn`).
+optional `app` and `builtIn`, and the nullable `credentialId`).
 
 **Account-owned.** Another account's id answers the same `404 unknown_connection`
 as an id that does not exist. The built-in zero-credential row that §2 can include
