@@ -69,7 +69,7 @@ when the server records them. A `kind` the SDK doesn't recognise is returned unc
 
 | Method | Returns | Notes |
 | --- | --- | --- |
-| `list({ signal? })` | `ConnectionSummary[]`: `id`, `appId`, `displayName`, `state`, `lastTestOk`, `lastTestedAt`, `tenant`, `subject`, and `app` (inline app name, icons and brand colours; `null` or absent when unknown) | |
+| `list({ signal? })` | `ConnectionSummary[]`: `id`, `appId`, `displayName`, `state`, `lastTestOk`, `lastTestedAt`, `tenant`, `subject`, `credentialId` (the stored credential it uses; `null` = none), and `app` (inline app name, icons and brand colours; `null` or absent when unknown) | |
 | `get(id, { signal? })` | `ConnectionSummary` | `404 unknown_connection` for an unknown or another account's id, and for a built-in `zerocred:` row |
 | `delete(id, { signal? })` | nothing | Account-owned; also tears down the connection's trigger subscriptions. Same `404` rules. |
 

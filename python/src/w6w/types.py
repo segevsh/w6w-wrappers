@@ -653,6 +653,10 @@ class ConnectionSummary:
     #: wire `builtIn` is absent (every stored connection, or an older server);
     #: only a wire `true` reads `True`.
     built_in: Optional[bool] = None
+    #: The stored credential this connection uses. `None` = no stored credential
+    #: (tenantAuth, jit, none, a zero-credential row), an absent key (an older
+    #: server) or a non-string value.
+    credentialId: Optional[str] = None
 
     @classmethod
     def from_wire(cls, body: Any) -> "ConnectionSummary":
@@ -683,6 +687,8 @@ class ConnectionSummary:
             app=ConnectionAppMeta.from_wire(body.get("app")) if isinstance(body, dict) else None,
             # Read explicitly: unknown keys are dropped, so this would otherwise vanish.
             built_in=True if isinstance(body, dict) and body.get("builtIn") is True else None,
+            # Read explicitly for the same reason: the dataclass drops unknown keys.
+            credentialId=_nullable_text(body, "credentialId"),
         )
 
 

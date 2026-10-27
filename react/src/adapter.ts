@@ -77,6 +77,10 @@ import type {
   ApiCallRecord,
   AppSummary,
   AuthDef,
+  ConnectionCreateInput,
+  CredentialDependents,
+  CredentialSummary,
+  CredentialTestResult,
   InvokeOptions,
   SavedTest,
   StepTest,
@@ -203,15 +207,7 @@ export interface W6WApi {
   getAppAuth(appId: string): Promise<AuthDef[]>;
 
   /** Create a non-OAuth connection with a user-supplied credential. */
-  createConnection(
-    appId: string,
-    body: {
-      authKey: string;
-      credential: Record<string, unknown>;
-      displayName?: string;
-      profile?: Record<string, unknown>;
-    },
-  ): Promise<ConnectionSummary>;
+  createConnection(appId: string, body: ConnectionCreateInput): Promise<ConnectionSummary>;
 
   /**
    * Start an OAuth 2.0 flow. Server builds the provider's authorize URL and
@@ -233,6 +229,44 @@ export interface W6WApi {
 
   /** List every connection across apps — drives the "Connected apps" tab. */
   listConnections(): Promise<ConnectionSummary[]>;
+
+  /** List stored credentials; only the given filter keys are sent. */
+  listCredentials(filter?: {
+    contract?: string;
+    appId?: string;
+    authKey?: string;
+  }): Promise<CredentialSummary[]>;
+
+  /** Create a stored credential. `source` is an opaque secret payload. */
+  createCredential(body: {
+    name: string;
+    contract: string;
+    source: Record<string, unknown>;
+  }): Promise<CredentialSummary>;
+
+  /** Fetch one stored credential. */
+  getCredential(id: string): Promise<CredentialSummary>;
+
+  /** Replace a credential's secret. */
+  rotateCredential(
+    id: string,
+    body: { source: Record<string, unknown> },
+  ): Promise<CredentialSummary>;
+
+  /** `"disabled"` → `POST /disable`, `"active"` → `POST /enable`. */
+  setCredentialStatus(id: string, status: "active" | "disabled"): Promise<CredentialSummary>;
+
+  /** Probe a credential; `ok: false` resolves (it is data, not an error). */
+  testCredential(id: string): Promise<CredentialTestResult>;
+
+  /** The connections that use a credential. */
+  credentialDependents(id: string): Promise<CredentialDependents>;
+
+  /**
+   * Delete a credential. A 409 `credential_in_use` rejects with `.body`
+   * carrying the dependents at `body.error.dependents.connections`.
+   */
+  deleteCredential(id: string): Promise<void>;
 
   /**
    * Invoke a single action — used to test-run one step from the visual
@@ -449,6 +483,21 @@ export function createW6WUiAdapter(client: W6WClient): W6WApi {
     // console-namespace consistency; that would silently narrow "every
     // connection across every app" down to one app's connections.
     listConnections: () => withApiErrorBody(() => client.connections.list()),
+
+    listCredentials: (filter) => withApiErrorBody(() => client.console.credentials.list(filter)),
+    createCredential: (body) => withApiErrorBody(() => client.console.credentials.create(body)),
+    getCredential: (id) => withApiErrorBody(() => client.console.credentials.get(id)),
+    rotateCredential: (id, body) =>
+      withApiErrorBody(() => client.console.credentials.rotate(id, body)),
+    setCredentialStatus: (id, status) =>
+      withApiErrorBody(() =>
+        status === "disabled"
+          ? client.console.credentials.disable(id)
+          : client.console.credentials.enable(id),
+      ),
+    testCredential: (id) => withApiErrorBody(() => client.console.credentials.test(id)),
+    credentialDependents: (id) => withApiErrorBody(() => client.console.credentials.dependents(id)),
+    deleteCredential: (id) => withApiErrorBody(() => client.console.credentials.delete(id)),
 
     invokeAction: (appId, actionKey, params, opts) =>
       withApiErrorBody(() => client.console.apps.invoke(appId, actionKey, params, opts)),

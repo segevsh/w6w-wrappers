@@ -270,6 +270,17 @@ React remains a derived lane, exempt from the `endpoints.json` naming contract.
 To update its UI contract, change the pinned npm version, refresh the lockfile,
 and run the React tests and build.
 
+## Console-only credential management
+
+`client.console.credentials.*` (node) manages stored credentials: list, get, create, rename, rotate,
+disable, enable, test, dependents and delete. It follows the same split as every connection write
+op (D-E2): console-only, so `endpoints.json` gains no operation and the count stays 100. cli and
+python have no credential commands. The one contract change is read-only and additive:
+`ConnectionSummary.credentialId` (`string | null`, `null` = no stored credential) in node, cli (which
+reuses node's type) and python, with the contract at `0.13.0`. react's `W6WApi` adapter implements the
+eight optional credential members over the console namespace; they are not in
+`adapter-conformance.test.ts`'s table, which must equal the pinned `@w6w/ui` member list.
+
 ## Server-only helpers
 
 Server-only helpers (`@w6w/sdk/server`'s `exchangeToken` and `createEmbedSessionClient`;

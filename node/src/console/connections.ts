@@ -58,6 +58,39 @@ export interface ConnectionsHost {
   request<T>(options: RequestOptions): Promise<HttpResponse<T>>;
 }
 
+/**
+ * Non-secret per-connection binding for a credential-backed connection
+ * (I-1): the scopes it asks for, the user it delegates as, and free settings.
+ */
+export interface ConnectionBinding {
+  scopes?: string[];
+  delegatedUser?: string;
+  settings?: Record<string, string | number | boolean>;
+}
+
+/**
+ * `create`'s body: either the legacy inline-secret form or the attach-by-id
+ * form. The `?: never` arms make a body carrying both a compile error (the
+ * server also answers `400 invalid_credential_source`).
+ */
+export type ConnectionCreateInput =
+  | {
+    authKey: string;
+    credential: Record<string, unknown>;
+    displayName?: string;
+    profile?: Record<string, unknown>;
+    credentialId?: never;
+    binding?: never;
+  }
+  | {
+    authKey: string;
+    credentialId: string;
+    binding?: ConnectionBinding;
+    displayName?: string;
+    credential?: never;
+    profile?: never;
+  };
+
 /** A callable (Function/Endpoint) bound to a connection. */
 export interface ConnectionDependentCallable {
   id: string;
@@ -172,19 +205,15 @@ export class ConnectionsApi {
    * the whole point of this field is a caller-opaque secret payload.
    *
    * @param appId - The app id.
-   * @param body - `authKey` selects the app's auth method; `credential` is
-   * the secret payload it needs; `displayName` and `profile` are optional.
+   * @param body - `authKey` selects the app's auth method. Either `credential`
+   * (the inline secret payload) **or** `credentialId` (attach a stored
+   * credential, with an optional `binding`) — never both. `displayName` is optional.
    * @returns The created connection, unwrapped from the `connection` envelope (the server answers `201`).
-   * @throws {ApiError} `400 invalid_auth_key`/`invalid_credential`; `404 unknown_app`.
+   * @throws {ApiError} `400 invalid_auth_key`/`invalid_credential`/`invalid_credential_source`; `404 unknown_app`.
    */
   async create(
     appId: string,
-    body: {
-      authKey: string;
-      credential: Record<string, unknown>;
-      displayName?: string;
-      profile?: Record<string, unknown>;
-    },
+    body: ConnectionCreateInput,
   ): Promise<ConnectionSummary> {
     const res = await this.#host.request<unknown>({
       method: "POST",
@@ -203,13 +232,18 @@ export class ConnectionsApi {
    * validates "nothing to update" and answers `400 invalid_body` itself.
    *
    * @param id - The `conn_…` id.
-   * @param body - `displayName` and/or `credential`, forwarded verbatim.
+   * @param body - `displayName`, `binding`, `credentialId` (re-attach) and/or `credential`, forwarded verbatim.
    * @returns The updated connection, unwrapped from the `connection` envelope.
    * @throws {ApiError} `400 invalid_body` ("Nothing to update"); `404 unknown_connection`.
    */
   async update(
     id: string,
-    body: { displayName?: string; credential?: Record<string, unknown> },
+    body: {
+      displayName?: string;
+      binding?: ConnectionBinding;
+      credentialId?: string;
+      credential?: Record<string, unknown>;
+    },
   ): Promise<ConnectionSummary> {
     const res = await this.#host.request<unknown>({
       method: "PATCH",
