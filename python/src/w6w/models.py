@@ -6,7 +6,7 @@ Six operations, one HTTP call each. ``model_routes.complete`` returns the
 
 ``complete`` accepts two query selectors:
 
-- ``dialect``: ``"openai" | "anthropic" | "ollama"``
+- ``dialect``: ``"bridge" | "openai" | "anthropic" | "ollama"``
 - ``response``: ``"both" | "output" | "raw"``
 
 Routes and usage are project-scoped: per-call ``project``, then the client's
@@ -107,10 +107,12 @@ class ModelRoutesApi:
     ) -> Dict[str, Any]:
         """POST `input` to ``/model-routes/{name}/complete``.
 
-        :param dialect: ``"openai"``, ``"anthropic"`` or ``"ollama"``.
+        :param dialect: ``"bridge"`` (provider-neutral), ``"openai"``,
+            ``"anthropic"`` or ``"ollama"``.
         :param response: ``"both"``, ``"output"`` or ``"raw"``.
         :returns: The flat envelope as sent, ``invocationId``/``status``/``key``
-            included. Not unwrapped.
+            included. Not unwrapped. Also carries ``contractVersion``, ``route``,
+            ``usageSummary`` (token counts, ``source``) and ``meta.usageRecorded``.
         """
         result = self._host.request(
             "POST",

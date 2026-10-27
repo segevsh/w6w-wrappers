@@ -10,6 +10,7 @@ import { JSDOM } from "jsdom";
 import { act, createElement } from "react";
 import { type Root, createRoot } from "react-dom/client";
 import { W6WProvider } from "../W6WProvider.tsx";
+import type { ModelCompletion } from "../hooks.ts";
 import { useModelRoutes, useModelUsage, useModels } from "../hooks.ts";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -117,3 +118,22 @@ test("distinct options make distinct requests (options are in the key)", () =>
     assert.equal(fake.urls.length, 4);
     assert.equal(new Set(fake.urls).size, 4);
   }));
+
+test("ModelCompletion exposes usageSummary", () => {
+  const c: ModelCompletion = {
+    contractVersion: 1,
+    route: null,
+    usageSummary: {
+      inclusiveInputTokens: 3,
+      freshInputTokens: 3,
+      cacheReadTokens: null,
+      cacheWriteTokens: null,
+      outputTokens: 2,
+      reasoningTokens: null,
+      totalTokens: 5,
+      source: "reported",
+    },
+    meta: { usageRecorded: true },
+  };
+  assert.equal(c.usageSummary?.totalTokens, 5);
+});

@@ -155,6 +155,24 @@ Deno.test("model-routes complete: POST /model-routes/{name}/complete, flat envel
   assertEquals(JSON.parse(r.stdout), envelope);
 });
 
+Deno.test("model-routes complete: --dialect bridge passes through", async () => {
+  const r = await w6w(
+    [
+      "model-routes",
+      "complete",
+      "fast",
+      "--input",
+      '{"prompt":"hello"}',
+      "--dialect",
+      "bridge",
+      "--json",
+    ],
+    () => json(200, { status: "success" }),
+  );
+  assertEquals(r.code, 0, r.stderr);
+  assertEquals(r.calls[0].url, `${BASE}/model-routes/fast/complete?dialect=bridge`);
+});
+
 Deno.test("model-routes complete: bad --input is a usage error before any request", async () => {
   const r = await w6w(["model-routes", "complete", "fast", "--input", "nope"]);
   assertEquals(r.code, 1);

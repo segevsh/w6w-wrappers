@@ -42,6 +42,7 @@ import type {
   FunctionSummary,
   Me,
   Model,
+  ModelCompletion,
   ModelListOptions,
   ModelPage,
   ModelRoute,
@@ -323,6 +324,13 @@ export function useWorkflows(options?: WorkflowListOptions): ReadResult<Workflow
   );
   return useAsync(JSON.stringify(["workflows.list", project ?? null]), fetcher, client, ready);
 }
+
+/**
+ * The typed completion envelope from `client.modelRoutes.complete`, including
+ * `usageSummary` and `meta.usageRecorded`. There is no completion hook; call
+ * `complete` on the client and type the result with this.
+ */
+export type { ModelCompletion };
 
 /** The model catalog page (`client.models.list`). Options are part of the cache key. */
 export function useModels(options?: Omit<ModelListOptions, "signal">): ReadResult<ModelPage> {
