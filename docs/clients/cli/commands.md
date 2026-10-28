@@ -189,7 +189,7 @@ Vars belong to your account, so these commands don't take `--project`.
 | `w6w vars update <id> [--type <t>] [--value <v>] [--description <d>]` | Change only the fields you pass. |
 | `w6w vars delete <id>` | Delete a var. |
 
-Names use lowercase letters, digits and underscores, and start with a letter or underscore. For
+Names use letters, digits and underscores, start with a letter or underscore, and are case-sensitive. For
 `string` vars, `--value` is taken as-is. For the other types it's read as JSON:
 
 ```bash

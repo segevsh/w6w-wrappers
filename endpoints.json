@@ -834,7 +834,7 @@
         "python": "client.vars.get_by_name(name)",
         "cli": "w6w vars get-by-name <name>"
       },
-      "notes": "`VarsRepo.getByName` already existed and was already called by `POST /vars` for its conflict check; only the HTTP route was missing. D12 (amending D6) — key-addressed reads become server routes rather than client-side composition; `packages/wrappers/README.md` \"What a wrapper is\" forbids a list-then-filter workaround. Same `404 unknown_var` as `vars.get`. Server-implemented 2026-07-28: names are already regex-validated (`[a-z_][a-z0-9_]*`) at create time, which is URL-safe by construction — no extra hazard handling needed."
+      "notes": "`VarsRepo.getByName` already existed and was already called by `POST /vars` for its conflict check; only the HTTP route was missing. D12 (amending D6) — key-addressed reads become server routes rather than client-side composition; `packages/wrappers/README.md` \"What a wrapper is\" forbids a list-then-filter workaround. Same `404 unknown_var` as `vars.get`. Server-implemented 2026-07-28: names are already regex-validated (`[A-Za-z_][A-Za-z0-9_]*`, case-sensitive) at create time, which is URL-safe by construction — no extra hazard handling needed."
     },
     {
       "name": "vars.create",
@@ -878,7 +878,7 @@
         "python": "client.vars.create(name, type, value, description=None)",
         "cli": "w6w vars create <name> --type <t> --value <v> [--description <d>]"
       },
-      "notes": "Create is addressed by `name` (D6 — mirror the server: create by name, update/delete by id). `name` must match `^[a-z_][a-z0-9_]*$`; violations are `400 invalid_name`. `type` is one of string|number|boolean|json and `value` is validated against it server-side (`400 invalid_type` / `400 invalid_value`). Duplicate name is `409 var_exists` — wrappers must surface that code, not swallow it into a generic error. No `project` param: vars are not project-scoped."
+      "notes": "Create is addressed by `name` (D6 — mirror the server: create by name, update/delete by id). `name` must match `^[A-Za-z_][A-Za-z0-9_]*$` (case-sensitive: `HELP_EMAIL` and `help_email` are different names); violations are `400 invalid_name`. `type` is one of string|number|boolean|json and `value` is validated against it server-side (`400 invalid_type` / `400 invalid_value`). Duplicate name is `409 var_exists` — wrappers must surface that code, not swallow it into a generic error. No `project` param: vars are not project-scoped."
     },
     {
       "name": "vars.update",

@@ -298,7 +298,7 @@ let the server decide what it means.
 
 Encode every caller-supplied path segment on **every** operation — explicitly
 including `vars.getByName` (`GET /vars/by-name/{name}`), whose name the server
-validates against `NAME_RE = /^[a-z_][a-z0-9_]*$/` and which is therefore
+validates against `NAME_RE = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/` and which is therefore
 URL-safe by construction **today**. Documents are the unsafe surface; vars are
 not. Encode both.
 

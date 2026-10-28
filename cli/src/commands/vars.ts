@@ -150,7 +150,7 @@ const get: CommandHandler = async (context) => {
  * `w6w vars get-by-name <name>` — the name-addressed read.
  *
  * The name is handed to the SDK untouched and percent-encoded at interpolation.
- * **No name is rejected here**: `^[a-z_][a-z0-9_]*$` is the server's rule to
+ * **No name is rejected here**: `^[A-Za-z_][A-Za-z0-9_]*$` is the server's rule to
  * enforce, and a copy of it in the CLI would refuse locally whatever the server
  * started accepting next. The same dot-segment caveat as
  * `w6w documents get-by-key` applies to this lane (D1) — see
@@ -167,7 +167,11 @@ const getByName: CommandHandler = async (context) => {
 
 const create: CommandHandler = async (context) => {
   refuseProject(context);
-  const name = argument(context, 0, "a variable name to create (matching `^[a-z_][a-z0-9_]*$`)");
+  const name = argument(
+    context,
+    0,
+    "a variable name to create (matching `^[A-Za-z_][A-Za-z0-9_]*$`)",
+  );
   noExtraArguments(context, 1);
   const type = requiredFlag(context, "type", "--type <t>");
   const variable = await context.client().vars.create({

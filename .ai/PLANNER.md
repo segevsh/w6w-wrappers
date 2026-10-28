@@ -419,3 +419,25 @@
 - **Trap — pytest is not installed here**: CI's command is `PYTHONPATH=src python3 -m unittest discover -s tests -t .`
   (from `python/`). cli and react need `npm ci` first; react tests need `NODE_OPTIONS=--experimental-strip-types`.
 - Baseline: `deno task --config node/deno.json test` → **725 passed, 0 failed**.
+
+## 26-10-27-00-updates update — var/secret name grammar
+
+**verified: 2026-10-28** — against `proj/26-10-27-00-updates` @ `a799b5c` (docs-only; `VERSION` and manifests
+untouched; `evals/T1.1.2.eval.md`).
+- **Var/secret names are any-case and case-sensitive**: the server rule is `/^[A-Za-z_][A-Za-z0-9_]{0,63}$/`
+  (server `packages/api/admin/name-limits.ts` `NAME_RE`). Every wrappers restatement — `endpoints.json` (vars notes incl.
+  `vars.getByName`), `docs/endpoints.md`, `docs/implementation.md`, `docs/clients/{cli/commands,node/documents-and-vars}.md`,
+  `node/src/{vars,types}.ts`, `node/src/console/vault.ts`, `python/src/w6w/{_vars,types}.py`, `cli/src/commands/vars.ts` —
+  now says so; `git grep '\[a-z_\]\[a-z0-9_\]'` over those is 0. The Function-key grammar ("lowercase" in
+  `node/src/functions.ts`, `python/src/w6w/functions.py`, `docs/endpoints.md`, `endpoints.json` `functions.create`) is a
+  different rule and was deliberately left.
+- **Trap — CLI param descriptions live in `cli/scripts/gen-help.ts`** (e.g. `"vars.create.name"`), not in
+  `endpoints.json`; edit there, run `deno task gen:help` in `cli/`, and commit `cli/src/help.generated.ts` —
+  `cli/tests/help_test.ts` byte-compares it (a stale file reads `244 passed | 1 failed`).
+- **Trap — `deno task check` in `cli/` is red in a lane without `cli/node_modules`** (`nodeModulesDir: manual`,
+  `@types/node`); `npm ci` in `cli/` first, or gate on a scoped `deno check` of the touched files
+  (`contracts/T1.1.2.contract.md` planner findings; CI runs `npm install` first, trap 8).
+- **Gap — `docs/endpoints.md` says `endpoints.json` and `endpoints.md` "must agree — CI checks that"; no such job exists**
+  in `.github/workflows/ci.yml` (jobs `lockstep`, `python`, `node`, `cli`, `react`). Keep both in sync by hand (FOLLOWUPS).
+- Baselines: cli `deno task test` → **245 passed, 0 failed**; python unittest `Ran 455 tests … OK`; node check/fmt/lint
+  clean (`evals/T1.1.2.eval.md` G1b/G2).
