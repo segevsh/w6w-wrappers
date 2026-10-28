@@ -62,7 +62,7 @@ export interface VaultHost {
 export interface VaultSecretSummary {
   /** Server-issued id, `sec_…`. */
   id: string;
-  /** Caller-chosen name, matching `^[a-z_][a-z0-9_]*$`. */
+  /** Caller-chosen name, matching `^[A-Za-z_][A-Za-z0-9_]*$` (case-sensitive). */
   name: string;
   /** Free-text description; `""` when unset. */
   description: string;
@@ -146,7 +146,7 @@ export class VaultApi {
    * `value` is opaque — forwarded verbatim, never inspected, logged, or
    * transformed.
    *
-   * @param body - `name` (unique, matches `^[a-z_][a-z0-9_]*$`), `value` (the
+   * @param body - `name` (unique, matches `^[A-Za-z_][A-Za-z0-9_]*$`), `value` (the
    * plaintext to store), and an optional `description`.
    * @returns The created secret, unwrapped from the `secret` envelope (the
    * server answers `201`). Never carries `value`.

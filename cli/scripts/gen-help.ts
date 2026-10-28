@@ -572,7 +572,7 @@ const PARAM_HELP: Record<string, string> = {
   "vars.update.id": "Variable id (see: w6w vars list)",
   "vars.delete.id": "Variable id (see: w6w vars list)",
   "vars.getByName.name": "Variable name, as chosen at creation",
-  "vars.create.name": "Variable name to create (must match ^[a-z_][a-z0-9_]*$)",
+  "vars.create.name": "Variable name to create (must match ^[A-Za-z_][A-Za-z0-9_]*$)",
   // The definition lifecycle. `definition` is the same word in both domains and
   // means the same thing, so it is a bare fallback; the id help differs per
   // domain because the two point a caller at different list commands.

@@ -1521,7 +1521,7 @@ export const HELP_TREE: HelpTree = {
               "name": "name",
               "kind": "argument",
               "display": "<name>",
-              "description": "Variable name to create (must match ^[a-z_][a-z0-9_]*$)",
+              "description": "Variable name to create (must match ^[A-Za-z_][A-Za-z0-9_]*$)",
               "required": true,
             },
             {

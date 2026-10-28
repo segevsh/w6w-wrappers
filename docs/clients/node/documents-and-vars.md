@@ -95,8 +95,8 @@ const v = await client.vars.create({
 console.log(v.id, v.name, v.value);
 ```
 
-You should see a `var_…` id. Names use lowercase letters, digits and underscores, start with a
-letter or underscore, and are at most 64 characters. `type` is `string`, `number`, `boolean` or
+You should see a `var_…` id. Names use letters, digits and underscores, start with a
+letter or underscore, are case-sensitive, and are at most 64 characters. `type` is `string`, `number`, `boolean` or
 `json`, and w6w checks `value` against it:
 
 ```ts
@@ -124,7 +124,7 @@ of these calls take a `project`.
 | --- | --- | --- |
 | `409 document_exists` | A document with that key already exists in the project. | Use `getByKey` and `update` it, or choose another key. |
 | `409 var_exists` | A var with that name already exists. | Use `getByName` and `update` it. |
-| `400 invalid_name` | The var name has capitals, dashes or other characters, or is too long. | Use lowercase letters, digits and underscores only. |
+| `400 invalid_name` | The var name starts with a digit, has dashes, spaces or other characters, or is too long. | Use letters, digits and underscores only, starting with a letter or underscore. |
 | `400 invalid_value` | The value doesn't match the var's `type`. | Pass a number for `number`, `true` or `false` for `boolean`. |
 | `400 invalid_format` | `format` isn't one of the five allowed values. | Use `text`, `markdown`, `yaml`, `html` or `json`. |
 | `404 unknown_document` from `getByKey` | No document with that key in this project. | Check the key, and pass `project` if the document lives in another project. |
