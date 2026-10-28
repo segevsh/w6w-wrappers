@@ -180,6 +180,11 @@ export interface ConnectionSummary {
   /** ISO-8601 timestamp. */
   updatedAt: string;
   /**
+   * The stored credential this connection uses. `null` = no stored credential
+   * (tenantAuth, jit, none, or a zero-credential row).
+   */
+  credentialId: string | null;
+  /**
    * The connection's app, inlined so a list needs no second fetch for names and icons.
    * `null` means the server found no app row; absent means an older server.
    */
@@ -813,12 +818,18 @@ export interface ContextCollection {
  */
 export interface ContextEntry {
   id: string;
-  collectionId: string;
+  /** Member collections, sorted ascending. */
+  collectionIds: string[];
+  /** Present on the nested `/context-collections/:id/entries*` responses only. */
+  collectionId?: string;
   /** The pin id an agent's {@linkcode ContextPin} attaches. */
   assetVersionId: string;
   name: string;
   mediaType: string;
   tags: string[];
+  visibility: AssetVisibility;
+  project: string | null;
+  ownerSubject: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -873,12 +884,43 @@ export interface SkillPin {
   skillVersionId: string;
 }
 
+/** `contextEntries.list` options. */
+export interface ListContextEntriesOptions extends ListArchivedOptions {
+  /** Only members of this collection. */
+  collectionId?: string;
+  project?: string;
+}
+
+/** Body of `contextEntries.create`. */
+export interface CreateStandaloneContextEntryInput {
+  name: string;
+  text: string;
+  visibility?: AssetVisibility;
+  collectionIds?: string[];
+}
+
 /** A pin of an agent to one context asset version. */
 export interface ContextPin {
-  collectionId: string;
+  /** At least one of `collectionId` / `entryId` is required. */
+  collectionId?: string;
   entryId?: string;
   assetVersionId: string;
 }
+
+/** Sampling options of an agent's model call; `modelOptions` replaces the whole object. */
+export interface ModelOptions {
+  /** 0–2. */
+  temperature?: number;
+  /** 0–1. */
+  topP?: number;
+  /** Integer 1–1000000. */
+  maxOutputTokens?: number;
+  /** ≤4 items, each 1–64 chars. */
+  stop?: string[];
+}
+
+/** Alias of {@linkcode ModelOptions}. */
+export type AgentModelOptions = ModelOptions;
 
 /** One finding of an agent draft's validation. */
 export interface AgentValidationIssue {
@@ -902,6 +944,7 @@ export interface Agent {
   modelRouteId: string | null;
   skills: SkillPin[];
   context: ContextPin[];
+  modelOptions: ModelOptions;
   visibility: AgentVisibility;
   project: string | null;
   revision: number;
@@ -920,6 +963,7 @@ export interface CreateAgentInput {
   modelRouteId?: string | null;
   skills?: SkillPin[];
   context?: ContextPin[];
+  modelOptions?: ModelOptions;
   visibility?: AgentVisibility;
   project?: string | null;
 }

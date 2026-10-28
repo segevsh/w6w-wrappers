@@ -97,11 +97,11 @@ const AGENT = {
 
 Deno.test("the registry holds exactly the help tree's skills/context/agents commands", () => {
   const documented = HELP_TREE.groups
-    .filter((g) => ["skills", "context", "agents"].includes(g.name))
+    .filter((g) => ["skills", "context", "context-entries", "agents"].includes(g.name))
     .flatMap((g) => g.commands.map((c) => c.path.join(" ")))
     .sort();
   assertEquals(Object.keys(AGENT_STUDIO_COMMANDS).sort(), documented);
-  assertEquals(documented.length, 17);
+  assertEquals(documented.length, 24);
 });
 
 Deno.test("skills list/get/archive print tables", async () => {
@@ -255,4 +255,178 @@ Deno.test("a uniform 404 prints one not-found line, never a stack trace", async 
     assertEquals(ran.stderr.split("\n").length, 1);
     assert(!ran.stderr.includes("    at "));
   }
+});
+
+const TOP = {
+  id: "ent_2",
+  name: "welcome",
+  mediaType: "text/plain",
+  revision: 2,
+  collectionIds: ["cc_1"],
+  archivedAt: null,
+};
+
+Deno.test("context-entries list sends collectionId / includeArchived / project", async () => {
+  const ran = await w6w(
+    [
+      "context-entries",
+      "list",
+      "--collection-id",
+      "cc_1",
+      "--include-archived",
+      "--project",
+      "p_1",
+    ],
+    () => json(200, { entries: [TOP] }),
+  );
+  assertEquals(ran.code, 0);
+  assertEquals(ran.calls[0].method, "GET");
+  const url = new URL(ran.calls[0].url);
+  assertEquals(url.pathname, "/context-entries");
+  assertEquals(url.searchParams.get("collectionId"), "cc_1");
+  assertEquals(url.searchParams.get("includeArchived"), "true");
+  assertEquals(url.searchParams.get("project"), "p_1");
+  assertStringIncludes(ran.stdout, "ent_2");
+});
+
+Deno.test("context-entries create posts name/text/visibility/collectionIds (array)", async () => {
+  const ran = await w6w(
+    [
+      "context-entries",
+      "create",
+      "welcome",
+      "--text",
+      "hi",
+      "--visibility",
+      "account",
+      "--collection-id",
+      "cc_1,cc_2",
+    ],
+    () => json(201, { entry: TOP }),
+  );
+  assertEquals(ran.code, 0);
+  assertEquals(ran.calls[0].method, "POST");
+  assertEquals(new URL(ran.calls[0].url).pathname, "/context-entries");
+  assertEquals(ran.calls[0].body, {
+    name: "welcome",
+    text: "hi",
+    visibility: "account",
+    collectionIds: ["cc_1", "cc_2"],
+  });
+  assertStringIncludes(ran.stdout, "Created");
+});
+
+Deno.test("context-entries create without a collection sends no collectionIds", async () => {
+  const ran = await w6w(
+    ["context-entries", "create", "n", "--text", "t"],
+    () => json(201, { entry: TOP }),
+  );
+  assertEquals(ran.calls[0].body, { name: "n", text: "t" });
+});
+
+Deno.test("context-entries get / archive hit the entry paths", async () => {
+  const get = await w6w(["context-entries", "get", "ent_2"], () => json(200, { entry: TOP }));
+  assertEquals(get.calls[0].method, "GET");
+  assertEquals(new URL(get.calls[0].url).pathname, "/context-entries/ent_2");
+  const arch = await w6w(
+    ["context-entries", "archive", "ent_2"],
+    () => json(200, { entry: TOP }),
+  );
+  assertEquals(arch.calls[0].method, "POST");
+  assertEquals(new URL(arch.calls[0].url).pathname, "/context-entries/ent_2/archive");
+});
+
+Deno.test("context-entries update sends revision + header; 409 names the revision", async () => {
+  const ok = await w6w(
+    [
+      "context-entries",
+      "update",
+      "ent_2",
+      "--text",
+      "x",
+      "--revision",
+      "2",
+      "--if-unmodified-since",
+      "2026-10-24T09:00:00.000Z",
+    ],
+    () => json(200, { entry: { ...TOP, revision: 3 } }),
+  );
+  assertEquals(ok.code, 0);
+  assertEquals(ok.calls[0].method, "PUT");
+  assertEquals(new URL(ok.calls[0].url).pathname, "/context-entries/ent_2");
+  assertEquals(ok.calls[0].body, { text: "x", revision: 2 });
+  assertEquals(ok.calls[0].headers.get("x-w6w-if-unmodified-since"), "2026-10-24T09:00:00.000Z");
+  const stale = await w6w(
+    ["context-entries", "update", "ent_2", "--text", "x", "--revision", "2"],
+    () => json(409, { error: { code: "conflict", message: "stale", currentRevision: 9 } }),
+  );
+  assertEquals(stale.code, 2);
+  assertStringIncludes(stale.stderr, "current revision: 9");
+});
+
+Deno.test("context-entries add-to-collection / remove-from-collection are PUT / DELETE", async () => {
+  const add = await w6w(
+    ["context-entries", "add-to-collection", "ent_2", "cc_9"],
+    () => json(200, { entry: TOP }),
+  );
+  assertEquals(add.code, 0);
+  assertEquals(add.calls[0].method, "PUT");
+  assertEquals(new URL(add.calls[0].url).pathname, "/context-entries/ent_2/collections/cc_9");
+  const rm = await w6w(
+    ["context-entries", "remove-from-collection", "ent_2", "cc_9"],
+    () => json(200, { entry: TOP }),
+  );
+  assertEquals(rm.code, 0);
+  assertEquals(rm.calls[0].method, "DELETE");
+  assertEquals(new URL(rm.calls[0].url).pathname, "/context-entries/ent_2/collections/cc_9");
+});
+
+Deno.test("agents create/update send modelOptions from flags; --stop repeats", async () => {
+  const created = await w6w(
+    [
+      "agents",
+      "create",
+      "--name",
+      "a",
+      "--temperature",
+      "0.2",
+      "--top-p",
+      "0.9",
+      "--max-output-tokens",
+      "512",
+      "--stop",
+      "END",
+      "--stop",
+      "###",
+    ],
+    () => json(201, { agent: AGENT }),
+  );
+  assertEquals(created.code, 0, created.stderr);
+  assertEquals(created.calls[0].body, {
+    name: "a",
+    modelOptions: { temperature: 0.2, topP: 0.9, maxOutputTokens: 512, stop: ["END", "###"] },
+  });
+
+  const updated = await w6w(
+    ["agents", "update", "ag_1", "--revision", "1", "--stop", "X"],
+    () => json(200, { agent: AGENT }),
+  );
+  assertEquals(updated.calls[0].body, { revision: 1, modelOptions: { stop: ["X"] } });
+
+  const bad = await w6w(
+    ["agents", "create", "--temperature", "9"],
+    () => json(201, { agent: AGENT }),
+  );
+  assertEquals(bad.code, 1);
+  assertEquals(bad.calls.length, 0);
+});
+
+Deno.test("assets upload accepts --visibility (context only)", async () => {
+  const ran = await w6w(
+    ["assets", "upload", ".", "--purpose", "skill", "--visibility", "private"],
+    () => json(200, {}),
+  );
+  assertEquals(ran.code, 1);
+  assertStringIncludes(ran.stderr, "--visibility");
+  assertEquals(ran.calls.length, 0);
 });

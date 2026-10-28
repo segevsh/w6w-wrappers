@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable surface contract for all w6w wrappers. Source of truth for conformance tests. Keep in sync with docs/endpoints.md.",
-  "contractVersion": "0.11.0",
+  "contractVersion": "0.13.0",
   "$basePathComment": "Empty since 0.2.0: the server serves its routes at the ROOT of its own host (https://api.w6w.io/vars, not .../api/vars). Clients append nothing to the configured origin.",
   "basePath": "",
   "defaultBaseUrl": "https://api.w6w.io",
@@ -43,7 +43,7 @@
         "python": "client.connections.list()",
         "cli": "w6w connections list"
       },
-      "notes": "`credential` and `lastRefreshedAt` are redacted server-side and must not appear in the wrapper's list type. D4 — kept in v0.1.0 even though the 07-27 intake does not name it: without it a user has no way to discover a `conn_…` URN to pass to `run`. Verified live. Each row carries `tenant` + `subject` (not `owner`) and a top-level `app` object (`displayName` plus optional `iconSvg`, `iconSvgDark`, `brandColor`, `brandColorDark`) beside `appId`; `app` is `null` when the server found no app row, and absent from an older server. `builtIn` is an optional boolean: `true` marks the synthetic zero-credential row (a `zerocred:` id, usable with no connection step, not stored and not deletable); it is absent on stored connections and on an older server that does not emit it."
+      "notes": "`credential` and `lastRefreshedAt` are redacted server-side and must not appear in the wrapper's list type. D4 — kept in v0.1.0 even though the 07-27 intake does not name it: without it a user has no way to discover a `conn_…` URN to pass to `run`. Verified live. Each row carries `tenant` + `subject` (not `owner`) and a top-level `app` object (`displayName` plus optional `iconSvg`, `iconSvgDark`, `brandColor`, `brandColorDark`) beside `appId`; `app` is `null` when the server found no app row, and absent from an older server. `builtIn` is an optional boolean: `true` marks the synthetic zero-credential row (a `zerocred:` id, usable with no connection step, not stored and not deletable); it is absent on stored connections and on an older server that does not emit it. `credentialId` (added in contract 0.13.0) is `string | null`, always present on a server that has the credential resource: the id of the stored credential this connection uses, and `null` = no stored credential (tenantAuth, jit, none, or a zero-credential row). Credential management itself stays console-only (`client.console.credentials.*`), not an operation here."
     },
     {
       "name": "connections.get",
@@ -66,7 +66,7 @@
         "python": "client.connections.get(id)",
         "cli": "w6w connections get <id>"
       },
-      "notes": "Server wraps the body as `{ connection: ConnectionSummary }`; the wrapper unwraps it. Same redacted projection as `connections.list`. Account-owned: another account's id is the uniform `404 unknown_connection`, indistinguishable from an id that does not exist. The built-in zero-credential row that `connections.list` can include (a `zerocred:` id, `builtIn: true`) is synthetic and is not fetchable: `404`."
+      "notes": "Server wraps the body as `{ connection: ConnectionSummary }`; the wrapper unwraps it. Same redacted projection as `connections.list`. Account-owned: another account's id is the uniform `404 unknown_connection`, indistinguishable from an id that does not exist. The built-in zero-credential row that `connections.list` can include (a `zerocred:` id, `builtIn: true`) is synthetic and is not fetchable: `404`. `credentialId` (added in contract 0.13.0) is `string | null`, always present on a server that has the credential resource: the id of the stored credential this connection uses, and `null` = no stored credential (tenantAuth, jit, none, or a zero-credential row). Credential management itself stays console-only (`client.console.credentials.*`), not an operation here."
     },
     {
       "name": "connections.delete",
@@ -1863,7 +1863,7 @@
         "python": "client.model_routes.complete(name, input, project=None, dialect=None, response=None)",
         "cli": "w6w model-routes complete <name> --input <json> [--project <id>] [--dialect <d>] [--response <r>]"
       },
-      "notes": "POSTs the `BridgeInput` body as-is. Returns the FLAT envelope `{ provider, key, model, dialect, output?, usage, raw?, meta, invocationId, status, startedAt, finishedAt, durationMs }` exactly as the server sends it: NO unwrap to `output` (`key` is the answering connection id, `invocationId`/`status` are the standard invocation frame). `dialect` is `openai|anthropic|ollama` and `response` is `both|output|raw` (typed unions in node, documented in python); `response=output` omits `raw`, `response=raw` omits `output`. Each is sent only when given. Errors: `429 model_budget_exceeded`, `424 model_provider_failed`, `409 model_route_broken`, `403 model_egress_denied`, `404 model_route_not_found`. A provider failure that the server reports as an invocation frame is the lane's ordinary API error."
+      "notes": "POSTs the `BridgeInput` body as-is. Returns the FLAT envelope `{ contractVersion (1), route (string|null), provider, key, model, dialect, output?, usage, usageSummary, raw?, meta (meta.usageRecorded: boolean), invocationId, status, startedAt, finishedAt, durationMs }` exactly as the server sends it: NO unwrap to `output` (`key` is the answering connection id, `invocationId`/`status` are the standard invocation frame). `dialect` is `bridge|openai|anthropic|ollama` (`bridge` is the provider-neutral baseline output) and `usageSummary` is `{ inclusiveInputTokens, freshInputTokens, cacheReadTokens, cacheWriteTokens, outputTokens, reasoningTokens, totalTokens: number|null; source: reported|partial|estimated|unknown|legacy }` identical across providers; and `response` is `both|output|raw` (typed unions in node, documented in python); `response=output` omits `raw`, `response=raw` omits `output`. Each is sent only when given. Errors: `400 model_request_unsupported` (carries `capability`), `429 model_budget_exceeded`, `424 model_provider_failed`, `409 model_route_broken`, `403 model_egress_denied`, `404 model_route_not_found`. A provider failure that the server reports as an invocation frame is the lane's ordinary API error."
     },
     {
       "name": "modelUsage.query",
@@ -2735,6 +2735,248 @@
       "notes": "A missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. A FULL REPLACEMENT of the text, not a patch. `id` is the COLLECTION id; an entry that does not belong to it is the uniform `404`. Body `revision` (a positive integer — the entry's last-seen revision) is REQUIRED and is passed through unchanged; a non-integer or `< 1` is `400 invalid_body`. `ifUnmodifiedSince` is the optimistic-concurrency precondition, sent as the `x-w6w-if-unmodified-since` HEADER (not a query param) and ONLY when a value was given — never as an empty or \"null\" string, which the server answers `400 invalid_precondition`. Pass the exact `updatedAt` last read. THE SERVER REQUIRES IT on this route: omitted, the answer is `428 precondition_required` (a typed precondition error, never a silent last-write-wins), so a wrapper must not default it. A stale `revision` or a stale `updatedAt` is `409 conflict` (recoverable: re-read and re-send); wrappers surface it as a typed conflict error, the 428 as a typed precondition error. Answers the new `ContextEntryView` (with the bumped `revision`), unwrapped from `{entry}`."
     },
     {
+      "name": "contextEntries.list",
+      "summary": "List context entries visible to the caller, across collections.",
+      "method": "GET",
+      "path": "/context-entries",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "collectionId",
+          "in": "query",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "includeArchived",
+          "in": "query",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "ContextEntry[]",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.contextEntries.list(opts?)",
+        "python": "client.context_entries.list(collection_id=None, include_archived=None, project=None)",
+        "cli": "w6w context-entries list [--collection-id <id>] [--include-archived] [--project <p>]"
+      },
+      "notes": "Top-level, collection-independent: an entry need not belong to any collection. `collectionId` filters to one collection's members. The server wraps the body as `{entries}`; the wrapper unwraps. A top-level entry carries `collectionIds` (sorted ascending) and never `collectionId`."
+    },
+    {
+      "name": "contextEntries.create",
+      "summary": "Create a text entry, optionally in collections.",
+      "method": "POST",
+      "path": "/context-entries",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "name",
+          "in": "body",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "text",
+          "in": "body",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "visibility",
+          "in": "body",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "collectionIds",
+          "in": "body",
+          "type": "string[]",
+          "required": false
+        }
+      ],
+      "returns": "ContextEntryView",
+      "successStatuses": [
+        201
+      ],
+      "naming": {
+        "ts": "client.contextEntries.create(input, opts?)",
+        "python": "client.context_entries.create(name, text, visibility=None, collection_ids=None)",
+        "cli": "w6w context-entries create <name> --text <text> [--visibility <v>] [--collection-id <id>...]"
+      },
+      "notes": "Both `name` and `text` must be strings. `visibility` defaults to the creator's default; `collectionIds` makes the entry a member of each. Answers the new `ContextEntryView` (with `revision`), unwrapped from `{entry}`."
+    },
+    {
+      "name": "contextEntries.get",
+      "summary": "Fetch one context entry.",
+      "method": "GET",
+      "path": "/context-entries/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "ContextEntryView",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.contextEntries.get(id, opts?)",
+        "python": "client.context_entries.get(id)",
+        "cli": "w6w context-entries get <id>"
+      },
+      "notes": "A missing, foreign, invisible or other-project entry (or collection) is the one uniform `404 not_found`. Unwrapped from `{entry}`."
+    },
+    {
+      "name": "contextEntries.update",
+      "summary": "Replace a text entry's content.",
+      "method": "PUT",
+      "path": "/context-entries/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "text",
+          "in": "body",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "revision",
+          "in": "body",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "ifUnmodifiedSince",
+          "in": "header",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "ContextEntryView",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.contextEntries.update(id, input, opts?)",
+        "python": "client.context_entries.update(id, text, revision, if_unmodified_since=None)",
+        "cli": "w6w context-entries update <id> --text <text> --revision <n> [--if-unmodified-since <ts>]"
+      },
+      "notes": "A missing, foreign, invisible or other-project entry (or collection) is the one uniform `404 not_found`. Same semantics as `context.entries.update`: a FULL REPLACEMENT; body `revision` required; `ifUnmodifiedSince` sent as the `x-w6w-if-unmodified-since` header only when given. The server REQUIRES it: omitted is `428 precondition_required`; a stale `revision` or `updatedAt` is `409 conflict`. Unwrapped from `{entry}`."
+    },
+    {
+      "name": "contextEntries.archive",
+      "summary": "Archive a context entry.",
+      "method": "POST",
+      "path": "/context-entries/{id}/archive",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "ContextEntry",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.contextEntries.archive(id, opts?)",
+        "python": "client.context_entries.archive(id)",
+        "cli": "w6w context-entries archive <id>"
+      },
+      "notes": "A missing, foreign, invisible or other-project entry (or collection) is the one uniform `404 not_found`. Returns the archived entry (`archivedAt` set), unwrapped from `{entry}`."
+    },
+    {
+      "name": "contextEntries.addToCollection",
+      "summary": "Add an entry to a collection.",
+      "method": "PUT",
+      "path": "/context-entries/{id}/collections/{collectionId}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "collectionId",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "ContextEntry",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.contextEntries.addToCollection(id, collectionId, opts?)",
+        "python": "client.context_entries.add_to_collection(id, collection_id)",
+        "cli": "w6w context-entries add-to-collection <id> <collectionId>"
+      },
+      "notes": "A missing, foreign, invisible or other-project entry (or collection) is the one uniform `404 not_found`. Idempotent. Answers the entry with its updated `collectionIds`, unwrapped from `{entry}`."
+    },
+    {
+      "name": "contextEntries.removeFromCollection",
+      "summary": "Remove an entry from a collection.",
+      "method": "DELETE",
+      "path": "/context-entries/{id}/collections/{collectionId}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "collectionId",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "ContextEntry",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.contextEntries.removeFromCollection(id, collectionId, opts?)",
+        "python": "client.context_entries.remove_from_collection(id, collection_id)",
+        "cli": "w6w context-entries remove-from-collection <id> <collectionId>"
+      },
+      "notes": "A missing, foreign, invisible or other-project entry (or collection) is the one uniform `404 not_found`. Idempotent. Answers the entry with its updated `collectionIds`, unwrapped from `{entry}`."
+    },
+    {
       "name": "agents.list",
       "summary": "List agent drafts visible to the caller.",
       "method": "GET",
@@ -2809,6 +3051,12 @@
           "in": "body",
           "type": "string",
           "required": false
+        },
+        {
+          "name": "modelOptions",
+          "in": "body",
+          "type": "object",
+          "required": false
         }
       ],
       "returns": "Agent",
@@ -2817,8 +3065,8 @@
       ],
       "naming": {
         "ts": "client.agents.create(input, opts?)",
-        "python": "client.agents.create(name=None, instructions=None, model_route_id=None, skills=None, context=None, visibility=None, project=None)",
-        "cli": "w6w agents create [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>]"
+        "python": "client.agents.create(name=None, instructions=None, model_route_id=None, skills=None, context=None, visibility=None, project=None, model_options=None)",
+        "cli": "w6w agents create [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>] [--temperature <n>] [--top-p <n>] [--max-output-tokens <n>] [--stop <text>]..."
       },
       "notes": "Saving an INCOMPLETE draft is allowed: every field is optional, and `validation` on the answer lists what is missing or disallowed. `skills` is `[{skillId, skillVersionId}]` and `context` is `[{collectionId, entryId?, assetVersionId}]` — pins to immutable VERSIONS, so a later skill upload never changes an existing pin. `instructions` is capped at 64 KiB, at most 100 pins. A malformed body is `422 validation_failed` (the envelope carries `issues`). The server wraps the body as `{agent}`; the wrapper unwraps. **`runnable` is always `false`** (A22)."
     },
@@ -2915,6 +3163,12 @@
           "in": "header",
           "type": "string",
           "required": false
+        },
+        {
+          "name": "modelOptions",
+          "in": "body",
+          "type": "object",
+          "required": false
         }
       ],
       "returns": "Agent",
@@ -2923,8 +3177,8 @@
       ],
       "naming": {
         "ts": "client.agents.update(id, patch, opts?)",
-        "python": "client.agents.update(id, revision, name=None, instructions=None, model_route_id=None, skills=None, context=None, visibility=None, project=None, if_unmodified_since=None)",
-        "cli": "w6w agents update <id> --revision <n> [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>] [--if-unmodified-since <ts>]"
+        "python": "client.agents.update(id, revision, name=None, instructions=None, model_route_id=None, skills=None, context=None, visibility=None, project=None, if_unmodified_since=None, model_options=None)",
+        "cli": "w6w agents update <id> --revision <n> [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>] [--if-unmodified-since <ts>] [--temperature <n>] [--top-p <n>] [--max-output-tokens <n>] [--stop <text>]..."
       },
       "notes": "A missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. A partial update: an omitted field is left alone. Body `revision` (a positive integer — the draft's last-seen `revision`) is REQUIRED and is passed through unchanged; `< 1` or non-integer is `400 invalid_body`. `ifUnmodifiedSince` is the optimistic-concurrency precondition, sent as the `x-w6w-if-unmodified-since` HEADER (not a query param) and ONLY when a value was given — never as an empty or \"null\" string, which the server answers `400 invalid_precondition`. Pass the exact `updatedAt` last read. THE SERVER REQUIRES IT on this route: omitted, the answer is `428 precondition_required` (a typed precondition error, never a silent last-write-wins), so a wrapper must not default it. A stale `revision` or `updatedAt` is `409 conflict` carrying `currentRevision` in the error envelope (`{error:{code,message,currentRevision}}`) — recoverable by re-reading and re-sending; wrappers surface it as a typed conflict error carrying that revision, the 428 as a typed precondition error. A disallowed pin is `422 validation_failed` (a uniform 422, `issues` in the envelope). Unwrapped from `{agent}`; `runnable` stays `false` (A22)."
     },
@@ -3087,7 +3341,7 @@
         "name": "assets.upload",
         "summary": "Upload a directory (or a ZIP) as an asset: walk, hash, create, put each entry with progress, finalize.",
         "status": "live",
-        "naming": "w6w assets upload <path> --purpose <skill|context> [--skill <id>] [--collection <id>] [--retry]",
+        "naming": "w6w assets upload <path> --purpose <skill|context> [--skill <id>] [--collection <id>] [--visibility <v>] [--retry]",
         "params": [
           {
             "name": "path",
@@ -3109,6 +3363,12 @@
           },
           {
             "name": "collection",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "visibility",
             "in": "query",
             "type": "string",
             "required": false

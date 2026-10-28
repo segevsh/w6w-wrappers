@@ -59,6 +59,11 @@ class ModelsTest(unittest.TestCase):
         self.assertEqual(query(req), {"project": ["p1"], "dialect": ["openai"], "response": ["both"]})
         self.assertEqual(json.loads(req.data.decode("utf-8")), {"messages": [1]})
 
+    def test_complete_sends_bridge_dialect(self) -> None:
+        client, calls = make(ENVELOPE)
+        client.model_routes.complete("fast", {"messages": [1]}, dialect="bridge")
+        self.assertEqual(query(calls[0])["dialect"], ["bridge"])
+
     def test_complete_uses_client_default_project(self) -> None:
         client, calls = make(ENVELOPE, project="dflt")
         client.model_routes.complete("fast", {})

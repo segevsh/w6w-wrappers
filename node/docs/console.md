@@ -430,15 +430,15 @@ comment block — field-for-field, not redesigned. `listConnections` (the sevent
 deliberately NOT relocated here: it already has a home on the pre-existing BASE namespace,
 `client.connections.list()` (`src/connections.ts:47-64`), and this domain does not duplicate it.
 
-| Method                 | Route                                  | Notes                                                                                                                                                                               |
-| ---------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `listForApp(appId)`    | `GET /apps/:id/connections`            | `unwrap<ConnectionSummary[]>(res, "connections")`.                                                                                                                                  |
-| `get(id)`              | `GET /connections/:id`                 | `unwrap<ConnectionSummary>(res, "connection")`. No 404 special-casing — propagates as `ApiError`, unlike `console.schedules.get`.                                                   |
-| `create(appId, body)`  | `POST /apps/:id/connections`           | Body `{authKey, credential, displayName?, profile?}` forwarded verbatim. `unwrap<ConnectionSummary>(res, "connection")` (`201`).                                                    |
-| `update(id, body)`     | `PATCH /connections/:id`               | Body `{displayName?, credential?}` forwarded verbatim, not pre-validated client-side. `unwrap<ConnectionSummary>(res, "connection")`.                                               |
-| `test(id)`             | `POST /connections/:id/test`           | **No envelope key — see below.**                                                                                                                                                    |
-| `delete(id, {force}?)` | `DELETE /connections/:id[?force=true]` | Returns nothing; discards `{ok: true}` (and a forced delete's `disabled`). `?force=true` is sent only when `force` is true; without it a `409 connection_in_use` raises `ApiError`. |
-| `dependents(id)`       | `GET /connections/:id/dependents`      | `unwrap<ConnectionDependents>(res, "dependents")` — `{callables, subscriptions}`. Console only; not in `endpoints.json`.                                                            |
+| Method                 | Route                                  | Notes                                                                                                                                                                                                                                                                                                                  |
+| ---------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `listForApp(appId)`    | `GET /apps/:id/connections`            | `unwrap<ConnectionSummary[]>(res, "connections")`.                                                                                                                                                                                                                                                                     |
+| `get(id)`              | `GET /connections/:id`                 | `unwrap<ConnectionSummary>(res, "connection")`. No 404 special-casing — propagates as `ApiError`, unlike `console.schedules.get`.                                                                                                                                                                                      |
+| `create(appId, body)`  | `POST /apps/:id/connections`           | Body forwarded verbatim: either `{authKey, credential, displayName?, profile?}` (inline secret) **or** `{authKey, credentialId, binding?, displayName?}` (attach a stored credential); both together is a compile error and a `400 invalid_credential_source`. `unwrap<ConnectionSummary>(res, "connection")` (`201`). |
+| `update(id, body)`     | `PATCH /connections/:id`               | Body `{displayName?, binding?, credentialId?, credential?}` forwarded verbatim, not pre-validated client-side. `unwrap<ConnectionSummary>(res, "connection")`.                                                                                                                                                         |
+| `test(id)`             | `POST /connections/:id/test`           | **No envelope key — see below.**                                                                                                                                                                                                                                                                                       |
+| `delete(id, {force}?)` | `DELETE /connections/:id[?force=true]` | Returns nothing; discards `{ok: true}` (and a forced delete's `disabled`). `?force=true` is sent only when `force` is true; without it a `409 connection_in_use` raises `ApiError`.                                                                                                                                    |
+| `dependents(id)`       | `GET /connections/:id/dependents`      | `unwrap<ConnectionDependents>(res, "dependents")` — `{callables, subscriptions}`. Console only; not in `endpoints.json`.                                                                                                                                                                                               |
 
 **`test`'s response has no envelope key — the whole body IS the `ConnectionTestResult`**, mirroring
 `console.reliability.list`'s pattern (`packages/server/packages/api/admin/connections.ts:151-190`
@@ -470,6 +470,51 @@ justifying promotion to the partner surface (cli/python lockstep; no partner-fac
 counterpart exists yet either). Console placement is the pinned default for this round;
 partner-surface promotion is deferred to a dedicated future project. A future reader evaluating that
 promotion should start from `HITL-10`/SP2.3 rather than re-deriving the reasoning from scratch.
+
+## `console.credentials.*`
+
+Stored credentials: create one once, attach it to many connections, rotate it in one place.
+Console-only like every connection write op (D-E2), so it is excluded from `endpoints.json` and the
+root barrel. Types (`CredentialSummary`, `CredentialStatus`, `CredentialErrorCode`,
+`CredentialTestResult`, `CredentialDependents`, `ConnectionBinding`, `ConnectionCreateInput`) are
+exported from `@w6w/sdk/console`.
+
+```ts
+import { W6WClient } from "@w6w/sdk";
+import "@w6w/sdk/console"; // pulls in client.console
+
+const client = new W6WClient();
+const cred = await client.console.credentials.create({
+  name: "Ops mailbox",
+  contract: "api_key",
+  source: { key: "sk_live_…" },
+});
+await client.console.connections.create("sendgrid", { authKey: "apiKey", credentialId: cred.id });
+```
+
+| Method                 | Route                                          | Result                                                                                             |
+| ---------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `list(filter?)`        | `GET /credentials[?contract=&appId=&authKey=]` | `CredentialSummary[]` from `credentials`. Only the defined filter keys are sent.                   |
+| `get(id)`              | `GET /credentials/:id`                         | `CredentialSummary` from `credential`.                                                             |
+| `create(body)`         | `POST /credentials`                            | Body `{name, contract, source}` verbatim; `201`, `CredentialSummary` from `credential`.            |
+| `update(id, {name})`   | `PATCH /credentials/:id`                       | Rename. `CredentialSummary` from `credential`.                                                     |
+| `rotate(id, {source})` | `POST /credentials/:id/rotate`                 | Body verbatim. `CredentialSummary` from `credential`.                                              |
+| `disable(id)`          | `POST /credentials/:id/disable`                | `CredentialSummary` from `credential`.                                                             |
+| `enable(id)`           | `POST /credentials/:id/enable`                 | `CredentialSummary` from `credential`.                                                             |
+| `test(id)`             | `POST /credentials/:id/test`                   | **No envelope key**: the whole body, `{ok, code?, message?}`. `ok: false` is a `200` and resolves. |
+| `dependents(id)`       | `GET /credentials/:id/dependents`              | `CredentialDependents` (`{connections}`) from `dependents`.                                        |
+| `delete(id)`           | `DELETE /credentials/:id`                      | Returns nothing (`204`). No force option and no query string.                                      |
+
+`source` (on `create` and `rotate`) is opaque (`Record<string, unknown>`) and forwarded verbatim: it
+is never inspected, logged, transformed or echoed. No response type carries a source payload,
+ciphertext or token; `CredentialSummary.display` holds non-secret labels only.
+
+A `delete` of a credential that connections still use answers `409 credential_in_use`, raised as
+`ApiError` with the server body intact on `raw`: the dependents are at
+`raw.error.dependents.connections` (`{id, appId, authKey, displayName}[]`). A foreign or absent id
+is a uniform `404 unknown_credential`. `create` answers `400 invalid_contract` for a `legacy:*`
+contract and `400 provider_unsupported` for an unknown provider. `update`'s `{credential}` response
+envelope is pinned by this project rather than by the original wire sketch.
 
 ## `console.workflows.*`
 

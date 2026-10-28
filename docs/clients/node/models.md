@@ -71,10 +71,25 @@ console.log(result.invocationId, result.status);
 exactly as the server sent it, including `invocationId`, `status` and `key`. The SDK does not
 unwrap it to `output`. Two options shape the call:
 
-- `dialect`: the wire format your input and the provider reply use: `openai`, `anthropic` or
-  `ollama`.
+- `dialect`: the wire format your input and the provider reply use: `bridge`, `openai`,
+  `anthropic` or `ollama`. Prefer `bridge`: the reply shape is the same whichever provider the
+  route points at.
 - `response`: how much comes back: `output` (the model's answer), `raw` (the provider's reply) or
   `both`.
+
+### Switch provider without changing your code
+
+With `dialect: "bridge"` the envelope has one shape for every provider, and `usageSummary` carries
+normalised token counts (`inclusiveInputTokens`, `freshInputTokens`, `cacheReadTokens`,
+`cacheWriteTokens`, `outputTokens`, `reasoningTokens`, `totalTokens`, each `number | null`, plus a
+`source`). Repointing the route from OpenAI to Anthropic needs no change here:
+
+```ts
+const r = await client.modelRoutes.complete("summarize", input, { dialect: "bridge" });
+console.log(r.usageSummary?.totalTokens, r.usageSummary?.source, r.meta?.usageRecorded);
+```
+
+An unsupported request for the route's model returns `400 model_request_unsupported`.
 
 ## Usage
 

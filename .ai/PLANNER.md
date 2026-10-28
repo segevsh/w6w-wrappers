@@ -1,6 +1,6 @@
 # PLANNER.md — read this first when planning work in `w6w-wrappers`
 
-> **verified: 2026-10-25** (26-10-24-02-agents-studio-foundations integration tip wrappers@7075b2a, `VERSION` 0.9.20, contract `0.11.0` — `cat VERSION`; `grep -m1 contractVersion endpoints.json`; traps 3, 15–17 and the 2026-10-24 gate row updated from that project's evals) — Prior: **verified: 2026-10-23** (26-10-22-00-workflow-updates integration tip, `VERSION` 0.9.17; react's `npm test` fails 11/11 until `node/dist` is built) — Prior: **verified: 2026-10-19** (26-10-18-01-fixes integration tip) — This guide records checked source locations, not a
+> **verified: 2026-10-26** (26-10-25-00-fixes integration tip, `VERSION` 0.9.21, contract `0.12.0` — `cat VERSION`; `grep -m1 contractVersion endpoints.json`; adds `contextEntries.*` (7 ops, entries live in 0..n collections), `Agent.modelOptions`, react `useContextEntries`, cli `w6w context-entries`, python `context_entries`; `contextEntries.archive` returns a bare `ContextEntry`, not a view) — Prior: **verified: 2026-10-25** (26-10-24-02-agents-studio-foundations integration tip wrappers@7075b2a, `VERSION` 0.9.20, contract `0.11.0` — `cat VERSION`; `grep -m1 contractVersion endpoints.json`; traps 3, 15–17 and the 2026-10-24 gate row updated from that project's evals) — Prior: **verified: 2026-10-23** (26-10-22-00-workflow-updates integration tip, `VERSION` 0.9.17; react's `npm test` fails 11/11 until `node/dist` is built) — Prior: **verified: 2026-10-19** (26-10-18-01-fixes integration tip) — This guide records checked source locations, not a
 > replacement for them. When this guide and the code disagree, **code wins**;
 > correct this guide in the same change.
 
@@ -289,7 +289,7 @@
    (26-10-24-02 `evals/T4.1.3.eval.md` mutants a–c). `assets.content`/`archiveDownload` declare an `out`
    query param that only the CLI help tree uses; node and python never send it (same eval, disclosed).
 
-16. **Agents Studio surface (`VERSION` 0.9.20): resource classes per lane, console-only storage.**
+16. **Agents Studio surface (`VERSION` 0.9.21): resource classes per lane, console-only storage.**
 
    **verified: 2026-10-25** — wrappers@7075b2a.
    - Contract resources `client.assets`/`skills`/`context`/`agents`: node `node/src/{assets,skills,context,agents}.ts`
@@ -408,3 +408,14 @@
 - **verified: 2026-10-13** — Keep the routing table and the traps in sync
   with the release workflow, `docs/parity.md`, `docs/implementation.md`, and
   `docs/release.md` named above.
+
+## 26-10-27-01-unified-credentials-service-accounts update
+
+**verified: 2026-10-27** — against wrappers `main` @ `a08b9df` (`VERSION` 0.9.23, contract `0.13.0`).
+- `client.console.credentials.{list,get,create,update,rotate,disable,enable,test,dependents,delete}`
+  (`node/src/console/credentials.ts`, console-only — not in `endpoints.json` operations). `ConnectionSummary.credentialId:
+  string | null` is REQUIRED in node (`null` = no stored credential) and read by python. A 409 `credential_in_use`
+  carries dependents under `error.dependents`.
+- **Trap — pytest is not installed here**: CI's command is `PYTHONPATH=src python3 -m unittest discover -s tests -t .`
+  (from `python/`). cli and react need `npm ci` first; react tests need `NODE_OPTIONS=--experimental-strip-types`.
+- Baseline: `deno task --config node/deno.json test` → **725 passed, 0 failed**.

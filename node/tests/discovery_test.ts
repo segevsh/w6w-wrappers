@@ -85,6 +85,7 @@ const CONNECTION: ConnectionSummary = {
   lastTestedAt: "2026-07-20T09:14:00.000Z",
   createdAt: "2026-07-01T12:00:00.000Z",
   updatedAt: "2026-07-20T09:14:00.000Z",
+  credentialId: null,
 };
 
 const WORKFLOW: WorkflowSummary = {

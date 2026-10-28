@@ -86,6 +86,7 @@ const PUBLIC_SURFACE: Record<string, "function" | "string"> = {
   AssetsApi: "function",
   SkillsApi: "function",
   ContextApi: "function",
+  ContextEntriesApi: "function",
   AgentsApi: "function",
   DashboardApi: "function",
   ProjectsApi: "function",
@@ -213,6 +214,7 @@ const CONNECTION: ConnectionSummary = {
   lastTestedAt: "2026-07-20T09:00:00.000Z",
   createdAt: "2026-07-01T12:00:00.000Z",
   updatedAt: "2026-07-20T09:00:00.000Z",
+  credentialId: "cred_1",
 };
 
 /** `app` is optional, and `null` (no app row) is distinct from absent (older server). */

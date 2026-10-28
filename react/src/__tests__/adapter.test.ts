@@ -608,3 +608,155 @@ test("listApps restarts once when the snapshot expires mid-walk and resolves onl
   );
   assert.equal(fake.calls.length, 4);
 });
+
+const CRED = {
+  id: "cred_1",
+  name: "Ops",
+  contract: "api_key",
+  status: "active",
+  revision: 1,
+  display: {},
+  private: false,
+  connectionCount: 0,
+  createdAt: "t",
+  updatedAt: "t",
+};
+const CRED_BASE = "https://api.example.com/credentials";
+
+test("listCredentials reaches GET /credentials with only the given filter keys", async () => {
+  const fake = fakeFetch(() => json({ credentials: [CRED] }));
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  assert.deepEqual(await adapter.listCredentials(), [CRED]);
+  await adapter.listCredentials({ appId: "gmail", authKey: "sa" });
+
+  assert.equal(fake.calls[0].url, CRED_BASE);
+  assert.equal(fake.calls[1].url, `${CRED_BASE}?appId=gmail&authKey=sa`);
+});
+
+test("createCredential reaches POST /credentials with the body verbatim", async () => {
+  const fake = fakeFetch(() => json({ credential: CRED }, 201));
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+  const body = { name: "Ops", contract: "api_key", source: { key: "k" } };
+
+  assert.deepEqual(await adapter.createCredential(body), CRED);
+
+  assert.equal(fake.calls[0].method, "POST");
+  assert.equal(fake.calls[0].url, CRED_BASE);
+  assert.equal(fake.calls[0].body, JSON.stringify(body));
+});
+
+test("getCredential reaches GET /credentials/:id (encoded)", async () => {
+  const fake = fakeFetch(() => json({ credential: CRED }));
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  assert.deepEqual(await adapter.getCredential("cred/x"), CRED);
+
+  assert.equal(fake.calls[0].method, "GET");
+  assert.equal(fake.calls[0].url, `${CRED_BASE}/cred%2Fx`);
+});
+
+test("rotateCredential reaches POST /credentials/:id/rotate with {source} verbatim", async () => {
+  const fake = fakeFetch(() => json({ credential: CRED }));
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  await adapter.rotateCredential("cred_1", { source: { key: "n" } });
+
+  assert.equal(fake.calls[0].method, "POST");
+  assert.equal(fake.calls[0].url, `${CRED_BASE}/cred_1/rotate`);
+  assert.equal(fake.calls[0].body, '{"source":{"key":"n"}}');
+});
+
+test("setCredentialStatus('disabled') reaches POST /disable", async () => {
+  const fake = fakeFetch(() => json({ credential: { ...CRED, status: "disabled" } }));
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  const res = await adapter.setCredentialStatus("cred_1", "disabled");
+
+  assert.equal(res.status, "disabled");
+  assert.equal(fake.calls[0].method, "POST");
+  assert.equal(fake.calls[0].url, `${CRED_BASE}/cred_1/disable`);
+});
+
+test("setCredentialStatus('active') reaches POST /enable", async () => {
+  const fake = fakeFetch(() => json({ credential: CRED }));
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  await adapter.setCredentialStatus("cred_1", "active");
+
+  assert.equal(fake.calls[0].method, "POST");
+  assert.equal(fake.calls[0].url, `${CRED_BASE}/cred_1/enable`);
+});
+
+test("testCredential reaches POST /credentials/:id/test and returns the whole body", async () => {
+  const body = { ok: false, code: "credential_invalid", message: "bad" };
+  const fake = fakeFetch(() => json(body));
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  assert.deepEqual(await adapter.testCredential("cred_1"), body);
+
+  assert.equal(fake.calls[0].method, "POST");
+  assert.equal(fake.calls[0].url, `${CRED_BASE}/cred_1/test`);
+});
+
+test("credentialDependents reaches GET /credentials/:id/dependents and unwraps", async () => {
+  const deps = {
+    connections: [{ id: "conn_1", appId: "gmail", authKey: "sa", displayName: "G" }],
+  };
+  const fake = fakeFetch(() => json({ dependents: deps }));
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  assert.deepEqual(await adapter.credentialDependents("cred_1"), deps);
+
+  assert.equal(fake.calls[0].url, `${CRED_BASE}/cred_1/dependents`);
+});
+
+test("deleteCredential sends a bare DELETE; a 409 rejects with .body.error.dependents intact", async () => {
+  const ok = fakeFetch(() => new Response(null, { status: 204 }));
+  assert.equal(
+    await createW6WUiAdapter(testClient(ok.fetch)).deleteCredential("cred_1"),
+    undefined,
+  );
+  assert.equal(ok.calls[0].method, "DELETE");
+  assert.equal(ok.calls[0].url, `${CRED_BASE}/cred_1`);
+
+  const errorBody = {
+    error: {
+      code: "credential_in_use",
+      message: "in use",
+      dependents: {
+        connections: [{ id: "conn_1", appId: "gmail", authKey: "sa" }],
+      },
+    },
+  };
+  const fake = fakeFetch(() => json(errorBody, 409));
+  await assert.rejects(
+    () => createW6WUiAdapter(testClient(fake.fetch)).deleteCredential("cred_1"),
+    (err: unknown) => {
+      const e = err as {
+        status?: number;
+        code?: string;
+        body?: typeof errorBody;
+      };
+      assert.equal(e.status, 409);
+      assert.equal(e.code, "credential_in_use");
+      assert.equal(e.body?.error.dependents.connections[0].id, "conn_1");
+      return true;
+    },
+  );
+});
+
+test("createConnection forwards an attach-by-id body verbatim", async () => {
+  const fake = fakeFetch(() => json({ connection: { id: "conn_1" } }, 201));
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+  const body = {
+    authKey: "sa",
+    credentialId: "cred_1",
+    binding: { delegatedUser: "u@x.io" },
+  };
+
+  await adapter.createConnection("gmail", body);
+
+  assert.equal(fake.calls[0].url, "https://api.example.com/apps/gmail/connections");
+  assert.equal(fake.calls[0].body, JSON.stringify(body));
+});

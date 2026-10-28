@@ -38,7 +38,7 @@ import type { Me, RunEnvelope } from "./types.ts";
 import { VarsApi } from "./vars.ts";
 import { AgentsApi } from "./agents.ts";
 import { AssetsApi } from "./assets.ts";
-import { ContextApi } from "./context.ts";
+import { ContextApi, ContextEntriesApi } from "./context.ts";
 import { SkillsApi } from "./skills.ts";
 import { EndpointsApi } from "./endpoints.ts";
 import { FunctionsApi } from "./functions.ts";
@@ -99,6 +99,8 @@ export class W6WClient {
   readonly skills: SkillsApi;
   /** Context collections and text entries. */
   readonly context: ContextApi;
+  /** Top-level context entries (contract 0.12.0). */
+  readonly contextEntries: ContextEntriesApi;
   /** Agent drafts (never runnable). */
   readonly agents: AgentsApi;
 
@@ -227,6 +229,7 @@ export class W6WClient {
     this.assets = new AssetsApi(this);
     this.skills = new SkillsApi(this);
     this.context = new ContextApi(this);
+    this.contextEntries = new ContextEntriesApi(this);
     this.agents = new AgentsApi(this);
     this.connections = new ConnectionsApi(this);
     this.apps = new AppsApi(this);

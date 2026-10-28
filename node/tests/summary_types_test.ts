@@ -3,7 +3,7 @@
  * The runtime test only keeps the file in the suite.
  */
 import { assertEquals } from "@std/assert";
-import type { FunctionSummary as PublicFunctionSummary } from "../src/types.ts";
+import type { ConnectionSummary, FunctionSummary as PublicFunctionSummary } from "../src/types.ts";
 import type { FunctionSummary } from "../src/console/functions.ts";
 import type { EndpointSummary } from "../src/console/endpoints.ts";
 import type {
@@ -19,6 +19,7 @@ const pin = <_T extends true>() => 0;
 pin<Equal<PublicFunctionSummary["archivedAt"], string | null>>();
 pin<Equal<FunctionSummary["archivedAt"], string | null>>();
 pin<Equal<EndpointSummary["archivedAt"], string | null>>();
+pin<Equal<ConnectionSummary["credentialId"], string | null>>();
 pin<Equal<EndpointSummary["status"], "draft" | "ready">>();
 pin<Equal<EndpointSummary["incomplete"], boolean>>();
 // Requiredness: an optional key is not assignable to its required counterpart.
@@ -29,6 +30,9 @@ pin<
   >
 >();
 pin<Equal<Required<Pick<FunctionSummary, "archivedAt">>, Pick<FunctionSummary, "archivedAt">>>();
+pin<
+  Equal<Required<Pick<ConnectionSummary, "credentialId">>, Pick<ConnectionSummary, "credentialId">>
+>();
 pin<
   Equal<
     Required<Pick<EndpointSummary, "archivedAt" | "status" | "incomplete">>,

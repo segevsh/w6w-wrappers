@@ -60,6 +60,8 @@ export interface Invocation {
   globals: GlobalOptions;
   /** Non-global flags, keyed by camelCased name. Empty unless `flags` was passed. */
   options: Record<string, string | boolean>;
+  /** Every value of a repeatable flag (see {@linkcode REPEATABLE_FLAGS}), in order, by camelCased name. */
+  lists?: Record<string, string[]>;
 }
 
 /** What `parse()` returns: a parsed command line, or a usage error to report. */
@@ -74,6 +76,12 @@ export interface ParseOptions {
   /** The command paths that exist. Defaults to the generated contract's. */
   commands?: readonly (readonly string[])[];
 }
+
+/**
+ * Flags that may be given more than once. Their values accumulate in
+ * `Invocation.lists`; `options` still holds the last one, as for every flag.
+ */
+export const REPEATABLE_FLAGS: ReadonlySet<string> = new Set(["--stop"]);
 
 /** `--base-url` → `baseUrl`. */
 function optionKey(flagName: string): string {
@@ -157,7 +165,7 @@ function normalizeAliases(operands: string[]): string[] {
  *
  * Accepted forms: `--flag`, `--flag value`, `--flag=value`, a short alias
  * (`-h`, `-v`), and `--` to end flag parsing. A repeated flag keeps the last
- * value. An unknown flag, a missing value, or a value handed to a boolean flag
+ * value (a repeatable one also accumulates all of them). An unknown flag, a missing value, or a value handed to a boolean flag
  * are all reported as usage errors.
  */
 export function parse(argv: string[], options: ParseOptions = {}): ParseResult {
@@ -169,6 +177,11 @@ export function parse(argv: string[], options: ParseOptions = {}): ParseResult {
   );
 
   const values: Record<string, string | boolean> = {};
+  const lists: Record<string, string[]> = {};
+  const record = (name: string, value: string) => {
+    values[optionKey(name)] = value;
+    if (REPEATABLE_FLAGS.has(name)) (lists[optionKey(name)] ??= []).push(value);
+  };
   const operands: string[] = [];
   const fail = (message: string): ParseResult => ({
     ok: false,
@@ -203,14 +216,14 @@ export function parse(argv: string[], options: ParseOptions = {}): ParseResult {
     }
 
     if (inlineValue !== null) {
-      values[optionKey(spec.name)] = inlineValue;
+      record(spec.name, inlineValue);
       continue;
     }
     const next = argv[i + 1];
     if (next === undefined || (next.startsWith("-") && next !== "-")) {
       return fail(`flag ${spec.name} requires a value`);
     }
-    values[optionKey(spec.name)] = next;
+    record(spec.name, next);
     i++;
   }
 
@@ -235,6 +248,7 @@ export function parse(argv: string[], options: ParseOptions = {}): ParseResult {
         help: values.help === true,
       },
       options: extras,
+      lists,
     },
   };
 }

@@ -277,6 +277,136 @@ class ContextEntriesApi:
         return {PRECONDITION_HEADER: if_unmodified_since} if if_unmodified_since else None
 
 
+class TopLevelContextEntriesApi:
+    """The top-level ``client.context_entries.*`` namespace (`/context-entries`).
+
+    Entries here are collection-independent: one may belong to no collection, or
+    to several (``collectionIds``). Distinct from :class:`ContextEntriesApi`,
+    the collection-nested ``client.context.entries`` half.
+    """
+
+    def __init__(self, host: AgentsStudioHost) -> None:
+        """Bind the namespace to the client it issues requests through.
+
+        :param host: The client this namespace issues requests through.
+        """
+        self._host = host
+
+    def list(
+        self,
+        collection_id: Optional[str] = None,
+        include_archived: Optional[bool] = None,
+        project: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """List entries, optionally one collection's members.
+
+        :returns: The `entries` array, unwrapped.
+        """
+        response = self._host.request(
+            "GET",
+            "/context-entries",
+            query={
+                "collectionId": collection_id,
+                "includeArchived": include_archived,
+                "project": project,
+            },
+        )
+        return unwrap_list(response, "entries")
+
+    def create(
+        self,
+        name: str,
+        text: str,
+        visibility: Optional[str] = None,
+        collection_ids: Optional[Sequence[str]] = None,
+    ) -> Dict[str, Any]:
+        """Create a text entry, in any number of collections (or none).
+
+        :returns: The entry, unwrapped from ``{entry}``.
+        """
+        response = self._host.request(
+            "POST",
+            "/context-entries",
+            body=_body(
+                name=name, text=text, visibility=visibility, collectionIds=collection_ids
+            ),
+        )
+        return unwrap_object(response, "entry")
+
+    def get(self, id: str) -> Dict[str, Any]:
+        """Fetch one entry.
+
+        :returns: The entry, unwrapped from ``{entry}``.
+        """
+        return unwrap_object(
+            self._host.request("GET", path("/context-entries/{id}", id=id)), "entry"
+        )
+
+    def update(
+        self,
+        id: str,
+        text: str,
+        revision: int,
+        if_unmodified_since: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Replace an entry's text (a full replacement).
+
+        ``if_unmodified_since`` is sent as the precondition header only when given.
+
+        :returns: The entry, unwrapped from ``{entry}``.
+        """
+        response = self._host.request(
+            "PUT",
+            path("/context-entries/{id}", id=id),
+            body={"text": text, "revision": revision},
+            headers=ContextEntriesApi._precondition(if_unmodified_since),
+        )
+        return unwrap_object(response, "entry")
+
+    def archive(self, id: str) -> Dict[str, Any]:
+        """Archive an entry.
+
+        :returns: The entry, unwrapped from ``{entry}``.
+        """
+        return unwrap_object(
+            self._host.request("POST", path("/context-entries/{id}/archive", id=id)), "entry"
+        )
+
+    def add_to_collection(self, id: str, collection_id: str) -> Dict[str, Any]:
+        """Add an entry to a collection.
+
+        :returns: The entry, unwrapped from ``{entry}``.
+        """
+        return unwrap_object(
+            self._host.request(
+                "PUT",
+                path(
+                    "/context-entries/{id}/collections/{collectionId}",
+                    id=id,
+                    collectionId=collection_id,
+                ),
+            ),
+            "entry",
+        )
+
+    def remove_from_collection(self, id: str, collection_id: str) -> Dict[str, Any]:
+        """Remove an entry from a collection.
+
+        :returns: The entry, unwrapped from ``{entry}``.
+        """
+        return unwrap_object(
+            self._host.request(
+                "DELETE",
+                path(
+                    "/context-entries/{id}/collections/{collectionId}",
+                    id=id,
+                    collectionId=collection_id,
+                ),
+            ),
+            "entry",
+        )
+
+
 class ContextApi:
     """The `context` namespace: context collections and their entries.
 
@@ -449,6 +579,7 @@ class AgentsApi:
         context: Optional[Sequence[Mapping[str, Any]]] = None,
         visibility: Optional[str] = None,
         project: Optional[str] = None,
+        model_options: Optional[Mapping[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Save a new agent draft. Every field is optional.
 
@@ -466,6 +597,8 @@ class AgentsApi:
             ``[{"collectionId": ..., "entryId": ..., "assetVersionId": ...}]``.
         :param visibility: ``private``, ``project`` or ``account``.
         :param project: The project to own the draft. Not this client's default.
+        :param model_options: Sampling options passed through as ``modelOptions``
+            (e.g. ``{"temperature": 0.2, "stop": ["END"]}``).
         :returns: The new draft, unwrapped from ``{agent}``, carrying
             ``revision``, ``updatedAt``, ``validation`` and ``runnable: false``.
         :raises ApiError: `422 validation_failed` — a malformed body or a
@@ -482,6 +615,7 @@ class AgentsApi:
                 context=context,
                 visibility=visibility,
                 project=project,
+                modelOptions=model_options,
             ),
         )
         return unwrap_object(response, "agent")
@@ -509,6 +643,7 @@ class AgentsApi:
         visibility: Optional[str] = None,
         project: Optional[str] = None,
         if_unmodified_since: Optional[str] = None,
+        model_options: Optional[Mapping[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Patch an agent draft.
 
@@ -530,6 +665,7 @@ class AgentsApi:
         :param context: The whole new pin list.
         :param visibility: ``private``, ``project`` or ``account``.
         :param project: Move the draft to this project.
+        :param model_options: Sampling options, passed through as ``modelOptions``.
         :param if_unmodified_since: The exact ``updatedAt`` this client last
             read. Sent as `x-w6w-if-unmodified-since` **only when given** —
             never as an empty string, which the server rejects as
@@ -552,6 +688,7 @@ class AgentsApi:
             context=context,
             visibility=visibility,
             project=project,
+            modelOptions=model_options,
         )
         response = self._host.request(
             "PATCH",

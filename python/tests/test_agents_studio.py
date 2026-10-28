@@ -491,5 +491,97 @@ class AgentsTest(unittest.TestCase):
         self.assertEqual(calls[0].get_method(), "POST")
 
 
+class TopLevelContextEntriesTest(unittest.TestCase):
+    """`/context-entries`: the seven collection-independent operations."""
+
+    BASE = "https://api.example.com"
+
+    def test_list(self) -> None:
+        instance, calls = client(responding({"entries": [{"id": "ent_1"}]}))
+        out = instance.context_entries.list(
+            collection_id="ctx_1", include_archived=True, project="prj_2"
+        )
+        self.assertEqual(out, [{"id": "ent_1"}])
+        self.assertEqual(calls[0].get_method(), "GET")
+        self.assertEqual(
+            calls[0].full_url,
+            self.BASE + "/context-entries?collectionId=ctx_1&includeArchived=true&project=prj_2",
+        )
+
+    def test_create(self) -> None:
+        instance, calls = client(responding({"entry": {"id": "ent_1"}}))
+        out = instance.context_entries.create(
+            "hours", "9-5", visibility="account", collection_ids=["ctx_1"]
+        )
+        self.assertEqual(out, {"id": "ent_1"})
+        self.assertEqual(calls[0].get_method(), "POST")
+        self.assertEqual(calls[0].full_url, self.BASE + "/context-entries")
+        self.assertEqual(
+            sent_body(calls[0]),
+            {"name": "hours", "text": "9-5", "visibility": "account", "collectionIds": ["ctx_1"]},
+        )
+
+    def test_get(self) -> None:
+        instance, calls = client(responding({"entry": {"id": "ent_1"}}))
+        self.assertEqual(instance.context_entries.get("ent_1"), {"id": "ent_1"})
+        self.assertEqual(calls[0].get_method(), "GET")
+        self.assertEqual(calls[0].full_url, self.BASE + "/context-entries/ent_1")
+
+    def test_update(self) -> None:
+        instance, calls = client(responding({"entry": {"id": "ent_1", "revision": 2}}))
+        instance.context_entries.update("ent_1", "new", 1, if_unmodified_since=TOKEN)
+        self.assertEqual(calls[0].get_method(), "PUT")
+        self.assertEqual(calls[0].full_url, self.BASE + "/context-entries/ent_1")
+        self.assertEqual(sent_body(calls[0]), {"text": "new", "revision": 1})
+        self.assertEqual(calls[0].get_header(HEADER), TOKEN)
+
+    def test_archive(self) -> None:
+        instance, calls = client(responding({"entry": {"id": "ent_1"}}))
+        instance.context_entries.archive("ent_1")
+        self.assertEqual(calls[0].get_method(), "POST")
+        self.assertEqual(calls[0].full_url, self.BASE + "/context-entries/ent_1/archive")
+
+    def test_add_to_collection(self) -> None:
+        instance, calls = client(responding({"entry": {"id": "ent_1"}}))
+        instance.context_entries.add_to_collection("ent_1", "ctx_1")
+        self.assertEqual(calls[0].get_method(), "PUT")
+        self.assertEqual(
+            calls[0].full_url, self.BASE + "/context-entries/ent_1/collections/ctx_1"
+        )
+
+    def test_remove_from_collection(self) -> None:
+        instance, calls = client(responding({"entry": {"id": "ent_1"}}))
+        instance.context_entries.remove_from_collection("ent_1", "ctx_1")
+        self.assertEqual(calls[0].get_method(), "DELETE")
+        self.assertEqual(
+            calls[0].full_url, self.BASE + "/context-entries/ent_1/collections/ctx_1"
+        )
+
+
+class AgentModelOptionsAndPinTest(unittest.TestCase):
+    """`modelOptions` pass-through and a collection-less context pin."""
+
+    def test_create_passes_model_options_and_a_collectionless_pin(self) -> None:
+        instance, calls = client(responding({"agent": {"id": "agt_1"}}))
+        pin = {"entryId": "ent_1", "assetVersionId": "av_1"}
+        instance.agents.create(
+            name="a", model_options={"temperature": 0.2, "stop": ["END"]}, context=[pin]
+        )
+        self.assertEqual(
+            sent_body(calls[0]),
+            {
+                "name": "a",
+                "context": [pin],
+                "modelOptions": {"temperature": 0.2, "stop": ["END"]},
+            },
+        )
+
+    def test_update_passes_model_options(self) -> None:
+        instance, calls = client(responding({"agent": {"id": "agt_1"}}))
+        instance.agents.update("agt_1", 1, model_options={"topP": 0.9})
+        self.assertEqual(sent_body(calls[0]), {"revision": 1, "modelOptions": {"topP": 0.9}})
+
+
+
 if __name__ == "__main__":  # pragma: no cover - convenience for a single-file run.
     unittest.main()

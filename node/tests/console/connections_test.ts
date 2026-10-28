@@ -62,6 +62,7 @@ const CONN_A: ConnectionSummary = {
   lastTestedAt: "2026-08-09T00:00:00.000Z",
   createdAt: "2026-08-01T00:00:00.000Z",
   updatedAt: "2026-08-09T00:00:00.000Z",
+  credentialId: "cred_1",
 };
 
 const CONN_B: ConnectionSummary = {
@@ -77,6 +78,7 @@ const CONN_B: ConnectionSummary = {
   lastTestedAt: null,
   createdAt: "2026-08-02T00:00:00.000Z",
   updatedAt: "2026-08-02T00:00:00.000Z",
+  credentialId: null,
 };
 
 /** A client wired to a fake transport. */
@@ -297,4 +299,54 @@ Deno.test("console.connections.dependents: GET /connections/:id/dependents unwra
   assertEquals(res, dependents);
   assertEquals(c.calls[0].method, "GET");
   assertEquals(c.calls[0].url, "https://api.example.com/connections/conn%201/dependents");
+});
+
+Deno.test("console.connections.create forwards an attach-by-id body verbatim", async () => {
+  const c = client(() => json({ connection: CONN_A }, 201));
+  const input = {
+    authKey: "serviceAccount",
+    credentialId: "cred_1",
+    binding: { scopes: ["a.readonly"], delegatedUser: "u@example.com", settings: { n: 1 } },
+    displayName: "SA",
+  };
+
+  const res = await c.client.console.connections.create("gmail", input);
+
+  assertEquals(res, CONN_A);
+  assertEquals(c.calls[0].method, "POST");
+  assertEquals(c.calls[0].url, "https://api.example.com/apps/gmail/connections");
+  assertEquals(c.calls[0].body, JSON.stringify(input));
+});
+
+Deno.test("console.connections.create: the legacy inline form still compiles and is verbatim", async () => {
+  const c = client(() => json({ connection: CONN_A }, 201));
+  const input = { authKey: "apiKey", credential: { key: "k" }, displayName: "D" };
+
+  await c.client.console.connections.create("sendgrid", input);
+
+  assertEquals(c.calls[0].body, JSON.stringify(input));
+});
+
+Deno.test("console.connections.create: a body carrying both forms is a compile error", () => {
+  const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
+  // Never invoked: this pins the type, `deno check` is the assertion.
+  const _never = () =>
+    // @ts-expect-error credential and credentialId are mutually exclusive
+    c.console.connections.create("sendgrid", {
+      authKey: "apiKey",
+      credential: { key: "k" },
+      credentialId: "cred_1",
+    });
+  assertEquals(typeof _never, "function");
+});
+
+Deno.test("console.connections.update forwards binding + credentialId verbatim", async () => {
+  const c = client(() => json({ connection: CONN_A }));
+  const patch = { binding: { delegatedUser: "u@example.com" }, credentialId: "cred_2" };
+
+  await c.client.console.connections.update("conn_1", patch);
+
+  assertEquals(c.calls[0].method, "PATCH");
+  assertEquals(c.calls[0].url, "https://api.example.com/connections/conn_1");
+  assertEquals(c.calls[0].body, JSON.stringify(patch));
 });

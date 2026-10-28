@@ -19,7 +19,7 @@ from typing import Any, Callable, Dict, Mapping, Optional, Union
 from ._config import ResolvedConfig, TokenProvider, resolve_config
 from ._http import HttpResponse, Transport, _request, default_transport
 from ._vars import VarsApi
-from .agents_studio import AgentsApi, ContextApi, SkillsApi
+from .agents_studio import AgentsApi, ContextApi, SkillsApi, TopLevelContextEntriesApi
 from .apps import AppsApi
 from .assets import AssetsApi
 from .connections import ConnectionsApi
@@ -185,6 +185,9 @@ class Client:
         #: ``context.list/create/get/update/archive`` and
         #: ``context.entries.list/create/update``.
         self.context: ContextApi = ContextApi(self)
+        #: Top-level entries: ``context_entries.list/create/get/update/archive/
+        #: add_to_collection/remove_from_collection``.
+        self.context_entries: TopLevelContextEntriesApi = TopLevelContextEntriesApi(self)
         #: Agent DRAFTS: ``agents.list/create/get/update/archive``. Every answer
         #: is ``runnable: false`` — no Agent runtime exists (A22).
         self.agents: AgentsApi = AgentsApi(self)

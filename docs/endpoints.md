@@ -245,6 +245,7 @@ the array.
       "lastTestedAt": "2026-07-20T09:14:00.000Z",
       "createdAt": "2026-07-01T12:00:00.000Z",
       "updatedAt": "2026-07-20T09:14:00.000Z",
+      "credentialId": "cred_01H…",
       "app": {
         "displayName": "SendGrid",
         "iconSvg": "data:image/svg+xml;base64,…",
@@ -262,6 +263,13 @@ flattened into the row), so a list needs no second fetch for names and icons.
 Only `displayName` is always present inside it. `app` is `null` when the server
 found no app row, and absent from an older server; the TypeScript wrappers keep
 those two apart, Python reads both as `None`.
+
+`credentialId` (contract `0.13.0`) is the id of the stored credential the
+connection uses. It is `string | null`, and `null` means no stored credential
+(tenantAuth, jit, none, or a zero-credential row). It is additive and
+read-only here: creating and managing credentials is console-only
+(`client.console.credentials.*`, see [parity.md](./parity.md)), so this contract
+gains no credential operation.
 
 Shape is `ConnectionSummary` (fields pinned in
 [implementation.md §5](./implementation.md#5-wire-types)) — the stored
@@ -1643,7 +1651,7 @@ GET /connections/:id
 
 **Response `200`** — envelope key `connection`; the wrapper unwraps and returns
 one `ConnectionSummary` (the same redacted projection as §2, including the
-optional `app` and `builtIn`).
+optional `app` and `builtIn`, and the nullable `credentialId`).
 
 **Account-owned.** Another account's id answers the same `404 unknown_connection`
 as an id that does not exist. The built-in zero-credential row that §2 can include
@@ -2284,6 +2292,90 @@ POST /agents/:id/archive
 Unwrapped from `{agent}`; `archived: true`. There is no agent delete or purge.
 Principal-scoped: a missing, foreign, private-to-someone-else or other-project
 id is the one uniform `404 not_found`.
+
+---
+
+## 87. `contextEntries.list` — list entries across collections
+
+```
+GET /context-entries
+```
+
+`status: required` · served today
+
+Top-level and collection-independent: an entry need not belong to any collection. Query `collectionId` (filter to one collection's members), `includeArchived`, `project`. Unwrapped from `{entries}`. A listed entry carries `collectionIds` (sorted ascending) and never `collectionId`.
+
+---
+
+## 88. `contextEntries.create` — create a text entry
+
+```
+POST /context-entries
+```
+
+`status: required` · served today
+
+Body `name` and `text` (strings, required), `visibility` (defaults to the creator's default) and `collectionIds` (the entry becomes a member of each). Answers `201` with a `ContextEntryView`, unwrapped from `{entry}`.
+
+---
+
+## 89. `contextEntries.get` — fetch one entry
+
+```
+GET /context-entries/:id
+```
+
+`status: required` · served today
+
+A missing, foreign, invisible or other-project entry (or collection) is the one uniform `404 not_found`. Answers a `ContextEntryView`, unwrapped from `{entry}`.
+
+---
+
+## 90. `contextEntries.update` — replace an entry's content
+
+```
+PUT /context-entries/:id
+```
+
+`status: required` · served today
+
+A full replacement of `text`. Body `revision` and the `ifUnmodifiedSince` header are both required; `428 precondition_required` without the header, `409 conflict` on a stale one. A missing, foreign, invisible or other-project entry (or collection) is the one uniform `404 not_found`.
+
+---
+
+## 91. `contextEntries.archive` — archive an entry
+
+```
+POST /context-entries/:id/archive
+```
+
+`status: required` · served today
+
+A missing, foreign, invisible or other-project entry (or collection) is the one uniform `404 not_found`. Answers the archived `ContextEntryView` (`archivedAt` set), unwrapped from `{entry}`.
+
+---
+
+## 92. `contextEntries.addToCollection` — add an entry to a collection
+
+```
+PUT /context-entries/:id/collections/:collectionId
+```
+
+`status: required` · served today
+
+A missing, foreign, invisible or other-project entry (or collection) is the one uniform `404 not_found`. Idempotent. Answers the entry with its updated `collectionIds`, unwrapped from `{entry}`.
+
+---
+
+## 93. `contextEntries.removeFromCollection` — remove an entry from a collection
+
+```
+DELETE /context-entries/:id/collections/:collectionId
+```
+
+`status: required` · served today
+
+A missing, foreign, invisible or other-project entry (or collection) is the one uniform `404 not_found`. Idempotent. Answers the entry with its updated `collectionIds`, unwrapped from `{entry}`.
 
 ---
 

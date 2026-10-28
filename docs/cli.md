@@ -330,6 +330,51 @@ flag in this CLI that does not come from the generated help tree (`mod.ts`'s
 `commandFlagSpecs`), for exactly the same reason the token aliases are
 hand-declared rather than contract-driven.
 
+## `agents` model options and `assets upload --visibility`
+
+`w6w agents create` and `w6w agents update` take the sampling options of an
+agent's model call as flags, assembled into the `modelOptions` body object
+(contract 0.12.0):
+
+```text
+--temperature <n>         0 to 2
+--top-p <n>               0 to 1
+--max-output-tokens <n>   integer, 1 to 1000000
+--stop <text>             repeatable; at most 4
+```
+
+`w6w agents update` replaces the whole `modelOptions` object when any of these
+is given, so repeat every option you want to keep. `--stop` is the one
+repeatable flag in this CLI: `--stop END --stop "###"` sends
+`"stop": ["END", "###"]`.
+
+`w6w assets upload --purpose context` takes `--visibility private|project|account`
+and passes it through; with no `--collection` the upload is not tied to a
+collection. `--visibility` with `--purpose skill` is a usage error.
+
+## `context-entries` — context entries outside any collection
+
+`w6w context-entries` manages text entries that do not belong to one collection
+(contract 0.12.0; the SDK's `client.contextEntries.*`). The nested
+`w6w context entries-*` commands keep working for collection-scoped entries.
+
+```
+w6w context-entries list [--collection-id <id>] [--include-archived] [--project <p>]
+w6w context-entries create <name> --text <text> [--visibility <v>] [--collection-id <id>]
+w6w context-entries get <id>
+w6w context-entries update <id> --text <text> --revision <n> [--if-unmodified-since <ts>]
+w6w context-entries archive <id>
+w6w context-entries add-to-collection <id> <collectionId>
+w6w context-entries remove-from-collection <id> <collectionId>
+```
+
+`--collection-id` on `create` takes one id or a comma-separated list (the flag
+parser keeps only the last value of a repeated flag). `update` is a precondition
+write: it sends the body `revision` and, when given, the `--if-unmodified-since`
+header, and a stale revision is reported with the current one, as for
+`w6w context entries-update`. `add-to-collection` and `remove-from-collection`
+are idempotent.
+
 ## Exit codes
 
 Help text is a promise about behavior, so the codes are part of the contract:

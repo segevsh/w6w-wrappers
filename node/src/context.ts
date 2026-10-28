@@ -16,7 +16,9 @@ import {
   type ContextEntryView,
   type CreateContextCollectionInput,
   type CreateContextEntryInput,
+  type CreateStandaloneContextEntryInput,
   type ListArchivedOptions,
+  type ListContextEntriesOptions,
   type ListPagedOptions,
   type PreconditionOptions,
   unwrap,
@@ -34,7 +36,7 @@ export interface ContextHost {
 }
 
 /** The `client.context.entries.*` half. */
-class ContextEntriesApi {
+class CollectionEntriesApi {
   readonly #host: ContextHost;
 
   constructor(host: ContextHost) {
@@ -91,11 +93,11 @@ class ContextEntriesApi {
 export class ContextApi implements ContextApiShape {
   readonly #host: ContextHost;
   /** Text entries of a collection. */
-  readonly entries: ContextEntriesApi;
+  readonly entries: CollectionEntriesApi;
 
   constructor(host: ContextHost) {
     this.#host = host;
-    this.entries = new ContextEntriesApi(host);
+    this.entries = new CollectionEntriesApi(host);
   }
 
   /** List collections visible to the caller. */
@@ -156,5 +158,112 @@ export class ContextApi implements ContextApiShape {
       signal: opts?.signal,
     });
     return unwrap<ContextCollection>(res, "collection");
+  }
+}
+
+/**
+ * `client.contextEntries.*` — top-level, collection-independent context entries
+ * (contract 0.12.0). `update` is a precondition write like `context.entries.update`.
+ */
+export class ContextEntriesApi {
+  readonly #host: ContextHost;
+
+  constructor(host: ContextHost) {
+    this.#host = host;
+  }
+
+  /** List entries visible to the caller; `collectionId` filters to one collection. */
+  async list(opts?: ListContextEntriesOptions): Promise<ContextEntry[]> {
+    const res = await this.#host.request<unknown>({
+      method: "GET",
+      path: "/context-entries",
+      query: {
+        collectionId: opts?.collectionId,
+        includeArchived: opts?.includeArchived,
+        project: opts?.project,
+      },
+      signal: opts?.signal,
+    });
+    return unwrap<ContextEntry[]>(res, "entries");
+  }
+
+  /** Create a text entry, optionally a member of `collectionIds`. */
+  async create(
+    input: CreateStandaloneContextEntryInput,
+    opts?: CallOptions,
+  ): Promise<ContextEntryView> {
+    const res = await this.#host.request<unknown>({
+      method: "POST",
+      path: "/context-entries",
+      body: input,
+      signal: opts?.signal,
+    });
+    return unwrap<ContextEntryView>(res, "entry");
+  }
+
+  /** Fetch one entry. */
+  async get(id: string, opts?: CallOptions): Promise<ContextEntryView> {
+    const res = await this.#host.request<unknown>({
+      method: "GET",
+      path: path`/context-entries/${id}`,
+      signal: opts?.signal,
+    });
+    return unwrap<ContextEntryView>(res, "entry");
+  }
+
+  /** Replace an entry's text. Sends body `revision` and the precondition header when given. */
+  async update(
+    id: string,
+    input: UpdateContextEntryInput,
+    opts?: PreconditionOptions,
+  ): Promise<ContextEntryView> {
+    const res = await this.#host.request<unknown>({
+      method: "PUT",
+      path: path`/context-entries/${id}`,
+      body: input,
+      ...(opts?.ifUnmodifiedSince
+        ? { headers: { [PRECONDITION_HEADER]: opts.ifUnmodifiedSince } }
+        : {}),
+      signal: opts?.signal,
+    });
+    return unwrap<ContextEntryView>(res, "entry");
+  }
+
+  /** Archive an entry. */
+  async archive(id: string, opts?: CallOptions): Promise<ContextEntry> {
+    const res = await this.#host.request<unknown>({
+      method: "POST",
+      path: path`/context-entries/${id}/archive`,
+      signal: opts?.signal,
+    });
+    return unwrap<ContextEntry>(res, "entry");
+  }
+
+  /** Add an entry to a collection (idempotent). */
+  async addToCollection(
+    id: string,
+    collectionId: string,
+    opts?: CallOptions,
+  ): Promise<ContextEntry> {
+    const res = await this.#host.request<unknown>({
+      method: "PUT",
+      path: path`/context-entries/${id}/collections/${collectionId}`,
+      signal: opts?.signal,
+    });
+    return unwrap<ContextEntry>(res, "entry");
+  }
+
+  /** Remove an entry from a collection (idempotent). */
+  async removeFromCollection(
+    id: string,
+    collectionId: string,
+    opts?: CallOptions,
+  ): Promise<ContextEntry> {
+    const res = await this.#host.request<unknown>({
+      method: "DELETE",
+      path: path`/context-entries/${id}/collections/${collectionId}`,
+      signal: opts?.signal,
+    });
+    return unwrap<ContextEntry>(res, "entry");
   }
 }
