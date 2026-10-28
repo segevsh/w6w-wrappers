@@ -42,7 +42,7 @@ export interface VarsHost {
  * Addressed by `name`, because that is how the server addresses a create (D6).
  */
 export interface VarCreateInput {
-  /** Must match `^[a-z_][a-z0-9_]*$` (`400 invalid_name`); unique (`409 var_exists`). */
+  /** Must match `^[A-Za-z_][A-Za-z0-9_]*$` (`400 invalid_name`); unique (`409 var_exists`). */
   name: string;
   /** The declared type. */
   type: VarType;
@@ -131,7 +131,7 @@ export class VarsApi {
    * Fetch one variable by the `name` its author chose.
    *
    * The name is percent-encoded at interpolation by the `path` tag. The server's
-   * own rule (`^[a-z_][a-z0-9_]*$`) contains nothing that needs encoding — but
+   * own rule (`^[A-Za-z_][A-Za-z0-9_]*$`) contains nothing that needs encoding — but
    * that rule is the *server's* to enforce, and this method encodes rather than
    * validates: a name the server accepts is sent as-is (encoded), and a name it
    * rejects comes back as `400 invalid_name` from the one place that owns the

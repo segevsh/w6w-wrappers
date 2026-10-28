@@ -8,7 +8,7 @@ Six operations, **one HTTP call each**. Create by `name`, read by id or by name,
 update and delete by id (`docs/implementation.md` §7, D6 amended by D12). No
 client-side list-then-filter: :meth:`VarsApi.get_by_name` targets a real route,
 `GET /vars/by-name/{name}`, served since 2026-07-28. Names are regex-validated
-(`^[a-z_][a-z0-9_]*$`) at create time and so are URL-safe by construction —
+(`^[A-Za-z_][A-Za-z0-9_]*$`) at create time and so are URL-safe by construction —
 unlike a document's free-form key, there is no dot-segment hazard here.
 
 **There is no scoping query parameter on any variable operation, and this module
@@ -126,7 +126,7 @@ class VarsApi:
         """Fetch one variable by the `name` its author chose.
 
         The name is percent-encoded at interpolation by :func:`w6w.path`. The
-        server's own rule (`^[a-z_][a-z0-9_]*$`) contains nothing that needs
+        server's own rule (`^[A-Za-z_][A-Za-z0-9_]*$`) contains nothing that needs
         encoding — but that rule is the *server's* to enforce, and this method
         encodes rather than validates: a name the server accepts is sent as-is
         (encoded), and a name it rejects comes back as `400 invalid_name` from
@@ -161,7 +161,7 @@ class VarsApi:
         the same request. The distinction that does matter lives on
         :meth:`update`, which uses :data:`w6w.UNSET`.
 
-        :param name: Must match `^[a-z_][a-z0-9_]*$` (`400 invalid_name`).
+        :param name: Must match `^[A-Za-z_][A-Za-z0-9_]*$` (`400 invalid_name`).
         :param type: One of `"string"`, `"number"`, `"boolean"`, `"json"`.
         :param value: The value, validated server-side against `type`
             (`400 invalid_value`).

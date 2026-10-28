@@ -694,7 +694,7 @@ GET /vars/by-name/:name
 
 `status: required` · `serverImplemented: true` — implemented 2026-07-28.
 
-Names are already regex-validated (`[a-z_][a-z0-9_]*`) at create time, which is
+Names are already regex-validated (`[A-Za-z_][A-Za-z0-9_]*`) at create time, which is
 URL-safe by construction — unlike documents' free-form `key`, no dot-segment
 hazard exists here and no extra normalization is needed.
 
@@ -728,7 +728,7 @@ POST /vars
 
 | Field         | Required | Notes                                                                |
 | ------------- | -------- | -------------------------------------------------------------------- |
-| `name`        | yes      | Must match `^[a-z_][a-z0-9_]*$`. Create is addressed by `name` (D6). |
+| `name`        | yes      | Must match `^[A-Za-z_][A-Za-z0-9_]*$` (case-sensitive). Create is addressed by `name` (D6). |
 | `type`        | yes      | One of `string` \| `number` \| `boolean` \| `json`.                  |
 | `value`       | yes      | Validated **server-side** against `type`.                            |
 | `description` | no       | Free text.                                                           |

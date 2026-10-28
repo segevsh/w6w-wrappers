@@ -448,7 +448,7 @@ class Var:
 
     #: Server-issued id, `var_…`. Addresses update and delete.
     id: str
-    #: Caller-chosen name, matching `^[a-z_][a-z0-9_]*$`. Immutable.
+    #: Caller-chosen name, matching `^[A-Za-z_][A-Za-z0-9_]*$` (case-sensitive). Immutable.
     name: str
     #: Declared type.
     type: VarType

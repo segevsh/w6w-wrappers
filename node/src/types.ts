@@ -75,7 +75,7 @@ export type VarType = "string" | "number" | "boolean" | "json";
 export interface Var {
   /** Server-issued id, `var_…`. Addresses update and delete. */
   id: string;
-  /** Caller-chosen name, matching `^[a-z_][a-z0-9_]*$`. Immutable. */
+  /** Caller-chosen name, matching `^[A-Za-z_][A-Za-z0-9_]*$` (case-sensitive). Immutable. */
   name: string;
   /** Declared type. */
   type: VarType;
