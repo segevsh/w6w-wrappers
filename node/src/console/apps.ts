@@ -571,6 +571,8 @@ export interface ListAppsOptions {
   category?: string;
   /** Only apps declaring `modelProvider` (`true`) or not (`false`). */
   modelProvider?: boolean;
+  /** Only apps declaring at least one trigger (`true`) or none (`false`). */
+  hasTriggers?: boolean;
   /** Only providers serving this model type. */
   modelType?: string;
   /** Only providers serving this model family. */
@@ -723,6 +725,7 @@ export class AppsApi {
         q: rest.q,
         category: rest.category,
         modelProvider: rest.modelProvider,
+        hasTriggers: rest.hasTriggers,
         modelType: rest.modelType,
         modelFamily: rest.modelFamily,
         maturity: rest.maturity,
