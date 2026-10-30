@@ -160,16 +160,16 @@ Every failure is an `ApiError` with `status` and `code`. The codes below are inf
 
 | Status and code | When |
 | --- | --- |
-| `400 invalid_value` | A value, row or cell the store's kind or schema refuses. Carries `field`, `row` and `column` where they apply. |
+| `400 invalid_value` | A value, row or cell the store's kind or schema refuses, or a document nested deeper than 100 levels. Carries `field`, `row` and `column` where they apply. |
 | `400 invalid_key` | The entry key is not allowed. |
 | `400 invalid_query` | A malformed `where` or `order`. |
 | `400 invalid_csv` | The import body was not sent as `text/csv`, or is not valid CSV. |
-| `400 unknown_project` | The project id isn't one of your account's projects. |
+| `400 unknown_project` | The project id isn't one of your account's projects, or your account no longer exists. |
 | `404 data_store_not_found` | No such store, or it is archived or belongs to another account or project. |
 | `404 entry_not_found` | No entry under that key. |
 | `409 store_exists` | A store with that name already exists. |
 | `409 version_conflict` | `ifVersion` is stale. |
-| `500 internal_error` | Something failed on the server. |
+| `500 internal_error` | Something failed on the server. The message is fixed and never carries database text. |
 
 For `invalid_value`, `field`, `row` and `column` sit in the response envelope, which the SDK keeps
 on `ApiError.raw`:
