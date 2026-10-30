@@ -1,6 +1,6 @@
 # PLANNER.md — read this first when planning work in `w6w-wrappers`
 
-> **verified: 2026-10-30** (26-10-29-00-scoped-app-management landed, `VERSION` 0.9.25, contract `0.14.0`, 107 ops — `cat VERSION`; `grep -m1 contractVersion endpoints.json`; adds `appManagement.*` (7 ops: list/get/preview/register/updateSource/sync/remove), python `app_management`, cli `w6w app-management` (use `--sort=-recent`, `=` form; register takes `--paths a,b`); `outOfScope` now names app-management as in scope; `appManagement.get` of an unmanaged app is `404 unknown_app`) — Prior: **verified: 2026-10-26** (26-10-25-00-fixes integration tip, `VERSION` 0.9.21, contract `0.12.0` — `cat VERSION`; `grep -m1 contractVersion endpoints.json`; adds `contextEntries.*` (7 ops, entries live in 0..n collections), `Agent.modelOptions`, react `useContextEntries`, cli `w6w context-entries`, python `context_entries`; `contextEntries.archive` returns a bare `ContextEntry`, not a view) — Prior: **verified: 2026-10-25** (26-10-24-02-agents-studio-foundations integration tip wrappers@7075b2a, `VERSION` 0.9.20, contract `0.11.0` — `cat VERSION`; `grep -m1 contractVersion endpoints.json`; traps 3, 15–17 and the 2026-10-24 gate row updated from that project's evals) — Prior: **verified: 2026-10-23** (26-10-22-00-workflow-updates integration tip, `VERSION` 0.9.17; react's `npm test` fails 11/11 until `node/dist` is built) — Prior: **verified: 2026-10-19** (26-10-18-01-fixes integration tip) — This guide records checked source locations, not a
+> **verified: 2026-10-30** (26-10-30-02-data-stores-everywhere landed, `VERSION` 0.9.26, contract `0.15.0`, 121 ops — `cat VERSION`; `grep -m1 contractVersion endpoints.json`; adds `dataStores.*` (14 ops: 7 store-level incl. `importCsv`/`exportCsv`, 7 `entries.*`), python `data_stores`, cli `w6w data-stores` (entry verbs are `entry-<verb>`), react's 13 derived hooks; CSV is a text transport mode, trap 19) — Prior: **verified: 2026-10-30** (26-10-29-00-scoped-app-management landed, `VERSION` 0.9.25, contract `0.14.0`, 107 ops — `cat VERSION`; `grep -m1 contractVersion endpoints.json`; adds `appManagement.*` (7 ops: list/get/preview/register/updateSource/sync/remove), python `app_management`, cli `w6w app-management` (use `--sort=-recent`, `=` form; register takes `--paths a,b`); `outOfScope` now names app-management as in scope; `appManagement.get` of an unmanaged app is `404 unknown_app`) — Prior: **verified: 2026-10-26** (26-10-25-00-fixes integration tip, `VERSION` 0.9.21, contract `0.12.0` — `cat VERSION`; `grep -m1 contractVersion endpoints.json`; adds `contextEntries.*` (7 ops, entries live in 0..n collections), `Agent.modelOptions`, react `useContextEntries`, cli `w6w context-entries`, python `context_entries`; `contextEntries.archive` returns a bare `ContextEntry`, not a view) — Prior: **verified: 2026-10-25** (26-10-24-02-agents-studio-foundations integration tip wrappers@7075b2a, `VERSION` 0.9.20, contract `0.11.0` — `cat VERSION`; `grep -m1 contractVersion endpoints.json`; traps 3, 15–17 and the 2026-10-24 gate row updated from that project's evals) — Prior: **verified: 2026-10-23** (26-10-22-00-workflow-updates integration tip, `VERSION` 0.9.17; react's `npm test` fails 11/11 until `node/dist` is built) — Prior: **verified: 2026-10-19** (26-10-18-01-fixes integration tip) — This guide records checked source locations, not a
 > replacement for them. When this guide and the code disagree, **code wins**;
 > correct this guide in the same change.
 
@@ -27,6 +27,7 @@
 | a `console.*` (`@w6w/sdk/console`) type or route            | `node/docs/console.md`, then trap 6 below    | **verified: 2026-10-13** — `node/src/console/mod.ts` header |
 | a byte (non-JSON) body or response                          | `docs/implementation.md` (the `bodyEncoding`/`responseEncoding: "octet-stream"` section), trap 15 | **verified: 2026-10-25** — `grep -n octet-stream docs/implementation.md` |
 | assets, skills, context or agent drafts                     | `docs/guides/agents-studio.md`, `docs/endpoints.md`, trap 16 | **verified: 2026-10-25** — `docs/manifest.json` lists the guide |
+| data stores (`dataStores.*`), CSV text mode                 | `docs/clients/node/data-stores.md`; `docs/implementation.md` (the text-mode `bodyEncoding: "csv"`/`responseEncoding: "text"` subsection), trap 19 | **verified: 2026-10-30** — `docs/manifest.json` lists `node/data-stores`; the implementation.md subsection is written by 26-10-30-02 T1.1.1 |
 
 ## Things that bite people who skip this
 
@@ -334,6 +335,16 @@
    named without a reference to `.../@w6w/sdk/dist/src/types`"). Fixed at closeout in `e8b7b1c` (the
    `export type { Agent, … }` block after the `Asset*` one in `mod.ts`). When adding an op, grep its
    argument and return types in `mod.ts`, not just the namespace class.
+
+19. **Text (CSV) mode: an explicit encoding value, otherwise a string body stays JSON.**
+
+   **verified: 2026-10-30** — `dataStores.importCsv` declares `bodyEncoding: "csv"` and
+   `dataStores.exportCsv` `responseEncoding: "text"` in `endpoints.json`. Only that explicit value makes
+   node's `http.ts` and python's `_http.py` send the string verbatim as `content-type: text/csv`, or return
+   the response body as an unparsed string. Do not key it on `typeof body === "string"`: a string passed to
+   any other operation is a JSON value and must still be quoted. The server refuses any other media type
+   with `400 invalid_csv`. Like byte mode (trap 15), the transport re-pins the content type, so a caller
+   header cannot change it.
 
 ## Gate baselines
 
