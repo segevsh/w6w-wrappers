@@ -281,6 +281,21 @@ reuses node's type) and python, with the contract at `0.13.0`. react's `W6WApi` 
 eight optional credential members over the console namespace; they are not in
 `adapter-conformance.test.ts`'s table, which must equal the pinned `@w6w/ui` member list.
 
+## Data stores
+
+Contract `0.15.0` adds the 14 `dataStores.*` operations, taking the contract from 107 to 121
+operations. They are stable (`operations[]`), not `console.*`, so node, cli and python all
+implement them and §Conformance covers them. The names are `dataStores.*` and
+`dataStores.entries.*`; the cli verbs are `data-stores <verb>` and `data-stores entry-<verb>`.
+
+- **react** stays a derived lane: 13 hooks wrap `client.dataStores.*` (five read hooks and eight
+  mutation hooks), and none has a route of its own. There is no hook for `exportCsv`.
+- **No adapter method.** `createW6WUiAdapter` gains no `listDataStores`: the pinned `W6WApi` has no
+  such member, and the adapter has no `listModelRoutes` either.
+- **CSV is text mode.** `importCsv` declares `bodyEncoding: "csv"` and `exportCsv`
+  `responseEncoding: "text"`. node and python carry the string verbatim, with `content-type: text/csv`
+  on import, and never JSON-encode or JSON-parse it. See `implementation.md`.
+
 ## Server-only helpers
 
 Server-only helpers (`@w6w/sdk/server`'s `exchangeToken` and `createEmbedSessionClient`;

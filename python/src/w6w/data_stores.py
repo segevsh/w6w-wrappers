@@ -142,7 +142,7 @@ class DataStoreEntriesApi:
             "PUT",
             path("/data-stores/{id}/entries/{key}", id=id, key=key),
             query={"project": _project(self._host, project)},
-            body=_present(value=value, ifVersion=if_version, ttlSeconds=ttl_seconds),
+            body={"value": value, **_present(ifVersion=if_version, ttlSeconds=ttl_seconds)},
         ).body
 
     def insert(
