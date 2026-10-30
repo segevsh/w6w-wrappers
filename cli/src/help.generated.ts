@@ -5145,7 +5145,7 @@ export const HELP_TREE: HelpTree = {
           "short": "Register an app or pack from a source into a target",
           "headline": "register an app or pack from a source into a target",
           "usage": "w6w app-management register --target <target> <source> [options]",
-          "naming": "w6w app-management register <source> --target <target> [--path <p>...]",
+          "naming": "w6w app-management register <source> --target <target> [--paths <a,b>]",
           "status": "required",
           "params": [
             {
@@ -5167,7 +5167,7 @@ export const HELP_TREE: HelpTree = {
             {
               "name": "paths",
               "kind": "flag",
-              "display": "--paths <value>",
+              "display": "--paths <a,b>",
               "description": "Pack sources only: comma-separated paths of the entries to register",
               "required": false,
             },

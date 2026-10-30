@@ -3302,7 +3302,7 @@
         "python": "client.app_management.get(id)",
         "cli": "w6w app-management get <id>"
       },
-      "notes": "Nothing is unwrapped: the body is returned exactly as sent. The body is the catalog detail (`app`, `actions`, `health`, `sourceRef`, `version`, `digest`, `versionCount`, `overlay`, `effective`, `owner`) plus `auths`, `management`, `source` and `lastSync`. Open unions: `ManagementClass`, `UnavailableReason`; closed: `SyncOutcome`. Codes: `400 invalid_path` (malformed id), `404 unknown_app` (also when the caller cannot see the app), `403 forbidden` (visible but not managed, or global and the caller is not an operator)."
+      "notes": "Nothing is unwrapped: the body is returned exactly as sent. The body is the catalog detail (`app`, `actions`, `health`, `sourceRef`, `version`, `digest`, `versionCount`, `overlay`, `effective`, `owner`) plus `auths`, `management`, `source` and `lastSync`. Open unions: `ManagementClass`, `UnavailableReason`; closed: `SyncOutcome`. Codes: `400 invalid_path` (malformed id), `404 unknown_app` (also when the caller cannot see the app), a global app is `200` with `management.class: \"global\"`; any app the caller does not manage (including visible-but-unmanaged) is `404 unknown_app`."
     },
     {
       "name": "appManagement.preview",
@@ -3369,7 +3369,7 @@
       "naming": {
         "ts": "client.appManagement.register(input, opts?)",
         "python": "client.app_management.register(target, source, paths=None)",
-        "cli": "w6w app-management register <source> --target <target> [--path <p>...]"
+        "cli": "w6w app-management register <source> --target <target> [--paths <a,b>]"
       },
       "notes": "Nothing is unwrapped: the body is returned exactly as sent. The legacy import shapes (app: 201 or 200; pack: 201, 207 or 200) plus `target`. Codes: `400 invalid_body`, `400 invalid_target`, `400 invalid_source`, `403 forbidden`, `403 user_import_disabled`, `403 local_import_forbidden`, `409 id_taken`, `424 fetch_failed`, `424 source_requires_grant`, `429 source_rate_limited`, `424 source_timeout`, `424 source_too_large`."
     },
