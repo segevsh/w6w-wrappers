@@ -58,6 +58,12 @@ A saved token is used only for the base URL it was saved for. See the [CLI](/cli
 | `w6w config get-base-url` | Show the effective base URL and where it came from (`flag`, `env`, `config`, `default`). |
 | `w6w config set-base-url <url>` | Save the base URL (trailing slash dropped). Tokens are not moved: run `w6w auth login` for the new host. A set `W6W_BASE_URL` still wins and is called out. |
 
+## Build
+
+| Command | What it does |
+| --- | --- |
+| `w6w build app <folder> [--out <dir>] [--pack <file>]` | Local only (no API call). Runs `npm run test` then `npm run build` in the app folder (output on stderr), then writes `app.js` and a deterministic `manifest.json` (sha256 digest, definition and hook names, icons embedded as `data:` URIs) to `--out` (default: the built file's directory). `--pack` updates a pack or index JSON file's `apps` entry with `id`, `version` and `digest` (safe under concurrent builds: updated under a `<pack>.lock`). Nothing is written if tests or build fail. |
+
 ## List
 
 | Command | What it does |

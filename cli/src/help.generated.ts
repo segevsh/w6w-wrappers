@@ -5153,6 +5153,91 @@ export const HELP_TREE: HelpTree = {
         "w6w config set-base-url https://w6w.example.com",
       ],
     },
+    {
+      "name": "build",
+      "summary": "Build apps locally (no API call)",
+      "headline": "build apps locally (no API call)",
+      "usage": "w6w build <command> [options]",
+      "commands": [
+        {
+          "operation": "build.app",
+          "path": [
+            "build",
+            "app",
+          ],
+          "name": "app",
+          "aliases": [],
+          "summary":
+            "Test and build an app folder into a self-describing bundle (local only, no API call).",
+          "short":
+            "Test and build an app folder into a self-describing bundle (local only, no API call)",
+          "headline":
+            "test and build an app folder into a self-describing bundle (local only, no API call)",
+          "usage": "w6w build app <folder> [options]",
+          "naming": "w6w build app <folder> [--out <dir>] [--pack <file>]",
+          "status": "live",
+          "params": [
+            {
+              "name": "folder",
+              "kind": "argument",
+              "display": "<folder>",
+              "description":
+                "The app directory: a package.json with a `w6w` block, version, scripts.test, scripts.build and main",
+              "required": true,
+            },
+            {
+              "name": "out",
+              "kind": "flag",
+              "display": "--out <dir>",
+              "description":
+                "Where to write app.js and manifest.json (icons are embedded in it as data: URIs; default: the directory of the built file)",
+              "required": false,
+            },
+            {
+              "name": "pack",
+              "kind": "flag",
+              "display": "--pack <file>",
+              "description":
+                "A pack or index JSON file (with an `apps` array) to update with the app's id, version and digest; created if missing",
+              "required": false,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w build app ./apps/2chat",
+            "w6w build app ./apps/2chat --out ./out/2chat --pack ./w6w-pack.json",
+          ],
+          "notes": [],
+        },
+      ],
+      "options": [
+        {
+          "name": "out",
+          "kind": "flag",
+          "display": "--out <dir>",
+          "description":
+            "Where to write app.js and manifest.json (icons are embedded in it as data: URIs; default: the directory of the built file)",
+          "required": false,
+        },
+        {
+          "name": "pack",
+          "kind": "flag",
+          "display": "--pack <file>",
+          "description":
+            "A pack or index JSON file (with an `apps` array) to update with the app's id, version and digest; created if missing",
+          "required": false,
+        },
+      ],
+      "examples": [
+        "w6w build app ./apps/2chat",
+      ],
+    },
   ],
   "globalFlags": [
     {
@@ -5642,6 +5727,10 @@ export const COMMAND_PATHS: string[][] = [
   [
     "config",
     "set-base-url",
+  ],
+  [
+    "build",
+    "app",
   ],
 ];
 

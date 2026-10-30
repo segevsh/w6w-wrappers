@@ -139,6 +139,7 @@ const GROUP_SUMMARIES: Record<string, string> = {
   reliability: "Health and performance of the apps you use",
   auth: "Save, remove and inspect the stored API token",
   config: "Show and set the API base URL",
+  build: "Build apps locally (no API call)",
 };
 
 const GROUP_EXAMPLES: Record<string, string[]> = {
@@ -166,6 +167,7 @@ const GROUP_EXAMPLES: Record<string, string[]> = {
   ],
   auth: ["w6w auth status", "printf '%s' \"$W6W_TOKEN\" | w6w auth login -"],
   config: ["w6w config get-base-url", "w6w config set-base-url https://w6w.example.com"],
+  build: ["w6w build app ./apps/2chat"],
 };
 
 /** At least one runnable example per command — the part people actually copy. */
@@ -292,6 +294,10 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
   "config.set-base-url": [
     "w6w config set-base-url https://w6w.example.com",
     "w6w config set-base-url https://api.w6w.io",
+  ],
+  "build.app": [
+    "w6w build app ./apps/2chat",
+    "w6w build app ./apps/2chat --out ./out/2chat --pack ./w6w-pack.json",
   ],
   "ls": [
     "w6w ls workflows",
@@ -525,6 +531,12 @@ const PARAM_HELP: Record<string, string> = {
     "The API token to save, or `-` to read it from standard input (default when input is piped)",
   "config.set-base-url.url":
     "The API origin to save, like https://api.example.com (a trailing slash is dropped)",
+  "build.app.folder":
+    "The app directory: a package.json with a `w6w` block, version, scripts.test, scripts.build and main",
+  "build.app.out":
+    "Where to write app.js and manifest.json (icons are embedded in it as data: URIs; default: the directory of the built file)",
+  "build.app.pack":
+    "A pack or index JSON file (with an `apps` array) to update with the app's id, version and digest; created if missing",
   "ls.kind":
     "What to list: integrations | workflows | functions | endpoints (endpoints is unstable)",
   "ls.project": "Project to scope to (workflows only; other kinds ignore it)",

@@ -3318,6 +3318,32 @@
         ]
       },
       {
+        "name": "build.app",
+        "summary": "Test and build an app folder into a self-describing bundle (local only, no API call).",
+        "status": "live",
+        "naming": "w6w build app <folder> [--out <dir>] [--pack <file>]",
+        "params": [
+          {
+            "name": "folder",
+            "in": "argument",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "out",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "pack",
+            "in": "query",
+            "type": "string",
+            "required": false
+          }
+        ]
+      },
+      {
         "name": "ls",
         "summary": "List integrations, workflows, functions or endpoints (endpoints is unstable).",
         "status": "live",

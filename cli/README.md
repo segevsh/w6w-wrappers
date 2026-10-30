@@ -33,6 +33,7 @@ w6w auth status                                # base URL, where it came from, m
 w6w auth logout
 w6w config get-base-url                        # effective base URL and its source
 w6w config set-base-url https://w6w.example.com  # save it (tokens are per host: auth login again)
+w6w build app ./my-app --pack ./w6w-pack.json   # test, build and describe an app folder (local only)
 ```
 
 The token is stored per user (`~/.config/w6w/config.json`, or `$XDG_CONFIG_HOME/w6w/…`;
