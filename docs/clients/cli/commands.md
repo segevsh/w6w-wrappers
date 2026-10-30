@@ -248,6 +248,33 @@ w6w model-routes complete summarize \
 w6w model-usage --group-by route --from 2026-10-01 --to 2026-10-24
 ```
 
+## Data stores
+
+Every data-stores command takes `--project <id>`. Without it, your account's default project is
+used. Entry commands are spelled `entry-<verb>`: a command path is at most two words.
+
+| Command | What it does |
+| --- | --- |
+| `w6w data-stores list [--kind <kv\|doc\|table>] [--cursor <c>] [--limit <n>]` | List data stores. |
+| `w6w data-stores get <id>` | Print one data store. |
+| `w6w data-stores create <name> --kind <kind> [--description <d>] [--schema <json>]` | Create a store. |
+| `w6w data-stores update <id> [--name <n>] [--description <d>] [--schema <json>]` | Change only the fields you pass. |
+| `w6w data-stores archive <id>` | Archive a store. |
+| `w6w data-stores import <id> --file <path>` | Import CSV rows; `--file -` reads standard input. |
+| `w6w data-stores export <id> [--out <path>]` | Write the CSV to standard output, or to a file. |
+| `w6w data-stores entry-list <id> [--prefix <p>] [--cursor <c>] [--limit <n>]` | List entries. |
+| `w6w data-stores entry-get <id> <key>` | Print one entry. |
+| `w6w data-stores entry-set <id> <key> --value <json> [--if-version <n>] [--ttl-seconds <n>]` | Write an entry; `--if-version` makes it a compare-and-set. |
+| `w6w data-stores entry-insert <id> --value <json> [--ttl-seconds <n>]` | Insert a row into a table store. |
+| `w6w data-stores entry-increment <id> <key> [--by <n>]` | Add to a numeric entry (default 1). |
+| `w6w data-stores entry-delete <id> <key>` | Delete an entry. |
+| `w6w data-stores entry-query <id> [--where <col=value>...] [--order <col>] [--limit <n>]` | Query a table store; repeat `--where` for more columns. |
+
+```bash
+w6w data-stores entry-query ds_01HQ8N --where status=open --where owner=ann --order created
+cat visits.csv | w6w data-stores import ds_01HQ8N --file -
+```
+
 ## Where to next
 
 - **[CLI](/clients/cli/)**: setup, scripting, exit codes and known limitations.

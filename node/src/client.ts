@@ -25,6 +25,7 @@ import { AppsApi } from "./apps.ts";
 import { ConnectionsApi } from "./connections.ts";
 import { ConsoleApi } from "./console/mod.ts";
 import { DashboardApi } from "./dashboard.ts";
+import { DataStoresApi } from "./data-stores.ts";
 import { DocumentsApi } from "./documents.ts";
 import { ConfigError } from "./errors.ts";
 import { type CallOptions, type HttpResponse, request, type RequestOptions } from "./http.ts";
@@ -77,6 +78,12 @@ export class W6WClient {
    * overrides this client's default.
    */
   readonly documents: DocumentsApi;
+
+  /**
+   * Data stores: `list`, `get`, `create`, `update`, `archive`, `importCsv`,
+   * `exportCsv`, plus `entries.*`. Project-scoped like `documents`.
+   */
+  readonly dataStores: DataStoresApi;
 
   /** The model catalog: `list`, `get`. Planned op — see `endpoints.json`. */
   readonly models: ModelsApi;
@@ -225,6 +232,7 @@ export class W6WClient {
     // additionally see the configuration, because they are the project-scoped
     // half of the surface and have a default project to apply.
     this.documents = new DocumentsApi(this);
+    this.dataStores = new DataStoresApi(this);
     this.models = new ModelsApi(this);
     this.modelRoutes = new ModelRoutesApi(this);
     this.modelUsage = new ModelUsageApi(this);

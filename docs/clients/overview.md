@@ -143,6 +143,7 @@ The four clients cover the same operations, named in each language's own style:
 | Endpoints | `run` by key or id |
 | Documents | `list`, `get`, `getByKey`, `create`, `update`, `delete` |
 | Vars | `list`, `get`, `getByName`, `create`, `update`, `delete` |
+| Data stores | `dataStores.list`, `get`, `create`, `update`, `archive`, `importCsv`, `exportCsv`, and `dataStores.entries.list`, `get`, `set`, `insert`, `increment`, `delete`, `query` |
 | Team | `members`, `invite`, `invites`, `revokeInvite`, `setRole`, `removeMember` |
 
 Each client also has a `request` method for routes that don't have a wrapper yet. It uses the
