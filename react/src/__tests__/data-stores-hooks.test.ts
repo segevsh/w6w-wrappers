@@ -9,22 +9,8 @@ import type { FetchLike } from "@w6w/sdk";
 import { JSDOM } from "jsdom";
 import { act, createElement } from "react";
 import { type Root, createRoot } from "react-dom/client";
-import {
-  W6WProvider,
-  useArchiveDataStore,
-  useCreateDataStore,
-  useDataStore,
-  useDataStoreEntries,
-  useDataStoreEntry,
-  useDataStoreQuery,
-  useDataStores,
-  useDeleteDataStoreEntry,
-  useImportDataStoreCsv,
-  useIncrementDataStoreEntry,
-  useInsertDataStoreRow,
-  useSetDataStoreEntry,
-  useUpdateDataStore,
-} from "../../mod.ts";
+import { W6WProvider } from "../../mod.ts";
+import * as hooks from "../../mod.ts";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -131,7 +117,7 @@ async function mutateOnce<A extends unknown[]>(
 }
 
 test("useDataStores: GET /data-stores with kind, limit and project", async () => {
-  const c = await readOnce(() => useDataStores({ kind: "table", limit: 5, project: "p1" }));
+  const c = await readOnce(() => hooks.useDataStores({ kind: "table", limit: 5, project: "p1" }));
   assert.equal(c.method, "GET");
   assert.equal(c.pathname, "/data-stores");
   assert.equal(c.params.get("project"), "p1");
@@ -140,20 +126,20 @@ test("useDataStores: GET /data-stores with kind, limit and project", async () =>
 });
 
 test("useDataStores: no options sends no query at all", async () => {
-  const c = await readOnce(() => useDataStores());
+  const c = await readOnce(() => hooks.useDataStores());
   assert.equal(c.pathname, "/data-stores");
   assert.equal([...c.params.keys()].length, 0);
 });
 
 test("useDataStore: GET /data-stores/ds_1?project=p1", async () => {
-  const c = await readOnce(() => useDataStore("ds_1", { project: "p1" }));
+  const c = await readOnce(() => hooks.useDataStore("ds_1", { project: "p1" }));
   assert.equal(c.method, "GET");
   assert.equal(c.pathname, "/data-stores/ds_1");
   assert.equal(c.params.get("project"), "p1");
 });
 
 test("useDataStoreEntries: GET .../entries with prefix and no where[...]", async () => {
-  const c = await readOnce(() => useDataStoreEntries("ds_1", { prefix: "user:", limit: 10 }));
+  const c = await readOnce(() => hooks.useDataStoreEntries("ds_1", { prefix: "user:", limit: 10 }));
   assert.equal(c.method, "GET");
   assert.equal(c.pathname, "/data-stores/ds_1/entries");
   assert.equal(c.params.get("prefix"), "user:");
@@ -165,7 +151,7 @@ test("useDataStoreEntries: GET .../entries with prefix and no where[...]", async
 });
 
 test("useDataStoreEntry: GET .../entries/k1 percent-encodes the key", async () => {
-  const c = await readOnce(() => useDataStoreEntry("ds_1", "k 1/x", { project: "p1" }));
+  const c = await readOnce(() => hooks.useDataStoreEntry("ds_1", "k 1/x", { project: "p1" }));
   assert.equal(c.method, "GET");
   assert.equal(c.pathname, "/data-stores/ds_1/entries/k%201%2Fx");
   assert.equal(c.params.get("project"), "p1");
@@ -173,7 +159,7 @@ test("useDataStoreEntry: GET .../entries/k1 percent-encodes the key", async () =
 
 test("useDataStoreQuery: GET .../entries with where[status]=open, order, limit", async () => {
   const c = await readOnce(() =>
-    useDataStoreQuery("ds_1", {
+    hooks.useDataStoreQuery("ds_1", {
       where: { status: "open", n: 3 },
       order: "-n",
       limit: 7,
@@ -191,7 +177,7 @@ test("useDataStoreQuery: GET .../entries with where[status]=open, order, limit",
 
 test("useCreateDataStore: POST /data-stores with the body and project", async () => {
   const c = await mutateOnce(
-    useCreateDataStore,
+    hooks.useCreateDataStore,
     { kind: "kv", name: "counters", description: "d" },
     { project: "p1" },
   );
@@ -202,7 +188,12 @@ test("useCreateDataStore: POST /data-stores with the body and project", async ()
 });
 
 test("useUpdateDataStore: PATCH /data-stores/ds_1 with the patch", async () => {
-  const c = await mutateOnce(useUpdateDataStore, "ds_1", { name: "renamed" }, { project: "p1" });
+  const c = await mutateOnce(
+    hooks.useUpdateDataStore,
+    "ds_1",
+    { name: "renamed" },
+    { project: "p1" },
+  );
   assert.equal(c.method, "PATCH");
   assert.equal(c.pathname, "/data-stores/ds_1");
   assert.equal(c.params.get("project"), "p1");
@@ -210,7 +201,7 @@ test("useUpdateDataStore: PATCH /data-stores/ds_1 with the patch", async () => {
 });
 
 test("useArchiveDataStore: DELETE /data-stores/ds_1", async () => {
-  const c = await mutateOnce(useArchiveDataStore, "ds_1", { project: "p1" });
+  const c = await mutateOnce(hooks.useArchiveDataStore, "ds_1", { project: "p1" });
   assert.equal(c.method, "DELETE");
   assert.equal(c.pathname, "/data-stores/ds_1");
   assert.equal(c.params.get("project"), "p1");
@@ -219,7 +210,7 @@ test("useArchiveDataStore: DELETE /data-stores/ds_1", async () => {
 
 test("useSetDataStoreEntry: PUT .../entries/k1 with ifVersion in the body", async () => {
   const c = await mutateOnce(
-    useSetDataStoreEntry,
+    hooks.useSetDataStoreEntry,
     "ds_1",
     "k1",
     { value: { a: 1 }, ifVersion: 3, ttlSeconds: 60 },
@@ -232,7 +223,7 @@ test("useSetDataStoreEntry: PUT .../entries/k1 with ifVersion in the body", asyn
 });
 
 test("useInsertDataStoreRow: POST .../entries with {value: row}", async () => {
-  const c = await mutateOnce(useInsertDataStoreRow, "ds_1", { name: "a" }, { project: "p1" });
+  const c = await mutateOnce(hooks.useInsertDataStoreRow, "ds_1", { name: "a" }, { project: "p1" });
   assert.equal(c.method, "POST");
   assert.equal(c.pathname, "/data-stores/ds_1/entries");
   assert.equal(c.params.get("project"), "p1");
@@ -240,17 +231,19 @@ test("useInsertDataStoreRow: POST .../entries with {value: row}", async () => {
 });
 
 test("useIncrementDataStoreEntry: POST .../entries/k1/increment with by, or no body", async () => {
-  const withBy = await mutateOnce(useIncrementDataStoreEntry, "ds_1", "k1", 5, { project: "p1" });
+  const withBy = await mutateOnce(hooks.useIncrementDataStoreEntry, "ds_1", "k1", 5, {
+    project: "p1",
+  });
   assert.equal(withBy.method, "POST");
   assert.equal(withBy.pathname, "/data-stores/ds_1/entries/k1/increment");
   assert.equal(withBy.params.get("project"), "p1");
   assert.deepEqual(withBy.json, { by: 5 });
-  const bare = await mutateOnce(useIncrementDataStoreEntry, "ds_1", "k1");
+  const bare = await mutateOnce(hooks.useIncrementDataStoreEntry, "ds_1", "k1");
   assert.equal(bare.raw, undefined);
 });
 
 test("useDeleteDataStoreEntry: DELETE .../entries/k1", async () => {
-  const c = await mutateOnce(useDeleteDataStoreEntry, "ds_1", "k1", { project: "p1" });
+  const c = await mutateOnce(hooks.useDeleteDataStoreEntry, "ds_1", "k1", { project: "p1" });
   assert.equal(c.method, "DELETE");
   assert.equal(c.pathname, "/data-stores/ds_1/entries/k1");
   assert.equal(c.params.get("project"), "p1");
@@ -258,7 +251,7 @@ test("useDeleteDataStoreEntry: DELETE .../entries/k1", async () => {
 
 test("useImportDataStoreCsv: POST .../import as text/csv with the raw body", async () => {
   const csv = 'name,n\n"a, b",1\n';
-  const c = await mutateOnce(useImportDataStoreCsv, "ds_1", csv, { project: "p1" });
+  const c = await mutateOnce(hooks.useImportDataStoreCsv, "ds_1", csv, { project: "p1" });
   assert.equal(c.method, "POST");
   assert.equal(c.pathname, "/data-stores/ds_1/import");
   assert.equal(c.params.get("project"), "p1");
@@ -272,8 +265,8 @@ test("query hooks: different where send 2 requests, identical ones send 1", asyn
     await mount(
       root,
       fake.fetch,
-      () => useDataStoreQuery("ds_1", { where: { status: "open" } }),
-      () => useDataStoreQuery("ds_1", { where: { status: "closed" } }),
+      () => hooks.useDataStoreQuery("ds_1", { where: { status: "open" } }),
+      () => hooks.useDataStoreQuery("ds_1", { where: { status: "closed" } }),
     );
     assert.equal(fake.calls.length, 2);
     assert.deepEqual(fake.calls.map((c) => c.params.get("where[status]")).sort(), [
@@ -286,8 +279,8 @@ test("query hooks: different where send 2 requests, identical ones send 1", asyn
     await mount(
       root,
       fake.fetch,
-      () => useDataStoreQuery("ds_1", { where: { status: "open" } }),
-      () => useDataStoreQuery("ds_1", { where: { status: "open" } }),
+      () => hooks.useDataStoreQuery("ds_1", { where: { status: "open" } }),
+      () => hooks.useDataStoreQuery("ds_1", { where: { status: "open" } }),
     );
     assert.equal(fake.calls.length, 1);
   });
@@ -299,10 +292,10 @@ test("entry and store reads are keyed on every argument", async () => {
     await mount(
       root,
       fake.fetch,
-      () => useDataStoreEntry("ds_1", "a"),
-      () => useDataStoreEntry("ds_1", "b"),
-      () => useDataStoreEntries("ds_1", { prefix: "a" }),
-      () => useDataStoreEntries("ds_1", { prefix: "b" }),
+      () => hooks.useDataStoreEntry("ds_1", "a"),
+      () => hooks.useDataStoreEntry("ds_1", "b"),
+      () => hooks.useDataStoreEntries("ds_1", { prefix: "a" }),
+      () => hooks.useDataStoreEntries("ds_1", { prefix: "b" }),
     );
     assert.equal(fake.calls.length, 4);
   });
