@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable surface contract for all w6w wrappers. Source of truth for conformance tests. Keep in sync with docs/endpoints.md.",
-  "contractVersion": "0.13.0",
+  "contractVersion": "0.14.0",
   "$basePathComment": "Empty since 0.2.0: the server serves its routes at the ROOT of its own host (https://api.w6w.io/vars, not .../api/vars). Clients append nothing to the configured origin.",
   "basePath": "",
   "defaultBaseUrl": "https://api.w6w.io",
@@ -3207,6 +3207,261 @@
         "cli": "w6w agents archive <id>"
       },
       "notes": "A missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. Returns the archived draft (`archived: true`), unwrapped from `{agent}`. There is no agent delete or purge op."
+    },
+    {
+      "name": "appManagement.list",
+      "summary": "List the apps the caller manages, with live management state per row.",
+      "method": "GET",
+      "path": "/app-management/apps",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "scope",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "$comment": "`all` (default), `account`, `tenant` or `personal`."
+        },
+        {
+          "name": "q",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "$comment": "Search text."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "$comment": "`name` (default), `-name`, `recent` or `-recent`."
+        },
+        {
+          "name": "compact",
+          "in": "query",
+          "type": "boolean",
+          "required": false,
+          "$comment": "Compact rows."
+        },
+        {
+          "name": "snapshot",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "$comment": "A previous page's snapshot token."
+        },
+        {
+          "name": "cursor",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "$comment": "The previous page's `nextCursor`."
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "type": "integer",
+          "required": false,
+          "$comment": "Row offset."
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "integer",
+          "required": false,
+          "$comment": "Page size."
+        }
+      ],
+      "returns": "ManagedAppsPage",
+      "naming": {
+        "ts": "client.appManagement.list(opts?)",
+        "python": "client.app_management.list(scope=None, q=None, sort=None, compact=None, snapshot=None, cursor=None, offset=None, limit=None)",
+        "cli": "w6w app-management list [--scope <scope>] [--q <q>] [--sort <sort>] [--compact] [--snapshot <t>] [--cursor <c>] [--offset <n>] [--limit <n>]"
+      },
+      "notes": "Nothing is unwrapped: the body is returned exactly as sent. The envelope is `{apps, scope, snapshot, total, offset, limit, expiresAt, nextCursor?, targets, sourceOptions}`: `targets` is always three `TargetOption`s (account, tenant, personal) and `sourceOptions` is what the caller may name as a source. Each row is the catalog summary plus `management`, `source` and `lastSync`, computed live. `ManagementClass`, `UnavailableReason` and `TargetOption.reason` are open unions (a newer server may add values); `SyncOutcome` is closed. Each option is sent under its own name only when given, so `offset: 0` and `compact: false` are sent. Codes: `400 invalid_scope`, `400 invalid_query`, `400 invalid_cursor`, `400 invalid_limit`, `400 invalid_offset`, `403 forbidden` (`scope=tenant` from a non-admin), `404 unknown_snapshot`, `410 snapshot_expired`, `400 snapshot_query_mismatch`. `snapshot` and `cursor` are mutually exclusive."
+    },
+    {
+      "name": "appManagement.get",
+      "summary": "Fetch one managed app: catalog detail plus management, source and last sync.",
+      "method": "GET",
+      "path": "/app-management/apps/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "ManagedAppDetail",
+      "naming": {
+        "ts": "client.appManagement.get(id, opts?)",
+        "python": "client.app_management.get(id)",
+        "cli": "w6w app-management get <id>"
+      },
+      "notes": "Nothing is unwrapped: the body is returned exactly as sent. The body is the catalog detail (`app`, `actions`, `health`, `sourceRef`, `version`, `digest`, `versionCount`, `overlay`, `effective`, `owner`) plus `auths`, `management`, `source` and `lastSync`. Open unions: `ManagementClass`, `UnavailableReason`; closed: `SyncOutcome`. Codes: `400 invalid_path` (malformed id), `404 unknown_app` (also when the caller cannot see the app), `403 forbidden` (visible but not managed, or global and the caller is not an operator)."
+    },
+    {
+      "name": "appManagement.preview",
+      "summary": "Preview a source for a target without registering anything.",
+      "method": "POST",
+      "path": "/app-management/preview",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "source",
+          "in": "body",
+          "type": "any",
+          "required": true,
+          "$comment": "A canonical remote ref string, or `{folder:{grant,path}}` (a path inside a granted server folder)."
+        },
+        {
+          "name": "target",
+          "in": "body",
+          "type": "string",
+          "required": true,
+          "$comment": "`account`, `tenant` or `personal`."
+        }
+      ],
+      "returns": "AppManagementPreview",
+      "naming": {
+        "ts": "client.appManagement.preview(input, opts?)",
+        "python": "client.app_management.preview(source, target)",
+        "cli": "w6w app-management preview <source> --target <target>"
+      },
+      "notes": "Nothing is unwrapped: the body is returned exactly as sent. Answers `{kind:'app', sourceRef, app}` or `{kind:'pack', sourceRef, pack, entries}`; `entries[].alreadyRegistered` covers only apps the caller manages. The body is built from `source` and `target` only. Codes: `400 invalid_body`, `400 invalid_target`, `400 invalid_source`, `403 forbidden`, `403 local_import_forbidden`, `424 fetch_failed`, `424 source_requires_grant`, `429 source_rate_limited`, `424 source_timeout`, `424 source_too_large`."
+    },
+    {
+      "name": "appManagement.register",
+      "summary": "Register an app or pack from a source into a target.",
+      "method": "POST",
+      "path": "/app-management/apps",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "target",
+          "in": "body",
+          "type": "string",
+          "required": true,
+          "$comment": "`account`, `tenant` or `personal`."
+        },
+        {
+          "name": "source",
+          "in": "body",
+          "type": "any",
+          "required": true,
+          "$comment": "A canonical remote ref string, or `{folder:{grant,path}}` (a path inside a granted server folder)."
+        },
+        {
+          "name": "paths",
+          "in": "body",
+          "type": "string[]",
+          "required": false,
+          "$comment": "Pack sources only; sent only when given."
+        }
+      ],
+      "returns": "RegisterAppResult",
+      "naming": {
+        "ts": "client.appManagement.register(input, opts?)",
+        "python": "client.app_management.register(target, source, paths=None)",
+        "cli": "w6w app-management register <source> --target <target> [--path <p>...]"
+      },
+      "notes": "Nothing is unwrapped: the body is returned exactly as sent. The legacy import shapes (app: 201 or 200; pack: 201, 207 or 200) plus `target`. Codes: `400 invalid_body`, `400 invalid_target`, `400 invalid_source`, `403 forbidden`, `403 user_import_disabled`, `403 local_import_forbidden`, `409 id_taken`, `424 fetch_failed`, `424 source_requires_grant`, `429 source_rate_limited`, `424 source_timeout`, `424 source_too_large`."
+    },
+    {
+      "name": "appManagement.updateSource",
+      "summary": "Validate a candidate source and, if it loads, make it the app's active source.",
+      "method": "PUT",
+      "path": "/app-management/apps/{id}/source",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "source",
+          "in": "body",
+          "type": "any",
+          "required": true,
+          "$comment": "A canonical remote ref string, or `{folder:{grant,path}}` (a path inside a granted server folder)."
+        },
+        {
+          "name": "expectedRevision",
+          "in": "body",
+          "type": "integer",
+          "required": true,
+          "$comment": "The `source.revision` read from the row or detail; `0` when no source is committed."
+        }
+      ],
+      "returns": "SyncResult",
+      "naming": {
+        "ts": "client.appManagement.updateSource(id, input, opts?)",
+        "python": "client.app_management.update_source(id, source, expected_revision)",
+        "cli": "w6w app-management update-source <id> <source> --expected-revision <n>"
+      },
+      "notes": "Nothing is unwrapped: the body is returned exactly as sent. `SyncResult.outcome` is closed: `registry_updated`, `definition_unchanged` or `failed` (a `failed` outcome is still a 200 with `error:{code,message}`). The active source changes only on `registry_updated` or `definition_unchanged`. Codes: `400 invalid_path` (malformed id), `404 unknown_app` (also when the caller cannot see the app), `403 forbidden` (visible but not managed, or global and the caller is not an operator). `409 artifact_backed`, `409 stale_source` (revision mismatch), `403 local_import_forbidden`, `400 invalid_source`, `400 invalid_body`."
+    },
+    {
+      "name": "appManagement.sync",
+      "summary": "Re-fetch the app's active source and update the registry.",
+      "method": "POST",
+      "path": "/app-management/apps/{id}/sync",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "expectedRevision",
+          "in": "body",
+          "type": "integer",
+          "required": false,
+          "$comment": "Refuse with `409 stale_source` unless this is the current revision. `0` is sent."
+        }
+      ],
+      "returns": "SyncResult",
+      "naming": {
+        "ts": "client.appManagement.sync(id, opts?)",
+        "python": "client.app_management.sync(id, expected_revision=None)",
+        "cli": "w6w app-management sync <id> [--expected-revision <n>]"
+      },
+      "notes": "Nothing is unwrapped: the body is returned exactly as sent. `SyncResult.outcome` is closed: `registry_updated`, `definition_unchanged` or `failed` (a `failed` outcome is still a 200 with `error:{code,message}`). The body is `{}`, or `{expectedRevision}` when given. Codes: `400 invalid_path` (malformed id), `404 unknown_app` (also when the caller cannot see the app), `403 forbidden` (visible but not managed, or global and the caller is not an operator). `409 artifact_backed`, `409 no_source`, `409 stale_source` (only when `expectedRevision` was sent), `409 sync_conflict` (lost the locked-write race), `403 local_import_forbidden`."
+    },
+    {
+      "name": "appManagement.remove",
+      "summary": "Remove an app: all its versions and its source row.",
+      "method": "DELETE",
+      "path": "/app-management/apps/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "{ removed: number }",
+      "naming": {
+        "ts": "client.appManagement.remove(id, opts?)",
+        "python": "client.app_management.remove(id)",
+        "cli": "w6w app-management remove <id>"
+      },
+      "notes": "Nothing is unwrapped: the body is returned exactly as sent. No request body. Answers `{removed}`. Codes: `400 invalid_path` (malformed id), `404 unknown_app` (also when the caller cannot see the app), `403 forbidden` (visible but not managed, or global and the caller is not an operator). `409 app_in_use`."
     }
   ],
   "cli": {
@@ -3410,7 +3665,7 @@
     ]
   },
   "outOfScope": [
-    "apps (catalog browse, search and paging; `apps.byIds` is the one in-scope read)",
+    "apps (catalog browse, search and paging; `apps.byIds` is the one in-scope read. App-definition management is in scope as `appManagement.*`)",
     "endpoints",
     "projects (create, rename, archive, delete; `projects.list` is the one in-scope read)",
     "vault",

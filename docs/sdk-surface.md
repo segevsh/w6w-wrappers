@@ -361,6 +361,21 @@ Shared rules for both asset namespaces:
   constructed without the client's configuration, so it holds no default to
   send, and the wire assertion in each suite is what actually holds the line.
 
+### App management
+
+| TS | Python | Returns |
+| -- | ------ | ------- |
+| `client.appManagement.list(opts?)` | `client.app_management.list(...)` | `ManagedAppsPage` (rows, `targets`, `sourceOptions`) |
+| `client.appManagement.get(id, opts?)` | `client.app_management.get(id)` | `ManagedAppDetail` |
+| `client.appManagement.preview(input, opts?)` | `client.app_management.preview(source, target)` | `AppManagementPreview` |
+| `client.appManagement.register(input, opts?)` | `client.app_management.register(target, source, paths=None)` | `RegisterAppResult` |
+| `client.appManagement.updateSource(id, input, opts?)` | `client.app_management.update_source(id, source, expected_revision)` | `SyncResult` |
+| `client.appManagement.sync(id, opts?)` | `client.app_management.sync(id, expected_revision=None)` | `SyncResult` |
+| `client.appManagement.remove(id, opts?)` | `client.app_management.remove(id)` | `{ removed: number }` |
+
+Bodies come back exactly as sent (no envelope key to unwrap). `SyncOutcome` is closed;
+`ManagementClass`, `UnavailableReason` and `TargetOption.reason` are open strings.
+
 ## 5. Wire types and the run types
 
 Both packages export the transcribed wire shapes: `Doc`, `DocFormat`, `Var`,
@@ -446,12 +461,13 @@ In scope since the contract's `0.5.0`–`0.7.0` lines: the full definition lifec
 of workflows and Functions (create / update / archive / delete, plus publish,
 version and draft-run operations), and, for integrations, `connections.get` and
 `connections.delete`, `apps.byIds`, `dashboard.stats`, `projects.list`, and
-`reliability.list` / `reliability.members`.
+`reliability.list` / `reliability.members`; and, since `0.14.0`, app-definition
+management (`appManagement.*`).
 
 Out of scope for this version, in every wrapper, and named so nobody adds them in
 one language: connection create / update / test / OAuth (interactive,
 secret-handling flows), the app catalog's browse / search / paging (only the
-bounded `apps.byIds` lookup is in), project writes, endpoint management, vault,
+bounded `apps.byIds` lookup is in; app-definition management is in as `appManagement.*`), project writes, endpoint management, vault,
 tokens, schedules, triggers, subscriptions, tenants, `runs.get` and
 `workflows.listRuns`. They exist on the API. They are not in the wrappers until
 they are in `endpoints.json` — see

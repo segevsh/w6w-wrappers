@@ -197,6 +197,36 @@ export { ContextApi, ContextEntriesApi } from "./src/context.ts";
 export type { ContextHost } from "./src/context.ts";
 export { AgentsApi } from "./src/agents.ts";
 export type { AgentsHost } from "./src/agents.ts";
+// App-definition management (contract 0.14.0).
+export { AppManagementApi } from "./src/app-management.ts";
+export type { AppManagementHost } from "./src/app-management.ts";
+export type {
+  AppManagementPackEntry,
+  AppManagementPackInfo,
+  AppManagementPreview,
+  LastSync,
+  ListManagedAppsOptions,
+  ManagedAppDetail,
+  ManagedAppRow,
+  ManagedAppsPage,
+  ManagedAppsSort,
+  Management,
+  ManagementClass,
+  ManagementScope,
+  PreviewAppInput,
+  RegisterAppInput,
+  RegisterAppResult,
+  SourceInput,
+  SourceOptions,
+  SourceView,
+  SyncAppOptions,
+  SyncOutcome,
+  SyncResult,
+  Target,
+  TargetOption,
+  UnavailableReason,
+  UpdateSourceInput,
+} from "./src/types.ts";
 export type {
   AgentModelOptions,
   Asset,
