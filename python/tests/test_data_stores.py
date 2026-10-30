@@ -179,8 +179,8 @@ class EntriesTest(unittest.TestCase):
 
     def test_set_unset_options_absent(self) -> None:
         t = answering({"key": "k"})
-        client(t).data_stores.entries.set("ds_1", "k", None)
-        self.assertEqual(body_of(t.calls[0]), {})
+        client(t).data_stores.entries.set("ds_1", "k", 1)
+        self.assertEqual(body_of(t.calls[0]), {"value": 1})
 
     def test_insert(self) -> None:
         t = answering({"key": "k"}, 201)
