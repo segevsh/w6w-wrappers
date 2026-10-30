@@ -446,6 +446,33 @@ export type ContextListOptions = Omit<
   "signal"
 >;
 
+// ── data stores ──────────────────────────────────────────────────────────
+// Types are derived from the SDK methods, never copied (one hook = one SDK method).
+
+type DataStores = Client["dataStores"];
+type DataStoreEntries = DataStores["entries"];
+type NoSignal<T> = Omit<NonNullable<T>, "signal">;
+
+/** Options of {@linkcode useDataStores}: `kind`, paging and `project`. */
+export type DataStoreListOptions = NoSignal<Parameters<DataStores["list"]>[0]>;
+/** Per-call options of the single-store hooks: `project`. */
+export type DataStoreOptions = NoSignal<Parameters<DataStores["get"]>[1]>;
+/** Options of {@linkcode useDataStoreEntries}: `prefix`, paging and `project`. */
+export type DataStoreEntryListOptions = NoSignal<Parameters<DataStoreEntries["list"]>[1]>;
+/** The argument of {@linkcode useDataStoreQuery}: the filter plus `project`. */
+export type DataStoreQueryArgs = NoSignal<Parameters<DataStoreEntries["query"]>[1]> &
+  DataStoreOptions;
+/** A page of stores. */
+export type DataStorePageResult = Awaited<ReturnType<DataStores["list"]>>;
+/** One store. */
+export type DataStoreResult = Awaited<ReturnType<DataStores["get"]>>;
+/** A page of entries. */
+export type DataStoreEntryPageResult = Awaited<ReturnType<DataStoreEntries["list"]>>;
+/** One entry. */
+export type DataStoreEntryResult = Awaited<ReturnType<DataStoreEntries["get"]>>;
+/** The rows a table query matched. */
+export type DataStoreRowSetResult = Awaited<ReturnType<DataStoreEntries["query"]>>;
+
 /**
  * Agent drafts (`client.agents.list`), archived ones hidden by default.
  * Options are part of the cache key: distinct options never share a flight.
@@ -507,6 +534,81 @@ export function useContextEntries(
     (signal: AbortSignal) =>
       client.contextEntries.list({ ...(JSON.parse(key)[1] ?? undefined), signal }),
     [client, key],
+  );
+  return useAsync(key, fetcher, client, ready);
+}
+
+/** The project's data stores (`client.dataStores.list`). Options are part of the cache key. */
+export function useDataStores(options?: DataStoreListOptions): ReadResult<DataStorePageResult> {
+  const { client, ready } = useW6WProviderContext();
+  const key = JSON.stringify(["dataStores.list", options ?? null]);
+  const fetcher = useCallback(
+    (signal: AbortSignal) =>
+      client.dataStores.list({ ...(JSON.parse(key)[1] ?? undefined), signal }),
+    [client, key],
+  );
+  return useAsync(key, fetcher, client, ready);
+}
+
+/** One data store (`client.dataStores.get`). */
+export function useDataStore(id: string, options?: DataStoreOptions): ReadResult<DataStoreResult> {
+  const { client, ready } = useW6WProviderContext();
+  const key = JSON.stringify(["dataStores.get", id, options ?? null]);
+  const fetcher = useCallback(
+    (signal: AbortSignal) =>
+      client.dataStores.get(id, { ...(JSON.parse(key)[2] ?? undefined), signal }),
+    [client, id, key],
+  );
+  return useAsync(key, fetcher, client, ready);
+}
+
+/** A page of a store's entries (`client.dataStores.entries.list`). */
+export function useDataStoreEntries(
+  id: string,
+  options?: DataStoreEntryListOptions,
+): ReadResult<DataStoreEntryPageResult> {
+  const { client, ready } = useW6WProviderContext();
+  const key = JSON.stringify(["dataStores.entries.list", id, options ?? null]);
+  const fetcher = useCallback(
+    (signal: AbortSignal) =>
+      client.dataStores.entries.list(id, { ...(JSON.parse(key)[2] ?? undefined), signal }),
+    [client, id, key],
+  );
+  return useAsync(key, fetcher, client, ready);
+}
+
+/** One entry by key (`client.dataStores.entries.get`). */
+export function useDataStoreEntry(
+  id: string,
+  entryKey: string,
+  options?: DataStoreOptions,
+): ReadResult<DataStoreEntryResult> {
+  const { client, ready } = useW6WProviderContext();
+  const key = JSON.stringify(["dataStores.entries.get", id, entryKey, options ?? null]);
+  const fetcher = useCallback(
+    (signal: AbortSignal) =>
+      client.dataStores.entries.get(id, entryKey, { ...(JSON.parse(key)[3] ?? undefined), signal }),
+    [client, id, entryKey, key],
+  );
+  return useAsync(key, fetcher, client, ready);
+}
+
+/**
+ * The rows of a table store that match a query (`client.dataStores.entries.query`).
+ * The whole query, `where` included, is part of the cache key.
+ */
+export function useDataStoreQuery(
+  id: string,
+  query: DataStoreQueryArgs,
+): ReadResult<DataStoreRowSetResult> {
+  const { client, ready } = useW6WProviderContext();
+  const key = JSON.stringify(["dataStores.entries.query", id, query]);
+  const fetcher = useCallback(
+    (signal: AbortSignal) => {
+      const { project, ...filter } = JSON.parse(key)[2] as DataStoreQueryArgs;
+      return client.dataStores.entries.query(id, filter, { project, signal });
+    },
+    [client, id, key],
   );
   return useAsync(key, fetcher, client, ready);
 }
@@ -652,4 +754,89 @@ export function useUpdateFunction(): MutationResult<
 export function useDeleteFunction(): MutationResult<[string], void> {
   const client = useW6WClient();
   return useMutationResource((id: string) => client.functions.delete(id));
+}
+
+/** `client.dataStores.create`. */
+export function useCreateDataStore(): MutationResult<
+  Parameters<DataStores["create"]>,
+  DataStoreResult
+> {
+  const client = useW6WClient();
+  return useMutationResource((...args: Parameters<DataStores["create"]>) =>
+    client.dataStores.create(...args),
+  );
+}
+
+/** `client.dataStores.update`. */
+export function useUpdateDataStore(): MutationResult<
+  Parameters<DataStores["update"]>,
+  DataStoreResult
+> {
+  const client = useW6WClient();
+  return useMutationResource((...args: Parameters<DataStores["update"]>) =>
+    client.dataStores.update(...args),
+  );
+}
+
+/** `client.dataStores.archive`. */
+export function useArchiveDataStore(): MutationResult<Parameters<DataStores["archive"]>, void> {
+  const client = useW6WClient();
+  return useMutationResource((...args: Parameters<DataStores["archive"]>) =>
+    client.dataStores.archive(...args),
+  );
+}
+
+/** `client.dataStores.entries.set` (an `ifVersion` mismatch rejects with `409 version_conflict`). */
+export function useSetDataStoreEntry(): MutationResult<
+  Parameters<DataStoreEntries["set"]>,
+  DataStoreEntryResult
+> {
+  const client = useW6WClient();
+  return useMutationResource((...args: Parameters<DataStoreEntries["set"]>) =>
+    client.dataStores.entries.set(...args),
+  );
+}
+
+/** `client.dataStores.entries.insert`. */
+export function useInsertDataStoreRow(): MutationResult<
+  Parameters<DataStoreEntries["insert"]>,
+  DataStoreEntryResult
+> {
+  const client = useW6WClient();
+  return useMutationResource((...args: Parameters<DataStoreEntries["insert"]>) =>
+    client.dataStores.entries.insert(...args),
+  );
+}
+
+/** `client.dataStores.entries.increment`. */
+export function useIncrementDataStoreEntry(): MutationResult<
+  Parameters<DataStoreEntries["increment"]>,
+  DataStoreEntryResult
+> {
+  const client = useW6WClient();
+  return useMutationResource((...args: Parameters<DataStoreEntries["increment"]>) =>
+    client.dataStores.entries.increment(...args),
+  );
+}
+
+/** `client.dataStores.entries.delete`. */
+export function useDeleteDataStoreEntry(): MutationResult<
+  Parameters<DataStoreEntries["delete"]>,
+  void
+> {
+  const client = useW6WClient();
+  return useMutationResource((...args: Parameters<DataStoreEntries["delete"]>) =>
+    client.dataStores.entries.delete(...args),
+  );
+}
+
+/** `client.dataStores.importCsv`. */
+export function useImportDataStoreCsv(): MutationResult<
+  Parameters<DataStores["importCsv"]>,
+  Awaited<ReturnType<DataStores["importCsv"]>>
+> {
+  const client = useW6WClient();
+  return useMutationResource((...args: Parameters<DataStores["importCsv"]>) =>
+    client.dataStores.importCsv(...args),
+  );
 }

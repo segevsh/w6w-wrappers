@@ -123,6 +123,19 @@ function ModelOverview() {
 }
 ```
 
+### Data store hooks
+
+| Hook | Loads |
+| --- | --- |
+| `useDataStores({ kind?, cursor?, limit?, project? })` | A page of data stores, `{ items, nextCursor }` |
+| `useDataStore(id, { project? })` | One data store by id |
+| `useDataStoreEntries(id, { prefix?, cursor?, limit?, project? })` | A page of a store's entries, ordered by key |
+| `useDataStoreEntry(id, key, { project? })` | One entry by key |
+| `useDataStoreQuery(id, { where?, order?, limit?, project? })` | The rows of a table that match a query |
+
+Different arguments make different requests, so changing a filter or a `where` reloads. See the
+[Node data stores page](/clients/node/data-stores/) for the options.
+
 ## Mutation hooks
 
 Each returns `{ call, data, error, loading }`. `call` takes the same arguments as the SDK method it
@@ -146,6 +159,14 @@ wraps, resolves with its result, and rejects on failure. None of them refresh a 
 | `useCreateVar()` | `client.vars.create({ name, type, value, description? })` |
 | `useUpdateVar()` | `client.vars.update(id, patch)` |
 | `useDeleteVar()` | `client.vars.delete(id)` |
+| `useCreateDataStore()` | `client.dataStores.create({ kind, name, description?, schema? }, { project? })` |
+| `useUpdateDataStore()` | `client.dataStores.update(id, patch, { project? })` |
+| `useArchiveDataStore()` | `client.dataStores.archive(id, { project? })` |
+| `useSetDataStoreEntry()` | `client.dataStores.entries.set(id, key, { value, ifVersion?, ttlSeconds? }, { project? })` |
+| `useInsertDataStoreRow()` | `client.dataStores.entries.insert(id, row, { project? })` |
+| `useIncrementDataStoreEntry()` | `client.dataStores.entries.increment(id, key, by?, { project? })` |
+| `useDeleteDataStoreEntry()` | `client.dataStores.entries.delete(id, key, { project? })` |
+| `useImportDataStoreCsv()` | `client.dataStores.importCsv(id, csv, { project? })` |
 
 `useUpdateWorkflow` and `useUpdateFunction` replace the whole definition. Read it with
 `useWorkflow` or `useFunction`, change it, and send all of it back. Pass the `updatedAt` from
@@ -181,6 +202,7 @@ These have no hook. Call them on the client from `useW6WClient()`:
 | Run a Function by key | `client.functions.run(key, { payload })` |
 | Run an Endpoint | `client.endpoints.run(key, { payload })` |
 | Cancel a run | `client.workflows.cancel(runId)` |
+| Export a store as CSV | `client.dataStores.exportCsv(id)` |
 | Manage your team | `client.team.members()`, `client.team.invite(...)`, and the rest |
 | Any other route | `client.request({ method, path })` |
 

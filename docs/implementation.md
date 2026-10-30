@@ -510,6 +510,7 @@ strings. The shape callers can rely on:
 | Pattern                                                                         | Status | Meaning                                                  |
 | ------------------------------------------------------------------------------- | ------ | -------------------------------------------------------- |
 | `unknown_*` (`unknown_document`, `unknown_var`, `unknown_workflow`, …)          | `404`  | The addressed thing does not exist in the caller's scope |
+| `*_not_found` (`data_store_not_found`, `entry_not_found`)                       | `404`  | The addressed store or entry does not exist in scope     |
 | `invalid_*` (`invalid_name`, `invalid_type`, `invalid_value`, `invalid_body`)   | `400`  | The request was malformed or failed validation           |
 | `*_exists` / `*_conflict` (`document_exists`, `var_exists`, `version_conflict`) | `409`  | Uniqueness violation                                     |
 | `forbidden`, `app_not_entitled`                                                 | `403`  | Authenticated but not permitted                          |
@@ -582,6 +583,27 @@ _success_ handling only, identically in node and python:
   to a byte request exactly as to a JSON one.
 
 The two fields are independent; an operation may declare either or both.
+
+### Text-mode (CSV) requests (contract 0.15.0)
+
+An operation that declares `bodyEncoding: "csv"` and/or `responseEncoding: "text"`
+changes the transport's _success_ handling only, identically in node and python.
+**Normative for both languages:** the mode is selected by an **explicit transport
+option** (node: `RequestOptions.bodyEncoding: "csv"` / `responseType: "text"`;
+python: the equivalent keyword on `request()`), chosen by the operation's module —
+never inferred from the argument's type. A `str` body passed without the option is
+JSON-encoded exactly as before (`"a,b"` goes out as `"\"a,b\""` with
+`application/json`).
+
+- **Text in.** With the csv mode, the caller's string is the request body, sent
+  verbatim (UTF-8) with `content-type: text/csv`. No JSON encoding or quoting.
+- **Text out.** On a 2xx the response body is read once as text and returned as
+  a string. It is never JSON-parsed, even when it would parse.
+- **Errors are unchanged.** A non-2xx response is read and mapped by §3's three
+  failure modes (a JSON envelope raises the typed error with its `code`, extras
+  such as `row`/`column` stay on `raw`; a non-JSON body is `bad_response`).
+- `content-type` is set after the caller's headers and the client default, as for
+  JSON and byte mode; neither can override it. 401 recovery applies unchanged.
 
 ---
 

@@ -25,6 +25,7 @@ from .apps import AppsApi
 from .assets import AssetsApi
 from .connections import ConnectionsApi
 from .dashboard import DashboardApi
+from .data_stores import DataStoresApi
 from .documents import DocumentsApi
 from .models import ModelRoutesApi, ModelsApi, ModelUsageApi
 from .errors import ApiError
@@ -182,6 +183,11 @@ class Client:
         #: (``put_entry`` in, ``content``/``archive_download`` out) carry
         #: ``bytes`` in both directions (contract 0.11.0).
         self.assets: AssetsApi = AssetsApi(self)
+        #: Data stores and their entries: ``data_stores.list/get/create/update/
+        #: archive/import_csv/export_csv`` and ``data_stores.entries.list/get/set/
+        #: insert/increment/delete/query``. The CSV pair uses the explicit text
+        #: transport mode (contract 0.15.0).
+        self.data_stores: DataStoresApi = DataStoresApi(self)
         #: Uploaded skills, read-only: ``skills.list/get/versions/archive``. A
         #: skill is created by an upload with ``purpose="skill"``, never here.
         self.skills: SkillsApi = SkillsApi(self)
@@ -265,6 +271,7 @@ class Client:
         body: Optional[Any] = None,
         headers: Optional[Mapping[str, str]] = None,
         response_encoding: Optional[str] = None,
+        body_encoding: Optional[str] = None,
     ) -> HttpResponse:
         """Perform one request against this client's server, with its credential.
 
@@ -295,8 +302,13 @@ class Client:
             `responseEncoding: "octet-stream"` (`client.assets.content` and
             `client.assets.archive_download` use it). Non-2xx is unchanged: the
             typed :class:`ApiError` carries the envelope's `code`.
+        :param body_encoding: Pass `"csv"` to send a `str` (or `bytes`) body as
+            `text/csv` verbatim instead of JSON (`bodyEncoding: "csv"`,
+            `client.data_stores.import_csv`). Explicit: left `None`, a `str` body
+            is still a JSON string. `response_encoding="text"` likewise returns
+            the 2xx body as a `str` (`client.data_stores.export_csv`).
         :returns: The status and parsed body — `bytes` when
-            `response_encoding="octet-stream"`.
+            `response_encoding="octet-stream"`, a `str` when `"text"`.
         :raises ConfigError: When no token is configured, naming `W6W_TOKEN`.
         :raises ApiError: On a transport failure, a non-JSON error body, or an
             error envelope.
@@ -310,4 +322,5 @@ class Client:
             body=body,
             headers=headers,
             response_encoding=response_encoding,
+            body_encoding=body_encoding,
         )

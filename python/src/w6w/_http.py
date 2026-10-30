@@ -82,6 +82,19 @@ OCTET_STREAM: str = "octet-stream"
 #: base64 or a text round-trip.
 OCTET_STREAM_CONTENT_TYPE: str = "application/octet-stream"
 
+#: The `endpoints.json` value that opts a request body into CSV text:
+#: `bodyEncoding: "csv"` (contract 0.15.0, `dataStores.importCsv`). The body is
+#: sent verbatim with `Content-Type: text/csv`, never JSON-encoded or quoted.
+CSV_BODY_ENCODING: str = "csv"
+
+#: The content type a CSV-mode request carries.
+CSV_CONTENT_TYPE: str = "text/csv"
+
+#: The `endpoints.json` value that opts a response into verbatim text:
+#: `responseEncoding: "text"` (contract 0.15.0, `dataStores.exportCsv`). The 2xx
+#: body is returned as a UTF-8 `str`, never JSON-parsed.
+TEXT_RESPONSE_ENCODING: str = "text"
+
 #: The transport seam.
 #:
 #: A callable taking a :class:`urllib.request.Request` and returning a
@@ -365,6 +378,7 @@ def _request(
     headers: Optional[Mapping[str, str]] = None,
     require_auth: bool = True,
     response_encoding: Optional[str] = None,
+    body_encoding: Optional[str] = None,
 ) -> HttpResponse:
     """Perform one request and map its outcome.
 
@@ -433,8 +447,13 @@ def _request(
         `responseEncoding: "octet-stream"`). Left `None`, the body is parsed as
         JSON as always. A non-2xx is the same typed error in both modes — the
         error envelope is parsed, and a non-JSON body is `bad_response`.
+    :param body_encoding: `"csv"` (:data:`CSV_BODY_ENCODING`) sends a `str` body
+        as UTF-8 text (a `bytes` body verbatim) with `Content-Type: text/csv`,
+        never JSON. It is an explicit option, not inferred from the body's type:
+        with it left `None` a plain `str` is still a JSON string. Also threaded
+        through the 401-refresh retry.
     :returns: The status and parsed body — a `dict`/`list` for JSON, `bytes` for
-        byte mode.
+        byte mode, a `str` when `response_encoding="text"`.
     :raises ConfigError: When no token is configured and `require_auth` is
         `True` — raised *before* the transport is touched.
     :raises ApiError: On any of the three failure modes above.
@@ -456,7 +475,16 @@ def _request(
         request_headers["Authorization"] = "Bearer " + token
     payload: Optional[bytes] = None
     if body is not None:
-        if isinstance(body, (bytes, bytearray, memoryview)):
+        if body_encoding == CSV_BODY_ENCODING:
+            # Text mode (`bodyEncoding: "csv"`): the CSV is the body, UTF-8,
+            # re-pinned to text/csv — the server refuses any other media type.
+            request_headers["Content-Type"] = CSV_CONTENT_TYPE
+            payload = (
+                bytes(body)
+                if isinstance(body, (bytes, bytearray, memoryview))
+                else str(body).encode("utf-8")
+            )
+        elif isinstance(body, (bytes, bytearray, memoryview)):
             # Byte mode (`bodyEncoding: "octet-stream"`): the bytes ARE the body.
             # No JSON, no quoting, no base64, no text round-trip — a binary
             # payload that went through any of those would no longer be the
@@ -522,6 +550,11 @@ def _request(
         return HttpResponse(status, raw)
 
     text = _decode_text(raw)
+    # Text mode (`responseEncoding: "text"`), SUCCESS path only: the decoded
+    # body is the result, verbatim — never JSON-parsed, so a body that happens
+    # to parse as JSON stays a string.
+    if ok and response_encoding == TEXT_RESPONSE_ENCODING:
+        return HttpResponse(status, text)
     data: Any = None
     if text:
         try:
@@ -587,6 +620,7 @@ def _request(
                     headers=headers,
                     require_auth=require_auth,
                     response_encoding=response_encoding,
+                    body_encoding=body_encoding,
                 )
             # No usable refreshed token: no retry — fall through and report
             # the ORIGINAL 401.
