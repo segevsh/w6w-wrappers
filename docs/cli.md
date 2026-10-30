@@ -58,6 +58,7 @@ COMMANDS
   functions              Run and edit functions
   endpoints              Run endpoints by key or id
   team                   Invite, list and manage your account's team
+  app-management         List, preview, register, edit the source of, sync and remove the apps you manage
   apps                   Look up apps by id
   dashboard              Run-ledger rollup for your account
   projects               List your projects
@@ -399,6 +400,54 @@ write: it sends the body `revision` and, when given, the `--if-unmodified-since`
 header, and a stale revision is reported with the current one, as for
 `w6w context entries-update`. `add-to-collection` and `remove-from-collection`
 are idempotent.
+
+## `app-management` — the apps you manage
+
+`w6w app-management` manages app definitions you own (contract 0.14.0; the SDK's
+`client.appManagement.*`, Python's `client.app_management.*`). One command is one
+API call.
+
+```
+w6w app-management list [--scope <scope>] [--q <q>] [--sort <sort>] [--compact] [--snapshot <t>] [--cursor <c>] [--offset <n>] [--limit <n>]
+w6w app-management get <id>
+w6w app-management preview <source> --target <target>
+w6w app-management register <source> --target <target> [--paths <a,b>]
+w6w app-management update-source <id> <source> --expected-revision <n>
+w6w app-management sync <id> [--expected-revision <n>]
+w6w app-management remove <id>
+```
+
+**Scope.** `list --scope` is `all` (the default), `account`, `tenant` or `personal`.
+`--sort` is `name` (the default), `-name`, `recent` or `-recent`; write a
+leading-dash value as `--sort=-recent`. `--cursor` takes the previous page's
+`nextCursor`; it is not combined with `--snapshot`, and the server refuses both
+together.
+
+**Target.** `--target` on `preview` and `register` is `account`, `tenant` or
+`personal`. The CLI sends what you type and never checks it: the server decides
+which targets you may use. The `targets` list in `w6w app-management list --json`
+says which.
+
+**Source.** `<source>` takes two forms. A canonical remote ref
+(`github:owner/repo`) is sent as a string. A value whose first non-space
+character is `{` is parsed as JSON and must be an object, normally a path inside
+a server folder you were granted:
+`'{"folder":{"grant":"sgr_01HQ8N","path":"./my-app"}}'`. Invalid JSON is a usage
+error (exit `1`) and sends nothing. `--paths a,b` (packs only) is split on
+commas, trimmed, and sent only when given. `--expected-revision`, `--offset` and
+`--limit` must be integers, otherwise exit `1` with no request.
+
+**Sync outcome.** `sync` and `update-source` answer a result whose `outcome` is
+`registry_updated`, `definition_unchanged` or `failed`. A source that could not
+be loaded is still a successful HTTP 200 with `outcome: "failed"` and an
+`error.code`: the command **exits `0`**, prints the outcome and the error code,
+and `--json` prints the result for a script to read. Only an HTTP error exits
+`2`, as in [Exit codes](#exit-codes); this group adds no code. An API error's
+`code` is appended to its message on stderr.
+
+**Not found.** An app you cannot see is answered `404 unknown_app`, the same as
+an app that does not exist, so a response never confirms that someone else's app
+exists. A visible app you may not manage is a `403 forbidden`.
 
 ## Exit codes
 

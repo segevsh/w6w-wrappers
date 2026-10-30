@@ -2379,13 +2379,110 @@ A missing, foreign, invisible or other-project entry (or collection) is the one 
 
 ---
 
+## 94. `appManagement.list` — the apps the caller manages
+
+```
+GET /app-management/apps
+```
+
+`status: required` · served today
+
+Query: `scope` (`all` default, `account`, `tenant`, `personal`), `q`, `sort` (`name` default, `-name`, `recent`, `-recent`), `compact`, `snapshot`, `cursor` (the previous `nextCursor`), `offset`, `limit`. Each is sent under its own name only when given, so `offset: 0` and `compact: false` are sent. `snapshot` and `cursor` are mutually exclusive.
+
+Nothing is unwrapped: the body is returned as sent, `{apps, scope, snapshot, total, offset, limit, expiresAt, nextCursor?, targets, sourceOptions}`. `targets` is always three `TargetOption`s in the order account, tenant, personal (each `permitted`, with a `reason` when not); `sourceOptions` is what the caller may name as a source (`publicRepos`, `privateRepos`, `folders`, `localPaths`). Each row is the catalog `AppSummary` plus `management` (class, owner, capabilities, reasons), `source` and `lastSync`, all computed live. `ManagementClass`, `UnavailableReason` and `TargetOption.reason` are **open** unions; `SyncOutcome` is **closed**.
+
+Errors: `400 invalid_scope`, `400 invalid_query`, `400 invalid_cursor`, `400 invalid_limit`, `400 invalid_offset`, `403 forbidden` (`scope=tenant` from a non-admin), `404 unknown_snapshot`, `410 snapshot_expired`, `400 snapshot_query_mismatch`.
+
+---
+
+## 95. `appManagement.get` — one managed app
+
+```
+GET /app-management/apps/:id
+```
+
+`status: required` · served today
+
+The catalog detail (`app`, `actions`, `health`, `sourceRef`, `version`, `digest`, `versionCount`, `overlay`, `effective`, `owner`) plus `auths`, `management`, `source` and `lastSync`, returned as sent. A malformed id is `400 invalid_path`; an app the caller cannot see, or can see but does not manage, is `404 unknown_app`.
+
+---
+
+## 96. `appManagement.preview` — preview a source for a target
+
+```
+POST /app-management/preview
+```
+
+`status: required` · served today
+
+Body `{source, target}` (nothing else is sent). `source` is a canonical remote ref or `{folder:{grant,path}}`; `target` is `account`, `tenant` or `personal`. Answers `{kind:"app", sourceRef, app}` or `{kind:"pack", sourceRef, pack, entries}`; `entries[].alreadyRegistered` covers only apps the caller manages.
+
+Errors: `400 invalid_body`, `400 invalid_target`, `400 invalid_source`, `403 forbidden`, `403 local_import_forbidden`, `424 fetch_failed`, `424 source_requires_grant`, `429 source_rate_limited`, `424 source_timeout`, `424 source_too_large`.
+
+---
+
+## 97. `appManagement.register` — register into a target
+
+```
+POST /app-management/apps
+```
+
+`status: required` · served today
+
+Body `{target, source, paths?}`; `paths` (pack sources only) is sent only when given. Answers the legacy import shapes (app 201/200, pack 201/207/200) plus `target`.
+
+Errors: `400 invalid_body`, `400 invalid_target`, `400 invalid_source`, `403 forbidden`, `403 user_import_disabled`, `403 local_import_forbidden`, `409 id_taken`, and the source fetch codes of §96.
+
+---
+
+## 98. `appManagement.updateSource` — edit the active source
+
+```
+PUT /app-management/apps/:id/source
+```
+
+`status: required` · served today
+
+Body `{source, expectedRevision}`, both required (`0` is sent). Answers a `SyncResult` `{appId, outcome, completedAt, previousVersion, version, bumped, fetchedRevision?, source, error?}`. `outcome` is the closed union `registry_updated | definition_unchanged | failed`; `error` is present only for `failed`, which is still a `200`. The active source changes only on the first two.
+
+Errors: the `:id` errors of §95 plus `403 forbidden`, `409 artifact_backed`, `409 stale_source`, `403 local_import_forbidden`, `400 invalid_source`, `400 invalid_body`.
+
+---
+
+## 99. `appManagement.sync` — sync from the active source
+
+```
+POST /app-management/apps/:id/sync
+```
+
+`status: required` · served today
+
+Body `{}`, or `{expectedRevision}` when given (`0` is sent). Answers a `SyncResult` (§98).
+
+Errors: the `:id` errors of §98 plus `409 no_source`, `409 sync_conflict` (lost the locked-write race), and `409 stale_source` only when `expectedRevision` was sent.
+
+---
+
+## 100. `appManagement.remove` — remove an app
+
+```
+DELETE /app-management/apps/:id
+```
+
+`status: required` · served today
+
+No body. Answers `{removed}`, a count of removed versions. Errors: the `:id` errors of §95, `403 forbidden`, `409 app_in_use`.
+
+---
+
 ## Explicitly out of scope for this version
 
 Named so nobody adds them ad hoc in one language — this list is the `outOfScope`
 array in `endpoints.json`, all twelve entries:
 
 the app catalog's browse, search and paging (`apps.byIds`, §47, is the one
-in-scope read), endpoints' management routes, project writes (`projects.list`,
+in-scope read; app-definition management is in scope as `appManagement.*`,
+§§94-100), endpoints' management routes, project writes (`projects.list`,
 §49, is the one in-scope read), vault, tokens, schedules, triggers,
 subscriptions, tenants, `runs.get`, `workflows.listRuns`, and **connection
 create / update / test / OAuth** (`connections.list`, `get` and `delete` — §§2,
@@ -2441,3 +2538,8 @@ They all exist on the API. They are not in the wrappers until they are in
 > `assets.archiveDownload` is `serverImplemented: false`. The operation count goes
 > from 64 to 76. The storage-binding and agent-settings admin routes are node
 > `console` group only, not in this contract.
+
+> **At contract `0.14.0` seven app-management operations were added** (§§94-100):
+> `appManagement.{list,get,preview,register,updateSource,sync,remove}`. The operation
+> count goes from 100 to 107. The operator source-grant API is not in this contract, and
+> `@w6w/sdk/console` `apps.*` is unchanged.

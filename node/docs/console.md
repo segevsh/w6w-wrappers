@@ -296,6 +296,10 @@ covered here** — the same "studio never wrapped it" reasoning as `console.proj
 
 ## `console.apps.*`
 
+> `import`, `refresh`, `delete` and `listPage({managed})` remain here, unchanged.
+> `client.appManagement.*` (contract `0.14.0`, stable, no `@w6w/sdk/console` import) is the
+> management surface to build on; see `docs/endpoints.md` §§94-100.
+
 ```ts
 import { W6WClient } from "@w6w/sdk";
 import "@w6w/sdk/console"; // pulls in client.console

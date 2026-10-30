@@ -44,11 +44,14 @@ import {
   type DocFormat,
   type FunctionRunEnvelope,
   isTerminalRunStatus,
+  type ManagementClass,
   type Me,
   type RunEnvelope,
   type RunInput,
   type RunResult,
   type RunStatus,
+  type SyncOutcome,
+  type UnavailableReason,
   type UnknownRunEnvelope,
   type Var,
   type VarType,
@@ -88,6 +91,7 @@ const PUBLIC_SURFACE: Record<string, "function" | "string"> = {
   ContextApi: "function",
   ContextEntriesApi: "function",
   AgentsApi: "function",
+  AppManagementApi: "function",
   DashboardApi: "function",
   ProjectsApi: "function",
   ReliabilityApi: "function",
@@ -325,3 +329,17 @@ const _meWithoutManageMembers: ConsoleMe = {
 Deno.test("ConsoleMe requires canManageMembers — the type-level guard above is live", () => {
   assertEquals(typeof _meWithoutManageMembers, "object");
 });
+
+// App management (contract 0.14.0): the sync outcome is CLOSED, the class and reason unions are OPEN.
+Deno.test("appManagement unions: SyncOutcome closed, ManagementClass and UnavailableReason open", () => {
+  const outcomes: SyncOutcome[] = ["registry_updated", "definition_unchanged", "failed"];
+  const classes: ManagementClass[] = ["global", "tenant", "account", "personal", "unclassified"];
+  const open: ManagementClass = "some_future_class";
+  const reason: UnavailableReason = "some_future_reason";
+  assertEquals(outcomes.length, 3);
+  assertEquals(classes.length, 5);
+  assertEquals([open, reason], ["some_future_class", "some_future_reason"]);
+});
+
+// @ts-expect-error — "skipped" is not a SyncOutcome; widening the union to `string` unpins it.
+const _notASyncOutcome: SyncOutcome = "skipped";

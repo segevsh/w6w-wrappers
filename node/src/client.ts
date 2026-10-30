@@ -37,6 +37,7 @@ import { TeamApi } from "./team.ts";
 import type { Me, RunEnvelope } from "./types.ts";
 import { VarsApi } from "./vars.ts";
 import { AgentsApi } from "./agents.ts";
+import { AppManagementApi } from "./app-management.ts";
 import { AssetsApi } from "./assets.ts";
 import { ContextApi, ContextEntriesApi } from "./context.ts";
 import { SkillsApi } from "./skills.ts";
@@ -103,6 +104,8 @@ export class W6WClient {
   readonly contextEntries: ContextEntriesApi;
   /** Agent drafts (never runnable). */
   readonly agents: AgentsApi;
+  /** App-definition management: inventory, register, edit source, sync, remove. */
+  readonly appManagement: AppManagementApi;
 
   /**
    * Connections: `list`, `get`, `delete`. Creating, updating or testing a
@@ -231,6 +234,7 @@ export class W6WClient {
     this.context = new ContextApi(this);
     this.contextEntries = new ContextEntriesApi(this);
     this.agents = new AgentsApi(this);
+    this.appManagement = new AppManagementApi(this);
     this.connections = new ConnectionsApi(this);
     this.apps = new AppsApi(this);
     this.dashboard = new DashboardApi(this);
