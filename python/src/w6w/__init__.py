@@ -36,6 +36,7 @@ from .apps import AppsApi, AppsHost
 from .client import Client
 from .connections import ConnectionsApi, ConnectionsRequest
 from .dashboard import DashboardApi, DashboardHost
+from .data_stores import DataStoreEntriesApi, DataStoresApi, DataStoresHost
 from .documents import DocumentsApi, DocumentsHost
 from .errors import ApiError, ConfigError
 from .me import MeRequest, fetch_me
@@ -102,6 +103,9 @@ __all__ = [
     "DEFAULT_BASE_URL",
     "DashboardApi",
     "DashboardHost",
+    "DataStoreEntriesApi",
+    "DataStoresApi",
+    "DataStoresHost",
     "Doc",
     "DocFormat",
     "DocumentsApi",
