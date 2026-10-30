@@ -46,6 +46,13 @@
       "order": 25
     },
     {
+      "path": "clients/node/data-stores.md",
+      "slug": "node/data-stores",
+      "section": "clients",
+      "title": "Data stores",
+      "order": 27
+    },
+    {
       "path": "clients/node/reference.md",
       "slug": "node/reference",
       "section": "clients",
