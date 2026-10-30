@@ -1,0 +1,23 @@
+{
+  "name": "@w6w-apps/fixture",
+  "version": "1.2.3",
+  "description": "A fixture app",
+  "license": "MIT",
+  "type": "module",
+  "main": "./built/app.js",
+  "scripts": { "test": "echo test", "build": "echo build" },
+  "w6w": {
+    "id": "io.w6w.fixture",
+    "displayName": "Fixture",
+    "entry": "./src/app.ts",
+    "build": { "target": "esm" },
+    "internal": true,
+    "appearance": {
+      "icon": {
+        "url": "./assets/icon.png",
+        "sizes": { "64": "./assets/icon.png", "128": "./assets/icon-128.png" }
+      },
+      "homepage": "https://example.com/"
+    }
+  }
+}

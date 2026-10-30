@@ -175,6 +175,31 @@ token saved for host A is not sent to host B, so after switching hosts run
 `w6w auth login` for the new one (until then commands exit `1` naming
 `w6w auth login`, before any request).
 
+## `build` — build an app folder
+
+`w6w build app <folder> [--out <dir>] [--pack <file>] [--json]` is CLI-only and local: it
+makes no API call (so, like `config`, it is not a contract operation and the node and python
+lanes do not implement it). `<folder>` is a Node package whose `package.json` has a `w6w`
+block with `id`, plus `version`, `scripts.test`, `scripts.build` and a `main` naming the
+built single-file ESM bundle; a missing field is a usage error (exit `1`).
+
+It runs `npm run test`, then `npm run build` (both streamed to stderr, so `--json` stdout stays
+one document; a non-zero exit stops the command and writes nothing). It then writes to `--out`
+(default: the built file's directory) `app.js` (a copy of `main`) and `manifest.json` (2-space
+indent, no timestamps): `id`, `name`, `version`, `app`, `exec`, `digest` (the sha256 of
+`app.js`), the `definition` read by importing the bundle with each item's function-valued
+`hooks`, and `builder`. Every relative file the `w6w` block points at (icons) is embedded in
+`app` as a `data:<mime>;base64,…` URI in place of the path (`.svg`, `.png`, `.jpg`/`.jpeg`,
+`.webp`, `.gif`, `.ico`; any other extension is an error and nothing is written); `http(s):` and
+`data:` values are left alone, and paths outside the app folder (`../_shared/icon.svg`) are fine
+if the file exists.
+
+`--pack` names a JSON file with an `apps` array (created as `{ "apps": [] }` if missing). The
+entry whose `path` resolves to the folder, else whose `id` matches, gets `id`, `version` and
+`digest` set; otherwise `{ id, version, digest }` is appended. Other fields and keys are
+kept. The update is a re-read, modify and rename done under an exclusive `<pack>.lock`, so many
+builds can share one pack in parallel. `--json` prints `{id, version, digest, out, files, pack?}`.
+
 ## `ls` — list a kind
 
 `w6w ls <integrations|workflows|functions|endpoints> [--project <id>] [--json]`
