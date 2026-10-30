@@ -68,7 +68,7 @@ interface Fs {
 let fsPromise: Promise<Fs> | undefined;
 
 /** `node:fs/promises`, imported by variable so the npm build does not need Deno types. */
-function fs(): Promise<Fs> {
+export function fs(): Promise<Fs> {
   const specifier = "node:fs/promises";
   fsPromise ??= import(specifier) as Promise<Fs>;
   return fsPromise;
@@ -451,7 +451,7 @@ const files: CommandHandler = async (context) => {
 };
 
 /** Write downloaded bytes to `--out`, or to stdout when it is absent. */
-async function deliver(context: CommandContext, bytes: Uint8Array): Promise<void> {
+export async function deliver(context: CommandContext, bytes: Uint8Array): Promise<void> {
   const out = textFlag(context, "out");
   if (out === undefined) {
     await stdoutBytes(bytes);

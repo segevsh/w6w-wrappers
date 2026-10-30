@@ -746,3 +746,51 @@ class NoRedirectTransportTest(unittest.TestCase):
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
+
+
+class BodyEncodingTest(unittest.TestCase):
+    """Text (CSV) transport mode is an explicit option, never inferred from type."""
+
+    def test_plain_str_body_stays_json(self) -> None:
+        transport = Recorder(lambda _r: FakeResponse(200, "{}"))
+        _request(CONFIG, transport, "POST", "/x", body="a,b\n1,2\n")
+        req = transport.calls[0]
+        self.assertEqual(req.get_header("Content-type"), "application/json")
+        self.assertEqual(req.data, json.dumps("a,b\n1,2\n").encode("utf-8"))
+
+    def test_csv_mode_sends_text_verbatim(self) -> None:
+        transport = Recorder(lambda _r: FakeResponse(200, "{}"))
+        _request(CONFIG, transport, "POST", "/x", body="a,ä\n", body_encoding=_http.CSV_BODY_ENCODING)
+        req = transport.calls[0]
+        self.assertEqual(req.get_header("Content-type"), "text/csv")
+        self.assertEqual(req.data, "a,ä\n".encode("utf-8"))
+
+    def test_csv_mode_survives_the_401_refresh_retry(self) -> None:
+        tokens: List[bool] = []
+
+        def provider(force_refresh: bool = False) -> str:
+            tokens.append(force_refresh)
+            return "tok_new" if force_refresh else "tok_old"
+
+        config = resolve_config(
+            base_url="https://api.example.com", token=provider, refresh_on_unauthorized=True
+        )
+        unauthorized = '{"error":{"code":"unauthorized","message":"m"}}'
+        answers = [FakeResponse(401, unauthorized), FakeResponse(200, "{}")]
+
+        def respond(_r: Request) -> Any:
+            resp = answers.pop(0)
+            if resp.status == 401:
+                raise http_error(401, unauthorized)
+            return resp
+
+        transport = Recorder(respond)
+        _request(config, transport, "POST", "/x", body="a\n", body_encoding="csv")
+        self.assertEqual(len(transport.calls), 2)
+        self.assertEqual(transport.calls[1].get_header("Content-type"), "text/csv")
+        self.assertEqual(transport.calls[1].data, b"a\n")
+
+    def test_text_response_is_verbatim_str(self) -> None:
+        transport = Recorder(lambda _r: FakeResponse(200, '{"a":1}'))
+        res = _request(CONFIG, transport, "GET", "/x", response_encoding=_http.TEXT_RESPONSE_ENCODING)
+        self.assertEqual(res.body, '{"a":1}')
