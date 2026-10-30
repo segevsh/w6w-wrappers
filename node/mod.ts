@@ -69,6 +69,29 @@ export type {
   ModelUsageOptions,
   ModelUsageReport,
 } from "./src/models.ts";
+// Data stores (contract 0.15.0).
+export { DataStoreEntriesApi, DataStoresApi } from "./src/data-stores.ts";
+export type {
+  DataStoreCreateInput,
+  DataStoreEntryListOptions,
+  DataStoreEntrySetInput,
+  DataStoreInsertOptions,
+  DataStoreListOptions,
+  DataStoreOptions,
+  DataStorePatch,
+  DataStoreQuery,
+  DataStoresHost,
+} from "./src/data-stores.ts";
+export type {
+  DataStore,
+  DataStoreColumn,
+  DataStoreEntry,
+  DataStoreEntryPage,
+  DataStoreKind,
+  DataStorePage,
+  DataStoreRowSet,
+  DataStoreSchema,
+} from "./src/types.ts";
 export { VarsApi } from "./src/vars.ts";
 export type { VarCreateInput, VarPatch, VarsHost } from "./src/vars.ts";
 

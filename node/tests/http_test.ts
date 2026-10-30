@@ -638,3 +638,50 @@ Deno.test("401 recovery re-sends the identical bytes body once", async () => {
   assertEquals(calls[1].headers.get("authorization"), "Bearer tok_2");
   assertEquals([...calls[1].bytes!], [...NON_UTF8]);
 });
+
+// ---------------------------------------------------------------------------
+// Text mode (contract 0.15.0: bodyEncoding "csv" / responseEncoding "text")
+// ---------------------------------------------------------------------------
+
+Deno.test("T1: a string body with no bodyEncoding stays JSON (mode is never inferred from the type)", async () => {
+  const { fetch, calls } = fakeFetch(() => json({ ok: true }));
+  await request(CONFIG, fetch, { method: "POST", path: "/x", body: "a,b" });
+  assertEquals(calls[0].headers.get("content-type"), "application/json");
+  assertEquals(calls[0].body, '"a,b"');
+});
+
+Deno.test("T2: bodyEncoding csv sends the string verbatim as text/csv, beating caller headers", async () => {
+  const { fetch, calls } = fakeFetch(() => json({ imported: 1 }));
+  await request(CONFIG, fetch, {
+    method: "POST",
+    path: "/x",
+    body: "a,b\n1,2\n",
+    bodyEncoding: "csv",
+    headers: { "content-type": "application/json" },
+  });
+  assertEquals(calls[0].headers.get("content-type"), "text/csv");
+  assertEquals(calls[0].body, "a,b\n1,2\n");
+});
+
+Deno.test("T3: responseType text returns the body verbatim even when it parses as JSON", async () => {
+  const { fetch } = fakeFetch(() => new Response('"name"\r\n', { status: 200 }));
+  const res = await request<string>(CONFIG, fetch, {
+    method: "GET",
+    path: "/x",
+    responseType: "text",
+  });
+  assertEquals(res.status, 200);
+  assertEquals(res.body, '"name"\r\n');
+});
+
+Deno.test("T4: a non-2xx in text mode still raises the typed error with the envelope code", async () => {
+  const { fetch } = fakeFetch(() =>
+    json({ error: { code: "data_store_not_found", message: "data store not found" } }, 404)
+  );
+  const err = await assertRejects(
+    () => request<string>(CONFIG, fetch, { method: "GET", path: "/x", responseType: "text" }),
+    ApiError,
+  );
+  assertEquals(err.status, 404);
+  assertEquals(err.code, "data_store_not_found");
+});

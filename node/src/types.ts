@@ -1328,3 +1328,66 @@ export interface AppManagementApi {
   sync(id: string, opts?: SyncAppOptions): Promise<SyncResult>;
   remove(id: string, opts?: CallOptions): Promise<{ removed: number }>;
 }
+
+// ── Data stores (contract 0.15.0) ───────────────────────────────────────────
+
+/** The three store kinds. Closed: a fourth is a contract change. */
+export type DataStoreKind = "kv" | "doc" | "table";
+
+/** One column of a `table` store's schema. */
+export interface DataStoreColumn {
+  name: string;
+  type: "string" | "number" | "integer" | "boolean" | "date" | "datetime";
+  required: boolean;
+  default?: unknown;
+}
+
+/** A store's schema. `kv`/`doc` stores carry `{}`; a `table` store carries its columns. */
+export interface DataStoreSchema {
+  columns?: DataStoreColumn[];
+  /** The column that names a row, when the table has one. */
+  key?: string;
+}
+
+/** The wire `DataStore` (exactly the server's `storeJson`). */
+export interface DataStore {
+  id: string;
+  kind: DataStoreKind;
+  name: string;
+  description: string;
+  project: string;
+  schema: DataStoreSchema;
+  entryCount: number;
+  sizeBytes: number;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The wire `Entry` (exactly the server's `entryJson`). */
+export interface DataStoreEntry {
+  key: string;
+  value: unknown;
+  version: number;
+  sizeBytes: number;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One page of stores. `nextCursor` is absent (never `null`) on the last page. */
+export interface DataStorePage {
+  items: DataStore[];
+  nextCursor?: string;
+}
+
+/** One page of entries, by key. `nextCursor` is absent (never `null`) on the last page. */
+export interface DataStoreEntryPage {
+  items: DataStoreEntry[];
+  nextCursor?: string;
+}
+
+/** The result of a query-mode read: the matching rows, no paging. */
+export interface DataStoreRowSet {
+  items: DataStoreEntry[];
+}

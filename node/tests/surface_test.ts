@@ -40,6 +40,10 @@ import {
   type ActionRunEnvelope,
   type ConnectionState,
   type ConnectionSummary,
+  type DataStore,
+  type DataStoreEntryPage,
+  type DataStoreKind,
+  type DataStorePage,
   type Doc,
   type DocFormat,
   type FunctionRunEnvelope,
@@ -81,6 +85,8 @@ const PUBLIC_SURFACE: Record<string, "function" | "string"> = {
   path: "function",
   // T2.1.3 — assets.
   DocumentsApi: "function",
+  DataStoresApi: "function",
+  DataStoreEntriesApi: "function",
   VarsApi: "function",
   // T2.1.4 — identity and discovery.
   fetchMe: "function",
@@ -131,6 +137,11 @@ Deno.test("the barrel's classes and guards are reachable and usable, not just pr
   // lines fail if the binding is not the thing it claims to be.
   const client = new barrel.W6WClient({ baseUrl: "https://api.example.com", token: "t" });
   assertEquals(typeof client.documents.list, "function");
+  assertEquals(typeof client.dataStores.list, "function");
+  assertEquals(typeof client.dataStores.importCsv, "function");
+  assertEquals(typeof client.dataStores.exportCsv, "function");
+  assertEquals(typeof client.dataStores.entries.query, "function");
+  assertEquals(typeof client.dataStores.entries.increment, "function");
   assertEquals(typeof client.vars.list, "function");
   assertEquals(typeof client.connections.list, "function");
   assertEquals(typeof client.connections.get, "function");
@@ -343,3 +354,23 @@ Deno.test("appManagement unions: SyncOutcome closed, ManagementClass and Unavail
 
 // @ts-expect-error — "skipped" is not a SyncOutcome; widening the union to `string` unpins it.
 const _notASyncOutcome: SyncOutcome = "skipped";
+
+// ── Data stores (contract 0.15.0) ────────────────────────────────────────────
+
+Deno.test("data-store kinds are closed and pages never carry a null cursor", () => {
+  const kinds: DataStoreKind[] = ["kv", "doc", "table"];
+  assertEquals(kinds.length, 3);
+  const page: DataStorePage = { items: [] };
+  const entries: DataStoreEntryPage = { items: [], nextCursor: "c" };
+  assertEquals(page.nextCursor, undefined);
+  assertEquals(entries.nextCursor, "c");
+  const store: DataStore | undefined = undefined;
+  assertEquals(store, undefined);
+});
+
+// @ts-expect-error — "queue" is not a DataStoreKind; widening the union to `string` unpins it.
+const _notAStoreKind: DataStoreKind = "queue";
+// @ts-expect-error — `nextCursor` is optional, never `null`.
+const _nullStoreCursor: DataStorePage = { items: [], nextCursor: null };
+// @ts-expect-error — `nextCursor` is optional, never `null`.
+const _nullEntryCursor: DataStoreEntryPage = { items: [], nextCursor: null };
