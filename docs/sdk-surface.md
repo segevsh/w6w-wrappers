@@ -376,6 +376,32 @@ Shared rules for both asset namespaces:
 Bodies come back exactly as sent (no envelope key to unwrap). `SyncOutcome` is closed;
 `ManagementClass`, `UnavailableReason` and `TargetOption.reason` are open strings.
 
+### Data stores — project-scoped
+
+| TS | Python | Returns |
+| -- | ------ | ------- |
+| `client.dataStores.list(opts?)` | `client.data_stores.list(kind=None, cursor=None, limit=None, project=None)` | `DataStorePage` |
+| `client.dataStores.get(id, opts?)` | `client.data_stores.get(id, project=None)` | `DataStore` |
+| `client.dataStores.create(input, opts?)` | `client.data_stores.create(kind, name, description=None, schema=None, project=None)` | `DataStore` |
+| `client.dataStores.update(id, patch, opts?)` | `client.data_stores.update(id, name=None, description=None, schema=None, project=None)` | `DataStore` |
+| `client.dataStores.archive(id, opts?)` | `client.data_stores.archive(id, project=None)` | `void` |
+| `client.dataStores.importCsv(id, csv, opts?)` | `client.data_stores.import_csv(id, csv, project=None)` | `{ imported: number }` |
+| `client.dataStores.exportCsv(id, opts?)` | `client.data_stores.export_csv(id, project=None)` | `string` |
+| `client.dataStores.entries.list(id, opts?)` | `client.data_stores.entries.list(id, prefix=None, cursor=None, limit=None, project=None)` | `DataStoreEntryPage` |
+| `client.dataStores.entries.get(id, key, opts?)` | `client.data_stores.entries.get(id, key, project=None)` | `DataStoreEntry` |
+| `client.dataStores.entries.set(id, key, input, opts?)` | `client.data_stores.entries.set(id, key, value, if_version=None, ttl_seconds=None, project=None)` | `DataStoreEntry` |
+| `client.dataStores.entries.insert(id, row, opts?)` | `client.data_stores.entries.insert(id, value, ttl_seconds=None, project=None)` | `DataStoreEntry` |
+| `client.dataStores.entries.increment(id, key, by?, opts?)` | `client.data_stores.entries.increment(id, key, by=None, project=None)` | `DataStoreEntry` |
+| `client.dataStores.entries.delete(id, key, opts?)` | `client.data_stores.entries.delete(id, key, project=None)` | `void` |
+| `client.dataStores.entries.query(id, query?, opts?)` | `client.data_stores.entries.query(id, where=None, order=None, limit=None, project=None)` | `DataStoreRowSet` |
+
+Every operation takes an optional `project` (per-call → client default → nothing). Single
+resources and pages come back exactly as the server sends them (no envelope key to unwrap);
+`nextCursor` is absent, never `null`, on the last page. `importCsv` takes the CSV as a string
+(text mode, `bodyEncoding: "csv"`) and `exportCsv` returns it verbatim as a string
+(`responseEncoding: "text"`); see implementation.md §3. `DataStoreKind` is the closed union
+`"kv" | "doc" | "table"`.
+
 ## 5. Wire types and the run types
 
 Both packages export the transcribed wire shapes: `Doc`, `DocFormat`, `Var`,

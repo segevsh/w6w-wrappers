@@ -2,7 +2,9 @@
 
 The operations every wrapper must support, at the current `VERSION`. The
 machine-readable form is [`../endpoints.json`](../endpoints.json); this document
-is the human one. They must agree — CI checks that.
+is the human one. They must agree; nothing checks the prose automatically, so a
+change to either is hand-synced into the other (the node conformance test pins
+the operation count and the `naming` entries, not this file).
 
 The cross-language _implementation_ rules that sit behind this catalog — types,
 error model, env handling, toolchains, conformance runner — are pinned in
@@ -76,6 +78,25 @@ still the JSON error envelope and raises the same typed error with its `code`
 as before. The two fields are independent: `assets.uploads.putEntry` declares
 only `bodyEncoding`, `assets.content` and `assets.archiveDownload` only
 `responseEncoding`.
+
+**Text bodies.** Contract `0.15.0` adds one value of each field for text routes
+(CSV), with the same success-path-only rule:
+
+- `bodyEncoding: "csv"` — the request body is the caller's string, sent verbatim
+  with `content-type: text/csv`. Never JSON-encoded or quoted. Declared only by
+  `dataStores.importCsv`.
+- `responseEncoding: "text"` — a **successful** response body is returned
+  verbatim as a string, never JSON-parsed (a CSV body that happens to parse as
+  JSON stays a string). Declared only by `dataStores.exportCsv`.
+
+The mode is chosen by the explicit option alone, never by the argument's type: a
+string body without `bodyEncoding` is still JSON-encoded (implementation.md §3,
+"Text-mode (CSV) requests").
+
+The encoded operations are exactly: `assets.uploads.putEntry` (`bodyEncoding:
+"octet-stream"`), `assets.content` and `assets.archiveDownload`
+(`responseEncoding: "octet-stream"`), `dataStores.importCsv` (`bodyEncoding:
+"csv"`) and `dataStores.exportCsv` (`responseEncoding: "text"`).
 
 **Naming.** Operation names in `endpoints.json` are the contract. Each language
 renders them in its own idiom but the mapping is mechanical and must not drift.
@@ -2475,6 +2496,258 @@ No body. Answers `{removed}`, a count of removed versions. Errors: the `:id` err
 
 ---
 
+## 101. `dataStores.list` — list the project's data stores
+
+```
+GET /data-stores
+```
+
+`status: required` · served today
+
+Params: `kind` (query, string), `cursor` (query, string), `limit` (query, integer), `project` (query, string). Returns `DataStorePage`.
+
+Returns `{items, nextCursor?}`; `nextCursor` is absent (never null) on the last page. A malformed cursor is `400 invalid_cursor`; a bad `limit` `400 invalid_limit`.
+
+Project rule: optional `?project=`, per call then client default, otherwise omitted (the server uses the account's default project); an unknown project is `400 unknown_project`.
+
+Errors (informational; status + code pass through as the ordinary `ApiError`): `400 invalid_cursor`, `400 invalid_limit`, `400 unknown_project`.
+
+---
+
+## 102. `dataStores.get` — fetch one data store by id
+
+```
+GET /data-stores/:id
+```
+
+`status: required` · served today
+
+Params: `id` (path, string, required), `project` (query, string). Returns `DataStore`.
+
+The store is returned BARE (not wrapped).
+
+Project rule: optional `?project=`, per call then client default, otherwise omitted (the server uses the account's default project); an unknown project is `400 unknown_project`.
+
+Errors (informational; status + code pass through as the ordinary `ApiError`): `404 data_store_not_found`, `400 unknown_project`.
+
+---
+
+## 103. `dataStores.create` — create a data store
+
+```
+POST /data-stores
+```
+
+`status: required` · served today
+
+Params: `kind` (body, string, required), `name` (body, string, required), `description` (body, string), `schema` (body, object), `project` (query, string). Returns `DataStore` (success status 201).
+
+`kind` is `kv`, `doc` or `table`; `schema` (table only) is `{columns:[{name,type,required,default?}], key?}`. The server answers `201` with the bare store. Validation refusals are `400` with codes such as `invalid_value`, `invalid_body`; a duplicate name is `409 store_exists`.
+
+Project rule: optional `?project=`, per call then client default, otherwise omitted (the server uses the account's default project); an unknown project is `400 unknown_project`.
+
+Errors (informational; status + code pass through as the ordinary `ApiError`): `400 invalid_value` / `invalid_body`, `409 store_exists`, `400 unknown_project`.
+
+---
+
+## 104. `dataStores.update` — patch a data store's name, description or schema
+
+```
+PATCH /data-stores/:id
+```
+
+`status: required` · served today
+
+Params: `id` (path, string, required), `name` (body, string), `description` (body, string), `schema` (body, object), `project` (query, string). Returns `DataStore`.
+
+Every body field is optional; an omitted field is left alone. `kind` is immutable. A schema the stored rows do not satisfy is `schema_incompatible`.
+
+Project rule: optional `?project=`, per call then client default, otherwise omitted (the server uses the account's default project); an unknown project is `400 unknown_project`.
+
+Errors (informational; status + code pass through as the ordinary `ApiError`): `404 data_store_not_found`, `400 invalid_body`, `400 schema_incompatible` when stored rows violate the new schema, `400 unknown_project`.
+
+---
+
+## 105. `dataStores.archive` — archive a data store
+
+```
+DELETE /data-stores/:id
+```
+
+`status: required` · served today
+
+Params: `id` (path, string, required), `project` (query, string). Returns `void` (success status 204).
+
+The server answers `204`; the wrapper returns nothing. Archiving is a soft delete: the store then answers `404 data_store_not_found`.
+
+Project rule: optional `?project=`, per call then client default, otherwise omitted (the server uses the account's default project); an unknown project is `400 unknown_project`.
+
+Errors (informational; status + code pass through as the ordinary `ApiError`): `404 data_store_not_found`, `400 unknown_project`.
+
+---
+
+## 106. `dataStores.importCsv` — import CSV text into a table store
+
+```
+POST /data-stores/:id/import
+```
+
+`status: required` · served today
+
+Params: `id` (path, string, required), `body` (body, string, required), `project` (query, string). Returns `{ imported: number }`.
+
+TEXT IN (`bodyEncoding: "csv"`, docs/endpoints.md Conventions): the request body is the CSV text verbatim with `content-type: text/csv` — never JSON-encoded or quoted. The header row names the columns. The server refuses any other media type with `400 invalid_csv`; a bad cell is `400 invalid_value` carrying `field`, `row` and `column` in the envelope (`ApiError.raw.error`). Answers `{ imported }`.
+
+Project rule: optional `?project=`, per call then client default, otherwise omitted (the server uses the account's default project); an unknown project is `400 unknown_project`.
+
+Errors (informational; status + code pass through as the ordinary `ApiError`): `404 data_store_not_found`, `400 invalid_csv`, `400 invalid_value` (with `field`, `row`, `column`), `413 payload_too_large`, `400 unknown_project`.
+
+---
+
+## 107. `dataStores.exportCsv` — export a table store as CSV text
+
+```
+GET /data-stores/:id/export
+```
+
+`status: required` · served today
+
+Params: `id` (path, string, required), `project` (query, string). Returns `string` (success status 200).
+
+TEXT OUT (`responseEncoding: "text"`, docs/endpoints.md Conventions): returns the CSV body verbatim as a string, never JSON-parsed — a body that happens to parse as JSON stays a string. A non-2xx still carries the JSON error envelope and raises the typed error with its `code`.
+
+Project rule: optional `?project=`, per call then client default, otherwise omitted (the server uses the account's default project); an unknown project is `400 unknown_project`.
+
+Errors (informational; status + code pass through as the ordinary `ApiError`): `404 data_store_not_found`, `400 unknown_project`.
+
+---
+
+## 108. `dataStores.entries.list` — list a store's entries, paged by key
+
+```
+GET /data-stores/:id/entries
+```
+
+`status: required` · served today
+
+Params: `id` (path, string, required), `prefix` (query, string), `cursor` (query, string), `limit` (query, integer), `project` (query, string). Returns `DataStoreEntryPage`.
+
+Returns `{items, nextCursor?}` ordered by key; `nextCursor` is absent (never null) on the last page. A malformed cursor is `400 invalid_cursor`. Filtering and ordering is `dataStores.entries.query`.
+
+Project rule: optional `?project=`, per call then client default, otherwise omitted (the server uses the account's default project); an unknown project is `400 unknown_project`.
+
+Errors (informational; status + code pass through as the ordinary `ApiError`): `404 data_store_not_found`, `400 invalid_cursor`, `400 invalid_limit`, `400 unknown_project`.
+
+---
+
+## 109. `dataStores.entries.get` — fetch one entry by key
+
+```
+GET /data-stores/:id/entries/:key
+```
+
+`status: required` · served today
+
+Params: `id` (path, string, required), `key` (path, string, required), `project` (query, string). Returns `DataStoreEntry`.
+
+The entry is returned BARE. A missing key is `404 entry_not_found`.
+
+Project rule: optional `?project=`, per call then client default, otherwise omitted (the server uses the account's default project); an unknown project is `400 unknown_project`.
+
+Errors (informational; status + code pass through as the ordinary `ApiError`): `404 data_store_not_found`, `404 entry_not_found`, `400 invalid_key`, `400 unknown_project`.
+
+---
+
+## 110. `dataStores.entries.set` — create or replace one entry by key
+
+```
+PUT /data-stores/:id/entries/:key
+```
+
+`status: required` · served today
+
+Params: `id` (path, string, required), `key` (path, string, required), `value` (body, any, required), `ifVersion` (body, integer), `ttlSeconds` (body, integer), `project` (query, string). Returns `DataStoreEntry`.
+
+Body `{value, ifVersion?, ttlSeconds?}`. `ifVersion` makes the write conditional (`409 version_conflict`). A value the store's kind or schema refuses is `400 invalid_value` with `field`/`row`/`column`; a bad key is `400 invalid_key`.
+
+Project rule: optional `?project=`, per call then client default, otherwise omitted (the server uses the account's default project); an unknown project is `400 unknown_project`.
+
+Errors (informational; status + code pass through as the ordinary `ApiError`): `404 data_store_not_found`, `400 invalid_key`, `400 invalid_value` (with `field`, `row`, `column`), `409 version_conflict`, `413 payload_too_large`, `400 unknown_project`.
+
+---
+
+## 111. `dataStores.entries.insert` — insert one row into a table store
+
+```
+POST /data-stores/:id/entries
+```
+
+`status: required` · served today
+
+Params: `id` (path, string, required), `value` (body, object, required), `ttlSeconds` (body, integer), `project` (query, string). Returns `DataStoreEntry` (success status 201).
+
+Table stores only; the server generates the key. Body `{value: row, ttlSeconds?}`; the server answers `201`. A bad row is `400 invalid_value`.
+
+Project rule: optional `?project=`, per call then client default, otherwise omitted (the server uses the account's default project); an unknown project is `400 unknown_project`.
+
+Errors (informational; status + code pass through as the ordinary `ApiError`): `404 data_store_not_found`, `400 invalid_value`, `413 payload_too_large`, `400 unknown_project`.
+
+---
+
+## 112. `dataStores.entries.increment` — atomically add to a numeric entry
+
+```
+POST /data-stores/:id/entries/:key/increment
+```
+
+`status: required` · served today
+
+Params: `id` (path, string, required), `key` (path, string, required), `by` (body, number), `project` (query, string). Returns `DataStoreEntry`.
+
+Omitted `by` sends no body, which the server reads as increment by 1. A missing key starts from 0; a non-numeric entry is `400 invalid_value`.
+
+Project rule: optional `?project=`, per call then client default, otherwise omitted (the server uses the account's default project); an unknown project is `400 unknown_project`.
+
+Errors (informational; status + code pass through as the ordinary `ApiError`): `404 data_store_not_found`, `400 invalid_body`, `400 invalid_value`, `400 unknown_project`.
+
+---
+
+## 113. `dataStores.entries.delete` — delete one entry by key
+
+```
+DELETE /data-stores/:id/entries/:key
+```
+
+`status: required` · served today
+
+Params: `id` (path, string, required), `key` (path, string, required), `project` (query, string). Returns `void` (success status 204).
+
+The server answers `204`; the wrapper returns nothing. A missing key is `404 entry_not_found`.
+
+Project rule: optional `?project=`, per call then client default, otherwise omitted (the server uses the account's default project); an unknown project is `400 unknown_project`.
+
+Errors (informational; status + code pass through as the ordinary `ApiError`): `404 data_store_not_found`, `404 entry_not_found`, `400 unknown_project`.
+
+---
+
+## 114. `dataStores.entries.query` — filter and order a table store's rows
+
+```
+GET /data-stores/:id/entries
+```
+
+`status: required` · served today
+
+Params: `id` (path, string, required), `where` (query, object), `order` (query, string), `limit` (query, integer), `project` (query, string). Returns `DataStoreRowSet`.
+
+Same route as `entries.list`, in QUERY MODE: the server switches to it when `order` or any `where[col]` key is present, and then answers `{items}` only (no `nextCursor`, no `cursor`/`prefix`). `where` is an object sent as one `where[<col>]=<value>` query key per column (a column once only; a malformed filter is `400 invalid_query`).
+
+Project rule: optional `?project=`, per call then client default, otherwise omitted (the server uses the account's default project); an unknown project is `400 unknown_project`.
+
+Errors (informational; status + code pass through as the ordinary `ApiError`): `404 data_store_not_found`, `400 invalid_query`, `400 invalid_cursor`, `400 unknown_project`.
+
+---
+
 ## Explicitly out of scope for this version
 
 Named so nobody adds them ad hoc in one language — this list is the `outOfScope`
@@ -2543,3 +2816,9 @@ They all exist on the API. They are not in the wrappers until they are in
 > `appManagement.{list,get,preview,register,updateSource,sync,remove}`. The operation
 > count goes from 100 to 107. The operator source-grant API is not in this contract, and
 > `@w6w/sdk/console` `apps.*` is unchanged.
+
+> **At contract `0.15.0` fourteen data-store operations were added** (§§101-114):
+> `dataStores.{list,get,create,update,archive,importCsv,exportCsv}` and
+> `dataStores.entries.{list,get,set,insert,increment,delete,query}`, plus the text
+> encodings `bodyEncoding: "csv"` / `responseEncoding: "text"` (Conventions, "Text
+> bodies"). The operation count goes from 107 to 121.
