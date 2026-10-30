@@ -135,6 +135,8 @@ const GROUP_SUMMARIES: Record<string, string> = {
   team: "Invite, list and manage your account's team",
   "app-management":
     "List, preview, register, edit the source of, sync and remove the apps you manage",
+  "data-stores":
+    "Create and edit data stores, import and export CSV, and read and write their entries",
   apps: "Look up apps by id",
   dashboard: "Run-ledger rollup for your account",
   projects: "List your projects",
@@ -164,6 +166,10 @@ const GROUP_EXAMPLES: Record<string, string[]> = {
   "app-management": [
     "w6w app-management list --scope account",
     "w6w app-management preview github:acme/app --target account",
+  ],
+  "data-stores": [
+    "w6w data-stores list --kind table",
+    "w6w data-stores entry-query ds_01HQ8N --where status=open --order created",
   ],
   dashboard: ["w6w dashboard stats", "w6w dashboard stats --bucket week"],
   projects: ["w6w projects list"],
@@ -457,6 +463,39 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
     "w6w app-management sync sendgrid --expected-revision 3",
   ],
   "appManagement.remove": ["w6w app-management remove sendgrid"],
+  "dataStores.list": ["w6w data-stores list", "w6w data-stores list --kind table --limit 20"],
+  "dataStores.get": ["w6w data-stores get ds_01HQ8N"],
+  "dataStores.create": [
+    "w6w data-stores create sessions --kind kv",
+    `w6w data-stores create visits --kind table --schema '{"columns":[{"name":"page","type":"string"}]}'`,
+  ],
+  "dataStores.update": ["w6w data-stores update ds_01HQ8N --name visits-v2"],
+  "dataStores.archive": ["w6w data-stores archive ds_01HQ8N"],
+  "dataStores.importCsv": [
+    "w6w data-stores import ds_01HQ8N --file ./visits.csv",
+    "cat visits.csv | w6w data-stores import ds_01HQ8N --file -",
+  ],
+  "dataStores.exportCsv": [
+    "w6w data-stores export ds_01HQ8N > visits.csv",
+    "w6w data-stores export ds_01HQ8N --out ./visits.csv",
+  ],
+  "dataStores.entries.list": ["w6w data-stores entry-list ds_01HQ8N --prefix user:"],
+  "dataStores.entries.get": ["w6w data-stores entry-get ds_01HQ8N user:42"],
+  "dataStores.entries.set": [
+    `w6w data-stores entry-set ds_01HQ8N user:42 --value '{"plan":"pro"}'`,
+    `w6w data-stores entry-set ds_01HQ8N user:42 --value '{"plan":"team"}' --if-version 3`,
+  ],
+  "dataStores.entries.insert": [
+    `w6w data-stores entry-insert ds_01HQ8N --value '{"page":"/","hits":1}'`,
+  ],
+  "dataStores.entries.increment": [
+    "w6w data-stores entry-increment ds_01HQ8N visits:home",
+    "w6w data-stores entry-increment ds_01HQ8N visits:home --by 5",
+  ],
+  "dataStores.entries.delete": ["w6w data-stores entry-delete ds_01HQ8N user:42"],
+  "dataStores.entries.query": [
+    "w6w data-stores entry-query ds_01HQ8N --where status=open --where owner=ann --order created",
+  ],
   "run": [
     `w6w run conn_01HQ8N --action send_email --payload '{"to":"a@b.com"}'`,
     `w6w run wf_01HQ8N --payload '{"email":"a@b.com"}'`,
@@ -471,6 +510,16 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
  * copied (see the module docstring).
  */
 const COMMAND_NOTES: Record<string, string[]> = {
+  "dataStores.importCsv": [
+    "The file is sent as text/csv, verbatim; its header row names the columns. Use --file - to " +
+    "read standard input. A bad cell is an invalid_value error naming the row and column.",
+  ],
+  "dataStores.exportCsv": [
+    "Writes the CSV to standard output, or to --out <path>.",
+  ],
+  "dataStores.entries.query": [
+    "Repeat --where <col>=<value> for more filters (one per column; values are sent as text).",
+  ],
   "workflows.run": [
     "Without --wait the run is queued and the command returns immediately with a run id and " +
     'status "queued". With --wait the CLI returns when the run finishes or the server\'s wait ' +
@@ -524,6 +573,75 @@ const COMMAND_NOTES: Record<string, string[]> = {
  * added to the contract cannot reach help undescribed.
  */
 const PARAM_HELP: Record<string, string> = {
+  "dataStores.list.project":
+    "Project to scope this call to (default: the client's, else the account's default)",
+  "dataStores.get.project":
+    "Project to scope this call to (default: the client's, else the account's default)",
+  "dataStores.create.project":
+    "Project to scope this call to (default: the client's, else the account's default)",
+  "dataStores.update.project":
+    "Project to scope this call to (default: the client's, else the account's default)",
+  "dataStores.archive.project":
+    "Project to scope this call to (default: the client's, else the account's default)",
+  "dataStores.importCsv.project":
+    "Project to scope this call to (default: the client's, else the account's default)",
+  "dataStores.exportCsv.project":
+    "Project to scope this call to (default: the client's, else the account's default)",
+  "dataStores.entries.list.project":
+    "Project to scope this call to (default: the client's, else the account's default)",
+  "dataStores.entries.get.project":
+    "Project to scope this call to (default: the client's, else the account's default)",
+  "dataStores.entries.set.project":
+    "Project to scope this call to (default: the client's, else the account's default)",
+  "dataStores.entries.insert.project":
+    "Project to scope this call to (default: the client's, else the account's default)",
+  "dataStores.entries.increment.project":
+    "Project to scope this call to (default: the client's, else the account's default)",
+  "dataStores.entries.delete.project":
+    "Project to scope this call to (default: the client's, else the account's default)",
+  "dataStores.entries.query.project":
+    "Project to scope this call to (default: the client's, else the account's default)",
+  "dataStores.get.id": "Data store id (see: `w6w data-stores list`)",
+  "dataStores.update.id": "Data store id (see: `w6w data-stores list`)",
+  "dataStores.archive.id": "Data store id (see: `w6w data-stores list`)",
+  "dataStores.importCsv.id": "Data store id (see: `w6w data-stores list`)",
+  "dataStores.exportCsv.id": "Data store id (see: `w6w data-stores list`)",
+  "dataStores.entries.list.id": "Data store id (see: `w6w data-stores list`)",
+  "dataStores.entries.get.id": "Data store id (see: `w6w data-stores list`)",
+  "dataStores.entries.set.id": "Data store id (see: `w6w data-stores list`)",
+  "dataStores.entries.insert.id": "Data store id (see: `w6w data-stores list`)",
+  "dataStores.entries.increment.id": "Data store id (see: `w6w data-stores list`)",
+  "dataStores.entries.delete.id": "Data store id (see: `w6w data-stores list`)",
+  "dataStores.entries.query.id": "Data store id (see: `w6w data-stores list`)",
+  "dataStores.entries.get.key": "Entry key",
+  "dataStores.entries.set.key": "Entry key",
+  "dataStores.entries.increment.key": "Entry key",
+  "dataStores.entries.delete.key": "Entry key",
+  "dataStores.list.cursor": "The previous page's nextCursor",
+  "dataStores.list.limit": "Page size (a positive integer)",
+  "dataStores.entries.list.cursor": "The previous page's nextCursor",
+  "dataStores.entries.list.limit": "Page size (a positive integer)",
+  "dataStores.entries.query.limit": "Maximum rows (a positive integer)",
+  "dataStores.list.kind": "Only stores of this kind: kv | doc | table",
+  "dataStores.create.kind": "Store kind: kv | doc | table",
+  "dataStores.create.name": "Store name",
+  "dataStores.update.name": "New store name",
+  "dataStores.create.description": "Store description",
+  "dataStores.update.description": "New store description",
+  "dataStores.create.schema":
+    'Table columns, as a JSON object like {"columns":[{"name":"page","type":"string"}]}',
+  "dataStores.update.schema": "New table schema, as a JSON object",
+  "dataStores.importCsv.body": "Path of the CSV file to import, or `-` for standard input",
+  "dataStores.entries.list.prefix": "Only keys starting with this",
+  "dataStores.entries.set.value": "The value, as JSON (strings need quotes)",
+  "dataStores.entries.set.ifVersion":
+    "Only write if the entry is at this version (compare-and-set)",
+  "dataStores.entries.set.ttlSeconds": "Expire the entry after this many seconds",
+  "dataStores.entries.insert.value": "The row, as a JSON object",
+  "dataStores.entries.insert.ttlSeconds": "Expire the row after this many seconds",
+  "dataStores.entries.increment.by": "Amount to add (default 1)",
+  "dataStores.entries.query.where": "Filter <col>=<value>; repeat the flag for more columns",
+  "dataStores.entries.query.order": "Column to order by",
   out: "Write the bytes to this file instead of standard output",
   purpose: "What the upload is for: skill | context (asset for upload-create)",
   idempotencyKey: "A caller-chosen key; replaying it with the same entries returns the same upload",
@@ -786,6 +904,14 @@ export const POSITIONAL_ALIASES: Readonly<Record<string, string>> = {
  * CLI spellings that differ from the contract's parameter name.
  */
 const FLAG_OVERRIDES: Record<string, { flag: string; placeholder: string | null }> = {
+  // The contract's CSV body parameter is the file the handler reads (`-` is stdin).
+  "dataStores.importCsv.body": { flag: "--file", placeholder: "<path>" },
+  // Kebab-case spellings of camelCase body fields, and a placeholder the naming
+  // string's `<col=value>...` form would otherwise lose.
+  "dataStores.entries.set.ifVersion": { flag: "--if-version", placeholder: "<n>" },
+  "dataStores.entries.set.ttlSeconds": { flag: "--ttl-seconds", placeholder: "<n>" },
+  "dataStores.entries.insert.ttlSeconds": { flag: "--ttl-seconds", placeholder: "<n>" },
+  "dataStores.entries.query.where": { flag: "--where", placeholder: "<col=value>" },
   "assets.uploads.putEntry.body": { flag: "--file", placeholder: "<path>" },
   // Kebab-case, so the flag reads like every other one; the contract's own
   // parameter name is camelCase because that is the HEADER it maps to. Without
@@ -806,6 +932,17 @@ const FLAG_OVERRIDES: Record<string, { flag: string; placeholder: string | null 
     flag: "--if-unmodified-since",
     placeholder: "<ts>",
   },
+};
+
+/**
+ * CLI-only flags an operation's handler reads that the contract has no
+ * parameter for: `data-stores export --out` (the contract returns the CSV
+ * text; where it is written is the CLI's business). Keyed by operation name.
+ */
+const EXTRA_FLAGS: Record<string, { name: string; display: string; description: string }[]> = {
+  "dataStores.exportCsv": [
+    { name: "out", display: "--out <path>", description: PARAM_HELP.out },
+  ],
 };
 
 /** The CLI flags `modelOptions` expands to: member, flag, placeholder. */
@@ -1103,6 +1240,10 @@ function buildParams(
       required: param.required,
     });
     if (param.required) usageParts.push(placeholder ? `${flag} ${placeholder}` : flag);
+  }
+
+  for (const extra of EXTRA_FLAGS[operation.name] ?? []) {
+    params.push({ ...extra, kind: "flag", required: false });
   }
 
   // `--json` is global, but every command's OPTIONS lists it (docs/cli.md).
