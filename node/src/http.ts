@@ -63,17 +63,28 @@ export interface RequestOptions {
    * Request body; omit it for a bodiless request. A `Uint8Array` is **bytes
    * mode**: sent untouched with `content-type: application/octet-stream` — no
    * JSON encoding, quoting or base64 (an `endpoints.json` operation declaring
-   * `bodyEncoding: "octet-stream"`). Anything else is serialised as JSON.
+   * `bodyEncoding: "octet-stream"`). Anything else is serialised as JSON —
+   * including a `string`, unless {@linkcode RequestOptions.bodyEncoding} says
+   * otherwise.
    */
   body?: unknown;
+  /**
+   * **Text mode** (contract `0.15.0`, an operation declaring `bodyEncoding:
+   * "csv"`): `"csv"` sends `body` — which must then be a string — verbatim with
+   * `content-type: text/csv`, never JSON-encoded or quoted. The mode is chosen
+   * ONLY by this option, never by `typeof body`: a string without it stays JSON.
+   */
+  bodyEncoding?: "csv";
   /**
    * How to read a **successful** response. `"bytes"` returns the body as a
    * `Uint8Array`, read once via `arrayBuffer()` and never decoded or
    * JSON-parsed (an operation declaring `responseEncoding: "octet-stream"`).
-   * Omitted, the body is parsed as JSON as always. A non-2xx response is the
+   * `"text"` returns the body as a `string`, read once via `text()` and never
+   * JSON-parsed even when it would parse (an operation declaring
+   * `responseEncoding: "text"`, contract `0.15.0`). Omitted, the body is parsed as JSON as always. A non-2xx response is the
    * JSON error envelope in **both** modes and raises exactly as before.
    */
-  responseType?: "json" | "bytes";
+  responseType?: "json" | "bytes" | "text";
   /**
    * Extra headers to send with this request. Precedence, low to high: the
    * client's own `headers` default < this option < the bearer
@@ -233,6 +244,10 @@ export function buildUrl(config: ResolvedConfig, options: RequestOptions): strin
  * check is false by construction. `config.onUnauthorized` is invoked with
  * whichever `401`/`unauthorized` error turns out to be terminal.
  *
+ * **Text mode** (contract `0.15.0`): `options.bodyEncoding: "csv"` and/or
+ * `options.responseType: "text"` swap the success-path encoding the same way,
+ * for a string body / string result. Chosen by those options alone.
+ *
  * **Byte mode** (contract `0.11.0`): a `Uint8Array` `options.body` and/or
  * `options.responseType: "bytes"` swap only the success-path encoding — see
  * {@linkcode RequestOptions.body} and {@linkcode RequestOptions.responseType}.
@@ -270,8 +285,12 @@ export async function request<T>(
 
   const hasBody = options.body !== undefined;
   const bytesBody = options.body instanceof Uint8Array;
+  const csvBody = hasBody && !bytesBody && options.bodyEncoding === "csv";
   if (hasBody) {
-    headers.set("content-type", bytesBody ? "application/octet-stream" : "application/json");
+    headers.set(
+      "content-type",
+      bytesBody ? "application/octet-stream" : csvBody ? "text/csv" : "application/json",
+    );
   }
 
   let res: Response;
@@ -283,6 +302,8 @@ export async function request<T>(
         ? undefined
         : bytesBody
         ? (options.body as BodyInit)
+        : csvBody
+        ? String(options.body)
         : JSON.stringify(options.body),
       signal: options.signal,
     });
@@ -317,6 +338,13 @@ export async function request<T>(
   // the typed error is identical in both modes.
   if (res.ok && options.responseType === "bytes") {
     return { status: res.status, body: new Uint8Array(await res.arrayBuffer()) as T };
+  }
+
+  // Text mode, success path only: the payload is the body, verbatim. Read once
+  // via `text()` and never JSON-parsed (a CSV body that happens to parse as
+  // JSON stays a string). A non-2xx falls through to the envelope handling.
+  if (res.ok && options.responseType === "text") {
+    return { status: res.status, body: (await res.text()) as T };
   }
 
   // Read the body exactly once, as text, then parse it guardedly — a response
