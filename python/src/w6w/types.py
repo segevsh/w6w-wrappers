@@ -695,6 +695,14 @@ class ConnectionSummary:
 #: A workflow's lifecycle state: an editable draft, or a published, live one.
 WorkflowStatus = Literal["draft", "active"]
 
+#: Where an app is registered: the caller's account, their tenant, or just them.
+#: Closed here (wire contract section 9); the server's `targets` list says which
+#: the caller may name, and it is the authority.
+ManagementTarget = Literal["account", "tenant", "personal"]
+
+#: How a sync or source edit ended. Closed: `failed` is still a 200, with `error`.
+SyncOutcome = Literal["registry_updated", "definition_unchanged", "failed"]
+
 
 @dataclass(frozen=True)
 class WorkflowSummary:

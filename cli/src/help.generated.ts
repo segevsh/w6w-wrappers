@@ -99,7 +99,7 @@ export interface HelpExitCode {
 /** The command tree, generated from the shared wrapper surface contract. */
 export const HELP_TREE: HelpTree = {
   "binary": "w6w",
-  "contractVersion": "0.13.0",
+  "contractVersion": "0.14.0",
   "tagline": "command-line client for the w6w workflow platform",
   "usage": "w6w <command> [options]",
   "docsUrl": "https://w6w.dev/docs/cli",
@@ -4961,6 +4961,371 @@ export const HELP_TREE: HelpTree = {
       ],
     },
     {
+      "name": "app-management",
+      "summary": "List, preview, register, edit the source of, sync and remove the apps you manage",
+      "headline":
+        "list, preview, register, edit the source of, sync and remove the apps you manage",
+      "usage": "w6w app-management <command> [options]",
+      "commands": [
+        {
+          "operation": "appManagement.list",
+          "path": [
+            "app-management",
+            "list",
+          ],
+          "name": "list",
+          "aliases": [],
+          "summary": "List the apps the caller manages, with live management state per row.",
+          "short": "List the apps the caller manages, with live management state per row",
+          "headline": "list the apps the caller manages, with live management state per row",
+          "usage": "w6w app-management list [options]",
+          "naming":
+            "w6w app-management list [--scope <scope>] [--q <q>] [--sort <sort>] [--compact] [--snapshot <t>] [--cursor <c>] [--offset <n>] [--limit <n>]",
+          "status": "required",
+          "params": [
+            {
+              "name": "scope",
+              "kind": "flag",
+              "display": "--scope <scope>",
+              "description": "Which apps: all (default), account, tenant or personal",
+              "required": false,
+            },
+            {
+              "name": "q",
+              "kind": "flag",
+              "display": "--q <q>",
+              "description": "Search text",
+              "required": false,
+            },
+            {
+              "name": "sort",
+              "kind": "flag",
+              "display": "--sort <sort>",
+              "description": "Order: name (default), -name, recent or -recent",
+              "required": false,
+            },
+            {
+              "name": "compact",
+              "kind": "flag",
+              "display": "--compact",
+              "description": "Return compact rows",
+              "required": false,
+            },
+            {
+              "name": "snapshot",
+              "kind": "flag",
+              "display": "--snapshot <t>",
+              "description": "Snapshot token from a previous page (not with --cursor)",
+              "required": false,
+            },
+            {
+              "name": "cursor",
+              "kind": "flag",
+              "display": "--cursor <c>",
+              "description": "The previous page's nextCursor (not with --snapshot)",
+              "required": false,
+            },
+            {
+              "name": "offset",
+              "kind": "flag",
+              "display": "--offset <n>",
+              "description": "Row offset (a non-negative integer)",
+              "required": false,
+            },
+            {
+              "name": "limit",
+              "kind": "flag",
+              "display": "--limit <n>",
+              "description": "Page size (a positive integer)",
+              "required": false,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w app-management list",
+            "w6w app-management list --scope account --sort=-recent --limit 20",
+          ],
+          "notes": [],
+        },
+        {
+          "operation": "appManagement.get",
+          "path": [
+            "app-management",
+            "get",
+          ],
+          "name": "get",
+          "aliases": [],
+          "summary": "Fetch one managed app: catalog detail plus management, source and last sync.",
+          "short": "Fetch one managed app: catalog detail plus management, source and last sync",
+          "headline": "fetch one managed app: catalog detail plus management, source and last sync",
+          "usage": "w6w app-management get <id> [options]",
+          "naming": "w6w app-management get <id>",
+          "status": "required",
+          "params": [
+            {
+              "name": "id",
+              "kind": "argument",
+              "display": "<id>",
+              "description":
+                "App id (see: w6w app-management list). An app you cannot see is a 404",
+              "required": true,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w app-management get sendgrid",
+          ],
+          "notes": [],
+        },
+        {
+          "operation": "appManagement.preview",
+          "path": [
+            "app-management",
+            "preview",
+          ],
+          "name": "preview",
+          "aliases": [],
+          "summary": "Preview a source for a target without registering anything.",
+          "short": "Preview a source for a target without registering anything",
+          "headline": "preview a source for a target without registering anything",
+          "usage": "w6w app-management preview <source> --target <target> [options]",
+          "naming": "w6w app-management preview <source> --target <target>",
+          "status": "required",
+          "params": [
+            {
+              "name": "source",
+              "kind": "argument",
+              "display": "<source>",
+              "description":
+                'A canonical remote ref (e.g. github:owner/repo), or a JSON object {"folder":{"grant":"…","path":"…"}} naming a path inside a granted server folder',
+              "required": true,
+            },
+            {
+              "name": "target",
+              "kind": "flag",
+              "display": "--target <target>",
+              "description":
+                "Where it would go: account, tenant or personal (the server's targets list says which you may use)",
+              "required": true,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w app-management preview github:acme/app --target account",
+          ],
+          "notes": [],
+        },
+        {
+          "operation": "appManagement.register",
+          "path": [
+            "app-management",
+            "register",
+          ],
+          "name": "register",
+          "aliases": [],
+          "summary": "Register an app or pack from a source into a target.",
+          "short": "Register an app or pack from a source into a target",
+          "headline": "register an app or pack from a source into a target",
+          "usage": "w6w app-management register --target <target> <source> [options]",
+          "naming": "w6w app-management register <source> --target <target> [--path <p>...]",
+          "status": "required",
+          "params": [
+            {
+              "name": "target",
+              "kind": "flag",
+              "display": "--target <target>",
+              "description":
+                "Where to register it: account, tenant or personal (the server's targets list says which you may use)",
+              "required": true,
+            },
+            {
+              "name": "source",
+              "kind": "argument",
+              "display": "<source>",
+              "description":
+                'A canonical remote ref (e.g. github:owner/repo), or a JSON object {"folder":{"grant":"…","path":"…"}} naming a path inside a granted server folder',
+              "required": true,
+            },
+            {
+              "name": "paths",
+              "kind": "flag",
+              "display": "--paths <value>",
+              "description": "Pack sources only: comma-separated paths of the entries to register",
+              "required": false,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w app-management register github:acme/app --target account",
+            'w6w app-management register \'{"folder":{"grant":"sgr_01HQ8N","path":"./my-app"}}\' --target personal',
+          ],
+          "notes": [],
+        },
+        {
+          "operation": "appManagement.updateSource",
+          "path": [
+            "app-management",
+            "update-source",
+          ],
+          "name": "update-source",
+          "aliases": [],
+          "summary":
+            "Validate a candidate source and, if it loads, make it the app's active source.",
+          "short": "Validate a candidate source and, if it loads, make it the app's active source",
+          "headline":
+            "validate a candidate source and, if it loads, make it the app's active source",
+          "usage":
+            "w6w app-management update-source <id> <source> --expected-revision <value> [options]",
+          "naming": "w6w app-management update-source <id> <source> --expected-revision <n>",
+          "status": "required",
+          "params": [
+            {
+              "name": "id",
+              "kind": "argument",
+              "display": "<id>",
+              "description": "App id (see: w6w app-management list)",
+              "required": true,
+            },
+            {
+              "name": "source",
+              "kind": "argument",
+              "display": "<source>",
+              "description":
+                'A canonical remote ref (e.g. github:owner/repo), or a JSON object {"folder":{"grant":"…","path":"…"}} naming a path inside a granted server folder',
+              "required": true,
+            },
+            {
+              "name": "expectedRevision",
+              "kind": "flag",
+              "display": "--expected-revision <value>",
+              "description":
+                "The source revision you read (0 when no source is set); a mismatch is a 409",
+              "required": true,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w app-management update-source sendgrid github:acme/app@v2 --expected-revision 3",
+          ],
+          "notes": [],
+        },
+        {
+          "operation": "appManagement.sync",
+          "path": [
+            "app-management",
+            "sync",
+          ],
+          "name": "sync",
+          "aliases": [],
+          "summary": "Re-fetch the app's active source and update the registry.",
+          "short": "Re-fetch the app's active source and update the registry",
+          "headline": "re-fetch the app's active source and update the registry",
+          "usage": "w6w app-management sync <id> [options]",
+          "naming": "w6w app-management sync <id> [--expected-revision <n>]",
+          "status": "required",
+          "params": [
+            {
+              "name": "id",
+              "kind": "argument",
+              "display": "<id>",
+              "description": "App id (see: w6w app-management list)",
+              "required": true,
+            },
+            {
+              "name": "expectedRevision",
+              "kind": "flag",
+              "display": "--expected-revision <value>",
+              "description": "Refuse with a 409 unless this is the current source revision",
+              "required": false,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w app-management sync sendgrid",
+            "w6w app-management sync sendgrid --expected-revision 3",
+          ],
+          "notes": [],
+        },
+        {
+          "operation": "appManagement.remove",
+          "path": [
+            "app-management",
+            "remove",
+          ],
+          "name": "remove",
+          "aliases": [],
+          "summary": "Remove an app: all its versions and its source row.",
+          "short": "Remove an app: all its versions and its source row",
+          "headline": "remove an app: all its versions and its source row",
+          "usage": "w6w app-management remove <id> [options]",
+          "naming": "w6w app-management remove <id>",
+          "status": "required",
+          "params": [
+            {
+              "name": "id",
+              "kind": "argument",
+              "display": "<id>",
+              "description":
+                "App id (see: w6w app-management list). An app you cannot see is a 404",
+              "required": true,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w app-management remove sendgrid",
+          ],
+          "notes": [],
+        },
+      ],
+      "options": [],
+      "examples": [
+        "w6w app-management list --scope account",
+        "w6w app-management preview github:acme/app --target account",
+      ],
+    },
+    {
       "name": "auth",
       "summary": "Save, remove and inspect the stored API token",
       "headline": "save, remove and inspect the stored API token",
@@ -5707,6 +6072,34 @@ export const COMMAND_PATHS: string[][] = [
   [
     "agents",
     "archive",
+  ],
+  [
+    "app-management",
+    "list",
+  ],
+  [
+    "app-management",
+    "get",
+  ],
+  [
+    "app-management",
+    "preview",
+  ],
+  [
+    "app-management",
+    "register",
+  ],
+  [
+    "app-management",
+    "update-source",
+  ],
+  [
+    "app-management",
+    "sync",
+  ],
+  [
+    "app-management",
+    "remove",
   ],
   [
     "auth",

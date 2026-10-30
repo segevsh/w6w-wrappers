@@ -133,6 +133,8 @@ const GROUP_SUMMARIES: Record<string, string> = {
   "model-usage": "Query model usage and cost",
   vars: "Create, read, update and delete variables",
   team: "Invite, list and manage your account's team",
+  "app-management":
+    "List, preview, register, edit the source of, sync and remove the apps you manage",
   apps: "Look up apps by id",
   dashboard: "Run-ledger rollup for your account",
   projects: "List your projects",
@@ -159,6 +161,10 @@ const GROUP_EXAMPLES: Record<string, string[]> = {
   vars: ["w6w vars list", "w6w vars create greeting --type string --value hello"],
   team: ["w6w team members", "w6w team invite --email new@example.com --role admin"],
   apps: ["w6w apps by-ids sendgrid,slack"],
+  "app-management": [
+    "w6w app-management list --scope account",
+    "w6w app-management preview github:acme/app --target account",
+  ],
   dashboard: ["w6w dashboard stats", "w6w dashboard stats --bucket week"],
   projects: ["w6w projects list"],
   reliability: [
@@ -433,6 +439,24 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
   "team.invites.revoke": ["w6w team revoke-invite inv_01HQ8N"],
   "team.members.updateRole": ["w6w team set-role usr_01HQ8N --role admin"],
   "team.members.remove": ["w6w team remove-member usr_01HQ8N"],
+  "appManagement.list": [
+    "w6w app-management list",
+    "w6w app-management list --scope account --sort=-recent --limit 20",
+  ],
+  "appManagement.get": ["w6w app-management get sendgrid"],
+  "appManagement.preview": ["w6w app-management preview github:acme/app --target account"],
+  "appManagement.register": [
+    "w6w app-management register github:acme/app --target account",
+    `w6w app-management register '{"folder":{"grant":"sgr_01HQ8N","path":"./my-app"}}' --target personal`,
+  ],
+  "appManagement.updateSource": [
+    "w6w app-management update-source sendgrid github:acme/app@v2 --expected-revision 3",
+  ],
+  "appManagement.sync": [
+    "w6w app-management sync sendgrid",
+    "w6w app-management sync sendgrid --expected-revision 3",
+  ],
+  "appManagement.remove": ["w6w app-management remove sendgrid"],
   "run": [
     `w6w run conn_01HQ8N --action send_email --payload '{"to":"a@b.com"}'`,
     `w6w run wf_01HQ8N --payload '{"email":"a@b.com"}'`,
@@ -702,6 +726,37 @@ const PARAM_HELP: Record<string, string> = {
   "team.members.updateRole.userId": "Member's user id (see: w6w team members)",
   "team.members.updateRole.role": "Role to set: member|admin (owner is not settable)",
   "team.members.remove.userId": "Member's user id (see: w6w team members)",
+  // App management. Every key is qualified: `target` would otherwise fall back
+  // to the assets text ({"skillId":…}), and `id`/`source` differ per command.
+  "appManagement.list.scope": "Which apps: all (default), account, tenant or personal",
+  "appManagement.list.q": "Search text",
+  "appManagement.list.sort": "Order: name (default), -name, recent or -recent",
+  "appManagement.list.compact": "Return compact rows",
+  "appManagement.list.snapshot": "Snapshot token from a previous page (not with --cursor)",
+  "appManagement.list.cursor": "The previous page's nextCursor (not with --snapshot)",
+  "appManagement.list.offset": "Row offset (a non-negative integer)",
+  "appManagement.list.limit": "Page size (a positive integer)",
+  "appManagement.get.id": "App id (see: w6w app-management list). An app you cannot see is a 404",
+  "appManagement.preview.source":
+    'A canonical remote ref (e.g. github:owner/repo), or a JSON object {"folder":{"grant":"…","path":"…"}} naming a path inside a granted server folder',
+  "appManagement.preview.target":
+    "Where it would go: account, tenant or personal (the server's targets list says which you may use)",
+  "appManagement.register.source":
+    'A canonical remote ref (e.g. github:owner/repo), or a JSON object {"folder":{"grant":"…","path":"…"}} naming a path inside a granted server folder',
+  "appManagement.register.target":
+    "Where to register it: account, tenant or personal (the server's targets list says which you may use)",
+  "appManagement.register.paths":
+    "Pack sources only: comma-separated paths of the entries to register",
+  "appManagement.updateSource.id": "App id (see: w6w app-management list)",
+  "appManagement.updateSource.source":
+    'A canonical remote ref (e.g. github:owner/repo), or a JSON object {"folder":{"grant":"…","path":"…"}} naming a path inside a granted server folder',
+  "appManagement.updateSource.expectedRevision":
+    "The source revision you read (0 when no source is set); a mismatch is a 409",
+  "appManagement.sync.id": "App id (see: w6w app-management list)",
+  "appManagement.sync.expectedRevision":
+    "Refuse with a 409 unless this is the current source revision",
+  "appManagement.remove.id":
+    "App id (see: w6w app-management list). An app you cannot see is a 404",
 };
 
 /**

@@ -20,6 +20,7 @@ from ._config import ResolvedConfig, TokenProvider, resolve_config
 from ._http import HttpResponse, Transport, _request, default_transport
 from ._vars import VarsApi
 from .agents_studio import AgentsApi, ContextApi, SkillsApi, TopLevelContextEntriesApi
+from .app_management import AppManagementApi
 from .apps import AppsApi
 from .assets import AssetsApi
 from .connections import ConnectionsApi
@@ -165,6 +166,9 @@ class Client:
         #: protocol), rather than the bare-callable shape ``vars``/
         #: ``connections`` use, per this task's contract (A8).
         self.team: TeamApi = TeamApi(self)
+        #: App-definition management: ``app_management.list()``, ``get``, ``preview``,
+        #: ``register``, ``update_source``, ``sync``, ``remove``.
+        self.app_management: AppManagementApi = AppManagementApi(self)
         #: Bounded app lookup: ``apps.by_ids(["sendgrid"])``.
         self.apps: AppsApi = AppsApi(self)
         #: The account's activity rollup: ``dashboard.stats()``.
