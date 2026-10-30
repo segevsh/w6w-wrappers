@@ -172,6 +172,11 @@ class EntriesTest(unittest.TestCase):
         self.assertEqual(split(req)[1], [])
         self.assertEqual(body_of(req), {"value": {"n": 1}, "ifVersion": 3, "ttlSeconds": 60})
 
+    def test_set_none_value_sends_explicit_null(self) -> None:
+        t = answering({"key": "k"})
+        client(t).data_stores.entries.set("ds_1", "k", None)
+        self.assertEqual(body_of(t.calls[0]), {"value": None})
+
     def test_set_unset_options_absent(self) -> None:
         t = answering({"key": "k"})
         client(t).data_stores.entries.set("ds_1", "k", None)
