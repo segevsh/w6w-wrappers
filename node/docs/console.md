@@ -363,22 +363,22 @@ instead of `list()`.** It sends exactly one `GET /apps` and resolves the page ve
 (the snapshot fields are present when the server answered from a snapshot) — with no accumulation
 loop of its own; `list()` above is now implemented ON TOP of it (same `AppsHost.request` call), not
 a parallel fetch. Every `ListAppsOptions` member (`q`, `category`, `maturity`, `visibility`, `sort`,
-`limit`, `cursor`, `snapshot`, `offset`, `managed`, `compact`) is forwarded under its own wire name
-only when present — an **omitted** member is dropped from the query string, while an **explicitly
-supplied `false`** (`managed: false` / `compact: false`) is still sent, because `QueryParams`
-(`../http.ts`) only drops `undefined`. `options.signal` is the one member that is never sent at all:
-it rides the existing `RequestOptions.signal` seam straight to the injected `fetch`'s own
-`AbortSignal`, and an aborted request surfaces as `ApiError` with `code: "cancelled"`, `status: 0` —
-distinguishable from `network_error` by code, not by message text. `managed: true` is
-`console.apps.listPage`'s single shared entry point for T3.1.2's account-scoped management query (a
-distinct, account-keyed cache there — this method itself has no opinion on caching); ordinary picker
-calls never set it. `compact: true` asks the server for a bounded picker-summary projection (heavy
-fields like inline icon SVGs trimmed) — the projection itself is T3.1.1's, not implemented by this
-method, and until that server support ships a host that ignores the flag simply returns full
-summaries, which callers must already tolerate. Passing an app-catalog id lookup through
-`listPage({q: <id>})` is a bounded best-effort match, not an indexed exact-id endpoint — no such
-endpoint exists server-side, so an ambiguous or unmatched result falls back to `get(id)`, never to a
-full unbounded `list()`.
+`limit`, `cursor`, `snapshot`, `offset`, `managed`, `compact`, `hasTriggers`) is forwarded under its
+own wire name only when present — an **omitted** member is dropped from the query string, while an
+**explicitly supplied `false`** (`managed: false` / `compact: false` / `hasTriggers: false`) is
+still sent, because `QueryParams` (`../http.ts`) only drops `undefined`. `options.signal` is the one
+member that is never sent at all: it rides the existing `RequestOptions.signal` seam straight to the
+injected `fetch`'s own `AbortSignal`, and an aborted request surfaces as `ApiError` with
+`code: "cancelled"`, `status: 0` — distinguishable from `network_error` by code, not by message
+text. `managed: true` is `console.apps.listPage`'s single shared entry point for T3.1.2's
+account-scoped management query (a distinct, account-keyed cache there — this method itself has no
+opinion on caching); ordinary picker calls never set it. `compact: true` asks the server for a
+bounded picker-summary projection (heavy fields like inline icon SVGs trimmed) — the projection
+itself is T3.1.1's, not implemented by this method, and until that server support ships a host that
+ignores the flag simply returns full summaries, which callers must already tolerate. Passing an
+app-catalog id lookup through `listPage({q: <id>})` is a bounded best-effort match, not an indexed
+exact-id endpoint — no such endpoint exists server-side, so an ambiguous or unmatched result falls
+back to `get(id)`, never to a full unbounded `list()`.
 
 **`snapshot?` / `offset?` read a position in one server snapshot.** The first page's result carries
 `snapshot` (a token), `total`, `offset`, `limit` and `expiresAt`; pass the token back as `snapshot`
@@ -397,6 +397,11 @@ never the unfiltered page), an omitted `ids` sends no `ids` key at all, and a ca
 ids than the server's cap (100) gets the server's own `400 too_many_ids`. `@w6w/react`'s
 `createW6WUiAdapter.listAppsByIds` is the one caller that chunks (at 100, concurrently) on top of
 this method.
+
+**`hasTriggers`** (0.9.27) narrows the list to apps that declare at least one trigger (`true`) or
+none (`false`) — `GET /apps?hasTriggers=true|false`, applied by the server before paging, so `total`
+is the filtered count. Like the `modelProvider` filters it is console-only, with no `endpoints.json`
+row. The Add-a-node dialog's Triggers tab uses it for "Search all apps".
 
 **`list()` is `@deprecated` for UI use** — prefer `listPage({ ids })`. Studio's `AppsProvider` is
 the current consumer and resolves exactly the ids it needs instead of this eager full-catalog fetch;
