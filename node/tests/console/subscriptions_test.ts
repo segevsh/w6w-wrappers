@@ -116,6 +116,7 @@ Deno.test(
     assertEquals(typeof c.console.subscriptions.get, "function");
     assertEquals(typeof c.console.subscriptions.create, "function");
     assertEquals(typeof c.console.subscriptions.delete, "function");
+    assertEquals(typeof c.console.subscriptions.retryRegistration, "function");
     assertEquals(typeof c.console.subscriptions.listEvents, "function");
     assertEquals(typeof c.console.subscriptions.requeueEvent, "function");
   },
@@ -154,6 +155,28 @@ Deno.test("console.subscriptions.get unwraps the `subscription` envelope", async
   assertEquals(res, SUB_A);
   assertEquals(c.calls[0].method, "GET");
   assertEquals(c.calls[0].url, "https://api.example.com/subscriptions/sub_1");
+});
+
+Deno.test("console.subscriptions.retryRegistration POSTs the encoded retry path and unwraps", async () => {
+  const retried: Subscription = { ...SUB_A, status: "registered", nodeId: "n1", lastFireAt: null };
+  const c = client(() => json({ subscription: retried }));
+
+  const res = await c.client.console.subscriptions.retryRegistration("sub/1");
+
+  assertEquals(res, retried);
+  assertEquals(c.calls.length, 1);
+  assertEquals(c.calls[0].method, "POST");
+  assertEquals(c.calls[0].url, "https://api.example.com/subscriptions/sub%2F1/retry-registration");
+});
+
+Deno.test("console.subscriptions.retryRegistration throws ApiError on 409 not_retryable", async () => {
+  const c = client(() => json({ error: { code: "not_retryable", message: "no" } }, 409));
+  const err = await assertRejects(
+    () => c.client.console.subscriptions.retryRegistration("sub_1"),
+    ApiError,
+  );
+  assertEquals(err.status, 409);
+  assertEquals(err.code, "not_retryable");
 });
 
 Deno.test("console.subscriptions.get throws ApiError on a 404, no null-coalescing", async () => {
