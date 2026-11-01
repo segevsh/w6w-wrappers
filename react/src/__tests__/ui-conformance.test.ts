@@ -1,3 +1,6 @@
+// TODO(26-11-01-02 test-consolidation): mock every @w6w/ui method and tag the adapter calls, so
+// react is tested on its own merit and never fails because @w6w/ui does. The real check against
+// @w6w/ui moves to the monorepo cross check (deploy/verify-cross.sh) with a drift check.
 /**
  * Runs `tsconfig.ui-conformance.json` (which compiles ONLY
  * `ui-conformance.check.ts`, see that file's header) as a real `tsc`
