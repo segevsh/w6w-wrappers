@@ -25,7 +25,7 @@ step "python: unittest (includes the conformance suite)"
 (cd python && PYTHONPATH=src python3 -m unittest discover -s tests -t .)
 step "python: build sdist + wheel"
 if ! python3 -c 'import build' 2>/dev/null; then
-  echo "verify: python3 has no 'build' module — install it (python3 -m pip install build)" >&2
+  echo "verify: python3 has no 'build' module. Devcontainer: sudo apt-get install -y python3-build python3-venv (the image ships both from w6w-io/w6w#.devcontainer); elsewhere: python3 -m pip install build" >&2
   exit 1
 fi
 (cd python && python3 -m build --outdir dist)
