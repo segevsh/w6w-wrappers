@@ -4,15 +4,15 @@
  * member that is present in the type but missing, mis-forwarded, or
  * error-body-dropping at run time. Three things are asserted here:
  *
- * 1. Every member name is READ from the installed `@w6w/ui` declarations
- *    (`provider.d.ts`'s `interface W6WApi`) — not the adapter's hand-copied
+ * 1. Every member name is READ from the in-repo `@w6w/ui` mock
+ *    (`test/mocks/ui/index.ts`'s `interface W6WApi`) — not the adapter's hand-copied
  *    interface — and each is a function on the adapter.
  * 2. Forwarding: each member, driven with sentinel arguments through a stub
  *    transport, produces the literal wire request listed in `CASES`.
  * 3. Error bodies: a 4xx JSON body per member reaches the caller as `err.body`,
  *    deep-equal to the literal body the server sent.
  *
- * The pinned UI is read as TEXT; nothing imports `@w6w/ui` at run time.
+ * The mock is read as TEXT; nothing resolves `@w6w/ui`.
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -22,7 +22,7 @@ import type { FetchLike } from "@w6w/sdk";
 import { W6WClient } from "@w6w/sdk";
 import { createW6WUiAdapter } from "../adapter.ts";
 
-const PROVIDER_SRC = fileURLToPath(new URL("./provider.d.ts", import.meta.resolve("@w6w/ui")));
+const PROVIDER_SRC = fileURLToPath(new URL("../../test/mocks/ui/index.ts", import.meta.url));
 
 /** `W6WApi` members read from the pinned UI source: `name` and whether it is `?`-optional. */
 function readUiMembers(): { name: string; optional: boolean }[] {
