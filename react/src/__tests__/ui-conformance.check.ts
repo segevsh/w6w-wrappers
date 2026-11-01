@@ -6,8 +6,8 @@
  * tsc's own output on failure — the output names whichever member went
  * missing).
  *
- * Compile against the published UI's public exports. Its expression dependency
- * is also available from npm, so this checks the same declarations consumers use.
+ * `@w6w/ui` and `@w6w/ui/flow` resolve to `test/mocks/ui` (see the tsconfig); the real ui is
+ * checked by the monorepo's `deploy/verify-cross.sh`.
  *
  * @module
  */
