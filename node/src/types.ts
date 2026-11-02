@@ -20,6 +20,7 @@
  */
 
 import { ApiError } from "./errors.ts";
+import type { AppSummary } from "./apps.ts";
 import type { CallOptions, HttpResponse } from "./http.ts";
 
 /**
@@ -1055,4 +1056,338 @@ export function mintId(prefix: string): string {
     ? crypto.randomUUID()
     : Math.floor(Math.random() * 1e16).toString(36);
   return `${prefix}_${uuid}`;
+}
+
+// ---------------------------------------------------------------------------
+// App management (contract 0.14.0) — `client.appManagement.*`
+// ---------------------------------------------------------------------------
+
+/**
+ * Open-ended string: the known literals autocomplete, any other string still
+ * type-checks. (`string & {}` fails `deno lint` `ban-types`.)
+ */
+type OpenString = string & Record<never, never>;
+
+/** Who manages an app. Open: a newer server may add a class. */
+export type ManagementClass =
+  | "global"
+  | "tenant"
+  | "account"
+  | "personal"
+  | "unclassified"
+  | OpenString;
+
+/** Why a management capability is unavailable. Open: a newer server may add a reason. */
+export type UnavailableReason =
+  | "not_manager"
+  | "global_operator_only"
+  | "artifact_backed"
+  | "no_source"
+  | "local_import_forbidden"
+  | "conflicting_ownership"
+  | OpenString;
+
+/** What the caller may do with one app, computed live at serve time. */
+export interface Management {
+  class: ManagementClass;
+  owner: { tenant: string; subject: string };
+  /** The attributed account id, iff `class` is `"account"`. */
+  account: string | null;
+  capabilities: { canSync: boolean; canEditSource: boolean; canDelete: boolean };
+  /** `reasons.x` is present exactly when `capabilities.canX` is `false`. */
+  reasons: { sync?: UnavailableReason; editSource?: UnavailableReason; delete?: UnavailableReason };
+}
+
+/** An app's active source, as the caller may see it. */
+export interface SourceView {
+  kind: "github" | "gitlab" | "bitbucket" | "folder" | "file" | "artifact" | "other";
+  /** Canonical ref; `null` when the caller may not see it. */
+  ref: string | null;
+  folder?: { grant: string; label: string; path: string };
+  /** `true` iff a source has been committed (not the lazy fallback to the latest version's ref). */
+  active: boolean;
+  /** The CAS revision; `0` means no committed source. Echo it as `expectedRevision`. */
+  revision: number;
+  /** The ref names a 40-hex commit (immutable). */
+  pinned: boolean;
+}
+
+/** The closed set of sync outcomes. */
+export type SyncOutcome = "registry_updated" | "definition_unchanged" | "failed";
+
+/** The last recorded sync attempt. */
+export interface LastSync {
+  outcome: SyncOutcome;
+  /** ISO-8601. */
+  at: string;
+  previousVersion: string | null;
+  version: string | null;
+  fetchedRevision?: string;
+  /** Present iff `outcome` is `"failed"`. */
+  errorCode?: string;
+}
+
+/** Where a registration lands. */
+export type Target = "account" | "tenant" | "personal";
+
+/** One registration target and whether the caller may use it. */
+export interface TargetOption {
+  target: Target;
+  permitted: boolean;
+  /** Present iff not permitted. Open: a newer server may add a reason. */
+  reason?:
+    | "user_import_disabled"
+    | "not_tenant_admin"
+    | "no_account"
+    | "no_subject"
+    | OpenString;
+}
+
+/** What the caller may name as a source; drives the add-source form. */
+export interface SourceOptions {
+  publicRepos: true;
+  privateRepos: { grant: string; host: "github" | "gitlab" | "bitbucket"; repo: string }[];
+  folders: { grant: string; label: string }[];
+  localPaths: boolean;
+}
+
+/** A source: a canonical remote ref string, or a path inside a granted server folder. */
+export type SourceInput = string | { folder: { grant: string; path: string } };
+
+/** One row of the management inventory: the catalog summary plus management state. */
+export type ManagedAppRow = AppSummary & {
+  management: Management;
+  source: SourceView;
+  lastSync: LastSync | null;
+};
+
+/** Which apps `list` covers. Absent means `"all"`. */
+export type ManagementScope = "all" | "account" | "tenant" | "personal";
+
+/** Sort order for `list`. Absent means `"name"`. */
+export type ManagedAppsSort = "name" | "-name" | "recent" | "-recent";
+
+/** Options for `appManagement.list`; each is forwarded under its own name when defined. */
+export interface ListManagedAppsOptions extends CallOptions {
+  scope?: ManagementScope;
+  q?: string;
+  sort?: ManagedAppsSort;
+  compact?: boolean;
+  snapshot?: string;
+  /** The previous page's `nextCursor`. */
+  cursor?: string;
+  offset?: number;
+  limit?: number;
+}
+
+/** The `GET /app-management/apps` body, as sent. */
+export interface ManagedAppsPage {
+  apps: ManagedAppRow[];
+  scope: ManagementScope;
+  snapshot: string;
+  total: number;
+  offset: number;
+  limit: number;
+  expiresAt: string;
+  nextCursor?: string;
+  /** Always all three, in the order account, tenant, personal. */
+  targets: TargetOption[];
+  sourceOptions: SourceOptions;
+}
+
+/** The `GET /app-management/apps/:id` body: the catalog detail plus management state. */
+export interface ManagedAppDetail {
+  app: Record<string, unknown>;
+  actions: Record<string, unknown>[];
+  auths: Record<string, unknown>[];
+  health: unknown;
+  sourceRef: string | null;
+  version: string;
+  digest: string;
+  versionCount: number;
+  overlay: unknown;
+  effective: unknown;
+  owner: { tenant: string; subject: string };
+  management: Management;
+  source: SourceView;
+  lastSync: LastSync | null;
+}
+
+/** Body of `appManagement.preview`. */
+export interface PreviewAppInput {
+  source: SourceInput;
+  target: Target;
+}
+
+/** Body of `appManagement.register`. */
+export interface RegisterAppInput {
+  target: Target;
+  source: SourceInput;
+  /** Pack sources only. Sent only when given. */
+  paths?: string[];
+}
+
+/** Body of `appManagement.updateSource`. */
+export interface UpdateSourceInput {
+  source: SourceInput;
+  /** The `source.revision` read from the row or detail. */
+  expectedRevision: number;
+}
+
+/** Options for `appManagement.sync`. */
+export interface SyncAppOptions extends CallOptions {
+  /** Refuse with `409 stale_source` unless this is the current revision. `0` is sent. */
+  expectedRevision?: number;
+}
+
+/** One entry of a pack preview. */
+export interface AppManagementPackEntry {
+  path: string;
+  id?: string;
+  displayName?: string;
+  version?: string;
+  description?: string;
+  alreadyRegistered: boolean;
+  pinnedVersion?: string;
+  pinnedId?: string;
+  optional?: boolean;
+  peekError?: string;
+}
+
+/** The pack header of a preview or pack registration. */
+export interface AppManagementPackInfo {
+  name: string;
+  displayName?: string;
+  description?: string;
+  version?: string;
+  count: number;
+}
+
+/** The `POST /app-management/preview` body. */
+export type AppManagementPreview =
+  | { kind: "app"; sourceRef: string; app: { id?: string; version?: string; displayName?: string } }
+  | {
+    kind: "pack";
+    sourceRef: string;
+    pack: AppManagementPackInfo;
+    entries: AppManagementPackEntry[];
+  };
+
+/** The `POST /app-management/apps` body: the legacy import shapes plus `target`. */
+export type RegisterAppResult =
+  | {
+    kind: "app";
+    sourceRef: string;
+    app: Record<string, unknown>;
+    actions: Record<string, unknown>[];
+    registered: boolean;
+    latestAdvanced: boolean;
+    target: Target;
+  }
+  | {
+    kind: "pack";
+    sourceRef: string;
+    pack: AppManagementPackInfo;
+    registered: number;
+    failed: number;
+    results: Array<
+      | {
+        path: string;
+        ok: true;
+        id: string;
+        version: string;
+        registered: boolean;
+        latestAdvanced: boolean;
+      }
+      | { path: string; ok: false; optional: boolean; error: { code: string; message: string } }
+    >;
+    target: Target;
+  };
+
+/** The result of `updateSource` and `sync`. A `failed` outcome is still a 200. */
+export interface SyncResult {
+  appId: string;
+  outcome: SyncOutcome;
+  completedAt: string;
+  previousVersion: string | null;
+  version: string | null;
+  bumped: boolean;
+  fetchedRevision?: string;
+  source: SourceView;
+  /** Present iff `outcome` is `"failed"`. */
+  error?: { code: string; message: string };
+}
+
+/** The `appManagement` namespace (implemented in `src/app-management.ts`). */
+export interface AppManagementApi {
+  list(opts?: ListManagedAppsOptions): Promise<ManagedAppsPage>;
+  get(id: string, opts?: CallOptions): Promise<ManagedAppDetail>;
+  preview(input: PreviewAppInput, opts?: CallOptions): Promise<AppManagementPreview>;
+  register(input: RegisterAppInput, opts?: CallOptions): Promise<RegisterAppResult>;
+  updateSource(id: string, input: UpdateSourceInput, opts?: CallOptions): Promise<SyncResult>;
+  sync(id: string, opts?: SyncAppOptions): Promise<SyncResult>;
+  remove(id: string, opts?: CallOptions): Promise<{ removed: number }>;
+}
+
+// ── Data stores (contract 0.15.0) ───────────────────────────────────────────
+
+/** The three store kinds. Closed: a fourth is a contract change. */
+export type DataStoreKind = "kv" | "doc" | "table";
+
+/** One column of a `table` store's schema. */
+export interface DataStoreColumn {
+  name: string;
+  type: "string" | "number" | "integer" | "boolean" | "date" | "datetime";
+  required: boolean;
+  default?: unknown;
+}
+
+/** A store's schema. `kv`/`doc` stores carry `{}`; a `table` store carries its columns. */
+export interface DataStoreSchema {
+  columns?: DataStoreColumn[];
+  /** The column that names a row, when the table has one. */
+  key?: string;
+}
+
+/** The wire `DataStore` (exactly the server's `storeJson`). */
+export interface DataStore {
+  id: string;
+  kind: DataStoreKind;
+  name: string;
+  description: string;
+  project: string;
+  schema: DataStoreSchema;
+  entryCount: number;
+  sizeBytes: number;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The wire `Entry` (exactly the server's `entryJson`). */
+export interface DataStoreEntry {
+  key: string;
+  value: unknown;
+  version: number;
+  sizeBytes: number;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One page of stores. `nextCursor` is absent (never `null`) on the last page. */
+export interface DataStorePage {
+  items: DataStore[];
+  nextCursor?: string;
+}
+
+/** One page of entries, by key. `nextCursor` is absent (never `null`) on the last page. */
+export interface DataStoreEntryPage {
+  items: DataStoreEntry[];
+  nextCursor?: string;
+}
+
+/** The result of a query-mode read: the matching rows, no paging. */
+export interface DataStoreRowSet {
+  items: DataStoreEntry[];
 }

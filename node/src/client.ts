@@ -25,6 +25,7 @@ import { AppsApi } from "./apps.ts";
 import { ConnectionsApi } from "./connections.ts";
 import { ConsoleApi } from "./console/mod.ts";
 import { DashboardApi } from "./dashboard.ts";
+import { DataStoresApi } from "./data-stores.ts";
 import { DocumentsApi } from "./documents.ts";
 import { ConfigError } from "./errors.ts";
 import { type CallOptions, type HttpResponse, request, type RequestOptions } from "./http.ts";
@@ -37,6 +38,7 @@ import { TeamApi } from "./team.ts";
 import type { Me, RunEnvelope } from "./types.ts";
 import { VarsApi } from "./vars.ts";
 import { AgentsApi } from "./agents.ts";
+import { AppManagementApi } from "./app-management.ts";
 import { AssetsApi } from "./assets.ts";
 import { ContextApi, ContextEntriesApi } from "./context.ts";
 import { SkillsApi } from "./skills.ts";
@@ -77,6 +79,12 @@ export class W6WClient {
    */
   readonly documents: DocumentsApi;
 
+  /**
+   * Data stores: `list`, `get`, `create`, `update`, `archive`, `importCsv`,
+   * `exportCsv`, plus `entries.*`. Project-scoped like `documents`.
+   */
+  readonly dataStores: DataStoresApi;
+
   /** The model catalog: `list`, `get`. Planned op — see `endpoints.json`. */
   readonly models: ModelsApi;
 
@@ -103,6 +111,8 @@ export class W6WClient {
   readonly contextEntries: ContextEntriesApi;
   /** Agent drafts (never runnable). */
   readonly agents: AgentsApi;
+  /** App-definition management: inventory, register, edit source, sync, remove. */
+  readonly appManagement: AppManagementApi;
 
   /**
    * Connections: `list`, `get`, `delete`. Creating, updating or testing a
@@ -222,6 +232,7 @@ export class W6WClient {
     // additionally see the configuration, because they are the project-scoped
     // half of the surface and have a default project to apply.
     this.documents = new DocumentsApi(this);
+    this.dataStores = new DataStoresApi(this);
     this.models = new ModelsApi(this);
     this.modelRoutes = new ModelRoutesApi(this);
     this.modelUsage = new ModelUsageApi(this);
@@ -231,6 +242,7 @@ export class W6WClient {
     this.context = new ContextApi(this);
     this.contextEntries = new ContextEntriesApi(this);
     this.agents = new AgentsApi(this);
+    this.appManagement = new AppManagementApi(this);
     this.connections = new ConnectionsApi(this);
     this.apps = new AppsApi(this);
     this.dashboard = new DashboardApi(this);

@@ -1,3 +1,6 @@
+// TODO(26-11-01-02 test-consolidation): mock every @w6w/ui method and tag the adapter calls, so
+// react is tested on its own merit and never fails because @w6w/ui does. The real check against
+// @w6w/ui moves to the monorepo cross check (deploy/verify-cross.sh) with a drift check.
 /**
  * Runs `tsconfig.ui-conformance.json` (which compiles ONLY
  * `ui-conformance.check.ts`, see that file's header) as a real `tsc`
@@ -19,7 +22,7 @@ import { fileURLToPath } from "node:url";
 const reactRoot = fileURLToPath(new URL("../..", import.meta.url));
 const tscBin = fileURLToPath(new URL("../../node_modules/typescript/bin/tsc", import.meta.url));
 
-test("ui-conformance: createW6WUiAdapter's return type satisfies the real @w6w/ui W6WApi", () => {
+test("ui-conformance: createW6WUiAdapter's return type satisfies the in-repo @w6w/ui W6WApi mock", () => {
   const result = spawnSync(process.execPath, [tscBin, "-p", "tsconfig.ui-conformance.json"], {
     cwd: reactRoot,
     encoding: "utf8",
@@ -28,6 +31,6 @@ test("ui-conformance: createW6WUiAdapter's return type satisfies the real @w6w/u
   assert.equal(
     result.status,
     0,
-    `tsc -p tsconfig.ui-conformance.json failed (exit ${result.status}) — createW6WUiAdapter's return type no longer satisfies @w6w/ui's real W6WApi. tsc output:\n${result.stdout}${result.stderr}`,
+    `tsc -p tsconfig.ui-conformance.json failed (exit ${result.status}) — createW6WUiAdapter's return type no longer satisfies the @w6w/ui W6WApi mock. tsc output:\n${result.stdout}${result.stderr}`,
   );
 });

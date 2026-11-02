@@ -56,13 +56,18 @@ export interface SubscriptionsHost {
 }
 
 /** How a trigger's events arrive: pushed to a webhook, or fetched by a poll. */
-export type TriggerType = "webhook" | "poll";
+export type TriggerType = "webhook" | "poll" | "protocol";
 
 /**
  * Where a subscription is in its registration lifecycle. Only `registered`
  * subscriptions receive events.
  */
-export type SubscriptionStatus = "pending" | "registered" | "failed" | "destroying";
+export type SubscriptionStatus =
+  | "pending"
+  | "registered"
+  | "failed"
+  | "destroying"
+  | "paused";
 
 /**
  * A (trigger → workflow) binding. Field-for-field per
@@ -97,6 +102,10 @@ export interface Subscription {
   registeredAt: string | null;
   /** Present only for `appId === "@w6w/webhook"` — the server's own computed receive URL. */
   webhookUrl?: string;
+  /** The trigger node this subscription is bound to; absent or `null` on an older server. */
+  nodeId?: string | null;
+  /** When an event last arrived; `null` if none has. Absent on an older server. */
+  lastFireAt?: string | null;
 }
 
 /**
@@ -218,6 +227,21 @@ export class SubscriptionsApi {
       method: "POST",
       path: path`/apps/${appId}/triggers/${triggerKey}/subscriptions`,
       body: input,
+    });
+    return unwrap<Subscription>(res, "subscription");
+  }
+
+  /**
+   * Re-run registration for a `pending` or `failed` subscription.
+   *
+   * @param id - The `sub_…` id.
+   * @returns The subscription after the retry, unwrapped from the `subscription` envelope.
+   * @throws {ApiError} `404 unknown_subscription`; `409 not_retryable` unless the status is `failed` or `pending`.
+   */
+  async retryRegistration(id: string): Promise<Subscription> {
+    const res = await this.#host.request<unknown>({
+      method: "POST",
+      path: path`/subscriptions/${id}/retry-registration`,
     });
     return unwrap<Subscription>(res, "subscription");
   }

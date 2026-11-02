@@ -26,10 +26,14 @@ and on `workflow_dispatch` (for a dry run). **Merging a version bump, pushing a
 `v*` tag, or manually dispatching the workflow does not publish packages.**
 
 **PR CI.** A second workflow, `.github/workflows/ci.yml`, runs on every pull
-request and every push to `main`: the lockstep version check plus the `python`,
+request and every push to `main`: one job, `verify`, that runs
+[`scripts/verify.sh`](../scripts/verify.sh) — the lockstep version check
+([`scripts/check-lockstep.py`](../scripts/check-lockstep.py)) plus the `python`,
 `node`, `cli` and `react` lane gates (and `deno publish --dry-run`, `npm pack
---dry-run`). It holds `contents: read` only — no secret, no `id-token`, no
-publish step — so it is safe on forks. Publishing stays in `release.yml`.
+--dry-run`). The pre-push hook runs the same file, so a check is added there,
+never only to `ci.yml`. It holds `contents: read` only — no secret, no
+`id-token`, no publish step — so it is safe on forks. Publishing stays in
+`release.yml`.
 
 The source version can therefore be ahead of the registries: `0.9.8` was on
 `main` while the last GitHub Release and all registries were still at `0.6.0`.

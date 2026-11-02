@@ -361,6 +361,47 @@ Shared rules for both asset namespaces:
   constructed without the client's configuration, so it holds no default to
   send, and the wire assertion in each suite is what actually holds the line.
 
+### App management
+
+| TS | Python | Returns |
+| -- | ------ | ------- |
+| `client.appManagement.list(opts?)` | `client.app_management.list(...)` | `ManagedAppsPage` (rows, `targets`, `sourceOptions`) |
+| `client.appManagement.get(id, opts?)` | `client.app_management.get(id)` | `ManagedAppDetail` |
+| `client.appManagement.preview(input, opts?)` | `client.app_management.preview(source, target)` | `AppManagementPreview` |
+| `client.appManagement.register(input, opts?)` | `client.app_management.register(target, source, paths=None)` | `RegisterAppResult` |
+| `client.appManagement.updateSource(id, input, opts?)` | `client.app_management.update_source(id, source, expected_revision)` | `SyncResult` |
+| `client.appManagement.sync(id, opts?)` | `client.app_management.sync(id, expected_revision=None)` | `SyncResult` |
+| `client.appManagement.remove(id, opts?)` | `client.app_management.remove(id)` | `{ removed: number }` |
+
+Bodies come back exactly as sent (no envelope key to unwrap). `SyncOutcome` is closed;
+`ManagementClass`, `UnavailableReason` and `TargetOption.reason` are open strings.
+
+### Data stores — project-scoped
+
+| TS | Python | Returns |
+| -- | ------ | ------- |
+| `client.dataStores.list(opts?)` | `client.data_stores.list(kind=None, cursor=None, limit=None, project=None)` | `DataStorePage` |
+| `client.dataStores.get(id, opts?)` | `client.data_stores.get(id, project=None)` | `DataStore` |
+| `client.dataStores.create(input, opts?)` | `client.data_stores.create(kind, name, description=None, schema=None, project=None)` | `DataStore` |
+| `client.dataStores.update(id, patch, opts?)` | `client.data_stores.update(id, name=None, description=None, schema=None, project=None)` | `DataStore` |
+| `client.dataStores.archive(id, opts?)` | `client.data_stores.archive(id, project=None)` | `void` |
+| `client.dataStores.importCsv(id, csv, opts?)` | `client.data_stores.import_csv(id, csv, project=None)` | `{ imported: number }` |
+| `client.dataStores.exportCsv(id, opts?)` | `client.data_stores.export_csv(id, project=None)` | `string` |
+| `client.dataStores.entries.list(id, opts?)` | `client.data_stores.entries.list(id, prefix=None, cursor=None, limit=None, project=None)` | `DataStoreEntryPage` |
+| `client.dataStores.entries.get(id, key, opts?)` | `client.data_stores.entries.get(id, key, project=None)` | `DataStoreEntry` |
+| `client.dataStores.entries.set(id, key, input, opts?)` | `client.data_stores.entries.set(id, key, value, if_version=None, ttl_seconds=None, project=None)` | `DataStoreEntry` |
+| `client.dataStores.entries.insert(id, row, opts?)` | `client.data_stores.entries.insert(id, value, ttl_seconds=None, project=None)` | `DataStoreEntry` |
+| `client.dataStores.entries.increment(id, key, by?, opts?)` | `client.data_stores.entries.increment(id, key, by=None, project=None)` | `DataStoreEntry` |
+| `client.dataStores.entries.delete(id, key, opts?)` | `client.data_stores.entries.delete(id, key, project=None)` | `void` |
+| `client.dataStores.entries.query(id, query?, opts?)` | `client.data_stores.entries.query(id, where=None, order=None, limit=None, project=None)` | `DataStoreRowSet` |
+
+Every operation takes an optional `project` (per-call → client default → nothing). Single
+resources and pages come back exactly as the server sends them (no envelope key to unwrap);
+`nextCursor` is absent, never `null`, on the last page. `importCsv` takes the CSV as a string
+(text mode, `bodyEncoding: "csv"`) and `exportCsv` returns it verbatim as a string
+(`responseEncoding: "text"`); see implementation.md §3. `DataStoreKind` is the closed union
+`"kv" | "doc" | "table"`.
+
 ## 5. Wire types and the run types
 
 Both packages export the transcribed wire shapes: `Doc`, `DocFormat`, `Var`,
@@ -446,12 +487,13 @@ In scope since the contract's `0.5.0`–`0.7.0` lines: the full definition lifec
 of workflows and Functions (create / update / archive / delete, plus publish,
 version and draft-run operations), and, for integrations, `connections.get` and
 `connections.delete`, `apps.byIds`, `dashboard.stats`, `projects.list`, and
-`reliability.list` / `reliability.members`.
+`reliability.list` / `reliability.members`; and, since `0.14.0`, app-definition
+management (`appManagement.*`).
 
 Out of scope for this version, in every wrapper, and named so nobody adds them in
 one language: connection create / update / test / OAuth (interactive,
 secret-handling flows), the app catalog's browse / search / paging (only the
-bounded `apps.byIds` lookup is in), project writes, endpoint management, vault,
+bounded `apps.byIds` lookup is in; app-definition management is in as `appManagement.*`), project writes, endpoint management, vault,
 tokens, schedules, triggers, subscriptions, tenants, `runs.get` and
 `workflows.listRuns`. They exist on the API. They are not in the wrappers until
 they are in `endpoints.json` — see

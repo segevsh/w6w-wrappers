@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable surface contract for all w6w wrappers. Source of truth for conformance tests. Keep in sync with docs/endpoints.md.",
-  "contractVersion": "0.13.0",
+  "contractVersion": "0.15.0",
   "$basePathComment": "Empty since 0.2.0: the server serves its routes at the ROOT of its own host (https://api.w6w.io/vars, not .../api/vars). Clients append nothing to the configured origin.",
   "basePath": "",
   "defaultBaseUrl": "https://api.w6w.io",
@@ -3207,6 +3207,834 @@
         "cli": "w6w agents archive <id>"
       },
       "notes": "A missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. Returns the archived draft (`archived: true`), unwrapped from `{agent}`. There is no agent delete or purge op."
+    },
+    {
+      "name": "appManagement.list",
+      "summary": "List the apps the caller manages, with live management state per row.",
+      "method": "GET",
+      "path": "/app-management/apps",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "scope",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "$comment": "`all` (default), `account`, `tenant` or `personal`."
+        },
+        {
+          "name": "q",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "$comment": "Search text."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "$comment": "`name` (default), `-name`, `recent` or `-recent`."
+        },
+        {
+          "name": "compact",
+          "in": "query",
+          "type": "boolean",
+          "required": false,
+          "$comment": "Compact rows."
+        },
+        {
+          "name": "snapshot",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "$comment": "A previous page's snapshot token."
+        },
+        {
+          "name": "cursor",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "$comment": "The previous page's `nextCursor`."
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "type": "integer",
+          "required": false,
+          "$comment": "Row offset."
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "integer",
+          "required": false,
+          "$comment": "Page size."
+        }
+      ],
+      "returns": "ManagedAppsPage",
+      "naming": {
+        "ts": "client.appManagement.list(opts?)",
+        "python": "client.app_management.list(scope=None, q=None, sort=None, compact=None, snapshot=None, cursor=None, offset=None, limit=None)",
+        "cli": "w6w app-management list [--scope <scope>] [--q <q>] [--sort <sort>] [--compact] [--snapshot <t>] [--cursor <c>] [--offset <n>] [--limit <n>]"
+      },
+      "notes": "Nothing is unwrapped: the body is returned exactly as sent. The envelope is `{apps, scope, snapshot, total, offset, limit, expiresAt, nextCursor?, targets, sourceOptions}`: `targets` is always three `TargetOption`s (account, tenant, personal) and `sourceOptions` is what the caller may name as a source. Each row is the catalog summary plus `management`, `source` and `lastSync`, computed live. `ManagementClass`, `UnavailableReason` and `TargetOption.reason` are open unions (a newer server may add values); `SyncOutcome` is closed. Each option is sent under its own name only when given, so `offset: 0` and `compact: false` are sent. Codes: `400 invalid_scope`, `400 invalid_query`, `400 invalid_cursor`, `400 invalid_limit`, `400 invalid_offset`, `403 forbidden` (`scope=tenant` from a non-admin), `404 unknown_snapshot`, `410 snapshot_expired`, `400 snapshot_query_mismatch`. `snapshot` and `cursor` are mutually exclusive."
+    },
+    {
+      "name": "appManagement.get",
+      "summary": "Fetch one managed app: catalog detail plus management, source and last sync.",
+      "method": "GET",
+      "path": "/app-management/apps/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "ManagedAppDetail",
+      "naming": {
+        "ts": "client.appManagement.get(id, opts?)",
+        "python": "client.app_management.get(id)",
+        "cli": "w6w app-management get <id>"
+      },
+      "notes": "Nothing is unwrapped: the body is returned exactly as sent. The body is the catalog detail (`app`, `actions`, `health`, `sourceRef`, `version`, `digest`, `versionCount`, `overlay`, `effective`, `owner`) plus `auths`, `management`, `source` and `lastSync`. Open unions: `ManagementClass`, `UnavailableReason`; closed: `SyncOutcome`. Codes: `400 invalid_path` (malformed id), `404 unknown_app` (also when the caller cannot see the app), a global app is `200` with `management.class: \"global\"`; any app the caller does not manage (including visible-but-unmanaged) is `404 unknown_app`."
+    },
+    {
+      "name": "appManagement.preview",
+      "summary": "Preview a source for a target without registering anything.",
+      "method": "POST",
+      "path": "/app-management/preview",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "source",
+          "in": "body",
+          "type": "any",
+          "required": true,
+          "$comment": "A canonical remote ref string, or `{folder:{grant,path}}` (a path inside a granted server folder)."
+        },
+        {
+          "name": "target",
+          "in": "body",
+          "type": "string",
+          "required": true,
+          "$comment": "`account`, `tenant` or `personal`."
+        }
+      ],
+      "returns": "AppManagementPreview",
+      "naming": {
+        "ts": "client.appManagement.preview(input, opts?)",
+        "python": "client.app_management.preview(source, target)",
+        "cli": "w6w app-management preview <source> --target <target>"
+      },
+      "notes": "Nothing is unwrapped: the body is returned exactly as sent. Answers `{kind:'app', sourceRef, app}` or `{kind:'pack', sourceRef, pack, entries}`; `entries[].alreadyRegistered` covers only apps the caller manages. The body is built from `source` and `target` only. Codes: `400 invalid_body`, `400 invalid_target`, `400 invalid_source`, `403 forbidden`, `403 local_import_forbidden`, `424 fetch_failed`, `424 source_requires_grant`, `429 source_rate_limited`, `424 source_timeout`, `424 source_too_large`."
+    },
+    {
+      "name": "appManagement.register",
+      "summary": "Register an app or pack from a source into a target.",
+      "method": "POST",
+      "path": "/app-management/apps",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "target",
+          "in": "body",
+          "type": "string",
+          "required": true,
+          "$comment": "`account`, `tenant` or `personal`."
+        },
+        {
+          "name": "source",
+          "in": "body",
+          "type": "any",
+          "required": true,
+          "$comment": "A canonical remote ref string, or `{folder:{grant,path}}` (a path inside a granted server folder)."
+        },
+        {
+          "name": "paths",
+          "in": "body",
+          "type": "string[]",
+          "required": false,
+          "$comment": "Pack sources only; sent only when given."
+        }
+      ],
+      "returns": "RegisterAppResult",
+      "naming": {
+        "ts": "client.appManagement.register(input, opts?)",
+        "python": "client.app_management.register(target, source, paths=None)",
+        "cli": "w6w app-management register <source> --target <target> [--paths <a,b>]"
+      },
+      "notes": "Nothing is unwrapped: the body is returned exactly as sent. The legacy import shapes (app: 201 or 200; pack: 201, 207 or 200) plus `target`. Codes: `400 invalid_body`, `400 invalid_target`, `400 invalid_source`, `403 forbidden`, `403 user_import_disabled`, `403 local_import_forbidden`, `409 id_taken`, `424 fetch_failed`, `424 source_requires_grant`, `429 source_rate_limited`, `424 source_timeout`, `424 source_too_large`."
+    },
+    {
+      "name": "appManagement.updateSource",
+      "summary": "Validate a candidate source and, if it loads, make it the app's active source.",
+      "method": "PUT",
+      "path": "/app-management/apps/{id}/source",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "source",
+          "in": "body",
+          "type": "any",
+          "required": true,
+          "$comment": "A canonical remote ref string, or `{folder:{grant,path}}` (a path inside a granted server folder)."
+        },
+        {
+          "name": "expectedRevision",
+          "in": "body",
+          "type": "integer",
+          "required": true,
+          "$comment": "The `source.revision` read from the row or detail; `0` when no source is committed."
+        }
+      ],
+      "returns": "SyncResult",
+      "naming": {
+        "ts": "client.appManagement.updateSource(id, input, opts?)",
+        "python": "client.app_management.update_source(id, source, expected_revision)",
+        "cli": "w6w app-management update-source <id> <source> --expected-revision <n>"
+      },
+      "notes": "Nothing is unwrapped: the body is returned exactly as sent. `SyncResult.outcome` is closed: `registry_updated`, `definition_unchanged` or `failed` (a `failed` outcome is still a 200 with `error:{code,message}`). The active source changes only on `registry_updated` or `definition_unchanged`. Codes: `400 invalid_path` (malformed id), `404 unknown_app` (also when the caller cannot see the app), `403 forbidden` (visible but not managed, or global and the caller is not an operator). `409 artifact_backed`, `409 stale_source` (revision mismatch), `403 local_import_forbidden`, `400 invalid_source`, `400 invalid_body`."
+    },
+    {
+      "name": "appManagement.sync",
+      "summary": "Re-fetch the app's active source and update the registry.",
+      "method": "POST",
+      "path": "/app-management/apps/{id}/sync",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "expectedRevision",
+          "in": "body",
+          "type": "integer",
+          "required": false,
+          "$comment": "Refuse with `409 stale_source` unless this is the current revision. `0` is sent."
+        }
+      ],
+      "returns": "SyncResult",
+      "naming": {
+        "ts": "client.appManagement.sync(id, opts?)",
+        "python": "client.app_management.sync(id, expected_revision=None)",
+        "cli": "w6w app-management sync <id> [--expected-revision <n>]"
+      },
+      "notes": "Nothing is unwrapped: the body is returned exactly as sent. `SyncResult.outcome` is closed: `registry_updated`, `definition_unchanged` or `failed` (a `failed` outcome is still a 200 with `error:{code,message}`). The body is `{}`, or `{expectedRevision}` when given. Codes: `400 invalid_path` (malformed id), `404 unknown_app` (also when the caller cannot see the app), `403 forbidden` (visible but not managed, or global and the caller is not an operator). `409 artifact_backed`, `409 no_source`, `409 stale_source` (only when `expectedRevision` was sent), `409 sync_conflict` (lost the locked-write race), `403 local_import_forbidden`."
+    },
+    {
+      "name": "appManagement.remove",
+      "summary": "Remove an app: all its versions and its source row.",
+      "method": "DELETE",
+      "path": "/app-management/apps/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "{ removed: number }",
+      "naming": {
+        "ts": "client.appManagement.remove(id, opts?)",
+        "python": "client.app_management.remove(id)",
+        "cli": "w6w app-management remove <id>"
+      },
+      "notes": "Nothing is unwrapped: the body is returned exactly as sent. No request body. Answers `{removed}`. Codes: `400 invalid_path` (malformed id), `404 unknown_app` (also when the caller cannot see the app), `403 forbidden` (visible but not managed, or global and the caller is not an operator). `409 app_in_use`."
+    },
+    {
+      "name": "dataStores.list",
+      "summary": "List the project's data stores.",
+      "method": "GET",
+      "path": "/data-stores",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "kind",
+          "in": "query",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "cursor",
+          "in": "query",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "DataStorePage",
+      "naming": {
+        "ts": "client.dataStores.list(opts?)",
+        "python": "client.data_stores.list(kind=None, cursor=None, limit=None, project=None)",
+        "cli": "w6w data-stores list [--kind <kv|doc|table>] [--cursor <c>] [--limit <n>] [--project <id>]"
+      },
+      "notes": "Returns `{items, nextCursor?}`; `nextCursor` is absent (never null) on the last page. A malformed cursor is `400 invalid_cursor`; a bad `limit` `400 invalid_limit`. Data stores are project-scoped: every `dataStores.*` route accepts an optional `?project=`, resolved per call, then from the client's default, otherwise left to the server (the account's default project). An unknown project id is `400 unknown_project`. A missing, archived, foreign-account or foreign-project store is the one uniform `404 data_store_not_found`."
+    },
+    {
+      "name": "dataStores.get",
+      "summary": "Fetch one data store by id.",
+      "method": "GET",
+      "path": "/data-stores/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "DataStore",
+      "naming": {
+        "ts": "client.dataStores.get(id, opts?)",
+        "python": "client.data_stores.get(id, project=None)",
+        "cli": "w6w data-stores get <id> [--project <id>]"
+      },
+      "notes": "The store is returned BARE (not wrapped). Data stores are project-scoped: every `dataStores.*` route accepts an optional `?project=`, resolved per call, then from the client's default, otherwise left to the server (the account's default project). An unknown project id is `400 unknown_project`. A missing, archived, foreign-account or foreign-project store is the one uniform `404 data_store_not_found`."
+    },
+    {
+      "name": "dataStores.create",
+      "summary": "Create a data store.",
+      "method": "POST",
+      "path": "/data-stores",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "kind",
+          "in": "body",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "name",
+          "in": "body",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "description",
+          "in": "body",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "schema",
+          "in": "body",
+          "type": "object",
+          "required": false
+        },
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "DataStore",
+      "successStatuses": [
+        201
+      ],
+      "naming": {
+        "ts": "client.dataStores.create(input, opts?)",
+        "python": "client.data_stores.create(kind, name, description=None, schema=None, project=None)",
+        "cli": "w6w data-stores create <name> --kind <kv|doc|table> [--description <d>] [--schema <json>] [--project <id>]"
+      },
+      "notes": "`kind` is `kv`, `doc` or `table`; `schema` (table only) is `{columns:[{name,type,required,default?}], key?}`. The server answers `201` with the bare store. Validation refusals are `400` with codes such as `invalid_value`, `invalid_body`; a duplicate name is `409 store_exists`. Data stores are project-scoped: every `dataStores.*` route accepts an optional `?project=`, resolved per call, then from the client's default, otherwise left to the server (the account's default project). An unknown project id is `400 unknown_project`. A missing, archived, foreign-account or foreign-project store is the one uniform `404 data_store_not_found`."
+    },
+    {
+      "name": "dataStores.update",
+      "summary": "Patch a data store's name, description or schema.",
+      "method": "PATCH",
+      "path": "/data-stores/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "name",
+          "in": "body",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "description",
+          "in": "body",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "schema",
+          "in": "body",
+          "type": "object",
+          "required": false
+        },
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "DataStore",
+      "naming": {
+        "ts": "client.dataStores.update(id, patch, opts?)",
+        "python": "client.data_stores.update(id, name=None, description=None, schema=None, project=None)",
+        "cli": "w6w data-stores update <id> [--name <n>] [--description <d>] [--schema <json>] [--project <id>]"
+      },
+      "notes": "Every body field is optional; an omitted field is left alone. `kind` is immutable. A schema the stored rows do not satisfy is `schema_incompatible`. Data stores are project-scoped: every `dataStores.*` route accepts an optional `?project=`, resolved per call, then from the client's default, otherwise left to the server (the account's default project). An unknown project id is `400 unknown_project`. A missing, archived, foreign-account or foreign-project store is the one uniform `404 data_store_not_found`."
+    },
+    {
+      "name": "dataStores.archive",
+      "summary": "Archive a data store.",
+      "method": "DELETE",
+      "path": "/data-stores/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "void",
+      "successStatuses": [
+        204
+      ],
+      "naming": {
+        "ts": "client.dataStores.archive(id, opts?)",
+        "python": "client.data_stores.archive(id, project=None)",
+        "cli": "w6w data-stores archive <id> [--project <id>]"
+      },
+      "notes": "The server answers `204`; the wrapper returns nothing. Archiving is a soft delete: the store then answers `404 data_store_not_found`. Data stores are project-scoped: every `dataStores.*` route accepts an optional `?project=`, resolved per call, then from the client's default, otherwise left to the server (the account's default project). An unknown project id is `400 unknown_project`. A missing, archived, foreign-account or foreign-project store is the one uniform `404 data_store_not_found`."
+    },
+    {
+      "name": "dataStores.importCsv",
+      "summary": "Import CSV text into a table store.",
+      "method": "POST",
+      "path": "/data-stores/{id}/import",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "body",
+          "in": "body",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "{ imported: number }",
+      "bodyEncoding": "csv",
+      "naming": {
+        "ts": "client.dataStores.importCsv(id, csv, opts?)",
+        "python": "client.data_stores.import_csv(id, csv, project=None)",
+        "cli": "w6w data-stores import <id> --file <path> [--project <id>]"
+      },
+      "notes": "TEXT IN (`bodyEncoding: \"csv\"`, docs/endpoints.md Conventions): the request body is the CSV text verbatim with `content-type: text/csv` — never JSON-encoded or quoted. The header row names the columns. The server refuses any other media type with `400 invalid_csv`; a bad cell is `400 invalid_value` carrying `field`, `row` and `column` in the envelope (`ApiError.raw.error`). Answers `{ imported }`. Data stores are project-scoped: every `dataStores.*` route accepts an optional `?project=`, resolved per call, then from the client's default, otherwise left to the server (the account's default project). An unknown project id is `400 unknown_project`. A missing, archived, foreign-account or foreign-project store is the one uniform `404 data_store_not_found`."
+    },
+    {
+      "name": "dataStores.exportCsv",
+      "summary": "Export a table store as CSV text.",
+      "method": "GET",
+      "path": "/data-stores/{id}/export",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "string",
+      "responseEncoding": "text",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.dataStores.exportCsv(id, opts?)",
+        "python": "client.data_stores.export_csv(id, project=None)",
+        "cli": "w6w data-stores export <id> [--project <id>]"
+      },
+      "notes": "TEXT OUT (`responseEncoding: \"text\"`, docs/endpoints.md Conventions): returns the CSV body verbatim as a string, never JSON-parsed — a body that happens to parse as JSON stays a string. A non-2xx still carries the JSON error envelope and raises the typed error with its `code`. Data stores are project-scoped: every `dataStores.*` route accepts an optional `?project=`, resolved per call, then from the client's default, otherwise left to the server (the account's default project). An unknown project id is `400 unknown_project`. A missing, archived, foreign-account or foreign-project store is the one uniform `404 data_store_not_found`."
+    },
+    {
+      "name": "dataStores.entries.list",
+      "summary": "List a store's entries, paged by key.",
+      "method": "GET",
+      "path": "/data-stores/{id}/entries",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "prefix",
+          "in": "query",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "cursor",
+          "in": "query",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "DataStoreEntryPage",
+      "naming": {
+        "ts": "client.dataStores.entries.list(id, opts?)",
+        "python": "client.data_stores.entries.list(id, prefix=None, cursor=None, limit=None, project=None)",
+        "cli": "w6w data-stores entry-list <id> [--prefix <p>] [--cursor <c>] [--limit <n>] [--project <id>]"
+      },
+      "notes": "Returns `{items, nextCursor?}` ordered by key; `nextCursor` is absent (never null) on the last page. A malformed cursor is `400 invalid_cursor`. Filtering and ordering is `dataStores.entries.query`. Data stores are project-scoped: every `dataStores.*` route accepts an optional `?project=`, resolved per call, then from the client's default, otherwise left to the server (the account's default project). An unknown project id is `400 unknown_project`. A missing, archived, foreign-account or foreign-project store is the one uniform `404 data_store_not_found`."
+    },
+    {
+      "name": "dataStores.entries.get",
+      "summary": "Fetch one entry by key.",
+      "method": "GET",
+      "path": "/data-stores/{id}/entries/{key}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "key",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "DataStoreEntry",
+      "naming": {
+        "ts": "client.dataStores.entries.get(id, key, opts?)",
+        "python": "client.data_stores.entries.get(id, key, project=None)",
+        "cli": "w6w data-stores entry-get <id> <key> [--project <id>]"
+      },
+      "notes": "The entry is returned BARE. A missing key is `404 entry_not_found`. Data stores are project-scoped: every `dataStores.*` route accepts an optional `?project=`, resolved per call, then from the client's default, otherwise left to the server (the account's default project). An unknown project id is `400 unknown_project`. A missing, archived, foreign-account or foreign-project store is the one uniform `404 data_store_not_found`."
+    },
+    {
+      "name": "dataStores.entries.set",
+      "summary": "Create or replace one entry by key.",
+      "method": "PUT",
+      "path": "/data-stores/{id}/entries/{key}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "key",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "value",
+          "in": "body",
+          "type": "any",
+          "required": true
+        },
+        {
+          "name": "ifVersion",
+          "in": "body",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "name": "ttlSeconds",
+          "in": "body",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "DataStoreEntry",
+      "naming": {
+        "ts": "client.dataStores.entries.set(id, key, input, opts?)",
+        "python": "client.data_stores.entries.set(id, key, value, if_version=None, ttl_seconds=None, project=None)",
+        "cli": "w6w data-stores entry-set <id> <key> --value <json> [--if-version <n>] [--ttl-seconds <n>] [--project <id>]"
+      },
+      "notes": "Body `{value, ifVersion?, ttlSeconds?}`. `ifVersion` makes the write conditional (`409 version_conflict`). A value the store's kind or schema refuses is `400 invalid_value` with `field`/`row`/`column`; a bad key is `400 invalid_key`. Data stores are project-scoped: every `dataStores.*` route accepts an optional `?project=`, resolved per call, then from the client's default, otherwise left to the server (the account's default project). An unknown project id is `400 unknown_project`. A missing, archived, foreign-account or foreign-project store is the one uniform `404 data_store_not_found`."
+    },
+    {
+      "name": "dataStores.entries.insert",
+      "summary": "Insert one row into a table store.",
+      "method": "POST",
+      "path": "/data-stores/{id}/entries",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "value",
+          "in": "body",
+          "type": "object",
+          "required": true
+        },
+        {
+          "name": "ttlSeconds",
+          "in": "body",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "DataStoreEntry",
+      "successStatuses": [
+        201
+      ],
+      "naming": {
+        "ts": "client.dataStores.entries.insert(id, row, opts?)",
+        "python": "client.data_stores.entries.insert(id, value, ttl_seconds=None, project=None)",
+        "cli": "w6w data-stores entry-insert <id> --value <json> [--ttl-seconds <n>] [--project <id>]"
+      },
+      "notes": "Table stores only; the server generates the key. Body `{value: row, ttlSeconds?}`; the server answers `201`. A bad row is `400 invalid_value`. Data stores are project-scoped: every `dataStores.*` route accepts an optional `?project=`, resolved per call, then from the client's default, otherwise left to the server (the account's default project). An unknown project id is `400 unknown_project`. A missing, archived, foreign-account or foreign-project store is the one uniform `404 data_store_not_found`."
+    },
+    {
+      "name": "dataStores.entries.increment",
+      "summary": "Atomically add to a numeric entry.",
+      "method": "POST",
+      "path": "/data-stores/{id}/entries/{key}/increment",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "key",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "by",
+          "in": "body",
+          "type": "number",
+          "required": false
+        },
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "DataStoreEntry",
+      "naming": {
+        "ts": "client.dataStores.entries.increment(id, key, by?, opts?)",
+        "python": "client.data_stores.entries.increment(id, key, by=None, project=None)",
+        "cli": "w6w data-stores entry-increment <id> <key> [--by <n>] [--project <id>]"
+      },
+      "notes": "Omitted `by` sends no body, which the server reads as increment by 1. A missing key starts from 0; a non-numeric entry is `400 invalid_value`. Data stores are project-scoped: every `dataStores.*` route accepts an optional `?project=`, resolved per call, then from the client's default, otherwise left to the server (the account's default project). An unknown project id is `400 unknown_project`. A missing, archived, foreign-account or foreign-project store is the one uniform `404 data_store_not_found`."
+    },
+    {
+      "name": "dataStores.entries.delete",
+      "summary": "Delete one entry by key.",
+      "method": "DELETE",
+      "path": "/data-stores/{id}/entries/{key}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "key",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "void",
+      "successStatuses": [
+        204
+      ],
+      "naming": {
+        "ts": "client.dataStores.entries.delete(id, key, opts?)",
+        "python": "client.data_stores.entries.delete(id, key, project=None)",
+        "cli": "w6w data-stores entry-delete <id> <key> [--project <id>]"
+      },
+      "notes": "The server answers `204`; the wrapper returns nothing. A missing key is `404 entry_not_found`. Data stores are project-scoped: every `dataStores.*` route accepts an optional `?project=`, resolved per call, then from the client's default, otherwise left to the server (the account's default project). An unknown project id is `400 unknown_project`. A missing, archived, foreign-account or foreign-project store is the one uniform `404 data_store_not_found`."
+    },
+    {
+      "name": "dataStores.entries.query",
+      "summary": "Filter and order a table store's rows.",
+      "method": "GET",
+      "path": "/data-stores/{id}/entries",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "where",
+          "in": "query",
+          "type": "object",
+          "required": false
+        },
+        {
+          "name": "order",
+          "in": "query",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "DataStoreRowSet",
+      "naming": {
+        "ts": "client.dataStores.entries.query(id, query?, opts?)",
+        "python": "client.data_stores.entries.query(id, where=None, order=None, limit=None, project=None)",
+        "cli": "w6w data-stores entry-query <id> [--where <col=value>...] [--order <col>] [--limit <n>] [--project <id>]"
+      },
+      "notes": "Same route as `entries.list`, in QUERY MODE: the server switches to it when `order` or any `where[col]` key is present, and then answers `{items}` only (no `nextCursor`, no `cursor`/`prefix`). `where` is an object sent as one `where[<col>]=<value>` query key per column (a column once only; a malformed filter is `400 invalid_query`). Data stores are project-scoped: every `dataStores.*` route accepts an optional `?project=`, resolved per call, then from the client's default, otherwise left to the server (the account's default project). An unknown project id is `400 unknown_project`. A missing, archived, foreign-account or foreign-project store is the one uniform `404 data_store_not_found`."
     }
   ],
   "cli": {
@@ -3410,7 +4238,7 @@
     ]
   },
   "outOfScope": [
-    "apps (catalog browse, search and paging; `apps.byIds` is the one in-scope read)",
+    "apps (catalog browse, search and paging; `apps.byIds` is the one in-scope read. App-definition management is in scope as `appManagement.*`)",
     "endpoints",
     "projects (create, rename, archive, delete; `projects.list` is the one in-scope read)",
     "vault",

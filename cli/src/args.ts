@@ -81,7 +81,7 @@ export interface ParseOptions {
  * Flags that may be given more than once. Their values accumulate in
  * `Invocation.lists`; `options` still holds the last one, as for every flag.
  */
-export const REPEATABLE_FLAGS: ReadonlySet<string> = new Set(["--stop"]);
+export const REPEATABLE_FLAGS: ReadonlySet<string> = new Set(["--stop", "--where"]);
 
 /** `--base-url` → `baseUrl`. */
 function optionKey(flagName: string): string {

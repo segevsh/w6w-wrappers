@@ -1,6 +1,6 @@
 # PLANNER.md — read this first when planning work in `w6w-wrappers`
 
-> **verified: 2026-10-26** (26-10-25-00-fixes integration tip, `VERSION` 0.9.21, contract `0.12.0` — `cat VERSION`; `grep -m1 contractVersion endpoints.json`; adds `contextEntries.*` (7 ops, entries live in 0..n collections), `Agent.modelOptions`, react `useContextEntries`, cli `w6w context-entries`, python `context_entries`; `contextEntries.archive` returns a bare `ContextEntry`, not a view) — Prior: **verified: 2026-10-25** (26-10-24-02-agents-studio-foundations integration tip wrappers@7075b2a, `VERSION` 0.9.20, contract `0.11.0` — `cat VERSION`; `grep -m1 contractVersion endpoints.json`; traps 3, 15–17 and the 2026-10-24 gate row updated from that project's evals) — Prior: **verified: 2026-10-23** (26-10-22-00-workflow-updates integration tip, `VERSION` 0.9.17; react's `npm test` fails 11/11 until `node/dist` is built) — Prior: **verified: 2026-10-19** (26-10-18-01-fixes integration tip) — This guide records checked source locations, not a
+> **verified: 2026-10-31** (26-10-30-03-trigger-picker integration tip wrappers@ae0d47b, `VERSION` 0.9.27, contract `0.15.0` unchanged — `cat VERSION`; `grep -m1 contractVersion endpoints.json`; adds console-only `ListAppsOptions.hasTriggers` forwarded by `console.apps.listPage`, trap 12) — Prior: **verified: 2026-10-30** (26-10-30-02-data-stores-everywhere landed, `VERSION` 0.9.26, contract `0.15.0`, 121 ops — `cat VERSION`; `grep -m1 contractVersion endpoints.json`; adds `dataStores.*` (14 ops: 7 store-level incl. `importCsv`/`exportCsv`, 7 `entries.*`), python `data_stores`, cli `w6w data-stores` (entry verbs are `entry-<verb>`), react's 13 derived hooks; CSV is a text transport mode, trap 19) — Prior: **verified: 2026-10-30** (26-10-29-00-scoped-app-management landed, `VERSION` 0.9.25, contract `0.14.0`, 107 ops — `cat VERSION`; `grep -m1 contractVersion endpoints.json`; adds `appManagement.*` (7 ops: list/get/preview/register/updateSource/sync/remove), python `app_management`, cli `w6w app-management` (use `--sort=-recent`, `=` form; register takes `--paths a,b`); `outOfScope` now names app-management as in scope; `appManagement.get` of an unmanaged app is `404 unknown_app`) — Prior: **verified: 2026-10-26** (26-10-25-00-fixes integration tip, `VERSION` 0.9.21, contract `0.12.0` — `cat VERSION`; `grep -m1 contractVersion endpoints.json`; adds `contextEntries.*` (7 ops, entries live in 0..n collections), `Agent.modelOptions`, react `useContextEntries`, cli `w6w context-entries`, python `context_entries`; `contextEntries.archive` returns a bare `ContextEntry`, not a view) — Prior: **verified: 2026-10-25** (26-10-24-02-agents-studio-foundations integration tip wrappers@7075b2a, `VERSION` 0.9.20, contract `0.11.0` — `cat VERSION`; `grep -m1 contractVersion endpoints.json`; traps 3, 15–17 and the 2026-10-24 gate row updated from that project's evals) — Prior: **verified: 2026-10-23** (26-10-22-00-workflow-updates integration tip, `VERSION` 0.9.17; react's `npm test` fails 11/11 until `node/dist` is built) — Prior: **verified: 2026-10-19** (26-10-18-01-fixes integration tip) — This guide records checked source locations, not a
 > replacement for them. When this guide and the code disagree, **code wins**;
 > correct this guide in the same change.
 
@@ -27,6 +27,7 @@
 | a `console.*` (`@w6w/sdk/console`) type or route            | `node/docs/console.md`, then trap 6 below    | **verified: 2026-10-13** — `node/src/console/mod.ts` header |
 | a byte (non-JSON) body or response                          | `docs/implementation.md` (the `bodyEncoding`/`responseEncoding: "octet-stream"` section), trap 15 | **verified: 2026-10-25** — `grep -n octet-stream docs/implementation.md` |
 | assets, skills, context or agent drafts                     | `docs/guides/agents-studio.md`, `docs/endpoints.md`, trap 16 | **verified: 2026-10-25** — `docs/manifest.json` lists the guide |
+| data stores (`dataStores.*`), CSV text mode                 | `docs/clients/node/data-stores.md`; `docs/implementation.md` (the text-mode `bodyEncoding: "csv"`/`responseEncoding: "text"` subsection), trap 19 | **verified: 2026-10-30** — `docs/manifest.json` lists `node/data-stores`; the implementation.md subsection is written by 26-10-30-02 T1.1.1 |
 
 ## Things that bite people who skip this
 
@@ -242,6 +243,18 @@
    once …`) and `adapter-conformance.test.ts` (`listAppsPage forwards snapshot and offset …`).
    Console-only, so the change needed no `endpoints.json` row, only the lockstep bump to 0.9.14.
 
+   **verified: 2026-10-31** — `ListAppsOptions.hasTriggers?: boolean` (`node/src/console/apps.ts`,
+   beside `modelProvider`) is forwarded by `listPage` as `GET /apps?hasTriggers=true|false`; the
+   server parses only `"true"`/`"false"` and filters before counting, so `total` is the filtered
+   count (server `api/admin/apps-catalog.ts` `modelProviderFilters`). Pinned by
+   `node/tests/console/apps_test.ts` (`console.apps.listPage sends hasTriggers=false and omits it when
+   undefined`); documented in `node/docs/console.md` (`hasTriggers` paragraph). Lockstep bump 0.9.27
+   (`ae0d47b`). **Gap:** the react copy `react/src/adapter.ts` `ListAppsPageOptions` has no
+   `hasTriggers`, although the ui original (`ui/src/provider.tsx`) does — add it there when react
+   needs it (trap 6). **Gap:** the server's Subscription response now carries `nodeId` (the trigger
+   node a publish-derived subscription feeds, `null` otherwise), but the SDK `Subscription` type in
+   `node/src/console/subscriptions.ts` does not (26-10-30-03 FOLLOWUPS).
+
 13. **Every lane defaults to `https://api.w6w.io`; the value lives once in `endpoints.json`.**
 
    **verified: 2026-10-19** — `endpoints.json` top-level `defaultBaseUrl` (beside `basePath`) is the
@@ -307,9 +320,10 @@
    - Upload finalize returns a `skill`/`skillVersion`/`entry` superset, and the entry index is
      server-assigned (`node/src/types.ts`, wrappers `94b3d17`). Address entries by the server's index.
    - `console.storage.{bindings,settings}` (`node/src/console/storage.ts`: `StorageBindingsApi`,
-     `AgentSettingsApi`) and the `console.apps` `modelProvider`/`modelType`/`modelFamily` filters
+     `AgentSettingsApi`) and the `console.apps` `modelProvider`/`modelType`/`modelFamily`/`hasTriggers` filters
      (`node/src/console/apps.ts`) are console-only (server ruling P-D5), with no `endpoints.json` row.
-     **Gap:** neither has a `node/docs/console.md` row (`grep -n -i storage node/docs/console.md` → no
+     **Gap:** only `hasTriggers` has a `node/docs/console.md` mention (26-10-30-03); storage and the
+     model filters have no row (`grep -n -i storage node/docs/console.md` → no
      match), which trap 6 requires. The SDK root does not re-export `Agent`, `SkillPin` or `ContextPin`
      (defined in `node/src/types.ts`; `grep -n 'Agent\b' node/mod.ts` → none), so Studio's embed derives
      local aliases (project FOLLOWUPS).
@@ -334,6 +348,16 @@
    named without a reference to `.../@w6w/sdk/dist/src/types`"). Fixed at closeout in `e8b7b1c` (the
    `export type { Agent, … }` block after the `Asset*` one in `mod.ts`). When adding an op, grep its
    argument and return types in `mod.ts`, not just the namespace class.
+
+19. **Text (CSV) mode: an explicit encoding value, otherwise a string body stays JSON.**
+
+   **verified: 2026-10-30** — `dataStores.importCsv` declares `bodyEncoding: "csv"` and
+   `dataStores.exportCsv` `responseEncoding: "text"` in `endpoints.json`. Only that explicit value makes
+   node's `http.ts` and python's `_http.py` send the string verbatim as `content-type: text/csv`, or return
+   the response body as an unparsed string. Do not key it on `typeof body === "string"`: a string passed to
+   any other operation is a JSON value and must still be quoted. The server refuses any other media type
+   with `400 invalid_csv`. Like byte mode (trap 15), the transport re-pins the content type, so a caller
+   header cannot change it.
 
 ## Gate baselines
 

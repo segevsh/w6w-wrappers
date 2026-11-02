@@ -69,6 +69,29 @@ export type {
   ModelUsageOptions,
   ModelUsageReport,
 } from "./src/models.ts";
+// Data stores (contract 0.15.0).
+export { DataStoreEntriesApi, DataStoresApi } from "./src/data-stores.ts";
+export type {
+  DataStoreCreateInput,
+  DataStoreEntryListOptions,
+  DataStoreEntrySetInput,
+  DataStoreInsertOptions,
+  DataStoreListOptions,
+  DataStoreOptions,
+  DataStorePatch,
+  DataStoreQuery,
+  DataStoresHost,
+} from "./src/data-stores.ts";
+export type {
+  DataStore,
+  DataStoreColumn,
+  DataStoreEntry,
+  DataStoreEntryPage,
+  DataStoreKind,
+  DataStorePage,
+  DataStoreRowSet,
+  DataStoreSchema,
+} from "./src/types.ts";
 export { VarsApi } from "./src/vars.ts";
 export type { VarCreateInput, VarPatch, VarsHost } from "./src/vars.ts";
 
@@ -197,6 +220,36 @@ export { ContextApi, ContextEntriesApi } from "./src/context.ts";
 export type { ContextHost } from "./src/context.ts";
 export { AgentsApi } from "./src/agents.ts";
 export type { AgentsHost } from "./src/agents.ts";
+// App-definition management (contract 0.14.0).
+export { AppManagementApi } from "./src/app-management.ts";
+export type { AppManagementHost } from "./src/app-management.ts";
+export type {
+  AppManagementPackEntry,
+  AppManagementPackInfo,
+  AppManagementPreview,
+  LastSync,
+  ListManagedAppsOptions,
+  ManagedAppDetail,
+  ManagedAppRow,
+  ManagedAppsPage,
+  ManagedAppsSort,
+  Management,
+  ManagementClass,
+  ManagementScope,
+  PreviewAppInput,
+  RegisterAppInput,
+  RegisterAppResult,
+  SourceInput,
+  SourceOptions,
+  SourceView,
+  SyncAppOptions,
+  SyncOutcome,
+  SyncResult,
+  Target,
+  TargetOption,
+  UnavailableReason,
+  UpdateSourceInput,
+} from "./src/types.ts";
 export type {
   AgentModelOptions,
   Asset,

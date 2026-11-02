@@ -307,6 +307,19 @@ later sends a new request, and `refetch()` starts a fresh one.
 | `useUpdateFunction()` | `client.functions.update()` |
 | `useDeleteFunction()` | `client.functions.delete()` |
 | `useRun()` | `client.run()` (the generic URN dispatch) |
+| `useDataStores(options?)` | `client.dataStores.list()` |
+| `useDataStore(id, options?)` | `client.dataStores.get()` |
+| `useDataStoreEntries(id, options?)` | `client.dataStores.entries.list()` |
+| `useDataStoreEntry(id, key, options?)` | `client.dataStores.entries.get()` |
+| `useDataStoreQuery(id, query)` | `client.dataStores.entries.query()` |
+| `useCreateDataStore()` | `client.dataStores.create()` |
+| `useUpdateDataStore()` | `client.dataStores.update()` |
+| `useArchiveDataStore()` | `client.dataStores.archive()` |
+| `useSetDataStoreEntry()` | `client.dataStores.entries.set()` |
+| `useInsertDataStoreRow()` | `client.dataStores.entries.insert()` |
+| `useIncrementDataStoreEntry()` | `client.dataStores.entries.increment()` |
+| `useDeleteDataStoreEntry()` | `client.dataStores.entries.delete()` |
+| `useImportDataStoreCsv()` | `client.dataStores.importCsv()` |
 
 Three things the definition hooks inherit from the SDK rather than invent:
 

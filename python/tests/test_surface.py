@@ -53,6 +53,10 @@ _CONTRACT = _REPO_ROOT.parent / "endpoints.json"
 #: the point, not friction.
 PUBLIC_SURFACE = {
     "DEFAULT_BASE_URL",
+    "AppManagementApi",
+    "AppManagementHost",
+    "ManagementTarget",
+    "SyncOutcome",
     # The Function and Workflow definition lifecycle: the list/get projections,
     # and what the two upsert routes answer with.
     "FunctionDetail",
@@ -94,6 +98,9 @@ PUBLIC_SURFACE = {
     "AppsHost",
     "DashboardApi",
     "DashboardHost",
+    "DataStoreEntriesApi",
+    "DataStoresApi",
+    "DataStoresHost",
     "ProjectsApi",
     "ProjectsHost",
     "ReliabilityApi",

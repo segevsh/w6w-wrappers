@@ -299,6 +299,7 @@ Deno.test("console.apps.listPage forwards every supplied option under its own wi
     q: "sendgrid",
     category: "email",
     modelProvider: true,
+    hasTriggers: true,
     modelType: "llm",
     modelFamily: "transformer",
     maturity: "stable",
@@ -315,6 +316,7 @@ Deno.test("console.apps.listPage forwards every supplied option under its own wi
   assertEquals(url.searchParams.get("q"), "sendgrid");
   assertEquals(url.searchParams.get("category"), "email");
   assertEquals(url.searchParams.get("modelProvider"), "true");
+  assertEquals(url.searchParams.get("hasTriggers"), "true");
   assertEquals(url.searchParams.get("modelType"), "llm");
   assertEquals(url.searchParams.get("modelFamily"), "transformer");
   assertEquals(url.searchParams.get("maturity"), "stable");
@@ -324,6 +326,16 @@ Deno.test("console.apps.listPage forwards every supplied option under its own wi
   assertEquals(url.searchParams.get("cursor"), "c1");
   assertEquals(url.searchParams.get("managed"), "true");
   assertEquals(url.searchParams.get("compact"), "true");
+});
+
+Deno.test("console.apps.listPage sends hasTriggers=false and omits it when undefined", async () => {
+  const c = client(() => json({ apps: [] }));
+  await c.client.console.apps.listPage({ hasTriggers: false });
+  await c.client.console.apps.listPage({});
+  const withFalse = new URL(c.calls[0].url);
+  assertEquals(withFalse.searchParams.get("hasTriggers"), "false");
+  const omitted = new URL(c.calls[1].url);
+  assertEquals(omitted.searchParams.has("hasTriggers"), false);
 });
 
 Deno.test("console.apps.listPage drops OMITTED options from the query string entirely", async () => {

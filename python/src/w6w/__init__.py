@@ -31,10 +31,12 @@ from ._config import BASE_PATH, DEFAULT_BASE_URL, ResolvedConfig, join_base_url
 from ._http import HttpResponse, Transport, path
 from ._vars import VarsApi, VarsRequest
 from ._version import __version__
+from .app_management import AppManagementApi, AppManagementHost
 from .apps import AppsApi, AppsHost
 from .client import Client
 from .connections import ConnectionsApi, ConnectionsRequest
 from .dashboard import DashboardApi, DashboardHost
+from .data_stores import DataStoreEntriesApi, DataStoresApi, DataStoresHost
 from .documents import DocumentsApi, DocumentsHost
 from .errors import ApiError, ConfigError
 from .me import MeRequest, fetch_me
@@ -51,6 +53,7 @@ from .types import (
     DocFormat,
     FunctionDetail,
     FunctionSummary,
+    ManagementTarget,
     Me,
     PatchableStr,
     RunEnvelope,
@@ -58,6 +61,7 @@ from .types import (
     RunStatus,
     SaveResult,
     StepError,
+    SyncOutcome,
     Unset,
     Var,
     VarType,
@@ -77,6 +81,8 @@ from .workflows import WorkflowsApi, WorkflowsHost
 
 __all__ = [
     "ApiError",
+    "AppManagementApi",
+    "AppManagementHost",
     "AppsApi",
     "AppsHost",
     "BASE_PATH",
@@ -97,6 +103,9 @@ __all__ = [
     "DEFAULT_BASE_URL",
     "DashboardApi",
     "DashboardHost",
+    "DataStoreEntriesApi",
+    "DataStoresApi",
+    "DataStoresHost",
     "Doc",
     "DocFormat",
     "DocumentsApi",
@@ -114,6 +123,7 @@ __all__ = [
     "FunctionsApi",
     "FunctionsHost",
     "HttpResponse",
+    "ManagementTarget",
     "Me",
     "MeRequest",
     "PatchableStr",
@@ -132,6 +142,7 @@ __all__ = [
     "RunStatus",
     "SaveResult",
     "StepError",
+    "SyncOutcome",
     # The caller's account team (T2.1.1). Not project-scoped
     # (`endpoints.json`: `status: "required"` for each).
     "TeamApi",

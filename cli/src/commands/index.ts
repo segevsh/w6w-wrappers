@@ -26,7 +26,9 @@ import { NAMED_RUN_COMMANDS } from "./named-run.ts";
 import { WORKFLOW_COMMANDS } from "./workflows.ts";
 import { RUN_COMMANDS } from "./run.ts";
 import { TEAM_COMMANDS } from "./team.ts";
+import { APP_MANAGEMENT_COMMANDS } from "./app-management.ts";
 import { APP_COMMANDS } from "./apps.ts";
+import { DATA_STORE_COMMANDS } from "./data-stores.ts";
 import { DASHBOARD_COMMANDS } from "./dashboard.ts";
 import { PROJECT_COMMANDS } from "./projects.ts";
 import { RELIABILITY_COMMANDS } from "./reliability.ts";
@@ -47,7 +49,9 @@ export { NAMED_RUN_COMMANDS } from "./named-run.ts";
 export { WORKFLOW_COMMANDS } from "./workflows.ts";
 export { RUN_COMMANDS } from "./run.ts";
 export { TEAM_COMMANDS } from "./team.ts";
+export { APP_MANAGEMENT_COMMANDS } from "./app-management.ts";
 export { APP_COMMANDS } from "./apps.ts";
+export { DATA_STORE_COMMANDS } from "./data-stores.ts";
 export { DASHBOARD_COMMANDS } from "./dashboard.ts";
 export { PROJECT_COMMANDS } from "./projects.ts";
 export { RELIABILITY_COMMANDS } from "./reliability.ts";
@@ -73,7 +77,9 @@ export const COMMANDS: CommandRegistry = {
   ...NAMED_RUN_COMMANDS,
   ...RUN_COMMANDS,
   ...TEAM_COMMANDS,
+  ...APP_MANAGEMENT_COMMANDS,
   ...APP_COMMANDS,
+  ...DATA_STORE_COMMANDS,
   ...DASHBOARD_COMMANDS,
   ...PROJECT_COMMANDS,
   ...RELIABILITY_COMMANDS,

@@ -147,6 +147,36 @@ Every method takes an optional `project=`.
 | `update(id, content=…, format=…, description=…)` | `Doc`. Only the arguments you pass are changed. |
 | `delete(id)` | `None` |
 
+## `client.data_stores`
+
+Every method takes an optional `project=` (per call, then the client's default, otherwise the server's). Results are the server's JSON as plain `dict`s. Unset options are absent from the request, never `null`.
+
+| Method | Returns |
+| --- | --- |
+| `list(kind=None, cursor=None, limit=None)` | `{"items": [...], "nextCursor"?: str}` |
+| `get(id)` | The store. |
+| `create(kind, name, description=None, schema=None)` | The new store. `kind` is `"kv"`, `"doc"` or `"table"`. |
+| `update(id, name=…, description=…, schema=…)` | The store. Only the arguments you pass are changed. |
+| `archive(id)` | `None`. A soft delete: the store then answers `404 data_store_not_found`. |
+| `import_csv(id, csv)` | `{"imported": n}`. `csv` is a `str` (sent as UTF-8) or `bytes` (verbatim). |
+| `export_csv(id)` | The CSV as a `str`, byte-for-byte as the server sent it. |
+
+`client.data_stores.entries` holds the entry operations:
+
+| Method | Returns |
+| --- | --- |
+| `list(id, prefix=None, cursor=None, limit=None)` | `{"items": [...], "nextCursor"?: str}` |
+| `get(id, key)` | The entry. The key is percent-encoded into the path. |
+| `set(id, key, value, if_version=None, ttl_seconds=None)` | The entry. `if_version` makes the write a compare-and-set. |
+| `insert(id, value, ttl_seconds=None)` | The new entry (table stores; the server generates the key). |
+| `increment(id, key, by=None)` | The entry. Without `by` no body is sent and the server adds 1. |
+| `delete(id, key)` | `None` |
+| `query(id, where=None, order=None, limit=None)` | `{"items": [...]}`. `where={"col": "v"}` is sent as `where[col]=v`, one pair per column. |
+
+### CSV text mode
+
+`import_csv` and `export_csv` are the only calls that leave JSON. They use two explicit options on `client.request`: `body_encoding="csv"` sends a `str` or `bytes` body verbatim as `Content-Type: text/csv`, and `response_encoding="text"` returns the 2xx body as a `str`, never JSON-parsed. Neither is inferred from the body's type: without `body_encoding`, a `str` body is still a JSON string. A non-2xx raises the usual `ApiError`, for example `400 invalid_value` (with `field`/`column` in `raw["error"]`), `invalid_key`, `invalid_cursor` or `unknown_project`.
+
 ## `client.vars`
 
 | Method | Returns |
