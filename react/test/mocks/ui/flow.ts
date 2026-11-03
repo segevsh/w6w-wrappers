@@ -1,4 +1,4 @@
-// @mock-of ui/src/flow.ts
+// @mock-of studio/packages/ui/src/flow.ts
 /**
  * In-repo MOCK of the `@w6w/ui/flow` surface react's converter mirror is checked against: the
  * `FlowWorkflow`/`FlowStep`/`FlowEdge` types of the PINNED `@w6w/ui` 0.1.0 (types only). The real

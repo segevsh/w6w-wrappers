@@ -1,4 +1,4 @@
-// @mock-of ui/src/index.ts
+// @mock-of studio/packages/ui/src/index.ts
 /**
  * In-repo MOCK of the `@w6w/ui` surface react calls: the `W6WApi` type (types only; react calls no
  * ui value). It mirrors the member set of the PINNED `@w6w/ui` 0.1.0 `W6WApi` — 21 required, 8
