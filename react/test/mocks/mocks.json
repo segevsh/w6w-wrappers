@@ -1,6 +1,6 @@
 {
   "mocks": [
-    { "mock": "ui/index.ts", "real": "ui/src/index.ts" },
-    { "mock": "ui/flow.ts", "real": "ui/src/flow.ts" }
+    { "mock": "ui/index.ts", "real": "studio/packages/ui/src/index.ts" },
+    { "mock": "ui/flow.ts", "real": "studio/packages/ui/src/flow.ts" }
   ]
 }

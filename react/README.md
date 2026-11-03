@@ -4,7 +4,7 @@ React bindings for [`@w6w/sdk`](../node) — a `<W6WProvider>` that holds one me
 `W6WClient` with per-request token freshness, a small hook set over the SDK's public
 surface (`me`, `documents`, `vars`, `connections`, `workflows`, `functions`, `run`), and
 `createW6WUiAdapter`, a structural bridge from a `W6WClient` to
-[`@w6w/ui`](https://github.com/w6w-io/w6w-ui)'s `W6WApi` contract.
+[`@w6w/ui`](https://github.com/w6w-io/w6w-studio/tree/main/packages/ui)'s `W6WApi` contract.
 
 License: MIT · Version: 0.9.17 · Guides: [docs.w6w.io/clients/react](https://docs.w6w.io/clients/react/)
 (with a [hooks reference](https://docs.w6w.io/clients/react/hooks/) and a
