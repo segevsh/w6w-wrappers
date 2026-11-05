@@ -239,6 +239,8 @@ export class ConnectionsApi {
   async update(
     id: string,
     body: {
+      /** Switch to a key/token auth method with a full replacement credential. */
+      authKey?: string;
       displayName?: string;
       binding?: ConnectionBinding;
       credentialId?: string;
