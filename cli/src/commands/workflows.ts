@@ -172,6 +172,9 @@ const run: CommandHandler = async (context) => {
     // Sent only when given: `false` and absent are the same on the wire, and an
     // absent flag must stay "run the published version".
     ...(context.invocation.options.allowUnpublished === true ? { allowUnpublished: true } : {}),
+    ...(typeof context.invocation.options.entry === "string"
+      ? { entry: context.invocation.options.entry }
+      : {}),
   });
   context.out.emit(result, (styles) => renderRun(result, styles));
   return exitCodeFor(result);

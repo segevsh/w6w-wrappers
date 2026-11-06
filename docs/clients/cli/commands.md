@@ -98,7 +98,7 @@ Creating, testing and reconnecting a connection are not in the CLI.
 | Command | What it does |
 | --- | --- |
 | `w6w workflows list [--project <id>]` | List workflows. |
-| `w6w workflows run <id-or-key> [--wait] [--input <json>] [--allow-unpublished]` | Start a run. `--wait` waits for it to finish, up to the server's limit. Exits `3` if the run failed. `--allow-unpublished` runs the saved draft even if it was never published; it runs the row as last saved, so save first, and it is sent only when you pass it. |
+| `w6w workflows run <id-or-key> [--wait] [--input <json>] [--allow-unpublished] [--entry <trigger-node-id>]` | Start a run. `--entry` picks the trigger node when the workflow has several. `--wait` waits for it to finish, up to the server's limit. Exits `3` if the run failed. `--allow-unpublished` runs the saved draft even if it was never published; it runs the row as last saved, so save first, and it is sent only when you pass it. |
 | `w6w workflows cancel <run-id>` | Ask for a run to be cancelled. It reports the run's status at that moment. |
 | `w6w workflows get <id>` | Print a workflow's full definition and its `updatedAt`. |
 | `w6w workflows create --definition <json> [--project <id>]` | Create a workflow from a definition. A new `wf_…` id is assigned if it has none. |

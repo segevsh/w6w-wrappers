@@ -800,6 +800,8 @@ const PARAM_HELP: Record<string, string> = {
   "reliability.list.limit": "Maximum services to return, a positive integer",
   "reliability.members.project": "Project id (see: w6w projects list)",
   "reliability.members.days": "Window length in days, a positive integer",
+  "workflows.run.entry":
+    "Trigger node id to start the run at (default: the workflow's first trigger)",
   "allowUnpublished": "Run the saved draft even if it was never published (sent only when given)",
   "n": "Version number (see: w6w <workflows|functions> versions <id>)",
   "workflows.listVersions.id": "Workflow id (see: w6w workflows list)",
