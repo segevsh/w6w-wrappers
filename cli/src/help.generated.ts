@@ -498,7 +498,7 @@ export const HELP_TREE: HelpTree = {
           "short": "Enqueue a workflow run; optionally wait for a terminal state",
           "headline": "enqueue a workflow run; optionally wait for a terminal state",
           "usage": "w6w workflows run <id> [options]",
-          "naming": "w6w workflows run <id> [--wait] [--input <json>]",
+          "naming": "w6w workflows run <id> [--wait] [--input <json>] [--entry <value>]",
           "status": "required",
           "params": [
             {
@@ -528,6 +528,14 @@ export const HELP_TREE: HelpTree = {
               "display": "--allow-unpublished",
               "description":
                 "Run the saved draft even if it was never published (sent only when given)",
+              "required": false,
+            },
+            {
+              "name": "entry",
+              "kind": "flag",
+              "display": "--entry <value>",
+              "description":
+                "Trigger node id to start the run at (default: the workflow's first trigger)",
               "required": false,
             },
             {

@@ -209,6 +209,19 @@ Deno.test("functions archive: POST /functions/<id>/archive", async () => {
   assertEquals(JSON.parse(r.stdout), { id: "fn_01HQ8N", key: "k" });
 });
 
+Deno.test("workflows run --entry: names the trigger node in the body only when passed", async () => {
+  const picked = await w6w(["workflows", "run", "wf_01HQ8N", "--entry", "manual_1"], (call) => {
+    assertEquals(call.body, { entry: "manual_1" });
+    return json(202, { runId: "run_1", status: "queued" });
+  });
+  assertEquals(picked.code, 0, picked.stderr);
+  const plain = await w6w(["workflows", "run", "wf_01HQ8N"], (call) => {
+    assertEquals(Object.hasOwn((call.body ?? {}) as object, "entry"), false);
+    return json(202, { runId: "run_1", status: "queued" });
+  });
+  assertEquals(plain.code, 0, plain.stderr);
+});
+
 Deno.test("--allow-unpublished: allowUnpublished:true in the body only when passed (both run commands)", async () => {
   const wf = await w6w(["workflows", "run", "wf_01HQ8N", "--allow-unpublished"], (call) => {
     assertEquals(call.url, `${BASE}/workflows/wf_01HQ8N/run`);

@@ -271,6 +271,13 @@ await client.workflows.update("wf_01H…", definition);
 const draft = await client.workflows.run("wf_01H…", { allowUnpublished: true, wait: true });
 ```
 
+A workflow with more than one trigger node can start at a specific one. Pass its node id as `entry`,
+with `input` for that trigger's fields. `runVersion` doesn't take `entry`.
+
+```ts
+await client.workflows.run("wf_01H…", { entry: "manual_2", input: { urn: "event:1" }, wait: true });
+```
+
 ## Troubleshooting
 
 | Symptom | Cause | What to do |

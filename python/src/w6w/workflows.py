@@ -215,6 +215,7 @@ class WorkflowsApi:
         trigger: Optional[str] = None,
         input: Optional[Mapping[str, Any]] = None,
         allow_unpublished: bool = False,
+        entry: Optional[str] = None,
     ) -> WorkflowRunResult:
         """Start a run of one workflow, optionally waiting for it to finish.
 
@@ -264,6 +265,8 @@ class WorkflowsApi:
             you submit here, so save first. Sent as `allowUnpublished: true` in
             the body **only when true**; `False` is the same as omitting it.
             Not accepted by :meth:`run_version`.
+        :param entry: Trigger node to start at; the server validates it against
+            the called workflow. Not accepted by :meth:`run_version`.
         :returns: The run handle, its status, and the result when the run has
             one.
         :raises ConfigError: When no token is configured.
@@ -273,7 +276,7 @@ class WorkflowsApi:
         return self._enqueue(
             path("/workflows/{id}/run", id=id),
             wait,
-            _run_body(variables, trigger, input, allow_unpublished),
+            _run_body(variables, trigger, input, allow_unpublished, entry),
         )
 
     def run_version(
@@ -647,6 +650,7 @@ def _run_body(
     trigger: Optional[str],
     input: Optional[Mapping[str, Any]] = None,
     allow_unpublished: bool = False,
+    entry: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Assemble the request body of a run, dropping what was not supplied.
 
@@ -661,7 +665,8 @@ def _run_body(
     :param input: Run input delivered to the entry trigger node, if any.
     :param allow_unpublished: Present in the body only when `True`, like `wait`
         on the query: the wire is read as a boolean and `False` is "absent".
-    :returns: The body — `{}` when the caller supplied none of the four.
+    :param entry: Trigger node to start at, if any.
+    :returns: The body — `{}` when the caller supplied none of the five.
     """
     body: Dict[str, Any] = {}
     if variables is not None:
@@ -672,4 +677,6 @@ def _run_body(
         body["input"] = dict(input)
     if allow_unpublished is True:
         body["allowUnpublished"] = True
+    if entry is not None:
+        body["entry"] = entry
     return body
