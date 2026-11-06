@@ -91,7 +91,7 @@ the synthetic zero-credential row in a list (optional; absent on older servers).
 | Method | Returns | Notes |
 | --- | --- | --- |
 | `list({ project?, signal? })` | `WorkflowSummary[]` | `id`, `key`, `name`, `displayName`, `status` (`draft`, `active` or `archived`), `tags`, `runCount`, `updatedAt` |
-| `run(idOrKey, { wait?, input?, variables?, trigger?, allowUnpublished? })` | `WorkflowRunResult` | `runId`, `status`, `terminal`, `output`, `error`, `stepErrors`, `steps`, `httpStatus`. A failed run is returned, not raised. |
+| `run(idOrKey, { wait?, input?, variables?, trigger?, allowUnpublished?, entry? })` | `WorkflowRunResult` | `runId`, `status`, `terminal`, `output`, `error`, `stepErrors`, `steps`, `httpStatus`. A failed run is returned, not raised. |
 | `cancel(runId)` | `{ id, status, cancelRequestedAt }` | Requests cancellation. `status` is the run's status at that moment. |
 | `get(id, { signal? })` | `{ workflow, sourceRef, updatedAt }` | The full definition. |
 | `create(definition, { project? })` | `{ workflow: { id, name }, scheduled, updatedAt }` | Assigns a `wf_…` id if the definition has none. |

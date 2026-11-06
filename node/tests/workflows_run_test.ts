@@ -332,3 +332,16 @@ Deno.test("workflows.run: an old steps-only response still parses", async () => 
   assertEquals(run.steps, { a: { status: "succeeded" } });
   assertEquals(run.nodes, { a: { status: "succeeded" } });
 });
+
+Deno.test("workflows.run: selected trigger and its input are sent together", async () => {
+  const c = client(() => json({ runId: "run_child", status: "succeeded" }));
+  await c.client.workflows.run("wf_child", {
+    entry: "manual_2",
+    input: { urn: "event:1", create: false },
+    wait: true,
+  });
+  assertEquals(sentBody(c.calls[0]), {
+    entry: "manual_2",
+    input: { urn: "event:1", create: false },
+  });
+});

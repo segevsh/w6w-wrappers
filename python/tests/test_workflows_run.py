@@ -315,6 +315,26 @@ class BodyTest(unittest.TestCase):
         )
 
 
+class EntryTest(unittest.TestCase):
+    """`entry` picks the trigger node to start at, and travels with `input`."""
+
+    QUEUED = {"runId": "run_01HQ", "status": "queued"}
+
+    def test_selected_trigger_and_its_input_are_sent_together(self) -> None:
+        instance, calls = client(responding(self.QUEUED, 202))
+
+        instance.workflows.run("wf_01HQ", entry="manual_2", input={"urn": "event:1"})
+
+        self.assertEqual(sent_body(calls[0]), {"entry": "manual_2", "input": {"urn": "event:1"}})
+
+    def test_default_leaves_the_field_out(self) -> None:
+        instance, calls = client(responding(self.QUEUED, 202))
+
+        instance.workflows.run("wf_01HQ")
+
+        self.assertEqual(sent_body(calls[0]), {})
+
+
 class AllowUnpublishedTest(unittest.TestCase):
     """`allow_unpublished` is a body field, present only when `True`."""
 

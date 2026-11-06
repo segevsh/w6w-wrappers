@@ -204,7 +204,7 @@ For a connection's own icon and label use the inline `app` on `ConnectionSummary
 | TS                                | Python                                                                           | Returns             |
 | --------------------------------- | -------------------------------------------------------------------------------- | ------------------- |
 | `client.run(input)`               | `client.run(urn, action=None, payload=None)`                                     | `RunEnvelope`       |
-| `client.workflows.run(id, opts?)` | `client.workflows.run(id, wait=False, variables=None, trigger=None, input=None)` | `WorkflowRunResult` |
+| `client.workflows.run(id, opts?)` | `client.workflows.run(id, wait=False, variables=None, trigger=None, input=None, allow_unpublished=False, entry=None)` | `WorkflowRunResult` |
 
 `run` dispatches on a URN over four runnable arms (`conn_`, `wf_`, `fn_`, `ep_`)
 and returns the `kind`-tagged envelope **exactly as it arrived**. `action` is

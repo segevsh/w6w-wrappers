@@ -139,6 +139,8 @@ export interface WorkflowListOptions extends CallOptions {
  * would be inventing a parameter.
  */
 export interface WorkflowRunOptions {
+  /** Trigger node to start at; the server validates it against the called workflow. */
+  entry?: string;
   /**
    * Wait for the run to reach a terminal state before answering.
    *
@@ -182,8 +184,8 @@ export interface WorkflowRunOptions {
   allowUnpublished?: boolean;
 }
 
-/** Per-call options for `workflows.runVersion`: everything `run` takes except the draft flag. */
-export type WorkflowRunVersionOptions = Omit<WorkflowRunOptions, "allowUnpublished">;
+/** Version runs do not accept the draft flag or an entry override. */
+export type WorkflowRunVersionOptions = Omit<WorkflowRunOptions, "allowUnpublished" | "entry">;
 
 /**
  * What `workflows.run` returns: the server's flat body, plus two signals derived
@@ -395,6 +397,7 @@ export class WorkflowsApi {
         variables: options?.variables,
         trigger: options?.trigger,
         input: options?.input,
+        ...(options?.entry !== undefined ? { entry: options.entry } : {}),
         allowUnpublished: options?.allowUnpublished === true ? true : undefined,
       },
     });
