@@ -1,6 +1,6 @@
 {
   "name": "@w6w/cli",
-  "version": "0.9.30",
+  "version": "0.9.31",
   "license": "MIT",
   "exports": "./mod.ts",
   "imports": {
