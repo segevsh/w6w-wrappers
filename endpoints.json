@@ -4087,7 +4087,7 @@
         "name": "--version",
         "alias": "-v",
         "type": "boolean",
-        "source": "VERSION",
+        "source": "VERSION + unauthenticated GET /version",
         "notes": "Shares one handler with `w6w version`: prints the CLI VERSION plus the server’s version and composition from an unauthenticated `GET /version` (no Authorization header, ever; 3 s timeout), versions only and no identity. Never fails: an unreachable server prints `server: unavailable (<reason>)` and the exit code is 0."
       },
       {

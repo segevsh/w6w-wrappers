@@ -79,6 +79,20 @@ Deno.test("version: no token is needed", async () => {
   assertStringIncludes(r.stdout, "server: 1.2.3");
 });
 
+Deno.test("version: an unsendable token (trailing newline) is irrelevant — versions still print, exit 0", async () => {
+  for (const argv of SPELLINGS) {
+    const r = await w6w(argv, () => json(200, BODY), { W6W_TOKEN: "bad\nline" });
+    assertEquals(r.code, 0, argv.join(" "));
+    assertEquals(
+      r.stdout,
+      `wrapper: ${VERSION}\nserver: 1.2.3\ncomposition: core:a,server:b`,
+      argv.join(" "),
+    );
+    assertEquals(r.calls.length, 1);
+    assertEquals(r.calls[0].headers.get("authorization"), null);
+  }
+});
+
 Deno.test("version: unavailable server prints the reason, exits 0, quickly", async () => {
   const cases: [string, () => Promise<Response> | Response, string][] = [
     ["refused", () => Promise.reject(new TypeError("connection refused")), "connection refused"],
