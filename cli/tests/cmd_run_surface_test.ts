@@ -459,8 +459,13 @@ Deno.test("run --app: a URN and --app together is a usage error, and no request 
 
 Deno.test("every root-level command (ls, me, run) in the help tree is registered", () => {
   const documented = HELP_TREE.commands.map((command) => command.path.join(" ")).sort();
-  assertEquals(documented, ["ls", "me", "model-usage", "run"]);
-  for (const path of documented) assert(Object.hasOwn(COMMANDS, path), `\`${path}\` is not wired`);
+  assertEquals(documented, ["ls", "me", "model-usage", "run", "version"]);
+  for (const path of documented) {
+    // `version` is answered by `main()` itself, sharing `--version`'s never-fails
+    // handler (src/commands/version.ts); it is exercised in cmd_version_test.ts.
+    if (path === "version") continue;
+    assert(Object.hasOwn(COMMANDS, path), `\`${path}\` is not wired`);
+  }
   assertEquals(Object.keys(ME_COMMANDS), ["me"]);
   assertEquals(Object.keys(RUN_COMMANDS), ["run"]);
 });
