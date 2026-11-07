@@ -10,8 +10,10 @@
  * server cannot know — it is this package's own published version. It is a
  * **fill, never an overwrite**: a key the server supplied wins, including
  * `wrapper` itself, so a future host that has a better answer is not silently
- * overruled by the client. The server does not send a `versions` block today,
- * so every call currently returns just `{wrapper: VERSION}` — expected, not
+ * overruled by the client. The server sends `versions: {server, composition}`
+ * (the deployment's image version and its per-repo composition string), so a
+ * call returns `{wrapper: VERSION, server, composition}`; against an older
+ * server with no block it returns just `{wrapper: VERSION}` — expected, not
  * an error.
  *
  * It is deliberately not a namespace class. `endpoints.json` names this

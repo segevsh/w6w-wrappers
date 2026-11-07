@@ -320,7 +320,7 @@ Deno.test("a malformed config fails every dispatched command, naming the path, n
   }
 });
 
-Deno.test("help and --version never read the store", async () => {
+Deno.test("help never reads the store", async () => {
   const store: ConfigStore = {
     path: PATH,
     read: () => Promise.reject(new Error("the store was read")),
@@ -334,7 +334,7 @@ Deno.test("help and --version never read the store", async () => {
       ["config", "--help"],
       ["config", "set-base-url", "--help"],
       ["ls", "--help"],
-      ["--version"],
+      ["--version", "--help"],
     ]
   ) {
     const result = await run(argv, { store });

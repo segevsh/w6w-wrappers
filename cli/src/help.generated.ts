@@ -99,7 +99,7 @@ export interface HelpExitCode {
 /** The command tree, generated from the shared wrapper surface contract. */
 export const HELP_TREE: HelpTree = {
   "binary": "w6w",
-  "contractVersion": "0.15.0",
+  "contractVersion": "0.15.1",
   "tagline": "command-line client for the w6w workflow platform",
   "usage": "w6w <command> [options]",
   "docsUrl": "https://w6w.dev/docs/cli",
@@ -274,6 +274,35 @@ export const HELP_TREE: HelpTree = {
       "examples": [
         "w6w model-usage",
         "w6w model-usage --group-by route --from 2026-10-01",
+      ],
+      "notes": [],
+    },
+    {
+      "operation": "version",
+      "path": [
+        "version",
+      ],
+      "name": "version",
+      "aliases": [],
+      "summary": "Show this CLI's version and the server's version and composition (no identity).",
+      "short": "Show this CLI's version and the server's version and composition (no identity)",
+      "headline": "show this CLI's version and the server's version and composition (no identity)",
+      "usage": "w6w version [options]",
+      "naming": "w6w version",
+      "status": "live",
+      "params": [
+        {
+          "name": "json",
+          "kind": "flag",
+          "display": "--json",
+          "description": "Output raw JSON instead of a table",
+          "required": false,
+        },
+      ],
+      "examples": [
+        "w6w version",
+        "w6w version --json",
+        "w6w --version",
       ],
       "notes": [],
     },
@@ -6513,6 +6542,9 @@ export const COMMAND_PATHS: string[][] = [
   ],
   [
     "model-usage",
+  ],
+  [
+    "version",
   ],
   [
     "ls",

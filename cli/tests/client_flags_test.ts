@@ -332,7 +332,15 @@ Deno.test("nothing constructs a client until a command asks for one", async () =
   const forbidden: EnvReader = (name) => {
     throw new Error(`the help path read the environment: ${name}`);
   };
-  for (const argv of [["--help"], ["--version"], ["documents", "--help"], ["me", "--help"], []]) {
+  for (
+    const argv of [
+      ["--help"],
+      ["--version", "--help"],
+      ["documents", "--help"],
+      ["me", "--help"],
+      [],
+    ]
+  ) {
     const io = recorder();
     const code = await main(argv, io.io, { env: forbidden, isTty: true });
     assertEquals(code, 0, `\`w6w ${argv.join(" ")}\` should exit 0 with nothing configured`);

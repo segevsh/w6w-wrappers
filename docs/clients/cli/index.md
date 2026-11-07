@@ -34,7 +34,11 @@ npm install -g @w6w/cli
 w6w --version
 ```
 
-You should see a version number.
+You should see three lines: `wrapper:` (this CLI), and `server:` and
+`composition:` from the server's unauthenticated `GET /version`. If the server is
+unreachable the server line reads `server: unavailable (<reason>)`; the command
+still exits `0`. `w6w version` is the same command. Neither prints your identity
+(that is `w6w me`).
 
 ## 2. Set your credentials
 

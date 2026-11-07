@@ -112,7 +112,13 @@ export interface Me {
   /** The caller's role within that account. */
   role: string;
   /**
-   * Component versions, e.g. `{composition: "server@1a2b3c4 …", wrapper: "0.1.0"}`.
+   * Component versions, e.g.
+   * `{server: "1.2.3", composition: "core:a1b2c3d,server:e4f5a6b", wrapper: "0.1.0"}`.
+   *
+   * - `server` — the deployment's image version (= `GET /version`'s `version`).
+   * - `composition` — the per-repo short-SHA string (= `GET /version`'s
+   *   `composition`; `"dev"` for local builds).
+   * - `wrapper` — this package's own version, filled in client-side.
    *
    * **Optional and open.** It may be absent entirely (an older server), and it
    * may carry keys this release has never heard of — so it is typed as a string
@@ -120,7 +126,11 @@ export interface Me {
    * installed client. `wrapper` is filled in by this package from its own
    * `VERSION` (`src/me.ts`); the server cannot know it.
    */
-  versions?: Record<string, string>;
+  versions?: Record<string, string> & {
+    server?: string;
+    composition?: string;
+    wrapper?: string;
+  };
 }
 
 /**

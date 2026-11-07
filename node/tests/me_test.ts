@@ -217,3 +217,14 @@ Deno.test("me: a 200 whose body is not an object is bad_response", async () => {
   assertEquals(err.code, "bad_response");
   assertStringIncludes(err.message, "not an identity object");
 });
+
+Deno.test("me: a server that sends {server, composition} yields them beside wrapper", async () => {
+  const c = client(() =>
+    json({ ...IDENTITY, versions: { server: "1.2.3", composition: "core:a,server:b" } })
+  );
+
+  const me = await c.client.me();
+
+  assertEquals(me.versions, { wrapper: VERSION, server: "1.2.3", composition: "core:a,server:b" });
+  assertEquals(me.versions?.server, "1.2.3");
+});

@@ -54,13 +54,29 @@ export W6W_TOKEN=…
 w6w workflows list
 ```
 
-`--help` and `--version` deliberately need neither. They resolve with no token configured and no
-server reachable, which is exactly when people need them most.
+`--help` deliberately needs neither. It resolves with no token configured and no server reachable,
+which is exactly when people need them most. `--version` (and its twin `w6w version`) needs no token
+either: it prints the CLI's version plus the server's `version` and `composition` from an
+unauthenticated `GET /version` (3 s timeout, never an `Authorization` header), versions only and no
+identity. It never fails: an unreachable server prints `server: unavailable (<reason>)` and the exit
+code is still `0`.
+
+```text
+$ w6w version
+wrapper: 0.9.30
+server: 1.2.3
+composition: core:a1b2c3d,server:e4f5a6b
+```
+
+With `--json` the output is `{"wrapper": "…", "server": "…"|null, "composition": "…"|null}`, plus
+`"serverError": "<reason>"` when the server could not be reached. JSON values are raw; the text view
+shows `0.0.0` or an empty version as `dev`.
 
 ## Usage
 
 ```bash
-w6w me                        # who am I, and which CLI version is this? (alias: info)
+w6w me                        # who am I, plus the wrapper/server/composition versions (alias: info)
+w6w version                   # versions only, no identity (same as --version)
 
 # Discover what you can run — a `conn_…`, `wf_…`, `fn_…` or `ep_…` id.
 w6w ls workflows              # also: ls integrations | functions | endpoints (endpoints is unstable)

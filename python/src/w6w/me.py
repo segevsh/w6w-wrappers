@@ -9,9 +9,11 @@ flat body, and it asserts the body's shape with
 **Fixed 2026-07-28** (`docs/endpoints.md` §1): every wrapper calls `/auth/me`
 directly rather than waiting on the `/me` alias D15 originally specced and that
 was never built. The live consumer of that route is the studio, whose typed `Me`
-is the flat body — a nested envelope would break it. What is still missing
-server-side is the optional `versions` block, which this module tolerates being
-absent entirely.
+is the flat body — a nested envelope would break it. The server sends
+`versions: {server, composition}` (the deployment's image version and its
+per-repo composition string); the block stays optional, and this module
+tolerates it being absent entirely (an older server) and carries unknown keys
+through.
 
 It is deliberately **not a namespace class**. `endpoints.json` names this
 operation `client.me()` — a method on the client itself — so this module exports

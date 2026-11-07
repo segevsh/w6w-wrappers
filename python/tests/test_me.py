@@ -232,6 +232,19 @@ class VersionsTest(unittest.TestCase):
         self.assertEqual(versions["somethingNobodyHasShippedYet"], "x")
         self.assertEqual(versions["wrapper"], __version__)
 
+    def test_server_and_composition_versions_arrive_beside_wrapper(self) -> None:
+        # The server sends `versions: {server, composition}` (T1.1.1 wire shape).
+        instance, _calls = client(
+            responding(
+                dict(ME_BODY, versions={"server": "1.2.3", "composition": "core:a,server:b"}),
+            ),
+        )
+
+        self.assertEqual(
+            instance.me().versions,
+            {"wrapper": __version__, "server": "1.2.3", "composition": "core:a,server:b"},
+        )
+
     def test_a_placeholder_version_from_the_server_reaches_the_caller_unaltered(self) -> None:
         # D5 is a RENDERING rule, and this is the line between the two: the data
         # a caller receives is a faithful transcription of the wire, so a

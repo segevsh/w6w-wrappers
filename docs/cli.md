@@ -539,7 +539,15 @@ The CLI's conformance test additionally asserts:
   since `status` records server readiness rather than wrapper obligation
   ([parity.md](./parity.md#conformance)) — appears in the help of its group, or
   in root help for the two root-level commands;
-- `w6w --version` prints the version from `VERSION`.
+- `w6w --version`, `-v` and `w6w version` share one handler and print versions
+  only (no identity): `wrapper: <VERSION>`, then `server:` and `composition:`
+  from an **unauthenticated** `GET <base URL>/version` (no `Authorization`
+  header ever, 3 s timeout). Any failure prints `server: unavailable (<reason>)`
+  with no composition line; the exit code is always `0`. `--json` prints
+  `{wrapper, server|null, composition|null, serverError?}` with raw values (the
+  `0.0.0`→`dev` display rule is text-only). `--version --help` and
+  `version --help` are help, with no request. `w6w version` is CLI-only
+  (`cli.commands[]`) and does not shadow `w6w workflows version <id> <n>`.
 
 The no-token condition is the one that regresses. It breaks the first time
 someone moves auth setup into a shared startup path, and it breaks silently for
