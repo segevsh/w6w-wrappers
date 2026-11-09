@@ -68,6 +68,17 @@ An agent can carry `modelOptions`: `temperature`, `topP`, `maxOutputTokens`
 and `stop`, all optional. Pass them to `agents.create` or `agents.update` and
 read them back on the agent.
 
+## Tools
+
+An agent can carry `tools`: capabilities it may call, at most 50. Each is an
+`action` (`uses: {app, action, connection?}`), a `function` (an `fn_…` id) or a
+`workflow` (a `wf_…` id), with an optional `description` (up to 1024 chars) that
+overrides what the model is told the tool does. `Agent.tools` is always present
+(`[]` when none). On `agents.update`, a given `tools` replaces the whole list and
+an absent one leaves it unchanged. A malformed or duplicate tool is
+`422 validation_failed`. From the CLI, pass `--tools <json>`; in Python,
+`tools=[...]`.
+
 ## SDK
 
 ```ts

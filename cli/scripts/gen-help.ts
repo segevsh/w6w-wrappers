@@ -754,6 +754,8 @@ const PARAM_HELP: Record<string, string> = {
   "skills": 'Pinned skill versions, as a JSON array of {"skillId":"…","skillVersionId":"…"}',
   "context":
     'Pinned context versions, as a JSON array of {"collectionId":"…","entryId":"…","assetVersionId":"…"}',
+  "tools":
+    'Tools the agent may call (max 50), as a JSON array of {"kind":"action","uses":{"app":"…","action":"…"}} | {"kind":"function","function":"fn_…"} | {"kind":"workflow","workflow":"wf_…"}, each with an optional "description"',
   "name": "Display name",
   "context.create.visibility": "Who can see the collection: private | project | account",
   "modelOptions.temperature": "Sampling temperature, 0 to 2",

@@ -2273,7 +2273,10 @@ POST /agents
 Every field optional (an incomplete draft saves; `validation` lists what is
 missing): `name`, `instructions` (64 KiB cap), `modelRouteId`, `skills`
 (`[{skillId, skillVersionId}]`), `context`
-(`[{collectionId, entryId?, assetVersionId}]`), `visibility`, `project`. Answers
+(`[{collectionId, entryId?, assetVersionId}]`), `visibility`, `project`, `tools`
+(`[{kind: "action", uses: {app, action, connection?}} | {kind: "function",
+function} | {kind: "workflow", workflow}]`, each with an optional `description`
+of at most 1024 chars; at most 50, no duplicates). Answers
 `201`; `422 validation_failed` carries `issues`. `runnable: false`.
 
 ---

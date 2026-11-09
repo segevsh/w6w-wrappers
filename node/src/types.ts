@@ -933,6 +933,17 @@ export interface ModelOptions {
 /** Alias of {@linkcode ModelOptions}. */
 export type AgentModelOptions = ModelOptions;
 
+/** A capability the agent may call. Max 50 per agent; the server stores only these keys. */
+export type AgentTool =
+  | {
+    kind: "action";
+    uses: { app: string; action: string; connection?: string | null };
+    /** ≤ 1024 chars; author override of what the model is told the tool does. */
+    description?: string;
+  }
+  | { kind: "function"; function: string; description?: string }
+  | { kind: "workflow"; workflow: string; description?: string };
+
 /** One finding of an agent draft's validation. */
 export interface AgentValidationIssue {
   field: string;
@@ -956,6 +967,8 @@ export interface Agent {
   skills: SkillPin[];
   context: ContextPin[];
   modelOptions: ModelOptions;
+  /** Always present; `[]` when none. */
+  tools: AgentTool[];
   visibility: AgentVisibility;
   project: string | null;
   revision: number;
@@ -975,6 +988,8 @@ export interface CreateAgentInput {
   skills?: SkillPin[];
   context?: ContextPin[];
   modelOptions?: ModelOptions;
+  /** On update, present REPLACES the whole list; absent leaves it unchanged. */
+  tools?: AgentTool[];
   visibility?: AgentVisibility;
   project?: string | null;
 }

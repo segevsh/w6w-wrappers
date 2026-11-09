@@ -252,6 +252,7 @@ export type {
 } from "./src/types.ts";
 export type {
   AgentModelOptions,
+  AgentTool,
   Asset,
   AssetFile,
   AssetFinalizeResult,

@@ -374,6 +374,11 @@ is given, so repeat every option you want to keep. `--stop` is the one
 repeatable flag in this CLI: `--stop END --stop "###"` sends
 `"stop": ["END", "###"]`.
 
+`w6w agents create` and `w6w agents update` also take `--tools <json>`, a JSON
+array of tools the agent may call (contract 0.16.0), mirroring `--skills <json>`:
+`'[{"kind":"function","function":"fn_01H"}]'`. On update it replaces the whole
+list.
+
 `w6w assets upload --purpose context` takes `--visibility private|project|account`
 and passes it through; with no `--collection` the upload is not tied to a
 collection. `--visibility` with `--purpose skill` is a usage error.

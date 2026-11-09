@@ -581,6 +581,13 @@ class AgentModelOptionsAndPinTest(unittest.TestCase):
         instance.agents.update("agt_1", 1, model_options={"topP": 0.9})
         self.assertEqual(sent_body(calls[0]), {"revision": 1, "modelOptions": {"topP": 0.9}})
 
+    def test_create_and_update_pass_tools(self) -> None:
+        tools = [{"kind": "function", "function": "fn_1", "description": "d"}]
+        instance, calls = client(responding({"agent": {"id": "agt_1"}}))
+        instance.agents.create(name="a", tools=tools)
+        self.assertEqual(sent_body(calls[0]), {"name": "a", "tools": tools})
+        instance.agents.update("agt_1", 1, tools=[])
+        self.assertEqual(sent_body(calls[1]), {"revision": 1, "tools": []})
 
 
 if __name__ == "__main__":  # pragma: no cover - convenience for a single-file run.
