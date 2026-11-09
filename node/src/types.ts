@@ -940,6 +940,17 @@ export type AgentTool =
     name?: string;
     /** ≤ 1024 chars; author override of what the model is told the tool does. */
     description?: string;
+    /**
+     * The target's field keys the MODEL fills — the only ones in the tool's schema and the only
+     * ones of its arguments passed on. Absent ⇒ every field not in `with`.
+     */
+    ai?: string[];
+    /**
+     * Fixed field values: a literal, or an expression over vars/constants/secrets, resolved by
+     * the host at call time. Never seen or overridden by the model. A key is in `ai` or `with`,
+     * not both. ≤ 64 KiB.
+     */
+    with?: Record<string, unknown>;
   }
   & (
     | { kind: "action"; uses: { app: string; action: string; connection?: string | null } }
