@@ -935,14 +935,17 @@ export type AgentModelOptions = ModelOptions;
 
 /** A capability the agent may call. Max 50 per agent; the server stores only these keys. */
 export type AgentTool =
-  | {
-    kind: "action";
-    uses: { app: string; action: string; connection?: string | null };
+  & {
+    /** 1–64 chars, stored trimmed; what the model calls the tool. Unique per agent (case-insensitive). */
+    name?: string;
     /** ≤ 1024 chars; author override of what the model is told the tool does. */
     description?: string;
   }
-  | { kind: "function"; function: string; description?: string }
-  | { kind: "workflow"; workflow: string; description?: string };
+  & (
+    | { kind: "action"; uses: { app: string; action: string; connection?: string | null } }
+    | { kind: "function"; function: string }
+    | { kind: "workflow"; workflow: string }
+  );
 
 /** One finding of an agent draft's validation. */
 export interface AgentValidationIssue {
