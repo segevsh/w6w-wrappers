@@ -252,13 +252,17 @@ Deno.test("a bare invocation prints root help on stdout and exits 0", () => {
   assertEquals(result.stderr, "");
 });
 
-Deno.test("--version prints the manifest version and exits 0", () => {
+Deno.test("--version is not answerable synchronously (it asks the server); the async path is in cmd_version_test.ts", () => {
   for (const argv of [["--version"], ["-v"]]) {
     const result = run(argv);
-    assertEquals(result.code, 0);
-    assertEquals(result.stdout, VERSION);
-    assertEquals(result.stderr, "");
+    assertEquals(result.code, 1);
+    assertEquals(result.stdout, "");
+    assertStringIncludes(result.stderr, "needs the API");
   }
+  // `--version --help` is help, with no I/O.
+  const help = run(["--version", "--help"]);
+  assertEquals(help.code, 0);
+  assertStringIncludes(help.stdout, "-v, --version");
 });
 
 Deno.test("an unknown or incomplete command prints help to stderr and exits 1", () => {

@@ -524,7 +524,8 @@ class Me:
     #: server's to extend, and a closed union would reject a newer role.
     role: str
     #: Component versions. Always present on a :func:`w6w.fetch_me` result, and
-    #: always carrying `wrapper`; open to keys this release does not know.
+    #: always carrying `wrapper`; the server adds `server` (image version) and
+    #: `composition` (per-repo short-SHA string). Open to keys this release does not know.
     versions: Dict[str, str] = field(default_factory=dict)
 
     @classmethod

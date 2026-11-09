@@ -3,9 +3,10 @@
  * versions.
  *
  * One command, one SDK call — `client.me()`, which calls `GET /auth/me`, the
- * server's real identity route (verified live 2026-07-28). The `versions`
- * block does not exist server-side yet, so it is absent or partial against a
- * live server today; every wrapper tolerates that.
+ * server's real identity route (verified live 2026-07-28). The server sends
+ * `versions: {server, composition}` and the SDK adds `wrapper`; an older server
+ * may send none or other keys, and every wrapper tolerates that. (For versions
+ * with no identity, see `w6w version`.)
  *
  * **Display is a separate rule from what the data carries (D5).** The
  * `--json` payload is a faithful transcription of the wire: precedence is
@@ -21,12 +22,7 @@
 import type { CommandHandler, CommandRegistry } from "../../mod.ts";
 import type { Me } from "@w6w/sdk";
 import type { Styles } from "../output.ts";
-import { noExtraArguments } from "./shared.ts";
-
-/** D5 — a version of `"0.0.0"` or `""` is never shown; the display is `"dev"`. */
-function displayVersion(value: string): string {
-  return value === "0.0.0" || value === "" ? "dev" : value;
-}
+import { displayVersion, noExtraArguments } from "./shared.ts";
 
 /** The caller's identity, plus versions when the server reports any. */
 function renderMe(me: Me, styles: Styles): string {

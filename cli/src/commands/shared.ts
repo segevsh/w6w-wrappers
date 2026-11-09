@@ -167,3 +167,8 @@ export function preview(value: unknown, width = 40): string {
   const text = JSON.stringify(value) ?? String(value);
   return text.length <= width ? text : `${text.slice(0, width - 1)}…`;
 }
+
+/** D5 — a version of `"0.0.0"` or `""` is never shown; the display is `"dev"`. */
+export function displayVersion(value: string): string {
+  return value === "0.0.0" || value === "" ? "dev" : value;
+}

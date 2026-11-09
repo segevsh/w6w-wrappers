@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable surface contract for all w6w wrappers. Source of truth for conformance tests. Keep in sync with docs/endpoints.md.",
-  "contractVersion": "0.15.0",
+  "contractVersion": "0.15.1",
   "$basePathComment": "Empty since 0.2.0: the server serves its routes at the ROOT of its own host (https://api.w6w.io/vars, not .../api/vars). Clients append nothing to the configured origin.",
   "basePath": "",
   "defaultBaseUrl": "https://api.w6w.io",
@@ -18,7 +18,7 @@
       "method": "GET",
       "path": "/auth/me",
       "status": "required",
-      "serverImplemented": "partial",
+      "serverImplemented": true,
       "cliAlias": "w6w info",
       "params": [],
       "returns": "Me",
@@ -27,7 +27,7 @@
         "python": "client.me()",
         "cli": "w6w me"
       },
-      "notes": "Fixed 2026-07-28: the wrapper calls `/auth/me` directly — the server’s real, already-live identity route (verified live: 200, `{tenant, subject, account, role}`), not the not-yet-built `/api/me` alias D15 originally specced. `{tenant, subject, account, role}`. The response body is flat, NOT a `{user:{…}}` envelope. The live consumer is the reference studio; a nested envelope would break it. `versions` is optional and additive — the server does not send one today, so a wrapper must tolerate it being absent entirely and must tolerate unknown keys inside it when it does. `versions.wrapper` is filled client-side from the wrapper’s own package version. PRECEDENCE IS SERVER-WINS: the wrapper’s own version is only a DEFAULT that any key the server supplied overrides — `{ wrapper: VERSION, ...body.versions }` in TS, `{\"wrapper\": VERSION, **(body.get(\"versions\") or {})}` in Python. Do NOT write the other order (`{**server, wrapper: VERSION}`), which would make the wrapper’s value win; the two are observably different on the one field a bug report is read off. DISPLAY IS A SEPARATE RULE: a wrapper must never SHOW a version of `0.0.0` or empty — if the resolved value is `0.0.0` or empty string, it presents `\"dev\"` (D5). The two rules do not conflict, because they act at different layers: server-wins governs the VALUE carried in the returned object (which stays a faithful transcription of the wire), the display rule governs what a banner such as `w6w info` PRINTS. So a server sending `versions.wrapper: \"0.0.0\"` is carried through in the data and rendered as `dev` to the user. D8 — the operation name is `me`; `w6w info` is a CLI alias only (see `cliAlias`)."
+      "notes": "Fixed 2026-07-28: the wrapper calls `/auth/me` directly — the server’s real, already-live identity route (verified live: 200, `{tenant, subject, account, role}`), not the not-yet-built `/api/me` alias D15 originally specced. `{tenant, subject, account, role}`. The response body is flat, NOT a `{user:{…}}` envelope. The live consumer is the reference studio; a nested envelope would break it. `versions` is optional and additive. The server now sends two keys inside it: `server` (the deployment’s image version, equal to `GET /version`’s `version`) and `composition` (equal to `GET /version`’s `composition`, a per-repo short-SHA string, `\"dev\"` for local builds). A wrapper must still tolerate `versions` being absent entirely (an older server) and must tolerate unknown keys inside it. `versions.wrapper` is filled client-side from the wrapper’s own package version. PRECEDENCE IS SERVER-WINS: the wrapper’s own version is only a DEFAULT that any key the server supplied overrides — `{ wrapper: VERSION, ...body.versions }` in TS, `{\"wrapper\": VERSION, **(body.get(\"versions\") or {})}` in Python. Do NOT write the other order (`{**server, wrapper: VERSION}`), which would make the wrapper’s value win; the two are observably different on the one field a bug report is read off. DISPLAY IS A SEPARATE RULE: a wrapper must never SHOW a version of `0.0.0` or empty — if the resolved value is `0.0.0` or empty string, it presents `\"dev\"` (D5). The two rules do not conflict, because they act at different layers: server-wins governs the VALUE carried in the returned object (which stays a faithful transcription of the wire), the display rule governs what a banner such as `w6w info` PRINTS. So a server sending `versions.wrapper: \"0.0.0\"` is carried through in the data and rendered as `dev` to the user. D8 — the operation name is `me`; `w6w info` is a CLI alias only (see `cliAlias`)."
     },
     {
       "name": "connections.list",
@@ -4087,7 +4087,8 @@
         "name": "--version",
         "alias": "-v",
         "type": "boolean",
-        "source": "VERSION"
+        "source": "VERSION + unauthenticated GET /version",
+        "notes": "Shares one handler with `w6w version`: prints the CLI VERSION plus the server’s version and composition from an unauthenticated `GET /version` (no Authorization header, ever; 3 s timeout), versions only and no identity. Never fails: an unreachable server prints `server: unavailable (<reason>)` and the exit code is 0."
       },
       {
         "name": "--help",
@@ -4176,6 +4177,13 @@
             "required": false
           }
         ]
+      },
+      {
+        "name": "version",
+        "summary": "Show this CLI's version and the server's version and composition (no identity).",
+        "status": "live",
+        "naming": "w6w version",
+        "params": []
       },
       {
         "name": "ls",

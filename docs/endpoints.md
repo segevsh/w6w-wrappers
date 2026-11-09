@@ -140,9 +140,9 @@ shapes; `endpoints.json`'s own `notes` for them are the reference until it does.
 `documents.getByKey`, `vars.getByName` and `run` were implemented server-side
 2026-07-28; `me` was fixed the same day to call the server's real `/auth/me`
 route directly rather than wait on a never-built `/me` alias. `me`'s
-`serverImplemented` stays `"partial"` — identity is fully live, but the optional
-`versions` block does not exist server-side yet, and every wrapper tolerates its
-absence. `status` records **server** readiness, not wrapper obligation — all
+`serverImplemented` is `true` since contract 0.15.1: the server sends
+`versions: {server, composition}` on `GET /auth/me`, and every wrapper still
+tolerates the block being absent (an older server). `status` records **server** readiness, not wrapper obligation — all
 fifty-one are implemented and tested against a mocked transport in every wrapper
 (see [implementation.md §10](./implementation.md#10-conformance-runner)).
 
@@ -154,7 +154,7 @@ fifty-one are implemented and tested against a mocked transport in every wrapper
 GET /auth/me
 ```
 
-`status: required` · `serverImplemented: partial`
+`status: required` · `serverImplemented: true`
 
 **Fixed 2026-07-28.** Every wrapper calls `/auth/me` directly — the server's
 real, already-live identity route (verified live: `200`,
@@ -162,9 +162,10 @@ real, already-live identity route (verified live: `200`,
 `/me` alias D15 originally specced. Its live consumer is the studio's Session
 modal.
 
-**Still missing:** the `versions` block. The server does not send one today;
-every wrapper tolerates its absence and fills in `versions.wrapper` itself
-(below).
+**Versions:** the server sends `versions.server` (the deployment's image
+version, = `GET /version`'s `version`) and `versions.composition` (=
+`GET /version`'s `composition`). Every wrapper tolerates the block being absent
+and fills in `versions.wrapper` itself (below).
 
 Returns who the caller is, plus the versions of the w6w components involved in
 answering the call. The version block is the reason this operation earns its
@@ -181,7 +182,8 @@ would break the studio (D15).
   "account": "default",
   "role": "admin",
   "versions": {
-    "composition": "server@1a2b3c4 core@a11a7ca studio@6e1c5eb",
+    "server": "1.2.3",
+    "composition": "core:a11a7ca,server:1a2b3c4",
     "wrapper": "0.1.0"
   }
 }
@@ -195,7 +197,10 @@ The four identity fields mirror the server's `Principal`.
   must tolerate **unknown keys inside it** — the set will grow, and adding one
   must never break an older client. Model it as a string→string map, not as a
   closed struct.
-- `versions.composition` is a **build string** derived at build time from the
+- `versions.server` is the deployment's **image version** (the same string
+  `GET /version` returns as `version`).
+- `versions.composition` is a **build string** (the same string `GET /version`
+  returns as `composition`) derived at build time from the
   composition the deploy workflow already computes, and is the literal string
   `"dev"` when that build arg is absent (D5).
 - `versions.wrapper` is filled in **client-side** by the wrapper from its own

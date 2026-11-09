@@ -160,7 +160,9 @@ cancellation (node only)" section for why Python and the CLI have no analog.
 `versions.wrapper`, its own version, as a **default the server overrides**
 (`{wrapper: VERSION, ...server}`, never the other order). The map is otherwise
 carried through unaltered — rendering a placeholder as `dev` is the CLI's
-display rule, not a data rule. A `2xx` body that is not an object (a list
+display rule, not a data rule. The server sends `versions.server` and
+`versions.composition` (= `GET /version`'s `version` / `composition`); unknown
+keys are still tolerated. A `2xx` body that is not an object (a list
 included) raises `bad_response`.
 
 ### Discovery

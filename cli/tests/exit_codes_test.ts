@@ -103,7 +103,8 @@ function probe(
 
 Deno.test("exit 0: help, --version and a bare invocation, with no configuration at all", async () => {
   for (const args of [["--help"], ["-h"], ["--version"], ["-v"], [], ["help", "documents"]]) {
-    const result = await w6w(args);
+    // `--version` asks the server: point it at a port nothing listens on, never a real host.
+    const result = await w6w(args, { W6W_BASE_URL: "http://127.0.0.1:1" });
     assertEquals(
       result.code,
       0,

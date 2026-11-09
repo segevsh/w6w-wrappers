@@ -8,9 +8,9 @@
  * exit codes included, be exercised in-process by the test suite, against an
  * injected environment and an injected transport, with no live server anywhere.
  *
- * {@linkcode runCli} is its synchronous half: help, `--version` and usage
- * errors, which by contract resolve with no token configured and no server
- * reachable. Running a command needs the API and therefore needs `await`, so it
+ * {@linkcode runCli} is its synchronous half: help and usage errors, which by
+ * contract resolve with no token configured and no server reachable. (`--version`
+ * asks the server for its version, so it lives on `main`.) Running a command needs the API and therefore needs `await`, so it
  * lives on `main` alone.
  *
  * The exit codes are the shared surface contract's, generated into
@@ -30,7 +30,7 @@ import { GLOBAL_FLAG_SPECS, parse } from "./src/args.ts";
 import type { FlagSpec, Invocation } from "./src/args.ts";
 import { createClient, NO_ENV } from "./src/client.ts";
 import type { EnvReader } from "./src/client.ts";
-import { loadConfig, NO_STDIN, NO_STORE } from "./src/config-store.ts";
+import { loadConfig, NO_CONFIG, NO_STDIN, NO_STORE } from "./src/config-store.ts";
 import type { ConfigStore, StdinSource, StoredConfig } from "./src/config-store.ts";
 import { createOutput } from "./src/output.ts";
 import type { Output } from "./src/output.ts";
@@ -45,6 +45,7 @@ import {
 import { HELP_TREE } from "./src/help.generated.ts";
 import type { HelpCommand } from "./src/help.generated.ts";
 import type { CliIo } from "./src/runtime.ts";
+import { reportVersions } from "./src/commands/version.ts";
 import type { FetchLike, W6WClient } from "@w6w/sdk";
 
 export { parse } from "./src/args.ts";
@@ -106,12 +107,12 @@ export type {
  * The same string as `deno.json`'s and `package.json`'s `version` and the shared
  * `VERSION` file beside this repo — the single version all three w6w wrappers
  * publish under. `tests/help_test.ts` fails if any of those disagree, so it cannot
- * drift silently. `--version` prints exactly this.
+ * drift silently. `--version` / `w6w version` print this as the `wrapper:` line.
  *
  * The explicit `: string` annotation is required, not decorative: JSR publishes
  * this file as TypeScript source and rejects inferred public types.
  */
-export const VERSION: string = "0.9.30";
+export const VERSION: string = "0.9.31";
 
 /** `w6w help <command>` is accepted as an alias for `w6w <command> --help`. */
 const HELP_COMMAND = "help";
@@ -196,7 +197,10 @@ interface RunRoute {
 }
 
 /** Where routing landed: an answer already written, or a command to run. */
-type Routed = { kind: "done"; code: number } | RunRoute;
+type Routed =
+  | { kind: "done"; code: number }
+  | RunRoute
+  | { kind: "version"; invocation: Invocation };
 
 /**
  * `run`'s one flag that is not in `endpoints.json`.
@@ -267,7 +271,7 @@ function parseInvocation(argv: string[]) {
  * Answers everything that can be answered without the API, and reports
  * everything else as a command to run.
  *
- * Help and `--version` are answered here, before anything else: they must
+ * Help is answered here, before anything else: it must
  * resolve with **no token configured and no server reachable**, so nothing on
  * those paths constructs a client or performs I/O beyond writing to `io`.
  */
@@ -298,10 +302,9 @@ function route(argv: string[], io: CliIo): Routed {
     return done(EXIT_SUCCESS);
   }
 
-  if (globals.version) {
-    io.stdout(VERSION);
-    return done(EXIT_SUCCESS);
-  }
+  // `--version` is answered by the same handler as `w6w version` (versions
+  // only, never fails) — but `--help` outranks it and does no I/O at all.
+  if (globals.version && !globals.help) return { kind: "version", invocation: result.invocation };
 
   const resolution = resolve(command);
 
@@ -334,8 +337,49 @@ function route(argv: string[], io: CliIo): Routed {
         io.stdout(renderCommandHelp(resolution.command));
         return done(EXIT_SUCCESS);
       }
+      // `w6w version` shares `--version`'s handler rather than a registry entry,
+      // so it works in every build and cannot drift from the flag.
+      if (resolution.command.path.length === 1 && resolution.command.path[0] === "version") {
+        return { kind: "version", invocation: result.invocation };
+      }
       return { kind: "run", command: resolution.command, invocation: result.invocation };
   }
+}
+
+/**
+ * `w6w version` / `--version`: wrapper plus server versions, no identity.
+ *
+ * Never fails: the stored config is read for its base URL only, and an
+ * unreadable store is treated as nothing stored. Always exits 0.
+ */
+async function runVersion(
+  invocation: Invocation,
+  io: CliIo,
+  options: CliOptions,
+): Promise<number> {
+  const { globals } = invocation;
+  const out = createOutput(io, {
+    json: globals.json,
+    noColor: globals.noColor,
+    isTty: options.isTty,
+    env: options.env,
+  });
+  const store = options.store ?? NO_STORE;
+  let stored: StoredConfig = NO_CONFIG;
+  try {
+    stored = await loadConfig(store);
+  } catch {
+    // A broken or unreadable config must not stop a version banner.
+  }
+  const env: EnvReader = (name) => {
+    try {
+      return (options.env ?? NO_ENV)(name);
+    } catch {
+      return undefined;
+    }
+  };
+  await reportVersions({ invocation, out, env, store, stored }, VERSION, options.fetch);
+  return EXIT_SUCCESS;
 }
 
 /**
@@ -413,11 +457,12 @@ async function dispatch(routed: RunRoute, io: CliIo, options: CliOptions): Promi
 export async function main(argv: string[], io: CliIo, options: CliOptions = {}): Promise<number> {
   const routed = route(argv, io);
   if (routed.kind === "done") return routed.code;
+  if (routed.kind === "version") return await runVersion(routed.invocation, io, options);
   return await dispatch(routed, io, options);
 }
 
 /**
- * The synchronous half of the command line: help, `--version`, and usage errors.
+ * The synchronous half of the command line: help and usage errors.
  *
  * Kept because those are exactly the paths that must work with **no token
  * configured and no server reachable**, and a function that cannot reach the API
@@ -428,7 +473,7 @@ export async function main(argv: string[], io: CliIo, options: CliOptions = {}):
 export function runCli(argv: string[], io: CliIo): number {
   const routed = route(argv, io);
   if (routed.kind === "done") return routed.code;
-  const path = routed.command.path.join(" ");
+  const path = routed.kind === "version" ? "version" : routed.command.path.join(" ");
   io.stderr(
     `${HELP_TREE.binary}: \`${path}\` needs the API, which this entry point does not reach. ` +
       `Try \`${HELP_TREE.binary} ${path} --help\`.`,

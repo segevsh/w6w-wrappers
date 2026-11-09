@@ -311,6 +311,7 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
     "w6w build app ./apps/2chat",
     "w6w build app ./apps/2chat --out ./out/2chat --pack ./w6w-pack.json",
   ],
+  "version": ["w6w version", "w6w version --json", "w6w --version"],
   "ls": [
     "w6w ls workflows",
     "w6w ls integrations --json",

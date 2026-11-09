@@ -31,7 +31,7 @@ These work on every command:
 | `--token <token>` | Your API token. Overrides `W6W_TOKEN` and the token saved by `w6w auth login`. |
 | `--json` | Print the raw JSON response instead of a table. |
 | `--no-color` | Turn off colour. Setting `NO_COLOR` does the same. |
-| `-v`, `--version` | Print the CLI version. |
+| `-v`, `--version` | Print the CLI version plus the server's version and composition (unauthenticated `GET /version`); versions only, never fails, exit `0`. Same as `w6w version`. |
 | `-h`, `--help` | Show help for any command. |
 
 Shortcuts: `conn` for `connections`, `wf` for `workflows`, `docs` for `documents`, and `ls` for
@@ -74,7 +74,8 @@ A saved token is used only for the base URL it was saved for. See the [CLI](/cli
 
 | Command | What it does |
 | --- | --- |
-| `w6w me` | Show your tenant, account, user id and role, and the CLI's version. Alias: `w6w info`. |
+| `w6w me` | Show your tenant, account, user id and role, and the wrapper, server and composition versions. Alias: `w6w info`. |
+| `w6w version` | Show the CLI's version and the server's version and composition, with no identity. Needs no token; exit `0` even when the server is unreachable (`--json`: `{wrapper, server, composition, serverError?}`). |
 
 ## Run
 
