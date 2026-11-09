@@ -99,7 +99,7 @@ export interface HelpExitCode {
 /** The command tree, generated from the shared wrapper surface contract. */
 export const HELP_TREE: HelpTree = {
   "binary": "w6w",
-  "contractVersion": "0.15.1",
+  "contractVersion": "0.16.0",
   "tagline": "command-line client for the w6w workflow platform",
   "usage": "w6w <command> [options]",
   "docsUrl": "https://w6w.dev/docs/cli",
@@ -4693,7 +4693,7 @@ export const HELP_TREE: HelpTree = {
           "headline": "create an agent draft",
           "usage": "w6w agents create [options]",
           "naming":
-            "w6w agents create [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>] [--temperature <n>] [--top-p <n>] [--max-output-tokens <n>] [--stop <text>]...",
+            "w6w agents create [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>] [--temperature <n>] [--top-p <n>] [--max-output-tokens <n>] [--stop <text>]... [--tools <json>]",
           "status": "required",
           "params": [
             {
@@ -4776,6 +4776,14 @@ export const HELP_TREE: HelpTree = {
               "required": false,
             },
             {
+              "name": "tools",
+              "kind": "flag",
+              "display": "--tools <json>",
+              "description":
+                'Tools the agent may call (max 50), as a JSON array of {"kind":"action","uses":{"app":"…","action":"…"}} | {"kind":"function","function":"fn_…"} | {"kind":"workflow","workflow":"wf_…"}, each with an optional "description"',
+              "required": false,
+            },
+            {
               "name": "json",
               "kind": "flag",
               "display": "--json",
@@ -4837,7 +4845,7 @@ export const HELP_TREE: HelpTree = {
           "headline": "patch an agent draft",
           "usage": "w6w agents update <id> --revision <n> [options]",
           "naming":
-            "w6w agents update <id> --revision <n> [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>] [--if-unmodified-since <ts>] [--temperature <n>] [--top-p <n>] [--max-output-tokens <n>] [--stop <text>]...",
+            "w6w agents update <id> --revision <n> [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>] [--if-unmodified-since <ts>] [--temperature <n>] [--top-p <n>] [--max-output-tokens <n>] [--stop <text>]... [--tools <json>]",
           "status": "required",
           "params": [
             {
@@ -4940,6 +4948,14 @@ export const HELP_TREE: HelpTree = {
               "kind": "flag",
               "display": "--stop <text>",
               "description": "Stop sequence; repeat the flag for more (at most 4)",
+              "required": false,
+            },
+            {
+              "name": "tools",
+              "kind": "flag",
+              "display": "--tools <json>",
+              "description":
+                'Tools the agent may call (max 50), as a JSON array of {"kind":"action","uses":{"app":"…","action":"…"}} | {"kind":"function","function":"fn_…"} | {"kind":"workflow","workflow":"wf_…"}, each with an optional "description"',
               "required": false,
             },
             {

@@ -430,3 +430,20 @@ Deno.test("assets upload accepts --visibility (context only)", async () => {
   assertStringIncludes(ran.stderr, "--visibility");
   assertEquals(ran.calls.length, 0);
 });
+
+Deno.test("agents create/update send --tools as a JSON array", async () => {
+  const tools = [{ kind: "workflow", workflow: "wf_1" }];
+  const created = await w6w(
+    ["agents", "create", "--tools", JSON.stringify(tools)],
+    () => json(201, { agent: AGENT }),
+  );
+  assertEquals(created.code, 0, created.stderr);
+  assertEquals(created.calls[0].body, { tools });
+
+  const updated = await w6w(
+    ["agents", "update", "ag_1", "--revision", "1", "--tools", "[]"],
+    () => json(200, { agent: AGENT }),
+  );
+  assertEquals(updated.code, 0, updated.stderr);
+  assertEquals(updated.calls[0].body, { revision: 1, tools: [] });
+});

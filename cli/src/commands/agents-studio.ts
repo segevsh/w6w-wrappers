@@ -34,6 +34,7 @@ type Agent = Awaited<ReturnType<Client["agents"]["get"]>>;
 type CreateAgentInput = NonNullable<Parameters<Client["agents"]["create"]>[0]>;
 type UpdateAgentInput = Parameters<Client["agents"]["update"]>[1];
 type SkillPin = NonNullable<CreateAgentInput["skills"]>[number];
+type AgentTool = NonNullable<CreateAgentInput["tools"]>[number];
 type ContextPin = NonNullable<CreateAgentInput["context"]>[number];
 
 /** A positive-integer flag, or `undefined` when absent. */
@@ -468,6 +469,8 @@ function agentFields(context: CommandContext): CreateAgentInput {
   if (skills !== undefined) fields.skills = skills;
   const pins = jsonList<ContextPin>(context, "context");
   if (pins !== undefined) fields.context = pins;
+  const tools = jsonList<AgentTool>(context, "tools");
+  if (tools !== undefined) fields.tools = tools;
   const vis = visibility(context);
   if (vis !== undefined) fields.visibility = vis;
   const project = textFlag(context, "project");

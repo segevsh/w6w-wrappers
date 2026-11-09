@@ -933,6 +933,31 @@ export interface ModelOptions {
 /** Alias of {@linkcode ModelOptions}. */
 export type AgentModelOptions = ModelOptions;
 
+/** A capability the agent may call. Max 50 per agent; the server stores only these keys. */
+export type AgentTool =
+  & {
+    /** 1–64 chars, stored trimmed; what the model calls the tool. Unique per agent (case-insensitive). */
+    name?: string;
+    /** ≤ 1024 chars; author override of what the model is told the tool does. */
+    description?: string;
+    /**
+     * The target's field keys the MODEL fills — the only ones in the tool's schema and the only
+     * ones of its arguments passed on. Absent ⇒ every field not in `with`.
+     */
+    ai?: string[];
+    /**
+     * Fixed field values: a literal, or an expression over vars/constants/secrets, resolved by
+     * the host at call time. Never seen or overridden by the model. A key is in `ai` or `with`,
+     * not both. ≤ 64 KiB.
+     */
+    with?: Record<string, unknown>;
+  }
+  & (
+    | { kind: "action"; uses: { app: string; action: string; connection?: string | null } }
+    | { kind: "function"; function: string }
+    | { kind: "workflow"; workflow: string }
+  );
+
 /** One finding of an agent draft's validation. */
 export interface AgentValidationIssue {
   field: string;
@@ -956,6 +981,8 @@ export interface Agent {
   skills: SkillPin[];
   context: ContextPin[];
   modelOptions: ModelOptions;
+  /** Always present; `[]` when none. */
+  tools: AgentTool[];
   visibility: AgentVisibility;
   project: string | null;
   revision: number;
@@ -975,6 +1002,8 @@ export interface CreateAgentInput {
   skills?: SkillPin[];
   context?: ContextPin[];
   modelOptions?: ModelOptions;
+  /** On update, present REPLACES the whole list; absent leaves it unchanged. */
+  tools?: AgentTool[];
   visibility?: AgentVisibility;
   project?: string | null;
 }

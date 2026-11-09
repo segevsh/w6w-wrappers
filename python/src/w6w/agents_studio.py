@@ -580,6 +580,7 @@ class AgentsApi:
         visibility: Optional[str] = None,
         project: Optional[str] = None,
         model_options: Optional[Mapping[str, Any]] = None,
+        tools: Optional[Sequence[Mapping[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """Save a new agent draft. Every field is optional.
 
@@ -599,6 +600,11 @@ class AgentsApi:
         :param project: The project to own the draft. Not this client's default.
         :param model_options: Sampling options passed through as ``modelOptions``
             (e.g. ``{"temperature": 0.2, "stop": ["END"]}``).
+        :param tools: Capabilities the agent may call (max 50) —
+            ``{"kind": "action", "uses": {"app", "action", "connection"?}}``,
+            ``{"kind": "function", "function": "fn_..."}`` or
+            ``{"kind": "workflow", "workflow": "wf_..."}``, each with an optional
+            ``description`` (<= 1024 chars). Duplicates are refused.
         :returns: The new draft, unwrapped from ``{agent}``, carrying
             ``revision``, ``updatedAt``, ``validation`` and ``runnable: false``.
         :raises ApiError: `422 validation_failed` — a malformed body or a
@@ -616,6 +622,7 @@ class AgentsApi:
                 visibility=visibility,
                 project=project,
                 modelOptions=model_options,
+                tools=tools,
             ),
         )
         return unwrap_object(response, "agent")
@@ -644,6 +651,7 @@ class AgentsApi:
         project: Optional[str] = None,
         if_unmodified_since: Optional[str] = None,
         model_options: Optional[Mapping[str, Any]] = None,
+        tools: Optional[Sequence[Mapping[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """Patch an agent draft.
 
@@ -666,6 +674,7 @@ class AgentsApi:
         :param visibility: ``private``, ``project`` or ``account``.
         :param project: Move the draft to this project.
         :param model_options: Sampling options, passed through as ``modelOptions``.
+        :param tools: The whole new tool list (replaces; omitted leaves it alone).
         :param if_unmodified_since: The exact ``updatedAt`` this client last
             read. Sent as `x-w6w-if-unmodified-since` **only when given** —
             never as an empty string, which the server rejects as
@@ -689,6 +698,7 @@ class AgentsApi:
             visibility=visibility,
             project=project,
             modelOptions=model_options,
+            tools=tools,
         )
         response = self._host.request(
             "PATCH",

@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable surface contract for all w6w wrappers. Source of truth for conformance tests. Keep in sync with docs/endpoints.md.",
-  "contractVersion": "0.15.1",
+  "contractVersion": "0.16.0",
   "$basePathComment": "Empty since 0.2.0: the server serves its routes at the ROOT of its own host (https://api.w6w.io/vars, not .../api/vars). Clients append nothing to the configured origin.",
   "basePath": "",
   "defaultBaseUrl": "https://api.w6w.io",
@@ -3063,6 +3063,12 @@
           "in": "body",
           "type": "object",
           "required": false
+        },
+        {
+          "name": "tools",
+          "in": "body",
+          "type": "object[]",
+          "required": false
         }
       ],
       "returns": "Agent",
@@ -3071,10 +3077,10 @@
       ],
       "naming": {
         "ts": "client.agents.create(input, opts?)",
-        "python": "client.agents.create(name=None, instructions=None, model_route_id=None, skills=None, context=None, visibility=None, project=None, model_options=None)",
-        "cli": "w6w agents create [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>] [--temperature <n>] [--top-p <n>] [--max-output-tokens <n>] [--stop <text>]..."
+        "python": "client.agents.create(name=None, instructions=None, model_route_id=None, skills=None, context=None, visibility=None, project=None, model_options=None, tools=None)",
+        "cli": "w6w agents create [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>] [--temperature <n>] [--top-p <n>] [--max-output-tokens <n>] [--stop <text>]... [--tools <json>]"
       },
-      "notes": "Saving an INCOMPLETE draft is allowed: every field is optional, and `validation` on the answer lists what is missing or disallowed. `skills` is `[{skillId, skillVersionId}]` and `context` is `[{collectionId, entryId?, assetVersionId}]` — pins to immutable VERSIONS, so a later skill upload never changes an existing pin. `instructions` is capped at 64 KiB, at most 100 pins. A malformed body is `422 validation_failed` (the envelope carries `issues`). The server wraps the body as `{agent}`; the wrapper unwraps. **`runnable` is always `false`** (A22)."
+      "notes": "Saving an INCOMPLETE draft is allowed: every field is optional, and `validation` on the answer lists what is missing or disallowed. `skills` is `[{skillId, skillVersionId}]` and `context` is `[{collectionId, entryId?, assetVersionId}]` — pins to immutable VERSIONS, so a later skill upload never changes an existing pin. `instructions` is capped at 64 KiB, at most 100 pins. `tools` is `[{kind:\"action\", uses:{app, action, connection?}} | {kind:\"function\", function} | {kind:\"workflow\", workflow}]`, each with an optional `name` (1–64 chars, stored trimmed — what the model calls the tool; unique per agent, case-insensitive) an optional `description` (≤1024 chars, the author override of what the model is told), an optional `ai` (the field keys the model fills — the only ones in the tool schema and passed on) and an optional `with` (fixed field values, literals or expressions resolved by the host; a key is in `ai` or `with`, not both; ≤64 KiB); at most 50, no duplicate (kind, target); the response `Agent.tools` is always present (`[]` when none). A malformed or duplicate tool is `422 validation_failed`. A malformed body is `422 validation_failed` (the envelope carries `issues`). The server wraps the body as `{agent}`; the wrapper unwraps. **`runnable` is always `false`** (A22)."
     },
     {
       "name": "agents.get",
@@ -3175,6 +3181,12 @@
           "in": "body",
           "type": "object",
           "required": false
+        },
+        {
+          "name": "tools",
+          "in": "body",
+          "type": "object[]",
+          "required": false
         }
       ],
       "returns": "Agent",
@@ -3183,10 +3195,10 @@
       ],
       "naming": {
         "ts": "client.agents.update(id, patch, opts?)",
-        "python": "client.agents.update(id, revision, name=None, instructions=None, model_route_id=None, skills=None, context=None, visibility=None, project=None, if_unmodified_since=None, model_options=None)",
-        "cli": "w6w agents update <id> --revision <n> [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>] [--if-unmodified-since <ts>] [--temperature <n>] [--top-p <n>] [--max-output-tokens <n>] [--stop <text>]..."
+        "python": "client.agents.update(id, revision, name=None, instructions=None, model_route_id=None, skills=None, context=None, visibility=None, project=None, if_unmodified_since=None, model_options=None, tools=None)",
+        "cli": "w6w agents update <id> --revision <n> [--name <n>] [--instructions <text>] [--model-route-id <id>] [--skills <json>] [--context <json>] [--visibility private|project|account] [--project <id>] [--if-unmodified-since <ts>] [--temperature <n>] [--top-p <n>] [--max-output-tokens <n>] [--stop <text>]... [--tools <json>]"
       },
-      "notes": "A missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. A partial update: an omitted field is left alone. Body `revision` (a positive integer — the draft's last-seen `revision`) is REQUIRED and is passed through unchanged; `< 1` or non-integer is `400 invalid_body`. `ifUnmodifiedSince` is the optimistic-concurrency precondition, sent as the `x-w6w-if-unmodified-since` HEADER (not a query param) and ONLY when a value was given — never as an empty or \"null\" string, which the server answers `400 invalid_precondition`. Pass the exact `updatedAt` last read. THE SERVER REQUIRES IT on this route: omitted, the answer is `428 precondition_required` (a typed precondition error, never a silent last-write-wins), so a wrapper must not default it. A stale `revision` or `updatedAt` is `409 conflict` carrying `currentRevision` in the error envelope (`{error:{code,message,currentRevision}}`) — recoverable by re-reading and re-sending; wrappers surface it as a typed conflict error carrying that revision, the 428 as a typed precondition error. A disallowed pin is `422 validation_failed` (a uniform 422, `issues` in the envelope). Unwrapped from `{agent}`; `runnable` stays `false` (A22)."
+      "notes": "A missing, foreign, private-to-someone-else or other-project id is the one uniform `404 not_found`. A partial update: an omitted field is left alone. Body `revision` (a positive integer — the draft's last-seen `revision`) is REQUIRED and is passed through unchanged; `< 1` or non-integer is `400 invalid_body`. `ifUnmodifiedSince` is the optimistic-concurrency precondition, sent as the `x-w6w-if-unmodified-since` HEADER (not a query param) and ONLY when a value was given — never as an empty or \"null\" string, which the server answers `400 invalid_precondition`. Pass the exact `updatedAt` last read. THE SERVER REQUIRES IT on this route: omitted, the answer is `428 precondition_required` (a typed precondition error, never a silent last-write-wins), so a wrapper must not default it. A stale `revision` or `updatedAt` is `409 conflict` carrying `currentRevision` in the error envelope (`{error:{code,message,currentRevision}}`) — recoverable by re-reading and re-sending; wrappers surface it as a typed conflict error carrying that revision, the 428 as a typed precondition error. A disallowed pin is `422 validation_failed` (a uniform 422, `issues` in the envelope). Unwrapped from `{agent}`; `runnable` stays `false` (A22). `tools`, when present, REPLACES the whole list; absent leaves it unchanged (same `tools` shape and limits as `agents.create`)."
     },
     {
       "name": "agents.archive",
