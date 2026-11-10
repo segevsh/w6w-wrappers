@@ -80,6 +80,9 @@ for (const c of connections) console.log(c.id, c.appId, c.state);
 
 const workflows = await client.workflows.list();
 const functions = await client.functions.list();
+
+// Only callables tagged action.order (or a tag under it, like action.order.confirm):
+const tagged = await client.endpoints.list({ tag: "action.order" });
 ```
 
 A connection you can use has `state: "connected"`.

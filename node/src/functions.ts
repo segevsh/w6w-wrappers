@@ -39,7 +39,13 @@
  */
 import type { ResolvedConfig } from "./config.ts";
 import { ApiError } from "./errors.ts";
-import { type CallOptions, type HttpResponse, path, type RequestOptions } from "./http.ts";
+import {
+  type CallOptions,
+  type HttpResponse,
+  path,
+  type RequestOptions,
+  tagQuery,
+} from "./http.ts";
 import { type FunctionSummary, mintId, unwrap } from "./types.ts";
 import {
   getVersion,
@@ -70,6 +76,16 @@ export interface FunctionsHost {
   readonly config: ResolvedConfig;
   /** Perform one request. */
   request<T>(options: RequestOptions): Promise<HttpResponse<T>>;
+}
+
+/** Per-call options for `functions.list`. */
+export interface FunctionListOptions extends CallOptions {
+  /**
+   * Narrow the list to Functions carrying this tag (equal, or a `.`-bounded
+   * prefix: `action.order` matches `action.order.confirm`, not `action.orders`).
+   * Sent as `?tag=` only when set.
+   */
+  tag?: string;
 }
 
 /** Per-call options for `functions.run`. */
@@ -252,16 +268,17 @@ export class FunctionsApi {
    * **No `project` parameter.** Unlike workflows and documents, the route reads
    * no `?project=` at all (`admin/functions.ts`) — sending one would be
    * inventing a parameter, which is the failure mode `endpoints.json` warns
-   * about.
+   * about. `tag` is the one filter this route takes.
    *
-   * @param options - Optional per-call transport options (`signal` to abort).
+   * @param options - Optional `tag` filter and/or `signal` to abort.
    * @returns The Functions, unwrapped from the `functions` envelope.
    * @throws {ApiError} On any non-2xx.
    */
-  async list(options?: CallOptions): Promise<FunctionSummary[]> {
+  async list(options?: FunctionListOptions): Promise<FunctionSummary[]> {
     const res = await this.#host.request<unknown>({
       method: "GET",
       path: "/functions",
+      query: { tag: tagQuery(options?.tag) },
       signal: options?.signal,
     });
     return unwrap<FunctionSummary[]>(res, "functions");

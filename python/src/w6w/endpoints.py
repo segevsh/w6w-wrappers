@@ -20,12 +20,12 @@ Workflow arm is asynchronous (``202``, a ``runId``) where the other two are not.
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Optional, Protocol
+from typing import Any, List, Mapping, Optional, Protocol
 
 from ._config import ResolvedConfig
-from ._http import HttpResponse, path
+from ._http import HttpResponse, path, tag_query
 from .errors import ApiError
-from .types import RunEnvelope
+from .types import EndpointSummary, RunEnvelope, unwrap_list
 
 
 class EndpointsHost(Protocol):
@@ -66,6 +66,24 @@ class EndpointsApi:
         :param host: The client this namespace issues requests through.
         """
         self._host = host
+
+    def list(self, tag: Optional[str] = None) -> List[EndpointSummary]:
+        """List the caller's Endpoint definitions.
+
+        This is how a caller discovers a ``key`` to pass to :meth:`run`, and how tag
+        mode reaches Endpoints. **No ``project`` parameter** — same as
+        ``functions.list``.
+
+        :param tag: Narrow the list to Endpoints carrying this tag (equal, or a
+            ``.``-bounded prefix: ``action.order`` matches ``action.order.confirm``,
+            not ``action.orders``). Sent as ``?tag=`` only when set and non-blank.
+        :returns: The Endpoints, unwrapped from the ``endpoints`` envelope.
+        :raises ConfigError: When no token is configured.
+        :raises ApiError: On any non-2xx.
+        :raises ApiError: ``bad_response`` when a `2xx` body carries no ``endpoints`` list.
+        """
+        response = self._host.request("GET", "/endpoints", query={"tag": tag_query(tag)})
+        return [EndpointSummary.from_wire(item) for item in unwrap_list(response, "endpoints")]
 
     def run(
         self,

@@ -72,7 +72,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Mapping, Optional, Protocol
 
 from ._config import ResolvedConfig
-from ._http import HttpResponse, path
+from ._http import HttpResponse, path, tag_query
 from .errors import ApiError
 from .types import (
     WorkflowDetail,
@@ -189,10 +189,15 @@ class WorkflowsApi:
         """
         return project if project is not None else self._host.config.project
 
-    def list(self, project: Optional[str] = None) -> List[WorkflowSummary]:
+    def list(
+        self, project: Optional[str] = None, tag: Optional[str] = None
+    ) -> List[WorkflowSummary]:
         """List the caller's workflow definitions.
 
         :param project: Project to scope this call to; defaults to the client's.
+        :param tag: Narrow the list to workflows carrying this tag (equal, or a
+            .-bounded prefix: action.order matches action.order.confirm,
+            not action.orders). Sent as ?tag= only when set and non-blank.
         :returns: The workflows, unwrapped from the `workflows` envelope — a
             plain list, with no cursor and no container around it.
         :raises ConfigError: When no token is configured.
@@ -203,7 +208,7 @@ class WorkflowsApi:
         response = self._host.request(
             "GET",
             "/workflows",
-            query={"project": self._project(project)},
+            query={"project": self._project(project), "tag": tag_query(tag)},
         )
         return [WorkflowSummary.from_wire(item) for item in unwrap_list(response, "workflows")]
 

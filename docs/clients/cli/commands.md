@@ -98,7 +98,7 @@ Creating, testing and reconnecting a connection are not in the CLI.
 
 | Command | What it does |
 | --- | --- |
-| `w6w workflows list [--project <id>]` | List workflows. |
+| `w6w workflows list [--project <id>] [--tag <tag>]` | List workflows. `--tag` keeps those carrying the tag or a tag under it (`action.order` matches `action.order.confirm`). |
 | `w6w workflows run <id-or-key> [--wait] [--input <json>] [--allow-unpublished] [--entry <trigger-node-id>]` | Start a run. `--entry` picks the trigger node when the workflow has several. `--wait` waits for it to finish, up to the server's limit. Exits `3` if the run failed. `--allow-unpublished` runs the saved draft even if it was never published; it runs the row as last saved, so save first, and it is sent only when you pass it. |
 | `w6w workflows cancel <run-id>` | Ask for a run to be cancelled. It reports the run's status at that moment. |
 | `w6w workflows get <id>` | Print a workflow's full definition and its `updatedAt`. |
@@ -121,7 +121,7 @@ Creating, testing and reconnecting a connection are not in the CLI.
 | Command | What it does |
 | --- | --- |
 | `w6w functions run <key-or-id> [--payload <json>] [--allow-unpublished]` | Run a Function and print its output. `--allow-unpublished` runs the saved draft even if it was never published; it is sent only when you pass it. |
-| `w6w functions list` | List your Functions, and whether each can run. |
+| `w6w functions list [--tag <tag>]` | List your Functions, and whether each can run. `--tag` filters as for workflows. |
 | `w6w functions get <id>` | Print a Function's definition. |
 | `w6w functions create --definition <json>` | Create a Function. A new `fn_…` id is assigned if it has none. |
 | `w6w functions update <id> --definition <json> [--if-unmodified-since <ts>]` | Replace a Function's definition. `--if-unmodified-since` takes the `updatedAt` from `functions get` and refuses a stale write with `409 function_stale`. |
@@ -138,6 +138,7 @@ Creating, testing and reconnecting a connection are not in the CLI.
 
 | Command | What it does |
 | --- | --- |
+| `w6w endpoints list [--tag <tag>]` | List your Endpoints. `--tag` filters as for workflows. |
 | `w6w endpoints run <key-or-id>` | Run an Endpoint and print its result. To send input, use `w6w run ep:<key> --payload <json>` instead. |
 
 ## Apps

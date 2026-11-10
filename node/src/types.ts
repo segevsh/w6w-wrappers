@@ -271,6 +271,38 @@ export interface FunctionSummary {
   valid: boolean;
   /** ISO-8601 archive time; `null` when the Function is live. Always present on the wire. */
   archivedAt: string | null;
+  /** Free-form labels the list can be filtered by (`functions.list({ tag })`); `[]` when none. */
+  tags: string[];
+}
+
+/**
+ * An Endpoint definition, as the stable `endpoints.list` route projects it.
+ *
+ * `key` is the name the Endpoint is CALLED by — `client.endpoints.run(key)` — and
+ * `displayName` is the label a human reads. Each row carries its own `invokeUrl`,
+ * merged in server-side.
+ */
+export interface EndpointSummary {
+  /** Server-issued id, `ep_…`. */
+  id: string;
+  /** The callable name, e.g. `"send-email"`. Kebab-case, never contains `_`. */
+  key: string;
+  /** Human-readable label; falls back to `key` server-side. */
+  displayName: string;
+  /** Free-text description; `""` when unset. */
+  description: string;
+  /** ISO-8601 timestamp. */
+  updatedAt: string;
+  /** The URL this Endpoint is invoked at. */
+  invokeUrl: string;
+  /** `"ready"` when the stored definition is runnable, else `"draft"`. */
+  status: "draft" | "ready";
+  /** `true` when `status` is not `"ready"`. */
+  incomplete: boolean;
+  /** ISO-8601 archive time; `null` when the Endpoint is live. */
+  archivedAt: string | null;
+  /** Free-form labels the list can be filtered by (`endpoints.list({ tag })`); `[]` when none. */
+  tags: string[];
 }
 
 /**
