@@ -273,7 +273,7 @@ and run the React tests and build.
 ## Console-only credential management
 
 `client.console.credentials.*` (node) manages stored credentials: list, get, create, rename, rotate,
-disable, enable, test, dependents and delete. It follows the same split as every connection write
+disable, enable, test, dependents, types (`GET /credential-types`, the type descriptors) and delete. It follows the same split as every connection write
 op (D-E2): console-only, so `endpoints.json` gains no operation and the count stays 100. cli and
 python have no credential commands. The one contract change is read-only and additive:
 `ConnectionSummary.credentialId` (`string | null`, `null` = no stored credential) in node, cli (which

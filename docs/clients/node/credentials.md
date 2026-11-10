@@ -55,6 +55,7 @@ console.log(conn.credentialId === cred.id); // true
 | `disable(id)` / `enable(id)` | Turn it off and on again. |
 | `test(id)` | Probe it. Returns `{ ok, code?, message? }`. A failed probe is `ok: false`, not an error. |
 | `dependents(id)` | The connections that use it. |
+| `types()` | The credential types the server stores and the fields each collects (`GET /credential-types`). |
 | `delete(id)` | Delete it. There is no force option. |
 
 ## What you never get back
@@ -63,6 +64,16 @@ console.log(conn.credentialId === cred.id); // true
 and no response carries it. A `CredentialSummary` has the id, name, contract, status, revision,
 non-secret `display` labels, whether it is `private`, how many connections use it
 (`connectionCount`) and its timestamps.
+
+## Listing credential types
+
+```ts
+const types = await client.console.credentials.types();
+// [{ id: "bearer.v1", label: "...", fields: [{ key: "token", label: "...", secret: true }] }, ...]
+```
+
+Each descriptor's `id` is the contract id to pass as `contract` to `create`; `fields` are the inputs
+to collect (render `secret` ones masked).
 
 ## Deleting a credential that is in use
 

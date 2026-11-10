@@ -508,6 +508,7 @@ await client.console.connections.create("sendgrid", { authKey: "apiKey", credent
 | `create(body)`         | `POST /credentials`                            | Body `{name, contract, source}` verbatim; `201`, `CredentialSummary` from `credential`.            |
 | `update(id, {name})`   | `PATCH /credentials/:id`                       | Rename. `CredentialSummary` from `credential`.                                                     |
 | `rotate(id, {source})` | `POST /credentials/:id/rotate`                 | Body verbatim. `CredentialSummary` from `credential`.                                              |
+| `types()`              | `GET /credential-types`                        | `CredentialTypeDescriptor[]` from `types`. Console only; not in `endpoints.json`.                  |
 | `disable(id)`          | `POST /credentials/:id/disable`                | `CredentialSummary` from `credential`.                                                             |
 | `enable(id)`           | `POST /credentials/:id/enable`                 | `CredentialSummary` from `credential`.                                                             |
 | `test(id)`             | `POST /credentials/:id/test`                   | **No envelope key**: the whole body, `{ok, code?, message?}`. `ok: false` is a `200` and resolves. |
