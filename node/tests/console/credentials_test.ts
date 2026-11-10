@@ -88,6 +88,7 @@ Deno.test("credentials: every method is a function on a constructed client", () 
     "enable",
     "test",
     "dependents",
+    "types",
     "delete",
   ] as const;
   for (const n of names) assertEquals(typeof c.console.credentials[n], "function", n);
@@ -197,6 +198,30 @@ Deno.test("credentials.dependents unwraps the dependents envelope", async () => 
   assertEquals(res, deps);
   assertEquals(c.calls[0].method, "GET");
   assertEquals(c.calls[0].url, `${BASE}/credentials/cred_1/dependents`);
+});
+
+Deno.test("credentials.types sends GET /credential-types and unwraps the types array", async () => {
+  const c = client(() =>
+    json({
+      types: [
+        {
+          id: "bearer.v1",
+          label: "Bearer token",
+          fields: [{ key: "token", label: "Token", secret: true }],
+        },
+      ],
+    })
+  );
+  const res = await c.client.console.credentials.types();
+  assertEquals(res, [
+    {
+      id: "bearer.v1",
+      label: "Bearer token",
+      fields: [{ key: "token", label: "Token", secret: true }],
+    },
+  ]);
+  assertEquals(c.calls[0].method, "GET");
+  assertEquals(c.calls[0].url, `${BASE}/credential-types`);
 });
 
 Deno.test("credentials.delete sends a bare DELETE (no query) and resolves undefined on 204", async () => {

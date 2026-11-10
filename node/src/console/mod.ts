@@ -183,6 +183,8 @@ export type {
   CredentialStatus,
   CredentialSummary,
   CredentialTestResult,
+  CredentialTypeDescriptor,
+  CredentialTypeField,
 } from "./credentials.ts";
 export { WorkflowsApi } from "./workflows.ts";
 export type { RunState, RunSummary, WorkflowsHost } from "./workflows.ts";
