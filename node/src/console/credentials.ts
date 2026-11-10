@@ -92,6 +92,22 @@ export interface CredentialDependents {
   connections: { id: string; appId: string; authKey: string; displayName: string }[];
 }
 
+/** One input of a credential type, as served by `GET /credential-types`. */
+export interface CredentialTypeField {
+  key: string;
+  label: string;
+  /** `true` = render masked and never echo it back. */
+  secret: boolean;
+  multiline?: boolean;
+}
+
+/** One credential type (`id` is the contract id, e.g. `bearer.v1`) and the fields it collects. */
+export interface CredentialTypeDescriptor {
+  id: string;
+  label: string;
+  fields: CredentialTypeField[];
+}
+
 /** Optional filters for {@linkcode CredentialsApi.list}; only defined keys are sent. */
 export interface CredentialListFilter {
   contract?: string;
@@ -252,6 +268,18 @@ export class CredentialsApi {
       path: path`/credentials/${id}/dependents`,
     });
     return unwrap<CredentialDependents>(res, "dependents");
+  }
+
+  /**
+   * The credential types the server can store and the fields each collects. Unwraps `{types}`.
+   * Console only; not in `endpoints.json`.
+   */
+  async types(): Promise<CredentialTypeDescriptor[]> {
+    const res = await this.#host.request<unknown>({
+      method: "GET",
+      path: "/credential-types",
+    });
+    return unwrap<CredentialTypeDescriptor[]>(res, "types");
   }
 
   /**
