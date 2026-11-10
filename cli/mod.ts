@@ -112,7 +112,7 @@ export type {
  * The explicit `: string` annotation is required, not decorative: JSR publishes
  * this file as TypeScript source and rejects inferred public types.
  */
-export const VERSION: string = "0.9.32";
+export const VERSION: string = "0.9.33";
 
 /** `w6w help <command>` is accepted as an alias for `w6w <command> --help`. */
 const HELP_COMMAND = "help";
