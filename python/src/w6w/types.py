@@ -1054,6 +1054,8 @@ class FunctionSummary:
     #: ISO-8601 archive time; `None` when the Function is live (or the server
     #: did not say). Named as the wire names it, like every field here.
     archivedAt: Optional[str] = None
+    #: Free-form labels the list can be filtered by; `[]` when none.
+    tags: List[str] = field(default_factory=list)
 
     @classmethod
     def from_wire(cls, body: Any) -> "FunctionSummary":
@@ -1074,6 +1076,59 @@ class FunctionSummary:
             # default for an answer the server did not give is "no".
             valid=raw_valid if isinstance(raw_valid, bool) else False,
             archivedAt=_nullable_text(body, "archivedAt"),
+            tags=_text_list(body, "tags"),
+        )
+
+
+@dataclass(frozen=True)
+class EndpointSummary:
+    """One Endpoint definition, as the stable `endpoints.list` route projects it.
+
+    `key` is the name the Endpoint is **called** by — `client.endpoints.run(key)` —
+    and `displayName` is the label a human reads. Each row carries its own
+    `invokeUrl`, merged in server-side.
+    """
+
+    #: Server-issued id, `ep_…`.
+    id: str
+    #: The callable name, e.g. `"send-email"`. Kebab-case, never contains `_`.
+    key: str
+    #: Human-facing label; falls back to `key` server-side.
+    displayName: str
+    #: Free-text description; `""` when unset.
+    description: str
+    #: ISO-8601 timestamp. A string, deliberately.
+    updatedAt: str
+    #: The URL this Endpoint is invoked at.
+    invokeUrl: str
+    #: `"ready"` when the stored definition is runnable, else `"draft"`.
+    status: str
+    #: `True` when `status` is not `"ready"`. A missing value reads as `True`.
+    incomplete: bool
+    #: ISO-8601 archive time; `None` when the Endpoint is live.
+    archivedAt: Optional[str] = None
+    #: Free-form labels the list can be filtered by; `[]` when none.
+    tags: List[str] = field(default_factory=list)
+
+    @classmethod
+    def from_wire(cls, body: Any) -> "EndpointSummary":
+        """Build an :class:`EndpointSummary`, ignoring unknown keys.
+
+        :param body: One parsed item of the `endpoints` array.
+        :returns: The Endpoint summary.
+        """
+        raw = body.get("incomplete") if isinstance(body, dict) else None
+        return cls(
+            id=_text(body, "id"),
+            key=_text(body, "key"),
+            displayName=_text(body, "displayName"),
+            description=_text(body, "description"),
+            updatedAt=_text(body, "updatedAt"),
+            invokeUrl=_text(body, "invokeUrl"),
+            status=_text(body, "status"),
+            incomplete=raw if isinstance(raw, bool) else True,
+            archivedAt=_nullable_text(body, "archivedAt"),
+            tags=_text_list(body, "tags"),
         )
 
 

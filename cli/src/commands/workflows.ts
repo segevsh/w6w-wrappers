@@ -67,15 +67,19 @@ function definition(context: CommandContext): WorkflowDefinition {
 }
 
 /**
- * The `--project` scope for `list`, or nothing at all.
+ * The `--project` scope and `--tag` filter for `list`, or nothing at all.
  *
  * Nothing is the important case — an omitted flag is how the caller asks the
  * server for every project the credential can see, matching
  * `src/commands/documents.ts`'s `scope()`.
  */
-function scope(context: CommandContext): { project?: string } {
+function scope(context: CommandContext): { project?: string; tag?: string } {
   const project = textFlag(context, "project");
-  return project === undefined ? {} : { project };
+  const tag = textFlag(context, "tag");
+  return {
+    ...(project === undefined ? {} : { project }),
+    ...(tag === undefined ? {} : { tag }),
+  };
 }
 
 /** One workflow, as a table row. */

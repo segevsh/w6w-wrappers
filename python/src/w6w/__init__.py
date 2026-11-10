@@ -51,6 +51,7 @@ from .types import (
     ConnectionSummary,
     Doc,
     DocFormat,
+    EndpointSummary,
     FunctionDetail,
     FunctionSummary,
     ManagementTarget,
@@ -114,6 +115,7 @@ __all__ = [
     # `endpoints.run(...)`): the sibling shape of `workflows.run`, exported
     # alongside their host protocols for the same reason the namespaces above
     # are — a helper typed around `client.functions` has to name them.
+    "EndpointSummary",
     "EndpointsApi",
     "EndpointsHost",
     # The Function definition lifecycle joins the run: `list`/`get` project into

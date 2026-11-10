@@ -107,7 +107,7 @@ character-for-character:
 | -------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | `me`                 | `client.me()`                               | `client.me()`                                                                            | `w6w me`                                                                                           |
 | `connections.list`   | `client.connections.list()`                 | `client.connections.list()`                                                              | `w6w connections list`                                                                             |
-| `workflows.list`     | `client.workflows.list(opts?)`              | `client.workflows.list(project=None)`                                                    | `w6w workflows list [--project <id>]`                                                              |
+| `workflows.list`     | `client.workflows.list(opts?)`              | `client.workflows.list(project=None, tag=None)`                                          | `w6w workflows list [--project <id>] [--tag <tag>]`                                                |
 | `workflows.run`      | `client.workflows.run(id, opts?)`           | `client.workflows.run(id, wait=False, variables=None, trigger=None, input=None, allow_unpublished=False, entry=None)`         | `w6w workflows run <id> [--wait] [--input <json>] [--entry <value>]` |
 | `documents.list`     | `client.documents.list(opts?)`              | `client.documents.list(project=None)`                                                    | `w6w documents list [--project <id>]`                                                              |
 | `documents.get`      | `client.documents.get(id, opts?)`           | `client.documents.get(id, project=None)`                                                 | `w6w documents get <id> [--project <id>]`                                                          |
@@ -122,6 +122,7 @@ character-for-character:
 | `vars.update`        | `client.vars.update(id, patch)`             | `client.vars.update(id, type=None, value=None, description=None)`                        | `w6w vars update <id> [--type <t>] [--value <v>] [--description <d>]`                              |
 | `vars.delete`        | `client.vars.delete(id)`                    | `client.vars.delete(id)`                                                                 | `w6w vars delete <id>`                                                                             |
 | `functions.run`      | `client.functions.run(name, opts?)`         | `client.functions.run(name, payload=None)`                                               | `w6w functions run <name> [--payload <json>]`                                                      |
+| `endpoints.list`     | `client.endpoints.list(opts?)`              | `client.endpoints.list(tag=None)`                                                        | `w6w endpoints list [--tag <tag>]`                                                                 |
 | `endpoints.run`      | `client.endpoints.run(name, opts?)`         | `client.endpoints.run(name, payload=None)`                                               | `w6w endpoints run <name> [--payload <json>]`                                                      |
 | `run`                | `client.run(input)`                         | `client.run(urn, action=None, payload=None)`                                             | `w6w run <urn> [--action <a>] [--payload <json>]`                                                  |
 
@@ -311,13 +312,18 @@ URN to pass to [`run`](#17-run--run-anything-addressable-by-urn).
 ## 3. `workflows.list` — list workflows
 
 ```
-GET /workflows[?project=<id>]
+GET /workflows[?project=<id>][&tag=<tag>]
 ```
 
 `status: required` · served today
 
 Lists the caller's workflow definitions. The optional `project` query filters to
 one project; wrappers expose it as an optional argument.
+
+The optional `tag` query narrows the list: a row is kept when one of its tags equals
+the value or starts with the value plus `.` (segment-bounded: `action.order` matches
+`action.order` and `action.order.confirm`, not `action.orders`). Wrappers send
+`?tag=` only when a non-blank tag was given; a single value, no multi-tag OR.
 
 **Response `200`** — envelope key `workflows`; the wrapper unwraps.
 
@@ -1182,7 +1188,7 @@ Deleting an unknown id is `404 unknown_workflow`, not a silent success.
 ## 25. `functions.list` — list Functions
 
 ```
-GET /functions
+GET /functions[?tag=<tag>]
 ```
 
 `status: required` · served today
@@ -1192,6 +1198,13 @@ The discovery operation for this domain, in for the same reason §2 and §3 are
 
 **No `project` parameter.** Unlike workflows and documents this route reads no
 `?project=` at all, and sending one would be inventing a parameter.
+
+The optional `tag` query narrows the list: a row is kept when one of its tags equals
+the value or starts with the value plus `.` (segment-bounded: `action.order` matches
+`action.order` and `action.order.confirm`, not `action.orders`). Wrappers send
+`?tag=` only when a non-blank tag was given; a single value, no multi-tag OR. Each row carries `tags: string[]` (`[]` when none);
+create/update definitions accept a top-level `tags?: string[]` (strings only, trimmed,
+empties dropped, de-duplicated; an update replaces the stored tags only when supplied).
 
 **Response `200`** — envelope key `functions`; the wrapper unwraps.
 
@@ -1204,7 +1217,8 @@ The discovery operation for this domain, in for the same reason §2 and §3 are
       "displayName": "Send email",
       "description": "Sends one transactional email.",
       "updatedAt": "2026-07-22T18:03:00.000Z",
-      "valid": true
+      "valid": true,
+      "tags": ["action.order"]
     }
   ]
 }
@@ -2754,6 +2768,54 @@ Same route as `entries.list`, in QUERY MODE: the server switches to it when `ord
 Project rule: optional `?project=`, per call then client default, otherwise omitted (the server uses the account's default project); an unknown project is `400 unknown_project`.
 
 Errors (informational; status + code pass through as the ordinary `ApiError`): `404 data_store_not_found`, `400 invalid_query`, `400 invalid_cursor`, `400 unknown_project`.
+
+## 115. `endpoints.list` — list Endpoints
+
+```
+GET /endpoints[?tag=<tag>]
+```
+
+`status: required` · served today
+
+Params: `tag` (query, string, optional). Returns `EndpointSummary[]`.
+
+The discovery operation for the Endpoint domain, mirroring §25: it is how a caller
+finds the `key` to pass to §18, and how tag mode reaches Endpoints. **No `project`
+parameter.**
+
+The optional `tag` query narrows the list: a row is kept when one of its tags equals
+the value or starts with the value plus `.` (segment-bounded: `action.order` matches
+`action.order` and `action.order.confirm`, not `action.orders`). Wrappers send
+`?tag=` only when a non-blank tag was given; a single value, no multi-tag OR.
+
+**Response `200`** — envelope key `endpoints`; the wrapper unwraps.
+
+```json
+{
+  "endpoints": [
+    {
+      "id": "ep_01H…",
+      "key": "send-email",
+      "displayName": "Send email",
+      "description": "",
+      "updatedAt": "2026-07-22T18:03:00.000Z",
+      "invokeUrl": "https://api.w6w.io/endpoints/send-email/invoke",
+      "status": "ready",
+      "incomplete": false,
+      "archivedAt": null,
+      "tags": ["action.order"]
+    }
+  ]
+}
+```
+
+Names: TS `client.endpoints.list(opts?)` · Python `client.endpoints.list(tag=None)` ·
+CLI `w6w endpoints list [--tag <tag>]`. `w6w ls endpoints` keeps listing through the
+unstable `console.endpoints` namespace.
+
+> **At contract `0.17.0` `endpoints.list` was added** (§115) and `tag` joined
+> `workflows.list` and `functions.list`; `FunctionSummary` / `EndpointSummary` carry
+> `tags`. The operation count goes from 121 to 122.
 
 ---
 

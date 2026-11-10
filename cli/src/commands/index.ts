@@ -21,6 +21,7 @@ import { DOCUMENT_COMMANDS } from "./documents.ts";
 import { VAR_COMMANDS } from "./vars.ts";
 import { ME_COMMANDS } from "./me.ts";
 import { CONNECTION_COMMANDS } from "./connections.ts";
+import { ENDPOINT_COMMANDS } from "./endpoints.ts";
 import { FUNCTION_COMMANDS } from "./functions.ts";
 import { NAMED_RUN_COMMANDS } from "./named-run.ts";
 import { WORKFLOW_COMMANDS } from "./workflows.ts";
@@ -44,6 +45,7 @@ export { DOCUMENT_COMMANDS } from "./documents.ts";
 export { VAR_COMMANDS } from "./vars.ts";
 export { ME_COMMANDS } from "./me.ts";
 export { CONNECTION_COMMANDS } from "./connections.ts";
+export { ENDPOINT_COMMANDS } from "./endpoints.ts";
 export { FUNCTION_COMMANDS } from "./functions.ts";
 export { NAMED_RUN_COMMANDS } from "./named-run.ts";
 export { WORKFLOW_COMMANDS } from "./workflows.ts";
@@ -74,6 +76,7 @@ export const COMMANDS: CommandRegistry = {
   ...CONNECTION_COMMANDS,
   ...WORKFLOW_COMMANDS,
   ...FUNCTION_COMMANDS,
+  ...ENDPOINT_COMMANDS,
   ...NAMED_RUN_COMMANDS,
   ...RUN_COMMANDS,
   ...TEAM_COMMANDS,

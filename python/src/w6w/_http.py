@@ -124,6 +124,18 @@ class HttpResponse(NamedTuple):
     body: Any
 
 
+def tag_query(tag: Optional[str]) -> Optional[str]:
+    """The ``?tag=`` value for a list call: the stripped tag, or `None` when absent or blank.
+
+    `None` is dropped from the query string, so an unset (or blank) tag sends the
+    unfiltered list path.
+    """
+    if tag is None:
+        return None
+    stripped = tag.strip()
+    return stripped if stripped else None
+
+
 def path(template: str, **values: str) -> str:
     """Build a base-relative path, percent-encoding every interpolated value.
 

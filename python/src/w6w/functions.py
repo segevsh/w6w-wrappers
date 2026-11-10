@@ -36,7 +36,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Mapping, Optional, Protocol
 
 from ._config import ResolvedConfig
-from ._http import HttpResponse, path
+from ._http import HttpResponse, path, tag_query
 from .errors import ApiError
 from .types import (
     FunctionDetail,
@@ -191,7 +191,7 @@ class FunctionsApi:
             )
         return body["output"]
 
-    def list(self) -> List[FunctionSummary]:
+    def list(self, tag: Optional[str] = None) -> List[FunctionSummary]:
         """List the caller's Function definitions.
 
         This is how a caller discovers a `key` to pass to :meth:`run` — the same
@@ -204,15 +204,18 @@ class FunctionsApi:
         **No `project` parameter.** Unlike workflows and documents, the route
         reads no `?project=` at all (`admin/functions.ts`) — sending one would be
         inventing a parameter, which is the failure mode `endpoints.json` warns
-        about.
+        about. ``tag`` is the one filter this route takes.
 
+        :param tag: Narrow the list to Functions carrying this tag (equal, or a
+            ``.``-bounded prefix: ``action.order`` matches ``action.order.confirm``,
+            not ``action.orders``). Sent as ``?tag=`` only when set and non-blank.
         :returns: The Functions, unwrapped from the `functions` envelope.
         :raises ConfigError: When no token is configured.
         :raises ApiError: On any non-2xx.
         :raises ApiError: `bad_response` when a `2xx` body carries no
             `functions` list.
         """
-        response = self._host.request("GET", "/functions")
+        response = self._host.request("GET", "/functions", query={"tag": tag_query(tag)})
         return [FunctionSummary.from_wire(item) for item in unwrap_list(response, "functions")]
 
     def get(self, id: str) -> FunctionDetail:
