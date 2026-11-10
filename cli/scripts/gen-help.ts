@@ -121,7 +121,7 @@ const GROUP_SUMMARIES: Record<string, string> = {
   connections: "List, inspect and delete connections",
   workflows: "List, run and edit workflows",
   functions: "Run and edit functions",
-  endpoints: "Run endpoints by key or id",
+  endpoints: "List and run endpoints by key or id",
   documents: "Create, read, update and delete documents",
   models: "Browse the model catalog",
   assets: "Upload, inspect and download versioned assets (skills, context files)",
@@ -336,7 +336,12 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
     "w6w reliability members --project prj_01HQ8N",
     "w6w reliability members --project prj_01HQ8N --days 30 --json",
   ],
-  "workflows.list": ["w6w workflows list", "w6w workflows list --project prj_01HQ8N"],
+  "workflows.list": [
+    "w6w workflows list",
+    "w6w workflows list --project prj_01HQ8N",
+    "w6w workflows list --tag action.order",
+  ],
+  "endpoints.list": ["w6w endpoints list", "w6w endpoints list --tag action.order"],
   // The key form is shown FIRST in both: it is the address a reader actually
   // has, and the id form is the fallback for a resource whose key they do not
   // know. Both reach the same command — one slot, no flag.
@@ -370,7 +375,11 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
   "workflows.cancel": ["w6w workflows cancel run_01HQ8N"],
   "workflows.archive": ["w6w workflows archive wf_01HQ8N"],
   "workflows.delete": ["w6w workflows archive wf_01HQ8N", "w6w workflows delete wf_01HQ8N"],
-  "functions.list": ["w6w functions list", "w6w functions list --json"],
+  "functions.list": [
+    "w6w functions list",
+    "w6w functions list --tag action.order",
+    "w6w functions list --json",
+  ],
   "functions.get": ["w6w functions get send-email", "w6w functions get fn_01HQ8N --json"],
   "functions.create": [
     `w6w functions create --definition '{"manifestVersion":"1","key":"send-email","inputs":[]}'`,
@@ -700,6 +709,8 @@ const PARAM_HELP: Record<string, string> = {
   "cursor": "Pagination cursor from a previous page",
   // Shared fallbacks, by bare parameter name.
   "project": "Project to scope to (default: the account's default project)",
+  "tag":
+    "Only items carrying this tag (or a tag under it: action.order matches action.order.confirm)",
   "description": "Human-readable description",
   "format": "Content format hint: text|markdown|yaml|html|json (default: text)",
   "content": "Document content, as raw text",

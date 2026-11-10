@@ -72,7 +72,13 @@
 
 import type { ResolvedConfig } from "./config.ts";
 import { ApiError } from "./errors.ts";
-import { type CallOptions, type HttpResponse, path, type RequestOptions } from "./http.ts";
+import {
+  type CallOptions,
+  type HttpResponse,
+  path,
+  type RequestOptions,
+  tagQuery,
+} from "./http.ts";
 import {
   getVersion,
   listVersions,
@@ -128,6 +134,12 @@ export interface WorkflowsHost {
 export interface WorkflowListOptions extends CallOptions {
   /** Project id to scope this call to; overrides the client's default. */
   project?: string;
+  /**
+   * Narrow the list to workflows carrying this tag. A row matches when one of its
+   * tags equals the value or starts with the value plus `.` (segment-bounded:
+   * `action.order` does not match `action.orders`). Sent as `?tag=` only when set.
+   */
+  tag?: string;
 }
 
 /**
@@ -340,7 +352,10 @@ export class WorkflowsApi {
     const res = await this.#host.request<unknown>({
       method: "GET",
       path: "/workflows",
-      query: { project: options?.project ?? this.#host.config.project ?? undefined },
+      query: {
+        project: options?.project ?? this.#host.config.project ?? undefined,
+        tag: tagQuery(options?.tag),
+      },
       signal: options?.signal,
     });
     return unwrap<WorkflowSummary[]>(res, "workflows");

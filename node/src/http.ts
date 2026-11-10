@@ -48,6 +48,18 @@ export type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
  */
 export type QueryParams = Record<string, string | number | boolean | undefined>;
 
+/**
+ * The `?tag=` value for a list call: the trimmed tag, or `undefined` (so no
+ * query parameter is sent) when it is absent or blank.
+ *
+ * @param tag - The caller's tag filter, if any.
+ * @returns The value to put in {@linkcode RequestOptions.query}.
+ */
+export function tagQuery(tag: string | undefined): string | undefined {
+  const trimmed = tag?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 /** One request, fully described. */
 export interface RequestOptions {
   /** HTTP method. */

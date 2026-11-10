@@ -118,6 +118,7 @@ PUBLIC_SURFACE = {
     # as the first argument rather than a field inside an options object.
     "FunctionsApi",
     "FunctionsHost",
+    "EndpointSummary",
     "EndpointsApi",
     "EndpointsHost",
     # The caller's account team (T2.1.1). Not project-scoped.

@@ -177,6 +177,25 @@ export interface FunctionDetail {
   valid: boolean;
 }
 
+/** The three things a host can call by name. */
+export type CallableKind = "workflow" | "function" | "endpoint";
+
+/** One callable, normalised across the three lists. */
+export interface CallableRef {
+  kind: CallableKind;
+  id: string;
+  name: string;
+  tags: string[];
+}
+
+/** An explicit host-key binding: which callable, which trigger (workflows), which input field. */
+export interface CallableBinding {
+  kind: CallableKind;
+  callableId: string;
+  entry?: string;
+  field: string;
+}
+
 export interface W6WApi {
   /** List registered apps to pick from in the connection modal. */
   listApps(): Promise<AppSummary[]>;
@@ -391,7 +410,11 @@ export interface W6WApi {
    */
   runWorkflow(
     id: string,
-    opts?: { variables?: Record<string, unknown>; input?: Record<string, unknown> },
+    opts?: {
+      variables?: Record<string, unknown>;
+      input?: Record<string, unknown>;
+      entry?: string;
+    },
   ): Promise<{
     runId: string;
     status: string;
@@ -399,6 +422,130 @@ export interface W6WApi {
     error?: unknown;
     terminal: boolean;
   }>;
+
+  /**
+   * Optional. All callables (workflows, Functions, Endpoints) carrying `tag` (equal, or a
+   * `.`-bounded prefix), merged with their `kind`.
+   */
+  listCallables?(opts: { tag?: string }): Promise<CallableRef[]>;
+
+  /** Optional. Run an Endpoint with `input` as its whole input. */
+  invokeEndpoint?(idOrKey: string, input: Record<string, unknown>): Promise<unknown>;
+
+  /** Optional. The explicit binding saved under `hostKey`, or `null` when none. */
+  getCallableBinding?(hostKey: string): Promise<CallableBinding | null>;
+
+  /** Optional. Create or replace the explicit binding saved under `hostKey`. */
+  saveCallableBinding?(hostKey: string, binding: CallableBinding): Promise<void>;
+}
+
+/** The document key an explicit binding lives under — a user-visible, editable namespace. */
+export function callableBindingKey(hostKey: string): string {
+  return `callable-binding/${hostKey}`;
+}
+
+/**
+ * The one place a list `tag` is normalised: trimmed, and an absent/empty/whitespace tag becomes
+ * `undefined` ("no filter"), so no list request ever carries an empty `?tag=`.
+ */
+export function normalizeTag(tag: string | undefined | null): string | undefined {
+  const trimmed = tag?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+/**
+ * `listCallables` over a client: the three tag-filtered lists, merged (all callables when `tag` is
+ * empty). Failure of any list rejects.
+ */
+export async function listCallablesFor(
+  client: W6WClient,
+  rawTag: string | undefined,
+  signal?: AbortSignal,
+): Promise<CallableRef[]> {
+  const tag = normalizeTag(rawTag);
+  const [workflows, functions, endpoints] = await Promise.all([
+    client.workflows.list({ tag, signal }),
+    client.functions.list({ tag, signal }),
+    client.endpoints.list({ tag, signal }),
+  ]);
+  return [
+    ...workflows.map((w) => ({
+      kind: "workflow" as const,
+      id: w.id,
+      name: w.displayName,
+      tags: w.tags,
+    })),
+    ...functions.map((f) => ({
+      kind: "function" as const,
+      id: f.id,
+      name: f.displayName,
+      tags: f.tags,
+    })),
+    ...endpoints.map((e) => ({
+      kind: "endpoint" as const,
+      id: e.id,
+      name: e.displayName,
+      tags: e.tags,
+    })),
+  ];
+}
+
+/**
+ * Run a callable by kind — P4's request, exactly. Workflow: `{ entry, input }` with `wait: true`;
+ * Function: the payload as `inputs`; Endpoint: the payload as `input`. `entry` (which manual
+ * trigger) is the caller's choice; it is never derived here and `allowUnpublished` is never set.
+ */
+export function runCallableFor(
+  client: W6WClient,
+  kind: CallableKind,
+  id: string,
+  input: Record<string, unknown>,
+  entry?: string,
+): Promise<unknown> {
+  if (kind === "workflow") {
+    return client.workflows.run(id, {
+      wait: true,
+      input,
+      ...(entry !== undefined ? { entry } : {}),
+    });
+  }
+  if (kind === "function") return client.functions.run(id, { payload: input });
+  return client.endpoints.run(id, { payload: input });
+}
+
+/** Read the binding document; a missing key (404) is `null`, anything else rejects. */
+export async function getCallableBindingFor(
+  client: W6WClient,
+  hostKey: string,
+  signal?: AbortSignal,
+): Promise<CallableBinding | null> {
+  try {
+    const doc = await client.documents.getByKey(callableBindingKey(hostKey), {
+      signal,
+    });
+    return JSON.parse(doc.content) as CallableBinding;
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+/** Create the binding document, or update it in place when the key already exists. */
+export async function saveCallableBindingFor(
+  client: W6WClient,
+  hostKey: string,
+  binding: CallableBinding,
+): Promise<void> {
+  const key = callableBindingKey(hostKey);
+  const content = JSON.stringify(binding);
+  let existing: { id: string } | null = null;
+  try {
+    existing = await client.documents.getByKey(key);
+  } catch (err) {
+    if (!(err instanceof ApiError && err.status === 404)) throw err;
+  }
+  if (existing) await client.documents.update(existing.id, { content, format: "json" });
+  else await client.documents.create({ key, content, format: "json" });
 }
 
 /**
@@ -619,5 +766,15 @@ export function createW6WUiAdapter(client: W6WClient): W6WApi {
           terminal: result.terminal,
         };
       }),
+
+    listCallables: ({ tag }) => withApiErrorBody(() => listCallablesFor(client, tag)),
+
+    invokeEndpoint: (idOrKey, input) =>
+      withApiErrorBody(() => runCallableFor(client, "endpoint", idOrKey, input)),
+
+    getCallableBinding: (hostKey) => withApiErrorBody(() => getCallableBindingFor(client, hostKey)),
+
+    saveCallableBinding: (hostKey, binding) =>
+      withApiErrorBody(() => saveCallableBindingFor(client, hostKey, binding)),
   };
 }

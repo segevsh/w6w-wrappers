@@ -77,6 +77,9 @@ for c in client.connections.list():
 
 workflows = client.workflows.list()
 functions = client.functions.list()
+
+# Only callables tagged action.order (or a tag under it, like action.order.confirm):
+tagged = client.endpoints.list(tag="action.order")
 ```
 
 A connection you can use has `state == "connected"`. Result objects use the same field names as

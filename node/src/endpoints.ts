@@ -25,8 +25,14 @@
  */
 import type { ResolvedConfig } from "./config.ts";
 import { ApiError } from "./errors.ts";
-import { type HttpResponse, path, type RequestOptions } from "./http.ts";
-import type { RunEnvelope } from "./types.ts";
+import {
+  type CallOptions,
+  type HttpResponse,
+  path,
+  type RequestOptions,
+  tagQuery,
+} from "./http.ts";
+import { type EndpointSummary, type RunEnvelope, unwrap } from "./types.ts";
 
 /**
  * What this namespace needs from the client — the same narrow seam
@@ -37,6 +43,16 @@ export interface EndpointsHost {
   readonly config: ResolvedConfig;
   /** Perform one request. */
   request<T>(options: RequestOptions): Promise<HttpResponse<T>>;
+}
+
+/** Per-call options for `endpoints.list`. */
+export interface EndpointListOptions extends CallOptions {
+  /**
+   * Narrow the list to Endpoints carrying this tag (equal, or a `.`-bounded
+   * prefix: `action.order` matches `action.order.confirm`, not `action.orders`).
+   * Sent as `?tag=` only when set.
+   */
+  tag?: string;
 }
 
 /** Per-call options for `endpoints.run`. */
@@ -67,6 +83,27 @@ export class EndpointsApi {
    */
   constructor(host: EndpointsHost) {
     this.#host = host;
+  }
+
+  /**
+   * List the caller's Endpoint definitions.
+   *
+   * This is how a caller discovers a `key` to pass to {@linkcode run}, and how
+   * tag mode reaches Endpoints. **No `project` parameter** — same as
+   * `functions.list`.
+   *
+   * @param options - Optional `tag` filter (equal, or a `.`-bounded prefix) and/or `signal` to abort.
+   * @returns The Endpoints, unwrapped from the `endpoints` envelope.
+   * @throws {ApiError} On any non-2xx.
+   */
+  async list(options?: EndpointListOptions): Promise<EndpointSummary[]> {
+    const res = await this.#host.request<unknown>({
+      method: "GET",
+      path: "/endpoints",
+      query: { tag: tagQuery(options?.tag) },
+      signal: options?.signal,
+    });
+    return unwrap<EndpointSummary[]>(res, "endpoints");
   }
 
   /**

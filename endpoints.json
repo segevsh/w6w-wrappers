@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable surface contract for all w6w wrappers. Source of truth for conformance tests. Keep in sync with docs/endpoints.md.",
-  "contractVersion": "0.16.0",
+  "contractVersion": "0.17.0",
   "$basePathComment": "Empty since 0.2.0: the server serves its routes at the ROOT of its own host (https://api.w6w.io/vars, not .../api/vars). Clients append nothing to the configured origin.",
   "basePath": "",
   "defaultBaseUrl": "https://api.w6w.io",
@@ -113,15 +113,21 @@
           "in": "query",
           "type": "string",
           "required": false
+        },
+        {
+          "name": "tag",
+          "in": "query",
+          "type": "string",
+          "required": false
         }
       ],
       "returns": "WorkflowSummary[]",
       "naming": {
         "ts": "client.workflows.list(opts?)",
-        "python": "client.workflows.list(project=None)",
-        "cli": "w6w workflows list [--project <id>]"
+        "python": "client.workflows.list(project=None, tag=None)",
+        "cli": "w6w workflows list [--project <id>] [--tag <tag>]"
       },
-      "notes": "Unpaginated today. Return a container type that can grow a cursor without a breaking change. D4 — kept in v0.1.0: it is how a user discovers a `wf_…` URN to pass to `run`. Verified live."
+      "notes": "`tag` (query, optional) narrows the list to callables carrying that tag: a row is kept when one of its tags equals the value or starts with the value plus `.` (segment-bounded: `action.order` matches `action.order` and `action.order.confirm` but not `action.orders`). Sent as `?tag=<value>` ONLY when set and non-empty (an omitted or empty tag sends no query parameter, which is the unfiltered list); a single value, no multi-tag OR. Unpaginated today. Return a container type that can grow a cursor without a breaking change. D4 — kept in v0.1.0: it is how a user discovers a `wf_…` URN to pass to `run`. Verified live."
     },
     {
       "name": "workflows.run",
@@ -995,14 +1001,21 @@
       "path": "/functions",
       "status": "required",
       "serverImplemented": true,
-      "params": [],
+      "params": [
+        {
+          "name": "tag",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
       "returns": "FunctionSummary[]",
       "naming": {
-        "ts": "client.functions.list()",
-        "python": "client.functions.list()",
-        "cli": "w6w functions list"
+        "ts": "client.functions.list(opts?)",
+        "python": "client.functions.list(tag=None)",
+        "cli": "w6w functions list [--tag <tag>]"
       },
-      "notes": "The discovery operation for this domain, in for the same reason `workflows.list` and `connections.list` are (D4): it is how a caller finds the `key` to pass to `functions.run`. Unpaginated today, same as `workflows.list`. **NO `project` PARAM** — unlike workflows and documents this route reads no `?project=` at all (`admin/functions.ts` calls `repo.list(scope)` with none), and sending one would be inventing a parameter. Each row already carries `valid`, computed server-side by the same predicate the invoke path guards with, so runnability needs no second call. `displayName` falls back to `key` server-side and is never a substitute for it: `key` is what `functions.run` takes."
+      "notes": "`tag` (query, optional) narrows the list to callables carrying that tag: a row is kept when one of its tags equals the value or starts with the value plus `.` (segment-bounded: `action.order` matches `action.order` and `action.order.confirm` but not `action.orders`). Sent as `?tag=<value>` ONLY when set and non-empty (an omitted or empty tag sends no query parameter, which is the unfiltered list); a single value, no multi-tag OR. Each row carries `tags: string[]` (`[]` when none); create/update definitions accept a top-level `tags?: string[]` (strings only, trimmed, empties dropped, de-duplicated; an update replaces the stored tags only when `tags` is supplied). The discovery operation for this domain, in for the same reason `workflows.list` and `connections.list` are (D4): it is how a caller finds the `key` to pass to `functions.run`. Unpaginated today, same as `workflows.list`. **NO `project` PARAM** — unlike workflows and documents this route reads no `?project=` at all (`admin/functions.ts` calls `repo.list(scope)` with none), and sending one would be inventing a parameter. Each row already carries `valid`, computed server-side by the same predicate the invoke path guards with, so runnability needs no second call. `displayName` falls back to `key` server-side and is never a substitute for it: `key` is what `functions.run` takes."
     },
     {
       "name": "functions.get",
@@ -1324,6 +1337,29 @@
         "cli": "w6w functions run-version <id> <n> [--payload <json>]"
       },
       "notes": "Same body as `functions.run`, against ONE published version instead of the live row. The wire verb is `invoke` (not `run`): `POST /functions/{id}/versions/{n}/invoke`. Returns the Function's OUTPUT unwrapped from the `output` envelope, exactly as `functions.run` does (guard on PRESENCE of the key, a `null` output is a successful run); wrappers expose the body field as `payload` and send it as `inputs`. Errors: `404 unknown_version`, `404 unknown_function`, `422 function_incomplete`, `422 function_disabled`, `422 function_not_published`, `400 invalid_version`."
+    },
+    {
+      "name": "endpoints.list",
+      "summary": "List the caller's Endpoint definitions.",
+      "method": "GET",
+      "path": "/endpoints",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "tag",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "EndpointSummary[]",
+      "naming": {
+        "ts": "client.endpoints.list(opts?)",
+        "python": "client.endpoints.list(tag=None)",
+        "cli": "w6w endpoints list [--tag <tag>]"
+      },
+      "notes": "The discovery operation for the Endpoint domain, mirroring `functions.list`: it is how a caller finds the `key` to pass to `endpoints.run`, and the way tag mode reaches Endpoints. Unpaginated; **NO `project` PARAM**, same as `functions.list`. Returns the `endpoints` array unwrapped. Each row carries `tags: string[]` (`[]` when none). `tag` (query, optional) narrows the list to callables carrying that tag: a row is kept when one of its tags equals the value or starts with the value plus `.` (segment-bounded: `action.order` matches `action.order` and `action.order.confirm` but not `action.orders`). Sent as `?tag=<value>` ONLY when set and non-empty (an omitted or empty tag sends no query parameter, which is the unfiltered list); a single value, no multi-tag OR. This is the stable list op; the CLI's `w6w ls endpoints` keeps listing through the unstable `console.endpoints` namespace."
     },
     {
       "name": "endpoints.run",

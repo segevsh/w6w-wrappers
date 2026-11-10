@@ -448,6 +448,27 @@ an editor refreshes the list beside it. The `@w6w/react` read hooks keep their o
 
 For the component catalogue, props and slots, see [Embed components](/clients/embed/components/).
 
+## Run a tagged action from your own screen
+
+A common embedded screen is "confirm this order": the host knows the order, and w6w holds the
+action that confirms it. Tag the Workflow, Function or Endpoint `action.order.send_confirmation` in
+w6w, then from the screen:
+
+1. **Tag mode.** List the callables under `action.order` (`listCallables({ tag: "action.order" })` on
+   the adapter, or `useCallables({ tag })` in `@w6w/react`), take the one tagged exactly
+   `action.order.send_confirmation`, and run it with your record under `order`: a Workflow starts from
+   a manual trigger you choose and gets `{ order }` as input, a Function or Endpoint gets `{ order }`
+   as its payload.
+2. **Explicit binding.** To pin one callable to one screen, save a binding under your own key,
+   for example `order-details.confirm` (`saveCallableBinding` on the adapter, `useCallableBinding` in
+   `@w6w/react`), and run whatever it names with `{ [binding.field]: order }`.
+
+A binding is stored as a w6w Document with the key `callable-binding/<your key>` (so
+`callable-binding/order-details.confirm`) and JSON content `{ kind, callableId, entry?, field }`. That
+namespace is user-visible: it appears in the Documents list, and a person with access can edit or
+delete it to change or remove the binding. Full code for both modes is in
+[the React guide](/clients/react/).
+
 ## In the browser
 
 Keep the session client and the client secret on your backend. In a React app, use

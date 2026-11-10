@@ -170,14 +170,17 @@ included) raises `bad_response`.
 | TS                               | Python                                | Returns                                           |
 | -------------------------------- | ------------------------------------- | ------------------------------------------------- |
 | `client.connections.list(opts?)` | `client.connections.list()`           | `ConnectionSummary[]` / `List[ConnectionSummary]` |
-| `client.workflows.list(opts?)`   | `client.workflows.list(project=None)` | `WorkflowSummary[]` / `List[WorkflowSummary]`     |
+| `client.workflows.list(opts?)`   | `client.workflows.list(project=None, tag=None)` | `WorkflowSummary[]` / `List[WorkflowSummary]`     |
 
 Both exist so a caller can _discover_ a `conn_…` / `wf_…` id to hand to `run`
 (D4). Both unwrap their envelope key and return the payload array. Connections
 can be listed, fetched and deleted in this version; creating, updating, testing
 and OAuth-connecting one are interactive, secret-handling studio flows and are out
 of scope. `connections.list` sends **no** `?project=`
-even when the client has a default; `workflows.list` does.
+even when the client has a default; `workflows.list` does. `workflows.list`,
+`functions.list` and `endpoints.list` take an optional `tag` (TS `{ tag }`, Python `tag=None`,
+CLI `--tag`), sent as `?tag=` only when set; a row matches when a tag equals it or starts with
+it plus `.`. `FunctionSummary` and `EndpointSummary` carry `tags`.
 
 Neither is paginated today and neither pretends otherwise — no cursor argument,
 no client-side paging loop.
@@ -258,7 +261,8 @@ Three rules both operations obey:
 | `client.workflows.enable(id)` | `client.workflows.enable(id)` | `void` / `None` |
 | `client.workflows.disable(id)` | `client.workflows.disable(id)` | `void` / `None` |
 | `client.workflows.runVersion(id, n, opts?)` | `client.workflows.run_version(id, n, ...)` | `WorkflowRunResult` |
-| `client.functions.list(opts?)`                   | `client.functions.list()`                                                         | `FunctionSummary[]` / `List[FunctionSummary]` |
+| `client.functions.list(opts?)`                   | `client.functions.list(tag=None)`                                                   | `FunctionSummary[]` / `List[FunctionSummary]` |
+| `client.endpoints.list(opts?)`                 | `client.endpoints.list(tag=None)`                                                   | `EndpointSummary[]` / `List[EndpointSummary]` |
 | `client.functions.get(id, opts?)`                | `client.functions.get(id)`                                                        | `FunctionDetail`                              |
 | `client.functions.create(definition)`            | `client.functions.create(definition)`                                             | `{id, key, updatedAt}` / `SaveResult`         |
 | `client.functions.update(id, definition, opts?)` | `client.functions.update(id, definition, if_unmodified_since=None)`                | `{id, key, updatedAt}` / `SaveResult`         |

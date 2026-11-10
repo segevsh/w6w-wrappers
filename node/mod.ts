@@ -137,6 +137,7 @@ export { FunctionsApi } from "./src/functions.ts";
 export type {
   FunctionDefinition,
   FunctionDetail,
+  FunctionListOptions,
   FunctionRunOptions,
   FunctionRunVersionOptions,
   FunctionSaveResult,
@@ -153,7 +154,7 @@ export type {
   VersionSummary,
 } from "./src/versions.ts";
 export { EndpointsApi } from "./src/endpoints.ts";
-export type { EndpointRunOptions, EndpointsHost } from "./src/endpoints.ts";
+export type { EndpointListOptions, EndpointRunOptions, EndpointsHost } from "./src/endpoints.ts";
 export { TeamApi } from "./src/team.ts";
 export type {
   TeamHost,
@@ -194,6 +195,7 @@ export type {
   ConnectionSummary,
   Doc,
   DocFormat,
+  EndpointSummary,
   FunctionRunEnvelope,
   FunctionSummary,
   InvocationFrame,

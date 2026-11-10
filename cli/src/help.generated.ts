@@ -99,7 +99,7 @@ export interface HelpExitCode {
 /** The command tree, generated from the shared wrapper surface contract. */
 export const HELP_TREE: HelpTree = {
   "binary": "w6w",
-  "contractVersion": "0.16.0",
+  "contractVersion": "0.17.0",
   "tagline": "command-line client for the w6w workflow platform",
   "usage": "w6w <command> [options]",
   "docsUrl": "https://w6w.dev/docs/cli",
@@ -491,7 +491,7 @@ export const HELP_TREE: HelpTree = {
           "short": "List the caller's workflow definitions",
           "headline": "list the caller's workflow definitions",
           "usage": "w6w workflows list [options]",
-          "naming": "w6w workflows list [--project <id>]",
+          "naming": "w6w workflows list [--project <id>] [--tag <tag>]",
           "status": "required",
           "params": [
             {
@@ -499,6 +499,14 @@ export const HELP_TREE: HelpTree = {
               "kind": "flag",
               "display": "--project <id>",
               "description": "Project to scope to (default: the account's default project)",
+              "required": false,
+            },
+            {
+              "name": "tag",
+              "kind": "flag",
+              "display": "--tag <tag>",
+              "description":
+                "Only items carrying this tag (or a tag under it: action.order matches action.order.confirm)",
               "required": false,
             },
             {
@@ -512,6 +520,7 @@ export const HELP_TREE: HelpTree = {
           "examples": [
             "w6w workflows list",
             "w6w workflows list --project prj_01HQ8N",
+            "w6w workflows list --tag action.order",
           ],
           "notes": [],
         },
@@ -1766,9 +1775,17 @@ export const HELP_TREE: HelpTree = {
           "short": "List the caller's Function definitions",
           "headline": "list the caller's Function definitions",
           "usage": "w6w functions list [options]",
-          "naming": "w6w functions list",
+          "naming": "w6w functions list [--tag <tag>]",
           "status": "required",
           "params": [
+            {
+              "name": "tag",
+              "kind": "flag",
+              "display": "--tag <tag>",
+              "description":
+                "Only items carrying this tag (or a tag under it: action.order matches action.order.confirm)",
+              "required": false,
+            },
             {
               "name": "json",
               "kind": "flag",
@@ -1779,6 +1796,7 @@ export const HELP_TREE: HelpTree = {
           ],
           "examples": [
             "w6w functions list",
+            "w6w functions list --tag action.order",
             "w6w functions list --json",
           ],
           "notes": [],
@@ -2265,10 +2283,47 @@ export const HELP_TREE: HelpTree = {
     },
     {
       "name": "endpoints",
-      "summary": "Run endpoints by key or id",
-      "headline": "run endpoints by key or id",
+      "summary": "List and run endpoints by key or id",
+      "headline": "list and run endpoints by key or id",
       "usage": "w6w endpoints <command> [options]",
       "commands": [
+        {
+          "operation": "endpoints.list",
+          "path": [
+            "endpoints",
+            "list",
+          ],
+          "name": "list",
+          "aliases": [],
+          "summary": "List the caller's Endpoint definitions.",
+          "short": "List the caller's Endpoint definitions",
+          "headline": "list the caller's Endpoint definitions",
+          "usage": "w6w endpoints list [options]",
+          "naming": "w6w endpoints list [--tag <tag>]",
+          "status": "required",
+          "params": [
+            {
+              "name": "tag",
+              "kind": "flag",
+              "display": "--tag <tag>",
+              "description":
+                "Only items carrying this tag (or a tag under it: action.order matches action.order.confirm)",
+              "required": false,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w endpoints list",
+            "w6w endpoints list --tag action.order",
+          ],
+          "notes": [],
+        },
         {
           "operation": "endpoints.run",
           "path": [
@@ -2316,15 +2371,7 @@ export const HELP_TREE: HelpTree = {
           "notes": [],
         },
       ],
-      "options": [
-        {
-          "name": "input",
-          "kind": "flag",
-          "display": "--payload <json>",
-          "description": "The Endpoint's input, as a JSON object",
-          "required": false,
-        },
-      ],
+      "options": [],
       "examples": [
         "w6w endpoints run send-email",
       ],
@@ -6740,6 +6787,10 @@ export const COMMAND_PATHS: string[][] = [
   [
     "functions",
     "run-version",
+  ],
+  [
+    "endpoints",
+    "list",
   ],
   [
     "endpoints",

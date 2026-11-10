@@ -86,7 +86,8 @@ function renderSave(verb: string, saved: { id: string; key: string }, styles: St
 
 const list: CommandHandler = async (context) => {
   noExtraArguments(context, 0);
-  const fns = await context.client().functions.list();
+  const tag = textFlag(context, "tag");
+  const fns = await context.client().functions.list(tag === undefined ? {} : { tag });
   context.out.emit(fns, (styles) => renderList(fns, styles));
 };
 
