@@ -168,6 +168,7 @@ function ConfirmOrder({ order }: { order: { id: string } }) {
 same filter is on each list hook: `useWorkflows({ tag })`, `useFunctions({ tag })`,
 `useEndpoints({ tag })`. A callable matches when one of its tags equals the value or starts with the
 value plus a `.`, so `action.order` matches `action.order.send_confirmation` but not `action.orders`.
+An empty or blank `tag` means no filter: it lists everything, and no `?tag=` is sent.
 
 `useRunCallable().call(kind, id, input, entry?)` sends exactly one request per kind: a Workflow run
 with `wait` and your `entry` and `input`; a Function invoke with `input` as its inputs; an Endpoint

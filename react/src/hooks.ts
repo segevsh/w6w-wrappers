@@ -76,6 +76,7 @@ import {
   callableBindingKey,
   getCallableBindingFor,
   listCallablesFor,
+  normalizeTag,
   runCallableFor,
   saveCallableBindingFor,
 } from "./adapter.ts";
@@ -331,7 +332,7 @@ export function useConnections(): ReadResult<ConnectionSummary[]> {
 export function useWorkflows(options?: WorkflowListOptions): ReadResult<WorkflowSummary[]> {
   const { client, ready } = useW6WProviderContext();
   const project = options?.project;
-  const tag = options?.tag;
+  const tag = normalizeTag(options?.tag);
   const fetcher = useCallback(
     (signal: AbortSignal) => client.workflows.list({ project, tag, signal }),
     [client, project, tag],
@@ -411,7 +412,7 @@ export function useWorkflow(id: string): ReadResult<WorkflowDetail> {
 
 export function useFunctions(options?: FunctionListOptions): ReadResult<FunctionSummary[]> {
   const { client, ready } = useW6WProviderContext();
-  const tag = options?.tag;
+  const tag = normalizeTag(options?.tag);
   const fetcher = useCallback(
     (signal: AbortSignal) => client.functions.list({ tag, signal }),
     [client, tag],
@@ -421,7 +422,7 @@ export function useFunctions(options?: FunctionListOptions): ReadResult<Function
 
 export function useEndpoints(options?: EndpointListOptions): ReadResult<EndpointSummary[]> {
   const { client, ready } = useW6WProviderContext();
-  const tag = options?.tag;
+  const tag = normalizeTag(options?.tag);
   const fetcher = useCallback(
     (signal: AbortSignal) => client.endpoints.list({ tag, signal }),
     [client, tag],
@@ -434,14 +435,14 @@ export function useEndpoints(options?: EndpointListOptions): ReadResult<Endpoint
  * into one `CallableRef[]` with its `kind`. One fan-out over the three tag-filtered lists; if any
  * list fails the hook reports that error.
  */
-export function useCallables(options: { tag: string }): ReadResult<CallableRef[]> {
+export function useCallables(options: { tag?: string }): ReadResult<CallableRef[]> {
   const { client, ready } = useW6WProviderContext();
-  const tag = options.tag;
+  const tag = normalizeTag(options.tag);
   const fetcher = useCallback(
     (signal: AbortSignal) => listCallablesFor(client, tag, signal),
     [client, tag],
   );
-  return useAsync(JSON.stringify(["callables.list", tag]), fetcher, client, ready);
+  return useAsync(JSON.stringify(["callables.list", tag ?? null]), fetcher, client, ready);
 }
 
 /** Read the explicit binding saved under `hostKey`; `data` is `null` when none exists. */

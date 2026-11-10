@@ -13,7 +13,7 @@ import { JSDOM } from "jsdom";
 import { act, createElement } from "react";
 import { type Root, createRoot } from "react-dom/client";
 import { W6WProvider } from "../W6WProvider.tsx";
-import { createW6WUiAdapter } from "../adapter.ts";
+import { createW6WUiAdapter, listCallablesFor } from "../adapter.ts";
 import {
   useCallableBinding,
   useCallables,
@@ -143,6 +143,72 @@ test("useCallables merges the three tag-filtered lists with kind", () =>
     assert.equal(fake.calls.length, 3);
     assert.ok(fake.calls.every((c) => c.url.endsWith("?tag=action.order")));
   }));
+
+const NO_FILTER_TAGS: (string | undefined)[] = ["", "   ", undefined];
+
+test("an empty / whitespace / absent tag is no filter: no ?tag= on any of the three lists", () =>
+  withRoot(async (root) => {
+    for (const tag of NO_FILTER_TAGS) {
+      const fake = fakeFetch(listResponder);
+      let all: unknown;
+      function Probe() {
+        useWorkflows({ tag });
+        useFunctions({ tag });
+        useEndpoints({ tag });
+        all = useCallables({ tag }).data;
+        return null;
+      }
+      await mount(root, fake.fetch, Probe);
+      await settle();
+      assert.ok(fake.calls.length >= 3, `requests for ${JSON.stringify(tag)}`);
+      assert.deepEqual(
+        [...new Set(fake.calls.map((c) => c.url))].sort(),
+        ["/endpoints", "/functions", "/workflows"],
+        `urls for tag ${JSON.stringify(tag)}`,
+      );
+      assert.equal((all as unknown[]).length, 3);
+      await act(async () => root.render(createElement("div")));
+    }
+  }));
+
+test("adapter.listCallables({ tag: '' }) lists every callable with no tag param", async () => {
+  for (const tag of NO_FILTER_TAGS) {
+    const { adapter, calls } = adapterOver(listResponder);
+    const refs = await adapter.listCallables?.({ tag });
+    assert.deepEqual(
+      refs?.map((r) => r.kind),
+      ["workflow", "function", "endpoint"],
+    );
+    assert.deepEqual(calls.map((c) => c.url).sort(), ["/endpoints", "/functions", "/workflows"]);
+  }
+});
+
+test("listCallablesFor hands the client an undefined tag (not '') for a blank tag, and trims", async () => {
+  const seen: unknown[] = [];
+  const list = (kind: string) => (o: { tag?: string }) => {
+    seen.push([kind, o.tag]);
+    return Promise.resolve([]);
+  };
+  const client = {
+    workflows: { list: list("w") },
+    functions: { list: list("f") },
+    endpoints: { list: list("e") },
+  } as unknown as W6WClient;
+  await listCallablesFor(client, "");
+  await listCallablesFor(client, "  ");
+  await listCallablesFor(client, " action.order ");
+  assert.deepEqual(seen, [
+    ["w", undefined],
+    ["f", undefined],
+    ["e", undefined],
+    ["w", undefined],
+    ["f", undefined],
+    ["e", undefined],
+    ["w", "action.order"],
+    ["f", "action.order"],
+    ["e", "action.order"],
+  ]);
+});
 
 /** Drive `useRunCallable().call(...)` and return the recorded run request. */
 async function runVia(

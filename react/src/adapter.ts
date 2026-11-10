@@ -427,7 +427,7 @@ export interface W6WApi {
    * Optional. All callables (workflows, Functions, Endpoints) carrying `tag` (equal, or a
    * `.`-bounded prefix), merged with their `kind`.
    */
-  listCallables?(opts: { tag: string }): Promise<CallableRef[]>;
+  listCallables?(opts: { tag?: string }): Promise<CallableRef[]>;
 
   /** Optional. Run an Endpoint with `input` as its whole input. */
   invokeEndpoint?(idOrKey: string, input: Record<string, unknown>): Promise<unknown>;
@@ -444,12 +444,25 @@ export function callableBindingKey(hostKey: string): string {
   return `callable-binding/${hostKey}`;
 }
 
-/** `listCallables` over a client: the three tag-filtered lists, merged. Failure of any list rejects. */
+/**
+ * The one place a list `tag` is normalised: trimmed, and an absent/empty/whitespace tag becomes
+ * `undefined` ("no filter"), so no list request ever carries an empty `?tag=`.
+ */
+export function normalizeTag(tag: string | undefined | null): string | undefined {
+  const trimmed = tag?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+/**
+ * `listCallables` over a client: the three tag-filtered lists, merged (all callables when `tag` is
+ * empty). Failure of any list rejects.
+ */
 export async function listCallablesFor(
   client: W6WClient,
-  tag: string,
+  rawTag: string | undefined,
   signal?: AbortSignal,
 ): Promise<CallableRef[]> {
+  const tag = normalizeTag(rawTag);
   const [workflows, functions, endpoints] = await Promise.all([
     client.workflows.list({ tag, signal }),
     client.functions.list({ tag, signal }),
