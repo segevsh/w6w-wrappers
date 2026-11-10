@@ -37,8 +37,11 @@ import type {
   DocumentCreateInput,
   DocumentOptions,
   DocumentPatch,
+  EndpointListOptions,
+  EndpointSummary,
   FunctionDefinition,
   FunctionDetail,
+  FunctionListOptions,
   FunctionSummary,
   Me,
   Model,
@@ -66,6 +69,16 @@ import type {
 } from "@w6w/sdk";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useW6WClient, useW6WProviderContext } from "./W6WProvider.tsx";
+import {
+  type CallableBinding,
+  type CallableKind,
+  type CallableRef,
+  callableBindingKey,
+  getCallableBindingFor,
+  listCallablesFor,
+  runCallableFor,
+  saveCallableBindingFor,
+} from "./adapter.ts";
 import { type Subscription, subscribe } from "./single-flight.ts";
 
 /** What every read hook returns. */
@@ -213,7 +226,12 @@ function useAsync<T>(
 
   const refetch = useCallback(() => run(true), [run]);
 
-  return { data: state.data, error: state.error, loading: state.loading, refetch };
+  return {
+    data: state.data,
+    error: state.error,
+    loading: state.loading,
+    refetch,
+  };
 }
 
 /**
@@ -318,11 +336,17 @@ export function useConnections(): ReadResult<ConnectionSummary[]> {
 export function useWorkflows(options?: WorkflowListOptions): ReadResult<WorkflowSummary[]> {
   const { client, ready } = useW6WProviderContext();
   const project = options?.project;
+  const tag = options?.tag;
   const fetcher = useCallback(
-    (signal: AbortSignal) => client.workflows.list({ project, signal }),
-    [client, project],
+    (signal: AbortSignal) => client.workflows.list({ project, tag, signal }),
+    [client, project, tag],
   );
-  return useAsync(JSON.stringify(["workflows.list", project ?? null]), fetcher, client, ready);
+  return useAsync(
+    JSON.stringify(["workflows.list", project ?? null, tag ?? null]),
+    fetcher,
+    client,
+    ready,
+  );
 }
 
 /**
@@ -390,10 +414,58 @@ export function useWorkflow(id: string): ReadResult<WorkflowDetail> {
   return useAsync(JSON.stringify(["workflows.get", id]), fetcher, client, ready);
 }
 
-export function useFunctions(): ReadResult<FunctionSummary[]> {
+export function useFunctions(options?: FunctionListOptions): ReadResult<FunctionSummary[]> {
   const { client, ready } = useW6WProviderContext();
-  const fetcher = useCallback((signal: AbortSignal) => client.functions.list({ signal }), [client]);
-  return useAsync(JSON.stringify(["functions.list"]), fetcher, client, ready);
+  const tag = options?.tag;
+  const fetcher = useCallback(
+    (signal: AbortSignal) => client.functions.list({ tag, signal }),
+    [client, tag],
+  );
+  return useAsync(JSON.stringify(["functions.list", tag ?? null]), fetcher, client, ready);
+}
+
+export function useEndpoints(options?: EndpointListOptions): ReadResult<EndpointSummary[]> {
+  const { client, ready } = useW6WProviderContext();
+  const tag = options?.tag;
+  const fetcher = useCallback(
+    (signal: AbortSignal) => client.endpoints.list({ tag, signal }),
+    [client, tag],
+  );
+  return useAsync(JSON.stringify(["endpoints.list", tag ?? null]), fetcher, client, ready);
+}
+
+/**
+ * Every workflow, Function and Endpoint carrying `tag` (equal, or a `.`-bounded prefix), merged
+ * into one `CallableRef[]` with its `kind`. One fan-out over the three tag-filtered lists; if any
+ * list fails the hook reports that error.
+ */
+export function useCallables(options: { tag: string }): ReadResult<CallableRef[]> {
+  const { client, ready } = useW6WProviderContext();
+  const tag = options.tag;
+  const fetcher = useCallback(
+    (signal: AbortSignal) => listCallablesFor(client, tag, signal),
+    [client, tag],
+  );
+  return useAsync(JSON.stringify(["callables.list", tag]), fetcher, client, ready);
+}
+
+/** Read the explicit binding saved under `hostKey`; `data` is `null` when none exists. */
+export function useCallableBinding(hostKey: string): ReadResult<CallableBinding | null> & {
+  /** Create the binding, or update it in place; refetches nothing (call `refetch`). */
+  save: (binding: CallableBinding) => Promise<void>;
+} {
+  const { client, ready } = useW6WProviderContext();
+  const key = callableBindingKey(hostKey);
+  const fetcher = useCallback(
+    (signal: AbortSignal) => getCallableBindingFor(client, hostKey, signal),
+    [client, hostKey],
+  );
+  const read = useAsync(JSON.stringify(["callables.binding", key]), fetcher, client, ready);
+  const save = useCallback(
+    (binding: CallableBinding) => saveCallableBindingFor(client, hostKey, binding),
+    [client, hostKey],
+  );
+  return { ...read, save };
 }
 
 export function useFunction(id: string): ReadResult<FunctionDetail> {
@@ -532,7 +604,10 @@ export function useContextEntries(
   const key = JSON.stringify(["contextEntries.list", options ?? null]);
   const fetcher = useCallback(
     (signal: AbortSignal) =>
-      client.contextEntries.list({ ...(JSON.parse(key)[1] ?? undefined), signal }),
+      client.contextEntries.list({
+        ...(JSON.parse(key)[1] ?? undefined),
+        signal,
+      }),
     [client, key],
   );
   return useAsync(key, fetcher, client, ready);
@@ -556,7 +631,10 @@ export function useDataStore(id: string, options?: DataStoreOptions): ReadResult
   const key = JSON.stringify(["dataStores.get", id, options ?? null]);
   const fetcher = useCallback(
     (signal: AbortSignal) =>
-      client.dataStores.get(id, { ...(JSON.parse(key)[2] ?? undefined), signal }),
+      client.dataStores.get(id, {
+        ...(JSON.parse(key)[2] ?? undefined),
+        signal,
+      }),
     [client, id, key],
   );
   return useAsync(key, fetcher, client, ready);
@@ -571,7 +649,10 @@ export function useDataStoreEntries(
   const key = JSON.stringify(["dataStores.entries.list", id, options ?? null]);
   const fetcher = useCallback(
     (signal: AbortSignal) =>
-      client.dataStores.entries.list(id, { ...(JSON.parse(key)[2] ?? undefined), signal }),
+      client.dataStores.entries.list(id, {
+        ...(JSON.parse(key)[2] ?? undefined),
+        signal,
+      }),
     [client, id, key],
   );
   return useAsync(key, fetcher, client, ready);
@@ -587,7 +668,10 @@ export function useDataStoreEntry(
   const key = JSON.stringify(["dataStores.entries.get", id, entryKey, options ?? null]);
   const fetcher = useCallback(
     (signal: AbortSignal) =>
-      client.dataStores.entries.get(id, entryKey, { ...(JSON.parse(key)[3] ?? undefined), signal }),
+      client.dataStores.entries.get(id, entryKey, {
+        ...(JSON.parse(key)[3] ?? undefined),
+        signal,
+      }),
     [client, id, entryKey, key],
   );
   return useAsync(key, fetcher, client, ready);
@@ -667,6 +751,22 @@ export function useRunWorkflow(): MutationResult<[string, WorkflowRunOptions?], 
   const client = useW6WClient();
   return useMutationResource((id: string, options?: WorkflowRunOptions) =>
     client.workflows.run(id, { ...options, wait: options?.wait ?? true }),
+  );
+}
+
+/**
+ * Run a callable by kind: workflow -> `workflows.run(id, { wait: true, entry, input })`, function
+ * -> `functions.run(id, { payload })`, endpoint -> `endpoints.run(id, { payload })`. The caller
+ * chooses `entry` (the manual trigger); it is forwarded verbatim, never derived.
+ */
+export function useRunCallable(): MutationResult<
+  [CallableKind, string, Record<string, unknown>, string?],
+  unknown
+> {
+  const client = useW6WClient();
+  return useMutationResource(
+    (kind: CallableKind, id: string, input: Record<string, unknown>, entry?: string) =>
+      runCallableFor(client, kind, id, input, entry),
   );
 }
 

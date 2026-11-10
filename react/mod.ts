@@ -62,6 +62,10 @@ export {
   useDocuments,
   useFunction,
   useFunctions,
+  useEndpoints,
+  useCallables,
+  useCallableBinding,
+  useRunCallable,
   useImportDataStoreCsv,
   useIncrementDataStoreEntry,
   useInsertDataStoreRow,
@@ -83,7 +87,13 @@ export {
   useWorkflows,
 } from "./src/hooks.ts";
 
-export { createW6WUiAdapter, type W6WApi } from "./src/adapter.ts";
+export {
+  type CallableBinding,
+  type CallableKind,
+  type CallableRef,
+  createW6WUiAdapter,
+  type W6WApi,
+} from "./src/adapter.ts";
 
 export {
   type FlowEdgeShape,
