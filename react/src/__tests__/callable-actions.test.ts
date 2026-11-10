@@ -111,7 +111,7 @@ test("each list hook sends ?tag= and the tag is part of the cache key", () =>
       const c = fake.calls.filter((x) => x.url === `${p}?tag=action.order`);
       assert.equal(c.length, 1, `${p}: ${JSON.stringify(fake.calls.map((x) => x.url))}`);
     }
-    // Same hook instance, new tag -> a NEW request (the tag is in the key, not just the closure).
+    // Same hook instance, new tag -> a NEW request.
     const before = fake.calls.length;
     tag = "action.invoice";
     await mount(root, fake.fetch, Probe);
@@ -318,4 +318,30 @@ test("useCallableBinding: null when missing, save then persists under the namesp
     const post = fake.calls.find((c) => c.method === "POST");
     assert.equal((post?.body as { key: string }).key, "callable-binding/order-details.confirm");
     assert.equal((post?.body as { content: string }).content, JSON.stringify(binding));
+  }));
+
+test("concurrent list hooks with different tags do not share one in-flight request", () =>
+  withRoot(async (root) => {
+    const fake = fakeFetch(listResponder);
+    const seen: Record<string, unknown> = {};
+    function Probe() {
+      seen.wa = useWorkflows({ tag: "a" }).data;
+      seen.wb = useWorkflows({ tag: "b" }).data;
+      seen.fa = useFunctions({ tag: "a" }).data;
+      seen.fb = useFunctions({ tag: "b" }).data;
+      seen.ea = useEndpoints({ tag: "a" }).data;
+      seen.eb = useEndpoints({ tag: "b" }).data;
+      return null;
+    }
+    await mount(root, fake.fetch, Probe);
+    await settle();
+    const urls = fake.calls.map((c) => c.url).sort();
+    assert.deepEqual(urls, [
+      "/endpoints?tag=a",
+      "/endpoints?tag=b",
+      "/functions?tag=a",
+      "/functions?tag=b",
+      "/workflows?tag=a",
+      "/workflows?tag=b",
+    ]);
   }));
