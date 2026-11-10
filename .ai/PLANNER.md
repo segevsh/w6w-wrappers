@@ -1,5 +1,12 @@
 # PLANNER.md — read this first when planning work in `w6w-wrappers`
 
+## Credential types (verified: 2026-11-10)
+
+Verified against `proj/26-11-10-01-app-independent-credentials` (wrappers `23790e2`, project 26-11-10-01).
+`client.console.credentials.types()` → `GET /credential-types`, returning `CredentialTypeDescriptor[]`
+(`node/src/console/credentials.ts`; types exported from `@w6w/sdk/console` via `node/src/console/mod.ts`). Console-only:
+`endpoints.json` operations are unchanged; `docs/parity.md` records the row.
+
 ## Connection editing (verified: 2026-11-05)
 
 Verified against `8f44b3d` plus this release diff. `console.connections.update` accepts optional `authKey` together with a full replacement `credential`, preserving the connection ID when changing authentication methods. This is a console-only API addition; the shared partner contract is unchanged. Source: `node/src/console/connections.ts` (`ConnectionsApi.update`).
