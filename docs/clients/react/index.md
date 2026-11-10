@@ -128,6 +128,90 @@ reports an unhandled rejection.
 Mutations don't refresh your lists. After a create, update or delete, call the matching read
 hook's `refetch`.
 
+## Run a tagged action from a screen (order confirmation)
+
+A product screen can offer "do something with this record" without hard-coding which Workflow,
+Function or Endpoint does it. Tag the callables in w6w (for example `action.order.send_confirmation`),
+then let the screen find and run them. Two ways to pick the callable:
+
+**Tag mode.** List everything under a tag prefix, pick one, run it with your data under a field named
+after the prefix's last segment (`action.order` gives `order`):
+
+```tsx
+import { useCallables, useRunCallable, type CallableRef } from "@w6w/react";
+
+function ConfirmOrder({ order }: { order: { id: string } }) {
+  const { data: callables = [] } = useCallables({ tag: "action.order" });
+  const { call, loading, error } = useRunCallable();
+
+  // The default action carries the tag `action.order.send_confirmation` exactly.
+  const action: CallableRef | undefined = callables.find((c) =>
+    c.tags.includes("action.order.send_confirmation"),
+  );
+
+  async function onClick() {
+    if (!action) return;
+    // Workflow: you choose the manual trigger to start from (`entry`); the order goes in as input.
+    // Function and Endpoint ignore `entry` and receive `{ order }` as their payload.
+    await call(action.kind, action.id, { order }, action.kind === "workflow" ? "<manual trigger node id>" : undefined);
+  }
+
+  return (
+    <button type="button" disabled={!action || loading} onClick={onClick}>
+      {action ? action.name : "No confirmation action"}
+    </button>
+  );
+}
+```
+
+`useCallables({ tag })` is the three tag-filtered lists merged, each row carrying its `kind`. The
+same filter is on each list hook: `useWorkflows({ tag })`, `useFunctions({ tag })`,
+`useEndpoints({ tag })`. A callable matches when one of its tags equals the value or starts with the
+value plus a `.`, so `action.order` matches `action.order.send_confirmation` but not `action.orders`.
+
+`useRunCallable().call(kind, id, input, entry?)` sends exactly one request per kind: a Workflow run
+with `wait` and your `entry` and `input`; a Function invoke with `input` as its inputs; an Endpoint
+invoke with `input`. It never publishes or sets `allowUnpublished`, and it does not choose `entry`
+for you.
+
+**Explicit binding.** When the screen should always run one specific callable, store that choice
+under a key your host picks. `useCallableBinding(hostKey)` reads it (`data` is `null` until saved)
+and `save` writes it:
+
+```tsx
+import { useCallableBinding, useRunCallable } from "@w6w/react";
+
+function ConfirmOrderBound({ order }: { order: { id: string } }) {
+  const { data: binding, save, refetch } = useCallableBinding("order-details.confirm");
+  const { call } = useRunCallable();
+
+  async function bind() {
+    await save({ kind: "workflow", callableId: "wf_123", entry: "<manual trigger node id>", field: "order" });
+    refetch();
+  }
+
+  return binding ? (
+    <button type="button" onClick={() => call(binding.kind, binding.callableId, { [binding.field]: order }, binding.entry)}>
+      Confirm order
+    </button>
+  ) : (
+    <button type="button" onClick={bind}>Choose confirmation action</button>
+  );
+}
+```
+
+The binding is an ordinary w6w Document keyed `callable-binding/<hostKey>` (here
+`callable-binding/order-details.confirm`), format `json`, content
+`{ kind, callableId, entry?, field }`. It is visible and editable in your Documents list like any
+other document; delete it to unbind. The first `save` creates it and later saves update the same
+document.
+
+If you use `createW6WUiAdapter`, the same operations are on the adapter as four optional members:
+`listCallables({ tag })`, `invokeEndpoint(idOrKey, input)`, `getCallableBinding(hostKey)` and
+`saveCallableBinding(hostKey, binding)`. Workflows run through the existing
+`runWorkflow(id, { input, entry })` and Functions through `invokeFunction(id, inputs)`. A `@w6w/ui`
+that does not know these members keeps working; they are optional on both sides.
+
 ## Use the client directly
 
 For anything without a hook, such as running a Function by key, calling an Endpoint, cancelling a
