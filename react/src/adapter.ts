@@ -348,11 +348,7 @@ export interface W6WApi {
   saveStepTest(
     workflowId: string,
     stepId: string,
-    body: {
-      name?: string;
-      input: Record<string, unknown>;
-      with: Record<string, unknown>;
-    },
+    body: { name?: string; input: Record<string, unknown>; with: Record<string, unknown> },
   ): Promise<StepTest>;
 
   /**
@@ -387,11 +383,7 @@ export interface W6WApi {
   createSubscription(
     appId: string,
     triggerKey: string,
-    input: {
-      workflowId: string;
-      connectionId?: string | null;
-      params?: Record<string, unknown>;
-    },
+    input: { workflowId: string; connectionId?: string | null; params?: Record<string, unknown> },
   ): Promise<Subscription>;
 
   /** List the caller's registered Functions — drives the step builder's Functions tab. */

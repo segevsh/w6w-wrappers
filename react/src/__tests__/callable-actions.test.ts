@@ -287,7 +287,7 @@ test("binding: missing -> null; first save creates; second save updates, never a
   assert.equal(calls.filter((c) => c.method === "POST").length, 0);
   const patches = calls.filter((c) => c.method === "PATCH");
   assert.equal(patches.length, 1);
-  assert.equal((patches[0]?.body as { content: string }).content, JSON.stringify(next));
+  assert.deepEqual(patches[0]?.body, { content: JSON.stringify(next), format: "json" });
   assert.deepEqual(await adapter.getCallableBinding?.("order-details.confirm"), next);
 });
 
@@ -345,3 +345,46 @@ test("concurrent list hooks with different tags do not share one in-flight reque
       "/workflows?tag=b",
     ]);
   }));
+
+test("concurrent useCallables with different tags do not share one in-flight request", () =>
+  withRoot(async (root) => {
+    const fake = fakeFetch(listResponder);
+    function Probe() {
+      useCallables({ tag: "a" });
+      useCallables({ tag: "b" });
+      return null;
+    }
+    await mount(root, fake.fetch, Probe);
+    await settle();
+    assert.deepEqual(fake.calls.map((c) => c.url).sort(), [
+      "/endpoints?tag=a",
+      "/endpoints?tag=b",
+      "/functions?tag=a",
+      "/functions?tag=b",
+      "/workflows?tag=a",
+      "/workflows?tag=b",
+    ]);
+  }));
+
+test("concurrent useCallableBinding for different host keys do not share one request", () =>
+  withRoot(async (root) => {
+    const fake = fakeFetch(() => ({ status: 404, body: { error: "unknown_document" } }));
+    function Probe() {
+      useCallableBinding("screen-a");
+      useCallableBinding("screen-b");
+      return null;
+    }
+    await mount(root, fake.fetch, Probe);
+    await settle();
+    assert.deepEqual(fake.calls.map((c) => c.url).sort(), [
+      "/documents/by-key/callable-binding%2Fscreen-a",
+      "/documents/by-key/callable-binding%2Fscreen-b",
+    ]);
+  }));
+
+test("getCallableBinding rejects on a non-404 error instead of reporting 'no binding'", async () => {
+  const { adapter } = adapterOver(() => ({ status: 500, body: { error: "boom" } }));
+  await assert.rejects(
+    () => adapter.getCallableBinding?.("order-details.confirm") ?? Promise.resolve(),
+  );
+});

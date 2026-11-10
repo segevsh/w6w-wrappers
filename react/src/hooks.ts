@@ -226,12 +226,7 @@ function useAsync<T>(
 
   const refetch = useCallback(() => run(true), [run]);
 
-  return {
-    data: state.data,
-    error: state.error,
-    loading: state.loading,
-    refetch,
-  };
+  return { data: state.data, error: state.error, loading: state.loading, refetch };
 }
 
 /**
@@ -604,10 +599,7 @@ export function useContextEntries(
   const key = JSON.stringify(["contextEntries.list", options ?? null]);
   const fetcher = useCallback(
     (signal: AbortSignal) =>
-      client.contextEntries.list({
-        ...(JSON.parse(key)[1] ?? undefined),
-        signal,
-      }),
+      client.contextEntries.list({ ...(JSON.parse(key)[1] ?? undefined), signal }),
     [client, key],
   );
   return useAsync(key, fetcher, client, ready);
@@ -631,10 +623,7 @@ export function useDataStore(id: string, options?: DataStoreOptions): ReadResult
   const key = JSON.stringify(["dataStores.get", id, options ?? null]);
   const fetcher = useCallback(
     (signal: AbortSignal) =>
-      client.dataStores.get(id, {
-        ...(JSON.parse(key)[2] ?? undefined),
-        signal,
-      }),
+      client.dataStores.get(id, { ...(JSON.parse(key)[2] ?? undefined), signal }),
     [client, id, key],
   );
   return useAsync(key, fetcher, client, ready);
@@ -649,10 +638,7 @@ export function useDataStoreEntries(
   const key = JSON.stringify(["dataStores.entries.list", id, options ?? null]);
   const fetcher = useCallback(
     (signal: AbortSignal) =>
-      client.dataStores.entries.list(id, {
-        ...(JSON.parse(key)[2] ?? undefined),
-        signal,
-      }),
+      client.dataStores.entries.list(id, { ...(JSON.parse(key)[2] ?? undefined), signal }),
     [client, id, key],
   );
   return useAsync(key, fetcher, client, ready);
@@ -668,10 +654,7 @@ export function useDataStoreEntry(
   const key = JSON.stringify(["dataStores.entries.get", id, entryKey, options ?? null]);
   const fetcher = useCallback(
     (signal: AbortSignal) =>
-      client.dataStores.entries.get(id, entryKey, {
-        ...(JSON.parse(key)[3] ?? undefined),
-        signal,
-      }),
+      client.dataStores.entries.get(id, entryKey, { ...(JSON.parse(key)[3] ?? undefined), signal }),
     [client, id, entryKey, key],
   );
   return useAsync(key, fetcher, client, ready);
