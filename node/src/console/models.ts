@@ -129,23 +129,59 @@ export interface ModelBudgetUsage {
   reserved: { requests: number; tokens: number; costMinor: number };
 }
 
-/** A `{model, connection}` fallback hop. */
-export interface ModelFallback {
-  model: string;
-  connection: string;
+/**
+ * Whose key a route target uses: one named account connection, or whichever
+ * personal key the invoking user has set as their default for the provider.
+ */
+export type CredentialSelection =
+  | { mode: "account"; connectionId: string }
+  | { mode: "invoking_user" };
+
+/**
+ * A fallback hop: the legacy `{model, connection}` form (= account) OR
+ * `{model, credentialSelection}`, never both.
+ */
+export type ModelFallback =
+  | { model: string; connection: string; credentialSelection?: never }
+  | { model: string; credentialSelection: CredentialSelection; connection?: never };
+
+/** Body of `createRoute`: legacy `connection` OR `credentialSelection`, never both. */
+export type ModelRouteInput =
+  & {
+    name: string;
+    model: string;
+    fallbacks?: ModelFallback[];
+    defaults?: Record<string, unknown>;
+  }
+  & (
+    | { connection: string; credentialSelection?: never }
+    | { credentialSelection: CredentialSelection; connection?: never }
+  );
+
+/** One problem found by a route-readiness check. */
+export interface ModelRouteReadinessIssue {
+  code: string;
+  severity: "error" | "warning";
+  field?: string;
+  message: string;
 }
 
-/** Body of `createRoute`. */
-export interface ModelRouteInput {
-  name: string;
-  model: string;
-  connection: string;
-  fallbacks?: ModelFallback[];
-  defaults?: Record<string, unknown>;
+/** `GET /model-routes/:name/readiness` — per caller, never persisted. */
+export interface ModelRouteReadiness {
+  ready: boolean;
+  credentialMode: "account" | "invoking_user";
+  issues: ModelRouteReadinessIssue[];
+  /** Present when the caller can fix the route by connecting a personal key. */
+  setup?: { action: "connect_personal_key"; providerAppId: string; modelId: string };
 }
 
 /** Body of `updateRoute`. */
-export type ModelRoutePatch = Partial<Omit<ModelRouteInput, "name">>;
+export type ModelRoutePatch =
+  & Partial<Pick<ModelRouteInput, "model" | "fallbacks" | "defaults">>
+  & (
+    | { connection?: string; credentialSelection?: never }
+    | { credentialSelection: CredentialSelection; connection?: never }
+  );
 
 /**
  * The budget write routes answer the budget object FLAT (`c.json(created, 201)`),
@@ -315,6 +351,22 @@ export class ModelsConsoleApi {
       signal: options?.signal,
     });
     return unwrap<ModelRoute>(res, "route");
+  }
+
+  /**
+   * `GET /model-routes/:name/readiness` — can THIS caller run the route? Returns the
+   * body as-is (no envelope).
+   *
+   * @throws {ApiError} `404 model_route_not_found`.
+   */
+  async routeReadiness(name: string, options?: ModelsConsoleOptions): Promise<ModelRouteReadiness> {
+    const res = await this.#host.request<ModelRouteReadiness>({
+      method: "GET",
+      path: path`/model-routes/${name}/readiness`,
+      query: { project: options?.project },
+      signal: options?.signal,
+    });
+    return res.body;
   }
 
   /** `PATCH /model-routes/:name` — edit a route. */

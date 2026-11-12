@@ -56,6 +56,10 @@ const routes = await client.modelRoutes.list();
 const route = await client.modelRoutes.get("summarize");
 ```
 
+On a current server a route also carries `credentialMode` (`"account"` or `"invoking_user"`), `credentialSelection` and `connectionId`, which is `null` for an `invoking_user` route (the caller's own default key is used). Fallbacks carry the same fields.
+
+To write a route, `client.console.models.createRoute` takes either the legacy `connection` or a `credentialSelection` (`{ mode: "account", connectionId }` or `{ mode: "invoking_user" }`), never both. `client.console.models.routeReadiness(name)` tells the calling user whether they can run the route now, with an `issues` list and, when a personal key is missing, a `setup` hint.
+
 ### Run a completion
 
 ```ts
@@ -131,6 +135,8 @@ const scoped = new W6WClient({ project: "prj_01H…" });
 | `404` from `modelRoutes.get` or `complete` | No route with that name in this project. | Check the name, and pass `project` if the route lives in another project. |
 | `400 unknown_project` | The project id isn't one of your account's projects. | Copy the project id from Studio. |
 | `complete` result has no `output` field | `response` was `raw`. | Use `response: "output"` or `"both"`. |
+| `409 personal_key_required` or `personal_key_unavailable` | The route uses the invoking user's key and they have no working default for the provider. | Set one with `client.console.aiKeys.setDefault`. |
+| `403 ai_credential_policy_denied` or `user_context_required` | The tenant policy forbids this key kind, or the caller is not an end user. | Ask a tenant admin, or call as a signed-in user. |
 
 ## Where to next
 

@@ -228,3 +228,10 @@ Deno.test("me: a server that sends {server, composition} yields them beside wrap
   assertEquals(me.versions, { wrapper: VERSION, server: "1.2.3", composition: "core:a,server:b" });
   assertEquals(me.versions?.server, "1.2.3");
 });
+
+Deno.test("me: capabilities pass through; absent stays absent", async () => {
+  const on = client(() => json({ ...IDENTITY, capabilities: { userScopedCredentials: true } }));
+  assertEquals((await on.client.me()).capabilities?.userScopedCredentials, true);
+  const old = client(() => json(IDENTITY));
+  assertEquals((await old.client.me()).capabilities, undefined);
+});
