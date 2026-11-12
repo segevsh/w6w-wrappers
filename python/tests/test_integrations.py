@@ -160,6 +160,13 @@ class ConnectionsTest(unittest.TestCase):
         rows = c.connections.list()
         self.assertEqual([r.credentialId for r in rows], ["cred_1", None])
 
+    def test_access_scope_maps_known_values_and_defaults_to_none(self) -> None:
+        for scope in ("account", "user"):
+            self.assertEqual(ConnectionSummary.from_wire({**CONN, "accessScope": scope}).accessScope, scope)
+        self.assertIsNone(ConnectionSummary.from_wire(CONN).accessScope)
+        for bad in ("team", "", None, 1, ["user"]):
+            self.assertIsNone(ConnectionSummary.from_wire({**CONN, "accessScope": bad}).accessScope)
+
     def test_built_in_rides_through_list(self) -> None:
         c, _ = client((200, {"connections": [{**CONN, "id": "zerocred:x", "builtIn": True}, CONN]}))
         rows = c.connections.list()

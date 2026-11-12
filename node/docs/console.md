@@ -1332,3 +1332,49 @@ dedicated branch in that page's own `messageOf`.
 
 None of these two methods take a `project` scoping parameter — `TenantLoginFlagsHost` needs only the
 transport, mirroring `TenantOAuthAppsHost`'s own host shape.
+
+## `console.aiKeys.*`
+
+```ts
+const defaults = await client.console.aiKeys.defaults();
+await client.console.aiKeys.setDefault("openai", "conn_1");
+await client.console.aiKeys.clearDefault("openai");
+```
+
+The invoking user's personal AI-provider defaults. **No subject, tenant or account parameter
+exists**: the server derives "me" from the bearer and refuses a non end-user caller with
+`403 user_context_required`.
+
+| Method                                 | Route                                       | Notes                                  |
+| -------------------------------------- | ------------------------------------------- | -------------------------------------- |
+| `defaults()`                           | `GET /me/ai-keys/defaults`                  | Unwraps `defaults`.                    |
+| `setDefault(providerAppId, connectionId)` | `PUT /me/ai-keys/defaults/:providerAppId` | Body is exactly `{connectionId}`; unwraps `default`. |
+| `clearDefault(providerAppId)`          | `DELETE /me/ai-keys/defaults/:providerAppId` | `204`, resolves to nothing.            |
+
+Refusals propagate as `ApiError`: `404 unknown_connection`, `409 credential_scope_mismatch`,
+`400 invalid_body`, `403 user_context_required`.
+
+## `console.aiCredentialPolicy.*`
+
+```ts
+const { policy, effect } = await client.console.aiCredentialPolicy.get();
+await client.console.aiCredentialPolicy.put({ mode: "user_only" });
+```
+
+The caller's OWN tenant's AI credential policy (`both`, `account_only` or `user_only`); the tenant
+is never a parameter. Both methods return the body as-is, `{ policy: { mode }, effect: {
+accountRoutes } }`. `get()` is open to any member; `put` needs a tenant admin and its body is built
+from an allowlist of exactly `mode`.
+
+## `console.models.routeReadiness`
+
+`routeReadiness(name, { project? })` is `GET /model-routes/:name/readiness`: whether THE CALLING
+USER can run the route, returned as-is (`{ ready, credentialMode, issues, setup? }`, no envelope).
+It is per caller and never persisted.
+
+## Ownership fields (since contract `0.18.0`)
+
+`CredentialSummary.accessScope`, `CredentialListFilter.accessScope`, the `accessScope` key on
+`credentials.create` and `connections.create`, the `CredentialSelection` route-target union and
+the `OwnershipErrorCode` type. Each is sent only when defined, so an omitted scope leaves today's
+request body unchanged.

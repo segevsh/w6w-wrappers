@@ -113,6 +113,8 @@ class ConnectionsApi:
         from an id that does not exist. The built-in zero-credential row that
         :meth:`list` can include (`built_in` is `True`, a `zerocred:` id) is
         synthetic and is not fetchable: `404`.
+        The summary's ``accessScope`` is ``"account"`` or ``"user"`` (``None`` on an
+        older server); ``subject`` stays creator attribution.
 
         :param id: The `conn_…` id. Percent-encoded into the path.
         :returns: The connection, unwrapped from the `connection` envelope.

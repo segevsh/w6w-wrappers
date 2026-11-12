@@ -254,3 +254,69 @@ Deno.test("credentials.delete 409 surfaces ApiError with nested dependents on ra
     "conn_1",
   );
 });
+
+Deno.test("credentials.create without accessScope sends exactly {name, contract, source}", async () => {
+  const c = client(() => json({ credential: CRED }, 201));
+  await c.client.console.credentials.create({
+    name: "Ops",
+    contract: "api_key",
+    source: { key: "k" },
+    accessScope: undefined,
+  });
+  assertEquals(
+    c.calls[0].body,
+    JSON.stringify({ name: "Ops", contract: "api_key", source: { key: "k" } }),
+  );
+});
+
+Deno.test("credentials.create with accessScope adds only accessScope", async () => {
+  const c = client(() => json({ credential: { ...CRED, accessScope: "user" } }, 201));
+  const res = await c.client.console.credentials.create({
+    name: "Mine",
+    contract: "api_key",
+    source: { key: "k" },
+    accessScope: "user",
+  });
+  assertEquals(res.accessScope, "user");
+  assertEquals(
+    c.calls[0].body,
+    JSON.stringify({
+      name: "Mine",
+      contract: "api_key",
+      source: { key: "k" },
+      accessScope: "user",
+    }),
+  );
+});
+
+Deno.test("credentials.list({accessScope}) sends accessScope and nothing undefined", async () => {
+  const c = client(() => json({ credentials: [] }));
+  await c.client.console.credentials.list({ accessScope: "user", appId: undefined });
+  assertEquals(c.calls[0].url, `${BASE}/credentials?accessScope=user`);
+});
+
+Deno.test("credentials.create propagates each ownership error code unchanged", async () => {
+  for (
+    const [status, code] of [
+      [403, "user_context_required"],
+      [409, "credential_scope_mismatch"],
+      [400, "user_scope_unsupported"],
+      [403, "user_scope_not_enabled"],
+      [403, "ai_credential_policy_denied"],
+    ] as const
+  ) {
+    const c = client(() => json({ error: { code, message: "no" } }, status));
+    const err = await assertRejects(
+      () =>
+        c.client.console.credentials.create({
+          name: "x",
+          contract: "api_key",
+          source: {},
+          accessScope: "user",
+        }),
+      ApiError,
+    );
+    assertEquals(err.code, code);
+    assertEquals(err.status, status);
+  }
+});

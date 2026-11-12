@@ -81,6 +81,7 @@ export type ConnectionCreateInput =
     profile?: Record<string, unknown>;
     credentialId?: never;
     binding?: never;
+    accessScope?: "account" | "user";
   }
   | {
     authKey: string;
@@ -89,6 +90,7 @@ export type ConnectionCreateInput =
     displayName?: string;
     credential?: never;
     profile?: never;
+    accessScope?: "account" | "user";
   };
 
 /** A callable (Function/Endpoint) bound to a connection. */
@@ -153,6 +155,12 @@ export interface ConnectionTestResult {
  * await client.console.connections.delete(created.id);
  * ```
  */
+/** The body without a (possibly `undefined`) `accessScope` key. */
+function omitScope(body: ConnectionCreateInput): ConnectionCreateInput {
+  const { accessScope: _omitted, ...rest } = body;
+  return rest as ConnectionCreateInput;
+}
+
 export class ConnectionsApi {
   readonly #host: ConnectionsHost;
 
@@ -218,7 +226,8 @@ export class ConnectionsApi {
     const res = await this.#host.request<unknown>({
       method: "POST",
       path: path`/apps/${appId}/connections`,
-      body,
+      // `accessScope` rides along only when defined (an omitted scope = today's body).
+      body: body.accessScope === undefined ? omitScope(body) : body,
     });
     return unwrap<ConnectionSummary>(res, "connection");
   }
