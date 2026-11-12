@@ -1345,11 +1345,11 @@ The invoking user's personal AI-provider defaults. **No subject, tenant or accou
 exists**: the server derives "me" from the bearer and refuses a non end-user caller with
 `403 user_context_required`.
 
-| Method                                 | Route                                       | Notes                                  |
-| -------------------------------------- | ------------------------------------------- | -------------------------------------- |
-| `defaults()`                           | `GET /me/ai-keys/defaults`                  | Unwraps `defaults`.                    |
-| `setDefault(providerAppId, connectionId)` | `PUT /me/ai-keys/defaults/:providerAppId` | Body is exactly `{connectionId}`; unwraps `default`. |
-| `clearDefault(providerAppId)`          | `DELETE /me/ai-keys/defaults/:providerAppId` | `204`, resolves to nothing.            |
+| Method                                    | Route                                        | Notes                                                |
+| ----------------------------------------- | -------------------------------------------- | ---------------------------------------------------- |
+| `defaults()`                              | `GET /me/ai-keys/defaults`                   | Unwraps `defaults`.                                  |
+| `setDefault(providerAppId, connectionId)` | `PUT /me/ai-keys/defaults/:providerAppId`    | Body is exactly `{connectionId}`; unwraps `default`. |
+| `clearDefault(providerAppId)`             | `DELETE /me/ai-keys/defaults/:providerAppId` | `204`, resolves to nothing.                          |
 
 Refusals propagate as `ApiError`: `404 unknown_connection`, `409 credential_scope_mismatch`,
 `400 invalid_body`, `403 user_context_required`.
@@ -1362,9 +1362,10 @@ await client.console.aiCredentialPolicy.put({ mode: "user_only" });
 ```
 
 The caller's OWN tenant's AI credential policy (`both`, `account_only` or `user_only`); the tenant
-is never a parameter. Both methods return the body as-is, `{ policy: { mode }, effect: {
-accountRoutes } }`. `get()` is open to any member; `put` needs a tenant admin and its body is built
-from an allowlist of exactly `mode`.
+is never a parameter. Both methods return the body as-is,
+`{ policy: { mode }, effect: {
+accountRoutes } }`. `get()` is open to any member; `put` needs a
+tenant admin and its body is built from an allowlist of exactly `mode`.
 
 ## `console.models.routeReadiness`
 
@@ -1375,6 +1376,6 @@ It is per caller and never persisted.
 ## Ownership fields (since contract `0.18.0`)
 
 `CredentialSummary.accessScope`, `CredentialListFilter.accessScope`, the `accessScope` key on
-`credentials.create` and `connections.create`, the `CredentialSelection` route-target union and
-the `OwnershipErrorCode` type. Each is sent only when defined, so an omitted scope leaves today's
+`credentials.create` and `connections.create`, the `CredentialSelection` route-target union and the
+`OwnershipErrorCode` type. Each is sent only when defined, so an omitted scope leaves today's
 request body unchanged.
