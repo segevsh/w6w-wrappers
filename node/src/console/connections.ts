@@ -140,6 +140,12 @@ export interface ConnectionTestResult {
   error?: { message: string };
 }
 
+/** The body without a (possibly `undefined`) `accessScope` key. */
+function omitScope(body: ConnectionCreateInput): ConnectionCreateInput {
+  const { accessScope: _omitted, ...rest } = body;
+  return rest as ConnectionCreateInput;
+}
+
 /**
  * The `console.connections` namespace on a `W6WClient`.
  *
@@ -155,12 +161,6 @@ export interface ConnectionTestResult {
  * await client.console.connections.delete(created.id);
  * ```
  */
-/** The body without a (possibly `undefined`) `accessScope` key. */
-function omitScope(body: ConnectionCreateInput): ConnectionCreateInput {
-  const { accessScope: _omitted, ...rest } = body;
-  return rest as ConnectionCreateInput;
-}
-
 export class ConnectionsApi {
   readonly #host: ConnectionsHost;
 
