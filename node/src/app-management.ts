@@ -19,6 +19,8 @@ import type {
   ManagedAppDetail,
   ManagedAppsPage,
   PreviewAppInput,
+  PublishArtifactInput,
+  PublishArtifactResult,
   RegisterAppInput,
   RegisterAppResult,
   SyncAppOptions,
@@ -97,6 +99,25 @@ export class AppManagementApi implements AppManagementApiShape {
     return res.body;
   }
 
+  /** Publish a built artifact (manifest + bundle bytes) to the caller's personal catalog. */
+  async publishArtifact(
+    input: PublishArtifactInput,
+    opts?: CallOptions,
+  ): Promise<PublishArtifactResult> {
+    const body: { artifact: unknown; exec: string; map?: string } = {
+      artifact: input.artifact,
+      exec: toBase64(input.exec),
+    };
+    if (input.map !== undefined) body.map = toBase64(input.map);
+    const res = await this.#host.request<PublishArtifactResult>({
+      method: "POST",
+      path: "/app-management/artifacts",
+      body,
+      signal: opts?.signal,
+    });
+    return res.body;
+  }
+
   /** Validate a candidate source and, if it loads, make it the app's active source. */
   async updateSource(
     id: string,
@@ -134,4 +155,13 @@ export class AppManagementApi implements AppManagementApiShape {
     });
     return res.body;
   }
+}
+
+/** Base64 of raw bytes, chunked so a large bundle cannot overflow the argument limit. */
+function toBase64(bytes: Uint8Array): string {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(bin);
 }

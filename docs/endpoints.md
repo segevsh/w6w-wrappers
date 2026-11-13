@@ -2524,6 +2524,20 @@ No body. Answers `{removed}`, a count of removed versions. Errors: the `:id` err
 
 ---
 
+## 100a. `appManagement.publishArtifact` — publish a built artifact
+
+```
+POST /app-management/artifacts
+```
+
+`status: planned` · not served yet (`serverImplemented: false`) · added in `0.19.0`
+
+Body `{artifact, exec, map?}`: `artifact` is the built manifest (opaque to the wrapper), `exec` and `map` are base64 strings (the wrappers take bytes and encode); `map` is sent only when given. Answers `{id, version, outcome, target}` with `outcome` one of `registered`, `bumped`, `upgraded`, `unchanged` and `target` always `personal`. The body is returned unchanged.
+
+Errors: `400 invalid_body`, `400 invalid_artifact`, `400 digest_mismatch`, `401`, `403 forbidden`, `409 id_taken`, `413 artifact_too_large`.
+
+---
+
 ## 101. `dataStores.list` — list the project's data stores
 
 ```
