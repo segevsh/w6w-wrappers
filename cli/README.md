@@ -33,7 +33,9 @@ w6w auth status                                # base URL, where it came from, m
 w6w auth logout
 w6w config get-base-url                        # effective base URL and its source
 w6w config set-base-url https://w6w.example.com  # save it (tokens are per host: auth login again)
-w6w build app ./my-app --pack ./w6w-pack.json   # test, build and describe an app folder (local only)
+w6w apps init my-app                           # scaffold a new app (local only)
+w6w apps validate ./my-app                     # validate it with the canonical builder (needs Deno)
+w6w apps build ./my-app --pack ./w6w-pack.json  # build it (`w6w build app` is an alias)
 ```
 
 The token is stored per user (`~/.config/w6w/config.json`, or `$XDG_CONFIG_HOME/w6w/…`;
@@ -112,6 +114,22 @@ w6w team invite --email dev@example.com --role member
 Add `--json` to any command for raw JSON instead of a table — the shape to script against. Errors go
 to stderr as `w6w: <message>`; colour is used only on a terminal and is turned off by `--no-color`
 or `NO_COLOR`.
+
+### apps init
+
+`w6w apps init <id> [--template deno|node] [--dir <path>]` scaffolds a new app into `./<id>`
+from a bundled template, with no network. It refuses a non-empty directory.
+
+### apps validate
+
+`w6w apps validate [dir] [--resolution sibling|registry] [--builder <spec>]` checks the app
+with the canonical `@w6w/app-build` builder. It needs [Deno](https://deno.com) on `PATH`.
+
+### apps build
+
+`w6w apps build [dir] [-o|--out <dir>] [--pack <file>] [--resolution sibling|registry]
+[--builder <spec>]` builds the app to `<out>/<id>/<version>/{app.js,manifest.json}` plus
+`<out>/index.json` and prints the index entry. `w6w build app` is an alias. Needs Deno.
 
 ### Known limitations
 

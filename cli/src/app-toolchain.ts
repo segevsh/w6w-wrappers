@@ -3,8 +3,7 @@
  * `@w6w/app-build` builder.
  *
  * The CLI never bundles an app itself: it spawns `deno run` on the builder and
- * reads the answer. That spawn is behind {@linkcode useToolchainRunner} (replace and
- * restore, mirroring `useBuildRunner`), so the test suite never starts Deno.
+ * reads the answer. That spawn is behind {@linkcode useToolchainRunner} (replace and restore), so the test suite never starts Deno.
  *
  * Host access follows the package's rule: `node:` modules are imported through a
  * non-literal specifier with structural types.

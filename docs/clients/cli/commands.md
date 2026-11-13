@@ -62,7 +62,10 @@ A saved token is used only for the base URL it was saved for. See the [CLI](/cli
 
 | Command | What it does |
 | --- | --- |
-| `w6w build app <folder> [--out <dir>] [--pack <file>]` | Local only (no API call). Runs `npm run test` then `npm run build` in the app folder (output on stderr), then writes `app.js` and a deterministic `manifest.json` (sha256 digest, definition and hook names, icons embedded as `data:` URIs) to `--out` (default: the built file's directory). `--pack` updates a pack or index JSON file's `apps` entry with `id`, `version` and `digest` (safe under concurrent builds: updated under a `<pack>.lock`). Nothing is written if tests or build fail. |
+| `w6w build app <folder> [--out <dir>] [--pack <file>]` | Local only (no API call). Alias of `w6w apps build`: the same handler, so it needs Deno and builds with the canonical `@w6w/app-build` builder. |
+| `w6w apps init <id> [--template deno\|node] [--dir <path>]` | Local only. Scaffold a new app in `./<id>` (or `--dir`) from a bundled template. Refuses a non-empty directory. |
+| `w6w apps validate [dir] [--resolution sibling\|registry] [--builder <spec>]` | Local only, needs Deno. Validate the app in `[dir]` (default: the current directory) with the canonical builder; prints `code: message` per error, exit `1` on failure. |
+| `w6w apps build [dir] [-o\|--out <dir>] [--pack <file>] [--resolution sibling\|registry] [--builder <spec>]` | Local only, needs Deno. Build to `<out>/<id>/<version>/{app.js,manifest.json}` plus `<out>/index.json` and print the index entry. `--pack` updates a pack file under an exclusive `<pack>.lock`. |
 
 ## List
 
