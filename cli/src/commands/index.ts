@@ -40,6 +40,8 @@ import { MODEL_COMMANDS } from "./models.ts";
 import { ASSET_COMMANDS } from "./assets.ts";
 import { AGENT_STUDIO_COMMANDS } from "./agents-studio.ts";
 import { BUILD_COMMANDS } from "./build.ts";
+import { INIT_COMMANDS } from "./init.ts";
+import { VALIDATE_COMMANDS } from "./validate.ts";
 
 export { DOCUMENT_COMMANDS } from "./documents.ts";
 export { VAR_COMMANDS } from "./vars.ts";
@@ -64,6 +66,8 @@ export { MODEL_COMMANDS } from "./models.ts";
 export { ASSET_COMMANDS } from "./assets.ts";
 export { AGENT_STUDIO_COMMANDS } from "./agents-studio.ts";
 export { BUILD_COMMANDS } from "./build.ts";
+export { INIT_COMMANDS } from "./init.ts";
+export { VALIDATE_COMMANDS } from "./validate.ts";
 
 /** Every wired command, keyed by canonical command path. */
 export const COMMANDS: CommandRegistry = {
@@ -90,4 +94,6 @@ export const COMMANDS: CommandRegistry = {
   ...CONFIG_COMMANDS,
   ...LS_COMMANDS,
   ...BUILD_COMMANDS,
+  ...INIT_COMMANDS,
+  ...VALIDATE_COMMANDS,
 };
