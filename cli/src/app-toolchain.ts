@@ -107,6 +107,91 @@ export async function runBuilder(argv: string[], cwd: string): Promise<Toolchain
   }
 }
 
+/** The app directory a command works on: the argument as given, else the process's cwd. */
+export async function appDir(dir: string | undefined): Promise<string> {
+  const { path } = await host();
+  return path.resolve(dir ?? ".");
+}
+
+/** One reason the builder refused an app. */
+export interface BuilderError {
+  code: string;
+  message: string;
+}
+
+/**
+ * The one JSON line `--validate` prints: `{"ok":true,"id","version"}` on a pass,
+ * `{"ok":false,"errors":[{"code","message"}]}` on a refusal.
+ *
+ * A failure is **data**, not a thrown error — it is the builder's answer to a
+ * question that was asked successfully, which is why the command renders it and
+ * exits by it instead of reporting it as a crash.
+ */
+export interface BuilderReport {
+  ok: boolean;
+  id?: string;
+  version?: string;
+  errors?: BuilderError[];
+}
+
+/** Why an answer could not be read as the pinned line, with the builder's own words. */
+function unreadable(answer: string | undefined, stderr: string): Error {
+  const said = answer === undefined
+    ? "printed nothing on stdout"
+    : `printed \`${
+      answer.length <= 120 ? answer : `${answer.slice(0, 119)}…`
+    }\`, which is not that line`;
+  const detail = stderr
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "")
+    .slice(-3)
+    .join("\n");
+  return new Error(
+    `the app builder did not answer with its JSON line: it ${said}.` +
+      (detail === "" ? "" : `\n${detail}`),
+  );
+}
+
+/**
+ * Read the builder's answer from its stdout.
+ *
+ * The last non-blank line is the line: `deno` and the builder may both write
+ * progress above it, and none of that is the answer.
+ *
+ * @param stdout - Everything the builder wrote to stdout.
+ * @param stderr - Everything it wrote to stderr, quoted when the answer is unreadable.
+ * @returns The report.
+ * @throws {Error} When the answer is not the pinned line.
+ */
+export function readReport(stdout: string, stderr = ""): BuilderReport {
+  const lines = stdout.split("\n").map((line) => line.trim()).filter((line) => line !== "");
+  const last = lines[lines.length - 1];
+  let parsed: unknown;
+  try {
+    parsed = last === undefined ? undefined : JSON.parse(last);
+  } catch {
+    throw unreadable(last, stderr);
+  }
+  if (
+    typeof parsed !== "object" || parsed === null ||
+    typeof (parsed as BuilderReport).ok !== "boolean"
+  ) {
+    throw unreadable(last, stderr);
+  }
+  const report = parsed as BuilderReport;
+  // A pass names the app; a refusal names at least one reason. Anything else is
+  // not the pinned line, however well-formed its JSON is.
+  if (report.ok === true) {
+    if (typeof report.id !== "string" || typeof report.version !== "string") {
+      throw unreadable(last, stderr);
+    }
+  } else if (!Array.isArray(report.errors) || report.errors.length === 0) {
+    throw unreadable(last, stderr);
+  }
+  return report;
+}
+
 /**
  * The resolution to pass: the explicit flag wins; otherwise `registry` iff the app's
  * `deno.json` maps `@w6w/types` to a `jsr:` specifier, else `sibling`.
