@@ -117,19 +117,20 @@ or `NO_COLOR`.
 
 ### apps init
 
-`w6w apps init <id> [--template deno|node] [--dir <path>]` scaffolds a new app into `./<id>`
-from a bundled template, with no network. It refuses a non-empty directory.
+`w6w apps init <id> [--template deno|node] [--dir <path>]` scaffolds a new app into `./<id>` from a
+bundled template, with no network. It refuses a non-empty directory.
 
 ### apps validate
 
-`w6w apps validate [dir] [--resolution sibling|registry] [--builder <spec>]` checks the app
-with the canonical `@w6w/app-build` builder. It needs [Deno](https://deno.com) on `PATH`.
+`w6w apps validate [dir] [--resolution sibling|registry] [--builder <spec>]` checks the app with the
+canonical `@w6w/app-build` builder. It needs [Deno](https://deno.com) on `PATH`.
 
 ### apps build
 
 `w6w apps build [dir] [-o|--out <dir>] [--pack <file>] [--resolution sibling|registry]
-[--builder <spec>]` builds the app to `<out>/<id>/<version>/{app.js,manifest.json}` plus
-`<out>/index.json` and prints the index entry. `w6w build app` is an alias. Needs Deno.
+[--builder <spec>]`
+builds the app to `<out>/<id>/<version>/{app.js,manifest.json}` plus `<out>/index.json` and prints
+the index entry. `w6w build app` is an alias. Needs Deno.
 
 ### Known limitations
 
