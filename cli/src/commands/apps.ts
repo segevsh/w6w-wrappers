@@ -10,12 +10,17 @@
  * the pack lock are one handler with one seam; registering it here keeps every
  * `apps …` spelling in this map (and `w6w build app` pointing at the same handler).
  *
+ * `apps publish` (build → upload) is in `./publish.ts`; `apps list` is the very handler object
+ * `app-management list` is registered under (exported from `./app-management.ts`).
+ *
  * @module
  */
 
 import type { CommandHandler, CommandRegistry } from "../../mod.ts";
 import type { Styles } from "../output.ts";
+import { listManagedApps } from "./app-management.ts";
 import { appsBuild } from "./build.ts";
+import { appsPublish } from "./publish.ts";
 import { argument, noExtraArguments, table } from "./shared.ts";
 import type { AppSummary } from "@w6w/sdk";
 
@@ -39,4 +44,6 @@ const byIds: CommandHandler = async (context) => {
 export const APP_COMMANDS: CommandRegistry = {
   "apps by-ids": byIds,
   "apps build": appsBuild,
+  "apps list": listManagedApps,
+  "apps publish": appsPublish,
 };
