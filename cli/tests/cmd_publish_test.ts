@@ -249,7 +249,7 @@ Deno.test("apps publish: takes no credential flag or extra positional", async ()
 
 // --- the real command line (`main()`): `--version` is a string flag here only -------------
 
-async function viaMain(argv: string[], dir: string) {
+async function viaMain(argv: string[], dir: string, reply?: () => Response) {
   const runs: string[][] = [];
   const requests: { url: string; body: string }[] = [];
   const restore = useToolchainRunner(async (args) => {
@@ -260,7 +260,8 @@ async function viaMain(argv: string[], dir: string) {
   const fetch: FetchLike = (url, init) => {
     requests.push({ url, body: typeof init?.body === "string" ? init.body : "" });
     return Promise.resolve(
-      json(200, { id: ID, version: "9.9.9", outcome: "registered", target: "personal" }),
+      reply?.() ??
+        json(200, { id: ID, version: "9.9.9", outcome: "registered", target: "personal" }),
     );
   };
   const env: EnvReader = (name) =>
@@ -312,4 +313,38 @@ Deno.test("main(): plain `--version` is still the banner, not a publish flag", a
   assertEquals(ran.code, 0, ran.stderr);
   assertEquals(ran.runs.length, 0);
   assertEquals(ran.requests.length <= 1, true);
+});
+
+Deno.test("main(): an upload refusal (409 id_taken) exits nonzero and leaks nothing", async () => {
+  const dir = await appDir();
+  try {
+    const ran = await viaMain(
+      ["apps", "publish"],
+      dir,
+      () => json(409, { error: { code: "id_taken", message: "that id belongs to another" } }),
+    );
+    assert(ran.code !== 0, "nonzero exit");
+    assertEquals(ran.requests.length, 1);
+    const all = `${ran.stdout}\n${ran.stderr}`;
+    assertStringIncludes(all, "id_taken");
+    assert(!all.includes(BEARER), "bearer absent");
+    assert(!all.includes(EXEC_B64), "base64 exec absent");
+    const out = outOf(ran.runs[0]);
+    assert(await gone(out), "temp dir gone");
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test('main(): `--version "1.2.3\\n"` is a usage error before package.json or the builder', async () => {
+  const dir = await appDir();
+  try {
+    const ran = await viaMain(["apps", "publish", "--version", "1.2.3\n"], dir);
+    assertEquals(ran.code, 1);
+    assertEquals(ran.runs.length, 0);
+    assertEquals(ran.requests.length, 0);
+    assertEquals(JSON.parse(await Deno.readTextFile(`${dir}/package.json`)).version, "0.0.1");
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
 });

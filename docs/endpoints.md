@@ -2534,7 +2534,7 @@ POST /app-management/artifacts
 
 Body `{artifact, exec, map?}`: `artifact` is the built manifest (opaque to the wrapper), `exec` and `map` are base64 strings (the wrappers take bytes and encode); `map` is sent only when given. Answers `{id, version, outcome, target}` with `outcome` one of `registered`, `bumped`, `upgraded`, `unchanged` and `target` always `personal`. The body is returned unchanged.
 
-Errors: `400 invalid_body`, `400 invalid_artifact`, `400 digest_mismatch`, `401`, `403 forbidden`, `409 id_taken`, `413 artifact_too_large`.
+Errors: `400 invalid_body`, `400 invalid_target`, `403 user_import_disabled`, `403 forbidden`, `409 id_taken`, `413 artifact_too_large`, `422` publisher codes (`invalid_manifest`, `exec_sha_mismatch`, `map_sha_mismatch`, `map_missing`, `manifest_mismatch`, `version_conflict`, `protocol_trigger_not_allowed`, …), `503 blob_store_unavailable`.
 
 ---
 
