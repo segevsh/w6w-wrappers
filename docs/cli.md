@@ -186,8 +186,8 @@ builder through it, and a missing Deno is an error that names this prerequisite.
 `w6w apps init <id> [--template deno|node] [--dir <path>]` scaffolds a new app (default
 template `deno`, default directory `./<id>`): `package.json`, `deno.json`, `index.ts`, one
 auth, one action, one poll trigger, one health check, tests, a `.github/workflows/w6w.yml`
-that runs validate and build, and a README. It writes nothing offline-unavailable (no
-network), and refuses a non-empty target directory. `<id>` must be a valid app id (lowercase
+that runs validate and build, and a README. It needs no
+network, and refuses a non-empty target directory. `<id>` must be a valid app id (lowercase
 letters, digits and single hyphens), else it is a usage error.
 
 `w6w apps validate [dir] [--resolution sibling|registry] [--builder <spec>]` checks the app
