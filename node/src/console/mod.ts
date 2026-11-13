@@ -19,6 +19,8 @@
  */
 
 import type { HttpResponse, RequestOptions } from "../http.ts";
+import { AiCredentialPolicyApi } from "./ai-credential-policy.ts";
+import { AiKeysApi } from "./ai-keys.ts";
 import { AliasesApi } from "./aliases.ts";
 import { ApiCallsApi } from "./api-calls.ts";
 import { AppsApi } from "./apps.ts";
@@ -176,6 +178,7 @@ export type {
 } from "./connections.ts";
 export { CredentialsApi } from "./credentials.ts";
 export type {
+  AccessScope,
   CredentialDependents,
   CredentialErrorCode,
   CredentialListFilter,
@@ -185,6 +188,7 @@ export type {
   CredentialTestResult,
   CredentialTypeDescriptor,
   CredentialTypeField,
+  OwnershipErrorCode,
 } from "./credentials.ts";
 export { WorkflowsApi } from "./workflows.ts";
 export type { RunState, RunSummary, WorkflowsHost } from "./workflows.ts";
@@ -239,6 +243,7 @@ export { AliasesApi } from "./aliases.ts";
 export type { AliasDef, AliasesHost, AliasSummary } from "./aliases.ts";
 export { ModelsConsoleApi } from "./models.ts";
 export type {
+  CredentialSelection,
   ModelBudget,
   ModelBudgetInput,
   ModelBudgetLimits,
@@ -251,6 +256,8 @@ export type {
   ModelRate,
   ModelRouteInput,
   ModelRoutePatch,
+  ModelRouteReadiness,
+  ModelRouteReadinessIssue,
   ModelsConsoleHost,
   ModelsConsoleOptions,
 } from "./models.ts";
@@ -291,6 +298,15 @@ export type {
 } from "./tenant-oauth-apps.ts";
 export { OtpApi } from "./otp.ts";
 export type { LoginProviders, OtpHost, OtpVerifyResponse } from "./otp.ts";
+export { AiKeysApi } from "./ai-keys.ts";
+export type { AiKeyDefault, AiKeysHost } from "./ai-keys.ts";
+export { AiCredentialPolicyApi } from "./ai-credential-policy.ts";
+export type {
+  AiCredentialPolicyHost,
+  AiCredentialPolicyMode,
+  AiCredentialPolicyResponse,
+  SetAiCredentialPolicyInput,
+} from "./ai-credential-policy.ts";
 export { TenantLoginFlagsApi } from "./tenant-login-flags.ts";
 export type {
   SetTenantLoginFlagsInput,
@@ -369,6 +385,10 @@ export class ConsoleApi {
   readonly tenantLoginFlags: TenantLoginFlagsApi;
   /** `console.storage.*` — the account's storage bindings and agent-limit settings. */
   readonly storage: StorageConsoleApi;
+  /** `console.aiKeys.*` — the invoking user's personal AI-provider defaults. */
+  readonly aiKeys: AiKeysApi;
+  /** `console.aiCredentialPolicy.*` — the caller's OWN tenant's AI credential policy. */
+  readonly aiCredentialPolicy: AiCredentialPolicyApi;
 
   /**
    * @param host - The client this namespace group issues requests through.
@@ -399,5 +419,7 @@ export class ConsoleApi {
     this.otp = new OtpApi(host);
     this.tenantLoginFlags = new TenantLoginFlagsApi(host);
     this.storage = new StorageConsoleApi(host);
+    this.aiKeys = new AiKeysApi(host);
+    this.aiCredentialPolicy = new AiCredentialPolicyApi(host);
   }
 }

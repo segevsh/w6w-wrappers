@@ -240,6 +240,8 @@ The `/me` alias this section used to ask for is **not** being built: the
 wrappers call `/auth/me` directly instead (see above), which is one fewer route
 to keep in step for no loss of anything.
 
+**Since `0.18.0`** the body may carry `capabilities: { userScopedCredentials?: boolean }`; gate on `=== true` (absent means an older server).
+
 ---
 
 ## 2. `connections.list` — list connections
@@ -254,7 +256,9 @@ Lists the calling principal's connections, scoped by tenant/account. Credentials
 are never included — the server returns a redacted projection.
 
 **Response `200`** — envelope key `connections`; the wrapper unwraps and returns
-the array.
+the array. Since `0.18.0` each row may carry `accessScope: "account" | "user"` (absent
+means an older server; `subject` stays creator attribution). The server-side
+`?accessScope=` filter exists but is not a param of this op in `0.18.0`.
 
 ```json
 {
@@ -1691,7 +1695,8 @@ GET /connections/:id
 
 **Response `200`** — envelope key `connection`; the wrapper unwraps and returns
 one `ConnectionSummary` (the same redacted projection as §2, including the
-optional `app` and `builtIn`, and the nullable `credentialId`).
+optional `app` and `builtIn`, and the nullable `credentialId`). Since `0.18.0` the row
+may carry `accessScope: "account" | "user"` (absent means an older server).
 
 **Account-owned.** Another account's id answers the same `404 unknown_connection`
 as an id that does not exist. The built-in zero-credential row that §2 can include
@@ -1857,7 +1862,7 @@ GET /model-routes?project=
 
 `status: required` · served today
 
-Project-scoped like the `documents.*` operations: optional `?project=`, else the default project; unknown project is `400 unknown_project`. The server wraps the body as `{ "routes": ModelRoute[] }`; the wrapper unwraps.
+Project-scoped like the `documents.*` operations: optional `?project=`, else the default project; unknown project is `400 unknown_project`. The server wraps the body as `{ "routes": ModelRoute[] }`; the wrapper unwraps. Since `0.18.0` each route may carry `credentialMode` (`account` | `invoking_user`), `credentialSelection` (`{ mode: "account", connectionId }` | `{ mode: "invoking_user" }`) and `connectionId: string | null`; each fallback carries the same.
 
 ---
 
@@ -1869,7 +1874,7 @@ GET /model-routes/:name?project=
 
 `status: required` · served today
 
-Addressed by route `name`. The server wraps the body as `{ "route": ModelRoute }`; the wrapper unwraps. A missing name is `404 model_route_not_found`.
+Addressed by route `name`. The server wraps the body as `{ "route": ModelRoute }`; the wrapper unwraps. A missing name is `404 model_route_not_found`. Since `0.18.0` the route carries `credentialMode`, `credentialSelection` and `connectionId: string | null`, as in §54.
 
 ---
 
@@ -1881,7 +1886,7 @@ POST /model-routes/:name/complete?project=&dialect=&response=
 
 `status: required` · served today
 
-Body is a `BridgeInput`, sent as-is. The result is the **flat envelope** `{ provider, key, model, dialect, output?, usage, raw?, meta, invocationId, status, startedAt, finishedAt, durationMs }` returned exactly as sent — **no unwrap to `output`** (`key` is the answering connection id). `dialect` is `openai | anthropic | ollama`; `response` is `both | output | raw` (`output` omits `raw`, `raw` omits `output`). Each query key is sent only when given. Errors: `429 model_budget_exceeded`, `424 model_provider_failed`, `409 model_route_broken`, `403 model_egress_denied`, `404 model_route_not_found`.
+Body is a `BridgeInput`, sent as-is. The result is the **flat envelope** `{ provider, key, model, dialect, output?, usage, raw?, meta, invocationId, status, startedAt, finishedAt, durationMs }` returned exactly as sent — **no unwrap to `output`** (`key` is the answering connection id). `dialect` is `openai | anthropic | ollama`; `response` is `both | output | raw` (`output` omits `raw`, `raw` omits `output`). Each query key is sent only when given. Errors: `429 model_budget_exceeded`, `424 model_provider_failed`, `409 model_route_broken`, `403 model_egress_denied`, `404 model_route_not_found`. Since `0.18.0`: `409 personal_key_required`, `409 personal_key_unavailable`, `403 ai_credential_policy_denied` and `403 user_context_required`.
 
 ---
 
@@ -2816,6 +2821,15 @@ unstable `console.endpoints` namespace.
 > **At contract `0.17.0` `endpoints.list` was added** (§115) and `tag` joined
 > `workflows.list` and `functions.list`; `FunctionSummary` / `EndpointSummary` carry
 > `tags`. The operation count goes from 121 to 122.
+
+> **At contract `0.18.0` ownership fields were added, no operation.** `me` gains
+> `capabilities.userScopedCredentials`; `connections.list` / `connections.get` rows gain
+> `accessScope`; `modelRoutes.list` / `get` gain `credentialMode`, `credentialSelection` and
+> a nullable `connectionId`; `modelRoutes.complete` gains the error codes
+> `personal_key_required`, `personal_key_unavailable`, `ai_credential_policy_denied` and
+> `user_context_required`. The operation count stays 122. Credential management itself stays
+> console-only; the personal-defaults, tenant-policy and route-readiness clients are node
+> `console` additions, not in this contract.
 
 ---
 

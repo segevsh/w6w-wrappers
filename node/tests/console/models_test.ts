@@ -8,6 +8,7 @@ import { assertEquals, assertRejects } from "@std/assert";
 import { ApiError } from "../../src/errors.ts";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
+import type { ModelRouteInput, ModelRouteReadiness } from "../../src/console/models.ts";
 
 interface Call {
   url: string;
@@ -173,4 +174,43 @@ Deno.test("routes: create, update, delete take project and encode the name", asy
 Deno.test("there is no console.models.complete", () => {
   const { m } = setup(() => ({}));
   assertEquals("complete" in m, false);
+});
+
+Deno.test("routes: credentialSelection bodies are forwarded as given", async () => {
+  const { m, calls } = setup(() => ({ route: { name: "chat" } }));
+  await m.createRoute({
+    name: "chat",
+    model: "mdl_1",
+    credentialSelection: { mode: "invoking_user" },
+    fallbacks: [{ model: "mdl_2", credentialSelection: { mode: "invoking_user" } }],
+  });
+  assertEquals(
+    calls[0].body,
+    JSON.stringify({
+      name: "chat",
+      model: "mdl_1",
+      credentialSelection: { mode: "invoking_user" },
+      fallbacks: [{ model: "mdl_2", credentialSelection: { mode: "invoking_user" } }],
+    }),
+  );
+  // deno-fmt-ignore
+  // @ts-expect-error legacy `connection` and `credentialSelection` are never both
+  const _both: ModelRouteInput = { name: "x", model: "m", connection: "c", credentialSelection: { mode: "invoking_user" } };
+  assertEquals(typeof _both, "object");
+});
+
+Deno.test("routeReadiness GETs /readiness with project and returns the body as-is", async () => {
+  const body: ModelRouteReadiness = {
+    ready: false,
+    credentialMode: "invoking_user",
+    issues: [{ code: "personal_key_required", severity: "error", message: "m" }],
+    setup: { action: "connect_personal_key", providerAppId: "openai", modelId: "mdl_1" },
+  };
+  const { m, calls } = setup(() => body);
+  assertEquals(await m.routeReadiness("a b", { project: "p1" }), body);
+  assertEquals(calls[0].method, "GET");
+  assertEquals(calls[0].url, "https://api.example.com/model-routes/a%20b/readiness?project=p1");
+  assertEquals(calls[0].body, null);
+  await m.routeReadiness("chat");
+  assertEquals(calls[1].url, "https://api.example.com/model-routes/chat/readiness");
 });

@@ -658,6 +658,9 @@ class ConnectionSummary:
     #: (tenantAuth, jit, none, a zero-credential row), an absent key (an older
     #: server) or a non-string value.
     credentialId: Optional[str] = None
+    #: Who may use the connection: `"account"` or `"user"` (only its creator).
+    #: `None` when the wire value is absent (an older server) or anything else.
+    accessScope: Optional[str] = None
 
     @classmethod
     def from_wire(cls, body: Any) -> "ConnectionSummary":
@@ -690,6 +693,12 @@ class ConnectionSummary:
             built_in=True if isinstance(body, dict) and body.get("builtIn") is True else None,
             # Read explicitly for the same reason: the dataclass drops unknown keys.
             credentialId=_nullable_text(body, "credentialId"),
+            # Read explicitly (unknown keys are dropped); only the two known scopes survive.
+            accessScope=(
+                body.get("accessScope")
+                if isinstance(body, dict) and body.get("accessScope") in ("account", "user")
+                else None
+            ),
         )
 
 
