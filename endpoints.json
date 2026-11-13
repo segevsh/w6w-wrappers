@@ -4202,7 +4202,7 @@
       },
       {
         "name": "build.app",
-        "summary": "Test and build an app folder into a self-describing bundle (local only, no API call).",
+        "summary": "Alias of apps build: build an app folder with the canonical app builder (local only).",
         "status": "live",
         "naming": "w6w build app <folder> [--out <dir>] [--pack <file>]",
         "params": [
@@ -4220,6 +4220,96 @@
           },
           {
             "name": "pack",
+            "in": "query",
+            "type": "string",
+            "required": false
+          }
+        ]
+      },
+      {
+        "name": "apps.init",
+        "summary": "Scaffold a new app (deno or node template) in a new directory (local only, no API call).",
+        "status": "live",
+        "naming": "w6w apps init <id> [--template deno|node] [--dir <path>]",
+        "params": [
+          {
+            "name": "id",
+            "in": "argument",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "template",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "dir",
+            "in": "query",
+            "type": "string",
+            "required": false
+          }
+        ]
+      },
+      {
+        "name": "apps.validate",
+        "summary": "Validate an app folder with the canonical app builder (local only, needs Deno).",
+        "status": "live",
+        "naming": "w6w apps validate [dir] [--resolution sibling|registry] [--builder <spec>]",
+        "params": [
+          {
+            "name": "dir",
+            "in": "argument",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "resolution",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "builder",
+            "in": "query",
+            "type": "string",
+            "required": false
+          }
+        ]
+      },
+      {
+        "name": "apps.build",
+        "summary": "Build an app folder into the canonical artifact layout with the app builder (local only, needs Deno).",
+        "status": "live",
+        "naming": "w6w apps build [dir] [-o|--out <dir>] [--pack <file>] [--resolution sibling|registry] [--builder <spec>]",
+        "params": [
+          {
+            "name": "dir",
+            "in": "argument",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "out",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "pack",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "resolution",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "builder",
             "in": "query",
             "type": "string",
             "required": false

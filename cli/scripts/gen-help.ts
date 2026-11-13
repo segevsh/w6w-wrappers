@@ -311,6 +311,12 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
     "w6w build app ./apps/2chat",
     "w6w build app ./apps/2chat --out ./out/2chat --pack ./w6w-pack.json",
   ],
+  "apps.init": ["w6w apps init demo-app", "w6w apps init demo-app --template node --dir ./demo"],
+  "apps.validate": ["w6w apps validate", "w6w apps validate ./demo-app --resolution registry"],
+  "apps.build": [
+    "w6w apps build ./demo-app",
+    "w6w apps build ./demo-app --out ./out --pack ./w6w-pack.json",
+  ],
   "version": ["w6w version", "w6w version --json", "w6w --version"],
   "ls": [
     "w6w ls workflows",
@@ -683,12 +689,28 @@ const PARAM_HELP: Record<string, string> = {
     "The API token to save, or `-` to read it from standard input (default when input is piped)",
   "config.set-base-url.url":
     "The API origin to save, like https://api.example.com (a trailing slash is dropped)",
-  "build.app.folder":
-    "The app directory: a package.json with a `w6w` block, version, scripts.test, scripts.build and main",
+  "build.app.folder": "The app directory (alias of `apps build`; default: the current directory)",
   "build.app.out":
-    "Where to write app.js and manifest.json (icons are embedded in it as data: URIs; default: the directory of the built file)",
+    "Output root: writes <out>/<id>/<version>/{app.js,manifest.json} and <out>/index.json",
   "build.app.pack":
-    "A pack or index JSON file (with an `apps` array) to update with the app's id, version and digest; created if missing",
+    "A pack or index JSON file (with an `apps` array) to update with the built entry; created if missing",
+  "apps.init.id": "The app id (lowercase letters, digits and single hyphens)",
+  "apps.init.template": "Template variant: deno (default) or node",
+  "apps.init.dir": "Directory to create (default: ./<id>); must be missing or empty",
+  "apps.validate.dir": "The app directory (default: the current directory)",
+  "apps.validate.resolution":
+    "How @w6w/* imports resolve: sibling or registry (default: registry when the app's deno.json maps @w6w/types to jsr:, else sibling)",
+  "apps.validate.builder":
+    "The app builder spec to run (default: jsr:@w6w/app-build@0.2.0/cli); a path or file: URL for a local builder",
+  "apps.build.dir": "The app directory (default: the current directory)",
+  "apps.build.out":
+    "Output root: writes <out>/<id>/<version>/{app.js,manifest.json} and <out>/index.json (`-o` is shorthand)",
+  "apps.build.pack":
+    "A pack or index JSON file (with an `apps` array) to update with the built entry; created if missing",
+  "apps.build.resolution":
+    "How @w6w/* imports resolve: sibling or registry (default: registry when the app's deno.json maps @w6w/types to jsr:, else sibling)",
+  "apps.build.builder":
+    "The app builder spec to run (default: jsr:@w6w/app-build@0.2.0/cli); a path or file: URL for a local builder",
   "ls.kind":
     "What to list: integrations | workflows | functions | endpoints (endpoints is unstable)",
   "ls.project": "Project to scope to (workflows only; other kinds ignore it)",
