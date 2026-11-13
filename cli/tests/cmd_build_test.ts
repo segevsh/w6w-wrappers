@@ -447,7 +447,7 @@ Deno.test("--pack: a malformed pack is a usage error before the builder runs", a
 Deno.test("--pack: concurrent builds against one pack all land", async () => {
   const root = await Deno.makeTempDir({ prefix: "w6w-build-pack-" });
   const pack = `${root}/w6w-pack.json`;
-  const dirs = [`${root}/app-0`, `${root}/app-1`, `${root}/app-2`, `${root}/app-3`];
+  const dirs = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => `${root}/app-${i}`);
   for (const dir of dirs) await Deno.mkdir(dir);
 
   // One runner for all of them — a build is identified by the folder it was handed,
