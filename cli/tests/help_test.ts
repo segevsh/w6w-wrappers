@@ -174,6 +174,17 @@ Deno.test("functions run and endpoints run help show only what the handler reads
   }
 });
 
+Deno.test("apps build/validate/publish help show an optional [dir] argument, not a --dir flag", () => {
+  for (const sub of ["build", "validate", "publish"]) {
+    const resolution = resolve(["apps", sub]);
+    assertEquals(resolution.kind, "command");
+    if (resolution.kind !== "command") continue;
+    const help = renderCommandHelp(resolution.command);
+    assertStringIncludes(help, "[dir]");
+    assert(!help.includes("--dir"), `\`apps ${sub}\` help still shows a --dir flag`);
+  }
+});
+
 Deno.test("workflows run and run-version help hide the flags their handlers ignore", () => {
   const cases: [string[], string[]][] = [
     [["workflows", "run"], ["--var", "--trigger", "--variables"]],

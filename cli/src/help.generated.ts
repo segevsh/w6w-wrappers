@@ -99,7 +99,7 @@ export interface HelpExitCode {
 /** The command tree, generated from the shared wrapper surface contract. */
 export const HELP_TREE: HelpTree = {
   "binary": "w6w",
-  "contractVersion": "0.18.0",
+  "contractVersion": "0.19.0",
   "tagline": "command-line client for the w6w workflow platform",
   "usage": "w6w <command> [options]",
   "docsUrl": "https://w6w.dev/docs/cli",
@@ -2646,6 +2646,63 @@ export const HELP_TREE: HelpTree = {
           "notes": [],
         },
         {
+          "operation": "appManagement.publishArtifact",
+          "path": [
+            "apps",
+            "publish",
+          ],
+          "name": "publish",
+          "aliases": [],
+          "summary":
+            "Publish a built app artifact (manifest + bundle) to the caller's personal catalog.",
+          "short":
+            "Publish a built app artifact (manifest + bundle) to the caller's personal catalog",
+          "headline":
+            "publish a built app artifact (manifest + bundle) to the caller's personal catalog",
+          "usage": "w6w apps publish [dir] [options]",
+          "naming": "w6w apps publish [dir] [--version <semver>] [--builder <spec>]",
+          "status": "planned",
+          "params": [
+            {
+              "name": "dir",
+              "kind": "argument",
+              "display": "[dir]",
+              "description": "The app directory (default: the current directory)",
+              "required": false,
+            },
+            {
+              "name": "version",
+              "kind": "flag",
+              "display": "--version <semver>",
+              "description":
+                "Semver to write into the app's package.json before building (rewritten in place; default: leave it as is)",
+              "required": false,
+            },
+            {
+              "name": "builder",
+              "kind": "flag",
+              "display": "--builder <spec>",
+              "description":
+                "The app builder spec to run (default: jsr:@w6w/app-build@0.2.0/cli); a path or file: URL for a local builder",
+              "required": false,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w apps publish ./demo-app",
+            "w6w apps publish ./demo-app --version 1.2.3",
+          ],
+          "notes": [
+            'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
+          ],
+        },
+        {
           "operation": "apps.init",
           "path": [
             "apps",
@@ -2711,14 +2768,14 @@ export const HELP_TREE: HelpTree = {
           "short": "Validate an app folder with the canonical app builder (local only, needs Deno)",
           "headline":
             "validate an app folder with the canonical app builder (local only, needs Deno)",
-          "usage": "w6w apps validate [options]",
+          "usage": "w6w apps validate [dir] [options]",
           "naming": "w6w apps validate [dir] [--resolution sibling|registry] [--builder <spec>]",
           "status": "live",
           "params": [
             {
               "name": "dir",
-              "kind": "flag",
-              "display": "--dir <value>",
+              "kind": "argument",
+              "display": "[dir]",
               "description": "The app directory (default: the current directory)",
               "required": false,
             },
@@ -2753,6 +2810,92 @@ export const HELP_TREE: HelpTree = {
           "notes": [],
         },
         {
+          "operation": "apps.list",
+          "path": [
+            "apps",
+            "list",
+          ],
+          "name": "list",
+          "aliases": [],
+          "summary": "Alias of app-management list: list the apps installed on the host.",
+          "short": "Alias of app-management list: list the apps installed on the host",
+          "headline": "alias of app-management list: list the apps installed on the host",
+          "usage": "w6w apps list [options]",
+          "naming":
+            "w6w apps list [--scope <scope>] [--q <q>] [--sort <sort>] [--compact] [--snapshot <t>] [--cursor <c>] [--offset <n>] [--limit <n>]",
+          "status": "live",
+          "params": [
+            {
+              "name": "scope",
+              "kind": "flag",
+              "display": "--scope <scope>",
+              "description": "Which apps: all (default), account, tenant or personal",
+              "required": false,
+            },
+            {
+              "name": "q",
+              "kind": "flag",
+              "display": "--q <q>",
+              "description": "Search text",
+              "required": false,
+            },
+            {
+              "name": "sort",
+              "kind": "flag",
+              "display": "--sort <sort>",
+              "description": "Order: name (default), -name, recent or -recent",
+              "required": false,
+            },
+            {
+              "name": "compact",
+              "kind": "flag",
+              "display": "--compact",
+              "description": "Return compact rows",
+              "required": false,
+            },
+            {
+              "name": "snapshot",
+              "kind": "flag",
+              "display": "--snapshot <t>",
+              "description": "Snapshot token from a previous page (not with --cursor)",
+              "required": false,
+            },
+            {
+              "name": "cursor",
+              "kind": "flag",
+              "display": "--cursor <c>",
+              "description": "The previous page's nextCursor (not with --snapshot)",
+              "required": false,
+            },
+            {
+              "name": "offset",
+              "kind": "flag",
+              "display": "--offset <n>",
+              "description": "Row offset",
+              "required": false,
+            },
+            {
+              "name": "limit",
+              "kind": "flag",
+              "display": "--limit <n>",
+              "description": "Page size",
+              "required": false,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w apps list",
+            "w6w apps list --scope personal --limit 20",
+          ],
+          "notes": [],
+        },
+        {
           "operation": "apps.build",
           "path": [
             "apps",
@@ -2766,7 +2909,7 @@ export const HELP_TREE: HelpTree = {
             "Build an app folder into the canonical artifact layout with the app builder (local only, needs Deno)",
           "headline":
             "build an app folder into the canonical artifact layout with the app builder (local only, needs Deno)",
-          "usage": "w6w apps build [<dir>] [options]",
+          "usage": "w6w apps build [dir] [options]",
           "naming":
             "w6w apps build [dir] [-o|--out <dir>] [--pack <file>] [--resolution sibling|registry] [--builder <spec>]",
           "status": "live",
@@ -2774,7 +2917,7 @@ export const HELP_TREE: HelpTree = {
             {
               "name": "dir",
               "kind": "argument",
-              "display": "<dir>",
+              "display": "[dir]",
               "description": "The app directory (default: the current directory)",
               "required": false,
             },
@@ -7005,11 +7148,19 @@ export const COMMAND_PATHS: string[][] = [
   ],
   [
     "apps",
+    "publish",
+  ],
+  [
+    "apps",
     "init",
   ],
   [
     "apps",
     "validate",
+  ],
+  [
+    "apps",
+    "list",
   ],
   [
     "apps",

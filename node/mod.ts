@@ -239,6 +239,8 @@ export type {
   ManagementClass,
   ManagementScope,
   PreviewAppInput,
+  PublishArtifactInput,
+  PublishArtifactResult,
   RegisterAppInput,
   RegisterAppResult,
   SourceInput,

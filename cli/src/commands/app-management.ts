@@ -217,9 +217,12 @@ function withErrorCode(handler: CommandHandler): CommandHandler {
   };
 }
 
+/** `app-management list`, with the error code named — also registered as `apps list`. */
+export const listManagedApps: CommandHandler = withErrorCode(list);
+
 /** Every `w6w app-management …` command, keyed by canonical command path. */
 export const APP_MANAGEMENT_COMMANDS: CommandRegistry = {
-  "app-management list": withErrorCode(list),
+  "app-management list": listManagedApps,
   "app-management get": withErrorCode(get),
   "app-management preview": withErrorCode(preview),
   "app-management register": withErrorCode(register),

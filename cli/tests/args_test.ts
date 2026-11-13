@@ -202,3 +202,15 @@ Deno.test("command-specific flags can be added without touching the parser", () 
   const undeclared = parse(["workflows", "run", "wf_1", "--wait"]);
   assert(!undeclared.ok);
 });
+
+Deno.test("a command flag that reuses a global's name is that command's option", () => {
+  const spec = { name: "--version", alias: null, type: "string" } as const;
+  const got = parse(["apps", "publish", "--version", "1.2.3"], { flags: [spec] });
+  assert(got.ok);
+  if (!got.ok) return;
+  assertEquals(got.invocation.globals.version, false);
+  assertEquals(got.invocation.options.version, "1.2.3");
+  const plain = parse(["--version"]);
+  assert(plain.ok);
+  if (plain.ok) assertEquals(plain.invocation.globals.version, true);
+});

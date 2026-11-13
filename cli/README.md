@@ -132,6 +132,26 @@ canonical `@w6w/app-build` builder. It needs [Deno](https://deno.com) on `PATH`.
 builds the app to `<out>/<id>/<version>/{app.js,manifest.json}` plus `<out>/index.json` and prints
 the index entry. `w6w build app` is an alias. Needs Deno.
 
+### apps publish
+
+`w6w apps publish [dir] [--version <semver>] [--builder <spec>]` builds the app (as `apps build`
+does, into a temporary directory) and uploads the built manifest, `app.js` and `app.js.map` to the
+**caller's personal tier**: the app is private to you, never shared with the tenant or the catalog.
+It prints what the server answered (`id`, `version`, `outcome`, `target`); the version shown is the
+server's, not the local one.
+
+`--version` rewrites the `version` in the app's `package.json` **in place**, before the build; it
+must be a semantic version (`1.2.3`), otherwise nothing is built or sent. It is a value flag for
+this command only: plain `w6w --version` still prints the version banner. There is no
+command-specific credential flag; authentication is the CLI's normal client resolution
+(config/login, and the global `--token` / `W6W_TOKEN`), and the upload goes only to the configured
+base URL. Needs Deno. The server route is `planned` until it is deployed.
+
+### apps list
+
+`w6w apps list` is the same command as `w6w app-management list` (same flags, same output): the apps
+installed on the host.
+
 ### Known limitations
 
 A few flags that `--help` lists aren't applied yet:

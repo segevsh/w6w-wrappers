@@ -1389,6 +1389,21 @@ export type RegisterAppResult =
     target: Target;
   };
 
+/** The `publishArtifact` input: the built manifest plus the bundle bytes (the SDK base64-encodes). */
+export interface PublishArtifactInput {
+  artifact: Record<string, unknown>;
+  exec: Uint8Array;
+  map?: Uint8Array;
+}
+
+/** The `POST /app-management/artifacts` body (contract 0.19.0), returned unchanged. */
+export interface PublishArtifactResult {
+  id: string;
+  version: string;
+  outcome: "registered" | "bumped" | "upgraded" | "unchanged";
+  target: "personal";
+}
+
 /** The result of `updateSource` and `sync`. A `failed` outcome is still a 200. */
 export interface SyncResult {
   appId: string;
@@ -1409,6 +1424,7 @@ export interface AppManagementApi {
   get(id: string, opts?: CallOptions): Promise<ManagedAppDetail>;
   preview(input: PreviewAppInput, opts?: CallOptions): Promise<AppManagementPreview>;
   register(input: RegisterAppInput, opts?: CallOptions): Promise<RegisterAppResult>;
+  publishArtifact(input: PublishArtifactInput, opts?: CallOptions): Promise<PublishArtifactResult>;
   updateSource(id: string, input: UpdateSourceInput, opts?: CallOptions): Promise<SyncResult>;
   sync(id: string, opts?: SyncAppOptions): Promise<SyncResult>;
   remove(id: string, opts?: CallOptions): Promise<{ removed: number }>;

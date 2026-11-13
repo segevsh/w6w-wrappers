@@ -228,7 +228,14 @@ export function parse(argv: string[], options: ParseOptions = {}): ParseResult {
   }
 
   const { command, positionals } = splitCommand(normalizeAliases(operands), commands);
-  const globalKeys = new Set(GLOBAL_FLAG_SPECS.map((spec) => optionKey(spec.name)));
+  // A command-specific flag that reuses a global's name (`apps publish --version <semver>`)
+  // is that command's own option, not the global.
+  const overridden = new Set((options.flags ?? []).map((spec) => spec.name));
+  const globalKeys = new Set(
+    GLOBAL_FLAG_SPECS.filter((spec) => !overridden.has(spec.name)).map((spec) =>
+      optionKey(spec.name)
+    ),
+  );
   const extras: Record<string, string | boolean> = {};
   for (const [key, value] of Object.entries(values)) {
     if (!globalKeys.has(key)) extras[key] = value;
