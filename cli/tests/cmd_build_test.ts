@@ -502,3 +502,17 @@ Deno.test("--pack: a stale lock is removed", async () => {
   assertEquals(JSON.parse(await Deno.readTextFile(pack)).apps.length, 1);
   assert(!(await exists(`${pack}.lock`)));
 });
+
+Deno.test("-o is the short form of --out on `apps build` and `build app`, through main()", async () => {
+  for (const head of [["apps", "build"], ["build", "app"]]) {
+    const dir = await appDirWith("jsr:@w6w/types@0.2.0");
+    const out = await Deno.makeTempDir({ prefix: "w6w-build-out-" });
+    const { code, stderr, calls } = await buildApp(
+      [...head, dir, "-o", out, "--json"],
+      { code: 0, stdout: "", stderr: "" },
+    );
+    assertEquals(code, 0, stderr);
+    assertEquals(calls.length, 1);
+    assertEquals(calls[0].argv.slice(-4), ["-o", out, "--resolution", "registry"]);
+  }
+});

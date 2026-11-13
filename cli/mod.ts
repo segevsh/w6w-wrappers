@@ -215,6 +215,12 @@ type Routed =
  */
 const RUN_APP_FLAG: FlagSpec = { name: "--app", alias: null, type: "string" };
 
+/** `apps build` and its alias `build app` — the only commands whose `--out` has the `-o` short form. */
+function isBuildCommand(command: HelpCommand): boolean {
+  const path = command.path.join(" ");
+  return path === "apps build" || path === "build app";
+}
+
 /**
  * The flags a command declares for itself, lifted out of the generated help
  * tree so the parser and the help text cannot disagree about them.
@@ -231,7 +237,8 @@ function commandFlagSpecs(command: HelpCommand): FlagSpec[] {
     if (param.kind !== "flag") continue;
     const [name, ...rest] = param.display.split(" ");
     if (globals.has(name)) continue;
-    specs.push({ name, alias: null, type: rest.length > 0 ? "string" : "boolean" });
+    const alias = name === "--out" && isBuildCommand(command) ? "-o" : null;
+    specs.push({ name, alias, type: rest.length > 0 ? "string" : "boolean" });
   }
   if (command.path.length === 1 && command.path[0] === "run") specs.push(RUN_APP_FLAG);
   return specs;
