@@ -249,17 +249,20 @@ export async function builderArgs(
   mode: "validate" | "build",
   extra: BuilderExtra = {},
 ): Promise<string[]> {
+  const { path } = await host();
   const argv = ["run", "-A", "--unstable-worker-options"];
+  let builder = spec;
   if (spec.startsWith("jsr:")) {
     argv.push("--no-config");
   } else {
-    const file = spec.startsWith("file:") ? new URL(spec).pathname : spec;
-    const config = await nearestDenoJson((await host()).path.dirname(
-      (await host()).path.resolve(file),
-    ));
+    // Resolved once, to an absolute path: the spawn's cwd is the app dir, so a
+    // relative spec would name a different file there than it did here.
+    const file = spec.startsWith("file:") ? decodeURIComponent(new URL(spec).pathname) : spec;
+    builder = path.resolve(file);
+    const config = await nearestDenoJson(path.dirname(builder));
     if (config !== undefined) argv.push("--config", config);
   }
-  argv.push(spec, dir);
+  argv.push(builder, path.resolve(dir));
   if (mode === "validate") argv.push("--validate");
   else if (extra.out !== undefined) argv.push("-o", extra.out);
   if (extra.resolution !== undefined) argv.push("--resolution", extra.resolution);

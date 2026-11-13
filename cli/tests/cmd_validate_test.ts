@@ -186,13 +186,32 @@ Deno.test("a local builder gets --config with the nearest deno.json above it", a
     "sibling",
   ];
   assertEquals(await builderArgs(spec, root, "validate", { resolution: "sibling" }), expected);
-  // A `file:` URL names the same file, so it earns the same config — the spec itself
-  // is passed to Deno exactly as given.
-  const url = `file://${spec}`;
-  assertEquals(
-    await builderArgs(url, root, "validate", { resolution: "sibling" }),
-    [...expected.slice(0, 5), url, ...expected.slice(6)],
-  );
+  // A `file:` URL (percent-encoded) names the same file: same config, absolute path.
+  const url = `file://${spec.replace("builder", "buil%64er")}`;
+  assertEquals(await builderArgs(url, root, "validate", { resolution: "sibling" }), expected);
+});
+
+Deno.test("a relative builder is made absolute, with [dir] != cwd", async () => {
+  const root = await Deno.makeTempDir({ prefix: "w6w-validate-rel-" });
+  await Deno.writeTextFile(`${root}/deno.json`, JSON.stringify({ imports: {} }));
+  await Deno.mkdir(`${root}/builder`);
+  const dir = `${root}/app`;
+  await Deno.mkdir(dir);
+  const abs = await Deno.realPath(root);
+  const prev = Deno.cwd();
+  Deno.chdir(root);
+  try {
+    const argv = await builderArgs("builder/cli.ts", "app", "validate", {});
+    assertEquals(argv.slice(3), [
+      "--config",
+      `${abs}/deno.json`,
+      `${abs}/builder/cli.ts`,
+      `${abs}/app`,
+      "--validate",
+    ]);
+  } finally {
+    Deno.chdir(prev);
+  }
 });
 
 Deno.test("a passing app exits 0 and prints `ok <id>@<version>`", async () => {
