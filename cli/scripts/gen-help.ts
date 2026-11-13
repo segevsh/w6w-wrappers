@@ -1192,6 +1192,8 @@ export function commandPathOf(naming: string): string[] {
 
 interface NamingSurface {
   positionals: Set<string>;
+  /** Positionals spelled `[name]` (no angle brackets) in the naming: optional arguments. */
+  optionalPositionals: Set<string>;
   flags: Map<string, string | null>;
 }
 
@@ -1205,6 +1207,7 @@ function namingSurface(naming: string, pathLength: number): NamingSurface {
   const tokens = naming.trim().split(/\s+/).slice(1 + pathLength);
   const bare = (t: string) => t.replace(/^\[+/, "").replace(/\]+$/, "");
   const positionals = new Set<string>();
+  const optionalPositionals = new Set<string>();
   const flags = new Map<string, string | null>();
   for (let i = 0; i < tokens.length; i++) {
     const token = bare(tokens[i]);
@@ -1219,9 +1222,14 @@ function namingSurface(naming: string, pathLength: number): NamingSurface {
     } else {
       const match = /^<(.+)>$/.exec(token);
       if (match) positionals.add(match[1]);
+      else if (tokens[i].startsWith("[") && /^[a-z][A-Za-z0-9]*$/.test(token)) {
+        // `[dir]`: an optional positional spelled without angle brackets.
+        positionals.add(token);
+        optionalPositionals.add(token);
+      }
     }
   }
-  return { positionals, flags };
+  return { positionals, optionalPositionals, flags };
 }
 
 function describeParam(operation: string, param: string): string {
@@ -1296,14 +1304,17 @@ function buildParams(
     const description = describeParam(operation.name, param.name);
     const positional = POSITIONAL_ALIASES[key] ?? param.name;
     if (!override && surface.positionals.has(positional)) {
+      const optional = surface.optionalPositionals.has(positional);
       params.push({
         name: param.name,
         kind: "argument",
-        display: `<${positional}>`,
+        display: optional ? `[${positional}]` : `<${positional}>`,
         description,
         required: param.required,
       });
-      usageParts.push(param.required ? `<${positional}>` : `[<${positional}>]`);
+      usageParts.push(
+        optional ? `[${positional}]` : param.required ? `<${positional}>` : `[<${positional}>]`,
+      );
       continue;
     }
     const flag = override?.flag ?? `--${kebab(param.name)}`;

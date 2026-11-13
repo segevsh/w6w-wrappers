@@ -24,10 +24,21 @@ const EXEC = Uint8Array.from({ length: 256 }, (_, i) => i);
 const EXEC_B64 = btoa(String.fromCharCode(...EXEC));
 const MANIFEST = { id: ID, version: BUILT, name: "Demo" };
 
+const madeDirs: string[] = [];
+// Fixtures live under the OS temp dir; remove every one when the test process ends.
+globalThis.addEventListener("unload", () => {
+  for (const dir of madeDirs) {
+    try {
+      Deno.removeSync(dir, { recursive: true });
+    } catch { /* already gone */ }
+  }
+});
+
 async function appDir(
   pkg: string | undefined = '{\n    "name": "demo",\n    "version": "0.0.1"\n}\n',
 ) {
   const dir = await Deno.makeTempDir({ prefix: "w6w-publish-app-" });
+  madeDirs.push(dir);
   if (pkg !== undefined) await Deno.writeTextFile(`${dir}/package.json`, pkg);
   await Deno.writeTextFile(`${dir}/index.ts`, "export default {};\n");
   return dir;

@@ -142,9 +142,10 @@ server's, not the local one.
 
 `--version` rewrites the `version` in the app's `package.json` **in place**, before the build; it
 must be a semantic version (`1.2.3`), otherwise nothing is built or sent. It is a value flag for
-this command only: plain `w6w --version` still prints the version banner. There is no token flag:
-the upload uses the credentials from `w6w auth login` / `w6w config` (or the environment), and goes
-only to the configured base URL. Needs Deno. The server route is `planned` until it is deployed.
+this command only: plain `w6w --version` still prints the version banner. There is no
+command-specific credential flag; authentication is the CLI's normal client resolution
+(config/login, and the global `--token` / `W6W_TOKEN`), and the upload goes only to the configured
+base URL. Needs Deno. The server route is `planned` until it is deployed.
 
 ### apps list
 

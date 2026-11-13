@@ -2659,14 +2659,14 @@ export const HELP_TREE: HelpTree = {
             "Publish a built app artifact (manifest + bundle) to the caller's personal catalog",
           "headline":
             "publish a built app artifact (manifest + bundle) to the caller's personal catalog",
-          "usage": "w6w apps publish [options]",
+          "usage": "w6w apps publish [dir] [options]",
           "naming": "w6w apps publish [dir] [--version <semver>] [--builder <spec>]",
           "status": "planned",
           "params": [
             {
               "name": "dir",
-              "kind": "flag",
-              "display": "--dir <value>",
+              "kind": "argument",
+              "display": "[dir]",
               "description": "The app directory (default: the current directory)",
               "required": false,
             },
@@ -2768,14 +2768,14 @@ export const HELP_TREE: HelpTree = {
           "short": "Validate an app folder with the canonical app builder (local only, needs Deno)",
           "headline":
             "validate an app folder with the canonical app builder (local only, needs Deno)",
-          "usage": "w6w apps validate [options]",
+          "usage": "w6w apps validate [dir] [options]",
           "naming": "w6w apps validate [dir] [--resolution sibling|registry] [--builder <spec>]",
           "status": "live",
           "params": [
             {
               "name": "dir",
-              "kind": "flag",
-              "display": "--dir <value>",
+              "kind": "argument",
+              "display": "[dir]",
               "description": "The app directory (default: the current directory)",
               "required": false,
             },
@@ -2909,7 +2909,7 @@ export const HELP_TREE: HelpTree = {
             "Build an app folder into the canonical artifact layout with the app builder (local only, needs Deno)",
           "headline":
             "build an app folder into the canonical artifact layout with the app builder (local only, needs Deno)",
-          "usage": "w6w apps build [<dir>] [options]",
+          "usage": "w6w apps build [dir] [options]",
           "naming":
             "w6w apps build [dir] [-o|--out <dir>] [--pack <file>] [--resolution sibling|registry] [--builder <spec>]",
           "status": "live",
@@ -2917,7 +2917,7 @@ export const HELP_TREE: HelpTree = {
             {
               "name": "dir",
               "kind": "argument",
-              "display": "<dir>",
+              "display": "[dir]",
               "description": "The app directory (default: the current directory)",
               "required": false,
             },
