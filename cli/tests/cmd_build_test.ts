@@ -302,6 +302,23 @@ Deno.test("a refused build reports the builder's own lines and leaves the pack a
   assert(!(await exists(pack)), "a refused build must not record an entry");
 });
 
+Deno.test("build app: a refused build exits 1 with the builder's line on stderr", async () => {
+  const root = await Deno.makeTempDir({ prefix: "w6w-build-refused-" });
+  const dir = await appDirWith(undefined);
+  const { code, stdout, stderr } = await buildApp(
+    ["build", "app", dir, "--out", `${root}/out`],
+    {
+      code: 1,
+      stdout: "built 0/1 → index.json\n",
+      stderr: "io.w6w.demo: invalid_id: `io.w6w.demo` is not a reverse-DNS id.\n",
+    },
+  );
+  assertEquals(code, 1);
+  assertStringIncludes(stderr, "could not build");
+  assertStringIncludes(stderr, "invalid_id");
+  assertEquals(stdout, "");
+});
+
 Deno.test("a builder that wrote no index.json is reported, not read", async () => {
   const root = await Deno.makeTempDir({ prefix: "w6w-build-empty-" });
   const dir = await appDirWith(undefined);
