@@ -3,7 +3,11 @@
  * The runtime test only keeps the file in the suite.
  */
 import { assertEquals } from "@std/assert";
-import type { ConnectionSummary, FunctionSummary as PublicFunctionSummary } from "../src/types.ts";
+import type {
+  ConnectionSummary,
+  FunctionSummary as PublicFunctionSummary,
+  Me,
+} from "../src/types.ts";
 import type { FunctionSummary } from "../src/console/functions.ts";
 import type { EndpointSummary } from "../src/console/endpoints.ts";
 import type {
@@ -69,3 +73,7 @@ Deno.test("summary types carry the list fields the server sends", () => {
     10,
   );
 });
+
+// Ownership fields are optional (absent = older server) and closed to the two scopes.
+pin<Equal<ConnectionSummary["accessScope"], "account" | "user" | undefined>>();
+pin<Equal<NonNullable<Me["capabilities"]>["userScopedCredentials"], boolean | undefined>>();

@@ -350,3 +350,23 @@ Deno.test("console.connections.update forwards binding + credentialId verbatim",
   assertEquals(c.calls[0].url, "https://api.example.com/connections/conn_1");
   assertEquals(c.calls[0].body, JSON.stringify(patch));
 });
+
+Deno.test("console.connections.create forwards accessScope only when defined", async () => {
+  const c = client(() => json({ connection: CONN_A }, 201));
+  await c.client.console.connections.create("openai", {
+    authKey: "apiKey",
+    credentialId: "cred_1",
+    accessScope: "user",
+  });
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), {
+    authKey: "apiKey",
+    credentialId: "cred_1",
+    accessScope: "user",
+  });
+  await c.client.console.connections.create("openai", {
+    authKey: "apiKey",
+    credentialId: "cred_1",
+    accessScope: undefined,
+  });
+  assertEquals(c.calls[1].body, JSON.stringify({ authKey: "apiKey", credentialId: "cred_1" }));
+});

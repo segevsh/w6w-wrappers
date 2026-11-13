@@ -131,6 +131,14 @@ export interface Me {
     composition?: string;
     wrapper?: string;
   };
+  /**
+   * Server capability markers. **Gate on `=== true`; absent means an older
+   * server** that knows nothing of user-scoped credentials.
+   */
+  capabilities?: {
+    /** `true` when this deployment lets a caller own personal ("Only me") credentials. */
+    userScopedCredentials?: boolean;
+  };
 }
 
 /**
@@ -174,8 +182,14 @@ export interface ConnectionSummary {
   authKey: string;
   /** The tenant that owns the connection. */
   tenant: string;
-  /** The subject (the partner's user id) that owns the connection. */
+  /** The subject (the partner's user id) that created the connection (attribution only). */
   subject: string;
+  /**
+   * Who may use the connection: `"account"` (shared) or `"user"` (only its
+   * creator). Absent means an older server. `subject` stays creator
+   * attribution and does not imply ownership.
+   */
+  accessScope?: "account" | "user";
   /** Human-chosen label. */
   displayName: string;
   /** Lifecycle state. */

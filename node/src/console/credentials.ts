@@ -48,7 +48,25 @@ export type CredentialErrorCode =
   | "scope_not_approved"
   | "auth_not_found"
   | "jit_unavailable_in_background"
-  | "credential_invalid";
+  | "credential_invalid"
+  | "user_context_required"
+  | "ai_credential_policy_denied";
+
+/** Who may use a credential or connection: the whole account, or only its creator. */
+export type AccessScope = "account" | "user";
+
+/**
+ * The ownership and personal-key refusal codes the server can answer (S4).
+ * Studio maps each to fixed, secret-free copy.
+ */
+export type OwnershipErrorCode =
+  | "user_context_required"
+  | "credential_scope_mismatch"
+  | "user_scope_unsupported"
+  | "user_scope_not_enabled"
+  | "ai_credential_policy_denied"
+  | "personal_key_required"
+  | "personal_key_unavailable";
 
 /**
  * A stored credential, as the server projects it. Never carries a source
@@ -67,8 +85,10 @@ export interface CredentialSummary {
   revision: number;
   /** Non-secret display labels. */
   display: Record<string, string>;
-  /** `true` when the credential is private to its creator. */
+  /** `true` when the credential is private to its creator (connection-private). */
   private: boolean;
+  /** `"account"` (shared) or `"user"` (only its creator); absent on an older server. */
+  accessScope?: AccessScope;
   /** How many connections currently use this credential. */
   connectionCount: number;
   /** ISO-8601 timestamp. */
@@ -113,6 +133,8 @@ export interface CredentialListFilter {
   contract?: string;
   appId?: string;
   authKey?: string;
+  /** Narrows the list to one ownership class; sent only when defined. */
+  accessScope?: AccessScope;
 }
 
 /**
@@ -149,6 +171,7 @@ export class CredentialsApi {
     if (filter?.contract !== undefined) query.contract = filter.contract;
     if (filter?.appId !== undefined) query.appId = filter.appId;
     if (filter?.authKey !== undefined) query.authKey = filter.authKey;
+    if (filter?.accessScope !== undefined) query.accessScope = filter.accessScope;
     const res = await this.#host.request<unknown>({
       method: "GET",
       path: "/credentials",
@@ -177,12 +200,24 @@ export class CredentialsApi {
    *   `400 provider_unsupported`.
    */
   async create(
-    body: { name: string; contract: string; source: Record<string, unknown> },
+    body: {
+      name: string;
+      contract: string;
+      source: Record<string, unknown>;
+      accessScope?: AccessScope;
+    },
   ): Promise<CredentialSummary> {
+    // Built by omission: an undefined scope leaves the body byte-identical to the legacy one.
+    const wire: Record<string, unknown> = {
+      name: body.name,
+      contract: body.contract,
+      source: body.source,
+    };
+    if (body.accessScope !== undefined) wire.accessScope = body.accessScope;
     const res = await this.#host.request<unknown>({
       method: "POST",
       path: "/credentials",
-      body,
+      body: wire,
     });
     return unwrap<CredentialSummary>(res, "credential");
   }

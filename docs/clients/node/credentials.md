@@ -47,9 +47,9 @@ console.log(conn.credentialId === cred.id); // true
 
 | Call | Does |
 | --- | --- |
-| `list({ contract?, appId?, authKey? })` | List credentials; only the filters you pass are sent. |
+| `list({ contract?, appId?, authKey?, accessScope? })` | List credentials; only the filters you pass are sent. |
 | `get(id)` | Read one credential. |
-| `create({ name, contract, source })` | Store a new credential. |
+| `create({ name, contract, source, accessScope? })` | Store a new credential. Leave `accessScope` out for a shared (account) credential. |
 | `update(id, { name })` | Rename it. |
 | `rotate(id, { source })` | Replace the secret. |
 | `disable(id)` / `enable(id)` | Turn it off and on again. |
@@ -63,7 +63,13 @@ console.log(conn.credentialId === cred.id); // true
 `source` is sent to the server and forwarded as-is. The SDK does not read it, log it or return it,
 and no response carries it. A `CredentialSummary` has the id, name, contract, status, revision,
 non-secret `display` labels, whether it is `private`, how many connections use it
-(`connectionCount`) and its timestamps.
+(`connectionCount`) and its timestamps. On a current server it also has `accessScope`: `"account"` (shared) or `"user"` (only its creator; absent on an older server). `private` keeps its own meaning, private to one connection.
+
+## Personal ("Only me") credentials
+
+Pass `accessScope: "user"` to `create` (or to `console.connections.create`) to keep a key to yourself. Check `(await client.me()).capabilities?.userScopedCredentials === true` first; an older server does not know the field. The server answers with one of these codes, which reach you as an `ApiError` with that `code`: `user_context_required`, `credential_scope_mismatch`, `user_scope_unsupported`, `user_scope_not_enabled`, `ai_credential_policy_denied`. The type `OwnershipErrorCode` lists them with the two model-call codes `personal_key_required` and `personal_key_unavailable`.
+
+Two more console namespaces cover the personal side. `client.console.aiKeys` has `defaults()`, `setDefault(providerAppId, connectionId)` and `clearDefault(providerAppId)`: the caller's own default key per provider, with no user or account parameter. `client.console.aiCredentialPolicy` has `get()` and `put({ mode })` for the tenant's policy on which key kinds AI calls may use (`both`, `account_only`, `user_only`); `put` needs a tenant admin.
 
 ## Listing credential types
 
