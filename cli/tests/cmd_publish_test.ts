@@ -4,15 +4,15 @@
  * The app builder is never started: the Deno spawn is replaced
  * ({@linkcode useToolchainRunner}) by a fake that writes the canonical artifact tree.
  * The upload goes through the real SDK against a fake `fetch`, so what is asserted is
- * the request on the wire. The handler is driven directly (the `--version` flag is
- * wired into the help tree with the rest of the surface).
+ * the request on the wire. Most cases drive the handler directly; the `main()` cases at the
+ * end prove the real command line parses `--version <semver>` as a string for this command.
  */
 
 import { assert, assertEquals, assertStringIncludes } from "@std/assert";
 import { ApiError, W6WClient } from "@w6w/sdk";
 import type { FetchLike } from "@w6w/sdk";
-import type { CliIo, CommandContext, Invocation } from "../mod.ts";
-import { createOutput, NO_CONFIG, NO_ENV, NO_STDIN, NO_STORE } from "../mod.ts";
+import type { CliIo, CommandContext, EnvReader, Invocation } from "../mod.ts";
+import { createOutput, main, NO_CONFIG, NO_ENV, NO_STDIN, NO_STORE } from "../mod.ts";
 import { COMMANDS } from "../src/commands/index.ts";
 import { useToolchainRunner } from "../src/app-toolchain.ts";
 
@@ -245,4 +245,71 @@ Deno.test("apps publish: takes no credential flag or extra positional", async ()
   assertEquals(extra.seen.requests.length, 0);
   const src = await Deno.readTextFile(new URL("../src/commands/publish.ts", import.meta.url));
   assert(!/textFlag\(context, "(token|auth|credential|bearer)/i.test(src));
+});
+
+// --- the real command line (`main()`): `--version` is a string flag here only -------------
+
+async function viaMain(argv: string[], dir: string) {
+  const runs: string[][] = [];
+  const requests: { url: string; body: string }[] = [];
+  const restore = useToolchainRunner(async (args) => {
+    runs.push(args);
+    await fabricate(args, false);
+    return { code: 0, stdout: "", stderr: "" };
+  });
+  const fetch: FetchLike = (url, init) => {
+    requests.push({ url, body: typeof init?.body === "string" ? init.body : "" });
+    return Promise.resolve(
+      json(200, { id: ID, version: "9.9.9", outcome: "registered", target: "personal" }),
+    );
+  };
+  const env: EnvReader = (name) =>
+    ({ W6W_BASE_URL: "https://api.example.test", W6W_TOKEN: BEARER } as Record<string, string>)[
+      name
+    ];
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  try {
+    const code = await main([...argv, dir], {
+      stdout: (t) => stdout.push(t),
+      stderr: (t) => stderr.push(t),
+    }, { env, fetch, commands: COMMANDS });
+    return { code, runs, requests, stdout: stdout.join("\n"), stderr: stderr.join("\n") };
+  } finally {
+    restore();
+  }
+}
+
+Deno.test("main(): `apps publish --version 1.2.3` rewrites package.json, builds and uploads", async () => {
+  const dir = await appDir();
+  try {
+    const ran = await viaMain(["apps", "publish", "--version", "1.2.3", "--json"], dir);
+    assertEquals(ran.code, 0, ran.stderr);
+    assertEquals(JSON.parse(await Deno.readTextFile(`${dir}/package.json`)).version, "1.2.3");
+    assertEquals(ran.runs.length, 1);
+    assertEquals(ran.requests.length, 1);
+    assert(!ran.stdout.includes("wrapper:"), "must not print the version banner");
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("main(): `apps publish --version nope` is a usage error, nothing built or sent", async () => {
+  const dir = await appDir();
+  try {
+    const ran = await viaMain(["apps", "publish", "--version", "nope"], dir);
+    assertEquals(ran.code, 1);
+    assertEquals(ran.runs.length, 0);
+    assertEquals(ran.requests.length, 0);
+    assertEquals(JSON.parse(await Deno.readTextFile(`${dir}/package.json`)).version, "0.0.1");
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("main(): plain `--version` is still the banner, not a publish flag", async () => {
+  const ran = await viaMain(["--version", "--json"], ".");
+  assertEquals(ran.code, 0, ran.stderr);
+  assertEquals(ran.runs.length, 0);
+  assertEquals(ran.requests.length <= 1, true);
 });

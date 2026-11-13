@@ -66,6 +66,8 @@ A saved token is used only for the base URL it was saved for. See the [CLI](/cli
 | `w6w apps init <id> [--template deno\|node] [--dir <path>]` | Local only. Scaffold a new app in `./<id>` (or `--dir`) from a bundled template. Refuses a non-empty directory. |
 | `w6w apps validate [dir] [--resolution sibling\|registry] [--builder <spec>]` | Local only, needs Deno. Validate the app in `[dir]` (default: the current directory) with the canonical builder; prints `code: message` per error, exit `1` on failure. |
 | `w6w apps build [dir] [-o\|--out <dir>] [--pack <file>] [--resolution sibling\|registry] [--builder <spec>]` | Local only, needs Deno. Build to `<out>/<id>/<version>/{app.js,manifest.json}` plus `<out>/index.json` and print the index entry. `--pack` updates a pack file under an exclusive `<pack>.lock`. |
+| `w6w apps publish [dir] [--version <semver>] [--builder <spec>]` | Needs Deno and a signed-in client. Build the app, then upload it to **your personal tier** (private to you). `--version` rewrites `package.json`'s `version` in place before the build (semver only; otherwise nothing is built or sent) and is a value flag for this command only. Prints the server's `{id, version, outcome, target}`. Credentials come from `w6w auth login` / config only — there is no token flag. The route is `planned` until deployed. |
+| `w6w apps list [--scope <scope>] [--q <q>] [--sort <sort>] [--compact] [--snapshot <t>] [--cursor <c>] [--offset <n>] [--limit <n>]` | Alias of `w6w app-management list`: the same handler, same flags, same output. |
 
 ## List
 
