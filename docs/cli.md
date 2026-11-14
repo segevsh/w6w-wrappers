@@ -454,7 +454,8 @@ together.
 `personal`. `personal` is the **deprecated alias** for `account`: it carries the same
 availability and the same import policy (the tenant's `allow_user_app_import`, or an
 operator), and an app it registers is owned by `{tenant, account}` with the caller's
-subject recorded as attribution (`publishedBy`) only. The CLI sends what you type and
+subject recorded as attribution (`publishedBy`) only. The id must sit under an active namespace your tenant holds, or the server answers
+`403 namespace_not_owned` (or `namespace_owned` when another tenant holds it). The CLI sends what you type and
 never checks it: the server decides which targets you may use. The `targets` list in
 `w6w app-management list --json` says which.
 
