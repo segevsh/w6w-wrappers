@@ -34,13 +34,25 @@ async function host(): Promise<Host> {
   };
 }
 
+/**
+ * The id to suggest for a rejected one: `com.example.<slug>`, where the slug is the
+ * rejected id folded into the builder's segment alphabet (`[a-z0-9-]`). Never silently
+ * applied — the error only names it.
+ */
+export function suggestId(id: string): string {
+  const slug = id.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return `com.example.${slug === "" ? "my-app" : slug}`;
+}
+
 const appsInit: CommandHandler = async (context) => {
-  const id = argument(context, 0, "an app id (e.g. demo-app)");
+  const id = argument(context, 0, "an app id (e.g. com.example.demo-app)");
   noExtraArguments(context, 1);
   if (!APP_ID.test(id)) {
     throw usageError(
       context,
-      `\`${id}\` is not a valid app id: use lowercase letters, digits and single hyphens, starting with a letter.`,
+      `\`${id}\` is not a valid app id: the builder needs a dotted reverse-DNS id — ` +
+        `lowercase letters, digits and hyphens, in two or more dot-separated segments ` +
+        `(e.g. \`com.example.my-app\`). Try \`${suggestId(id)}\`.`,
     );
   }
   const template = textFlag(context, "template") ?? "deno";
