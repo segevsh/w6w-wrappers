@@ -2440,7 +2440,7 @@ Query: `scope` (`all` default, `account`, `tenant`, `personal` — the last the 
 
 Nothing is unwrapped: the body is returned as sent, `{apps, scope, snapshot, total, offset, limit, expiresAt, nextCursor?, targets, sourceOptions}`. `targets` is always three `TargetOption`s in the order account, tenant, personal (each `permitted`, with a `reason` when not); `sourceOptions` is what the caller may name as a source (`publicRepos`, `privateRepos`, `folders`, `localPaths`). Each row is the catalog `AppSummary` plus `management` (class, owner, capabilities, reasons), `source` and `lastSync`, all computed live. `ManagementClass`, `UnavailableReason` and `TargetOption.reason` are **open** unions; `SyncOutcome` is **closed**.
 
-`personal` is the **deprecated alias** for account-owned in all three places it appears — the `scope` value, the third `TargetOption` and a `ManagementClass`. It is accepted as sent, but the server never classifies an app as subject-private: a `personal` app is owned by `{tenant, account}` (`owner_account`), the subject is attribution only, same-account teammates share it and a foreign account does not see it. App ids stay globally unique — two accounts in one tenant that register the same id collide on `409 id_taken`.
+`personal` is the **deprecated alias** for account-owned in all three places it appears — the `scope` value, the third `TargetOption` and a `ManagementClass`. It is accepted as sent, but the server never classifies an app as subject-private: a `personal` app is owned by `{tenant, account}` (`owner_account`), the subject is attribution only, same-account teammates share it and a foreign account does not see it.
 
 Errors: `400 invalid_scope`, `400 invalid_query`, `400 invalid_cursor`, `400 invalid_limit`, `400 invalid_offset`, `403 forbidden` (`scope=tenant` from a non-admin), `404 unknown_snapshot`, `410 snapshot_expired`, `400 snapshot_query_mismatch`.
 
@@ -2480,7 +2480,7 @@ POST /app-management/apps
 
 `status: required` · served today
 
-Body `{target, source, paths?}`; `paths` (pack sources only) is sent only when given. Answers the legacy import shapes (app 201/200, pack 201/207/200) plus `target`. `target` accepts `account`, `tenant` or `personal`; `personal` is the **deprecated alias** for `account`, so it shares that target's availability and its `allow_user_app_import`/operator gate, and the app is stored account-owned (`owner_account`) with the subject kept as `publishedBy` attribution only.
+Body `{target, source, paths?}`; `paths` (pack sources only) is sent only when given. Answers the legacy import shapes (app 201/200, pack 201/207/200) plus `target`. `target` accepts `account`, `tenant` or `personal`; `personal` is the **deprecated alias** for `account`, so it shares that target's availability and its `allow_user_app_import`/operator gate, and the app is stored account-owned (`owner_account`) with the subject kept as `publishedBy` attribution only. App ids are globally unique whatever the tier: even two accounts in one tenant that register the same id collide with `409 id_taken`.
 
 Errors: `400 invalid_body`, `400 invalid_target`, `400 invalid_source`, `403 forbidden`, `403 user_import_disabled`, `403 local_import_forbidden`, `409 id_taken`, and the source fetch codes of §96.
 
