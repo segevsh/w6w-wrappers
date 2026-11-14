@@ -15,8 +15,12 @@
 /** The two scaffold variants. */
 export type TemplateName = "deno" | "node";
 
-/** The app-id grammar `apps init` accepts. */
-export const APP_ID = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
+/**
+ * The app-id grammar `apps init` accepts: the canonical builder's `ID_RE`
+ * (`core/packages/app-build/src/build.ts`), restated here so the CLI refuses a
+ * non-buildable id at scaffold time instead of letting `apps validate` do it later.
+ */
+export const APP_ID = /^[a-z0-9]+(\.[a-z0-9-]+)+$/;
 
 /** The exact `deno.json` imports every template carries (pinned P3). */
 export const TEMPLATE_IMPORTS: Record<string, string> = {
@@ -24,6 +28,15 @@ export const TEMPLATE_IMPORTS: Record<string, string> = {
   "@w6w/runtime/author": "jsr:@w6w/runtime@0.2.0/author",
   "@w6w/app-kit/poll": "jsr:@w6w/app-kit@0.1.0/poll",
 };
+
+/** The bundled app icon (`assets/icon.svg`), inlined into the built manifest. */
+const ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="12" cy="12" r="9"/>
+  <path d="M3.5 12h17"/>
+  <path d="M12 3.5c2.5 2.4 3.9 5.4 3.9 8.5s-1.4 6.1-3.9 8.5c-2.5-2.4-3.9-5.4-3.9-8.5s1.4-6.1 3.9-8.5z"/>
+</svg>
+`;
 
 const INDEX = `import type { AppDefinition } from "@w6w/types";
 import apiKey from "./auth/api-key.ts";
@@ -50,6 +63,12 @@ const apiKey: AuthDefinition = {
   connectionLabel: "__ID__",
   apiKey: { in: "header", name: "X-Api-Key" },
   fields: [{ key: "apiKey", label: "API Key", type: "secret", required: true }],
+
+  /** Required: the connect-time check that the credential is live. */
+  async test({ credential }) {
+    const { apiKey } = credential as { apiKey: string };
+    return apiKey ? { ok: true } : { ok: false, message: "no API key" };
+  },
 
   sign({ request, credential }) {
     const { apiKey } = credential as { apiKey: string };
@@ -150,7 +169,13 @@ jobs:
 `;
 
 function readme(template: TemplateName): string {
-  const test = template === "deno" ? "deno test -A tests/" : "npm test";
+  const loop = template === "deno"
+    ? `deno task test  # unit tests
+deno task validate  # check the app against the builder
+deno task build     # write ./out/__ID__/<version>/{app.js,manifest.json}`
+    : `npm test           # unit tests
+w6w apps validate  # check the app against the builder
+w6w apps build     # write ./out/__ID__/<version>/{app.js,manifest.json}`;
   return `# __ID__
 
 A w6w app scaffolded by \`w6w apps init __ID__ --template ${template}\`.
@@ -158,15 +183,19 @@ A w6w app scaffolded by \`w6w apps init __ID__ --template ${template}\`.
 ## Prerequisite
 
 [Deno](https://deno.com) must be on your PATH: \`w6w apps validate\` and \`w6w apps build\` run the
-canonical \`@w6w/app-build\` builder through it.
+canonical \`@w6w/app-build\` builder through it. The \`w6w\` CLI itself must be on your PATH too.
 
 ## Loop
 
 \`\`\`sh
-${test}            # unit tests
-w6w apps validate  # check the app against the builder
-w6w apps build     # write ./out/__ID__/<version>/{app.js,manifest.json}
+${loop}
 \`\`\`
+
+## Manifest
+
+\`package.json\` carries the app's manifest under \`w6w\`: the dotted reverse-DNS \`id\`, a bundled
+\`appearance.icon\` (\`assets/icon.svg\`) and the \`author\` the build requires. Replace the icon and
+fill in your own \`author\` before publishing.
 `;
 }
 
@@ -176,8 +205,16 @@ import ping from "../actions/ping.ts";
 
 Deno.test("api-key signs with X-Api-Key", () => {
   const request = { url: "https://example.com", headers: {} as Record<string, string> };
-  const signed = apiKey.sign!({ request, credential: { apiKey: "k" } } as never) as typeof request;
+  const signed = apiKey.sign!(
+    { request, credential: { apiKey: "k" } } as never,
+    {} as never,
+  ) as typeof request;
   assertEquals(signed.headers["x-api-key"], "k");
+});
+
+Deno.test("api-key test hook accepts a key", async () => {
+  const result = await apiKey.test({ credential: { apiKey: "k" } } as never, {} as never);
+  assertEquals(result, { ok: true });
 });
 
 Deno.test("ping echoes", async () => {
@@ -192,8 +229,17 @@ import ping from "../actions/ping.ts";
 
 test("api-key signs with X-Api-Key", () => {
   const request = { url: "https://example.com", headers: {} as Record<string, string> };
-  const signed = apiKey.sign!({ request, credential: { apiKey: "k" } } as never) as typeof request;
+  const signed = apiKey.sign!(
+    { request, credential: { apiKey: "k" } } as never,
+    {} as never,
+  ) as typeof request;
   assert.equal(signed.headers["x-api-key"], "k");
+});
+
+test("api-key test hook accepts a key", async () => {
+  assert.deepEqual(await apiKey.test({ credential: { apiKey: "k" } } as never, {} as never), {
+    ok: true,
+  });
 });
 
 test("ping echoes", async () => {
@@ -208,7 +254,11 @@ export function templateFiles(template: TemplateName, id: string): Record<string
     exports: "./index.ts",
     imports: TEMPLATE_IMPORTS,
     tasks: template === "deno"
-      ? { test: "deno test -A tests/" }
+      ? {
+        test: "deno test -A tests/",
+        validate: "w6w apps validate",
+        build: "w6w apps build",
+      }
       : { test: "node --test --experimental-strip-types tests/*.test.ts" },
   };
   const pkg: Record<string, unknown> = {
@@ -216,11 +266,13 @@ export function templateFiles(template: TemplateName, id: string): Record<string
     version: "0.1.0",
     description: `The ${id} w6w app.`,
     license: "MIT",
+    author: { name: id },
     private: true,
     w6w: {
       id,
       displayName: id,
       longDescription: `The ${id} w6w app.`,
+      appearance: { icon: { url: "assets/icon.svg" } },
       categories: ["other"],
       network: { allow: ["example.com"] },
       entry: "./index.ts",
@@ -233,6 +285,7 @@ export function templateFiles(template: TemplateName, id: string): Record<string
   const files: Record<string, string> = {
     "package.json": JSON.stringify(pkg, null, 2) + "\n",
     "deno.json": JSON.stringify(denoJson, null, 2) + "\n",
+    "assets/icon.svg": ICON_SVG,
     "index.ts": INDEX,
     "auth/api-key.ts": AUTH,
     "actions/ping.ts": ACTION,

@@ -33,9 +33,9 @@ w6w auth status                                # base URL, where it came from, m
 w6w auth logout
 w6w config get-base-url                        # effective base URL and its source
 w6w config set-base-url https://w6w.example.com  # save it (tokens are per host: auth login again)
-w6w apps init my-app                           # scaffold a new app (local only)
-w6w apps validate ./my-app                     # validate it with the canonical builder (needs Deno)
-w6w apps build ./my-app --pack ./w6w-pack.json  # build it (`w6w build app` is an alias)
+w6w apps init com.example.my-app              # scaffold a new app (local only)
+w6w apps validate ./com.example.my-app        # validate it with the canonical builder (needs Deno)
+w6w apps build ./com.example.my-app --pack ./w6w-pack.json  # build it (`w6w build app` is an alias)
 ```
 
 The token is stored per user (`~/.config/w6w/config.json`, or `$XDG_CONFIG_HOME/w6w/…`;
@@ -119,6 +119,16 @@ or `NO_COLOR`.
 
 `w6w apps init <id> [--template deno|node] [--dir <path>]` scaffolds a new app into `./<id>` from a
 bundled template, with no network. It refuses a non-empty directory.
+
+`<id>` must be the dotted reverse-DNS id the canonical builder accepts — two or more dot-separated
+segments of lowercase letters, digits and hyphens, e.g. `com.example.my-app` (the same rule as the
+builder's `ID_RE`, so a scaffolded app validates as scaffolded). A non-dotted id is a usage error
+that names the rule and suggests a `com.example.<slug>` spelling; it is never rewritten silently.
+
+The scaffold ships in the manifest under `w6w` what the build requires: an `author`, and an
+`appearance.icon` pointing at the bundled `assets/icon.svg`. The `deno` template also has
+`test`/`validate`/`build` tasks, so `deno task test`, `deno task validate` and `deno task build` all
+work in the new directory.
 
 ### apps validate
 
