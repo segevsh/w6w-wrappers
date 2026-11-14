@@ -135,6 +135,11 @@ async function writeBuilderMap(dir: string): Promise<string> {
 function realRunner(options: { map: string; jsrUrl: string }): ToolchainRunner {
   return async (argv, cwd) => {
     const args = [...argv];
+    // The seam's own assumptions, asserted rather than trusted: the spawn names the lane's
+    // builder, and the builder is already told to allow worker options (which is the only
+    // reason the re-exec marker above may be set).
+    assertStringIncludes(args.join(" "), BUILDER);
+    assertStringIncludes(args.join(" "), "--unstable-worker-options");
     const at = args.indexOf("--config");
     if (at === -1) throw new Error(`the builder argv names no --config: ${args.join(" ")}`);
     args[at + 1] = options.map;
