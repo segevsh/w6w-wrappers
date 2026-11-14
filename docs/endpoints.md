@@ -2436,9 +2436,11 @@ GET /app-management/apps
 
 `status: required` · served today
 
-Query: `scope` (`all` default, `account`, `tenant`, `personal`), `q`, `sort` (`name` default, `-name`, `recent`, `-recent`), `compact`, `snapshot`, `cursor` (the previous `nextCursor`), `offset`, `limit`. Each is sent under its own name only when given, so `offset: 0` and `compact: false` are sent. `snapshot` and `cursor` are mutually exclusive.
+Query: `scope` (`all` default, `account`, `tenant`, `personal` — the last the **deprecated alias** for `account`), `q`, `sort` (`name` default, `-name`, `recent`, `-recent`), `compact`, `snapshot`, `cursor` (the previous `nextCursor`), `offset`, `limit`. Each is sent under its own name only when given, so `offset: 0` and `compact: false` are sent. `snapshot` and `cursor` are mutually exclusive.
 
 Nothing is unwrapped: the body is returned as sent, `{apps, scope, snapshot, total, offset, limit, expiresAt, nextCursor?, targets, sourceOptions}`. `targets` is always three `TargetOption`s in the order account, tenant, personal (each `permitted`, with a `reason` when not); `sourceOptions` is what the caller may name as a source (`publicRepos`, `privateRepos`, `folders`, `localPaths`). Each row is the catalog `AppSummary` plus `management` (class, owner, capabilities, reasons), `source` and `lastSync`, all computed live. `ManagementClass`, `UnavailableReason` and `TargetOption.reason` are **open** unions; `SyncOutcome` is **closed**.
+
+`personal` is the **deprecated alias** for account-owned in all three places it appears — the `scope` value, the third `TargetOption` and a `ManagementClass`. It is accepted as sent, but the server never classifies an app as subject-private: a `personal` app is owned by `{tenant, account}` (`owner_account`), the subject is attribution only, same-account teammates share it and a foreign account does not see it.
 
 Errors: `400 invalid_scope`, `400 invalid_query`, `400 invalid_cursor`, `400 invalid_limit`, `400 invalid_offset`, `403 forbidden` (`scope=tenant` from a non-admin), `404 unknown_snapshot`, `410 snapshot_expired`, `400 snapshot_query_mismatch`.
 
@@ -2464,7 +2466,7 @@ POST /app-management/preview
 
 `status: required` · served today
 
-Body `{source, target}` (nothing else is sent). `source` is a canonical remote ref or `{folder:{grant,path}}`; `target` is `account`, `tenant` or `personal`. Answers `{kind:"app", sourceRef, app}` or `{kind:"pack", sourceRef, pack, entries}`; `entries[].alreadyRegistered` covers only apps the caller manages.
+Body `{source, target}` (nothing else is sent). `source` is a canonical remote ref or `{folder:{grant,path}}`; `target` is `account`, `tenant` or `personal` (`personal` the deprecated alias for `account`, with the same availability). Answers `{kind:"app", sourceRef, app}` or `{kind:"pack", sourceRef, pack, entries}`; `entries[].alreadyRegistered` covers only apps the caller manages.
 
 Errors: `400 invalid_body`, `400 invalid_target`, `400 invalid_source`, `403 forbidden`, `403 local_import_forbidden`, `424 fetch_failed`, `424 source_requires_grant`, `429 source_rate_limited`, `424 source_timeout`, `424 source_too_large`.
 
@@ -2478,7 +2480,7 @@ POST /app-management/apps
 
 `status: required` · served today
 
-Body `{target, source, paths?}`; `paths` (pack sources only) is sent only when given. Answers the legacy import shapes (app 201/200, pack 201/207/200) plus `target`.
+Body `{target, source, paths?}`; `paths` (pack sources only) is sent only when given. Answers the legacy import shapes (app 201/200, pack 201/207/200) plus `target`. `target` accepts `account`, `tenant` or `personal`; `personal` is the **deprecated alias** for `account`, so it shares that target's availability and its `allow_user_app_import`/operator gate, and the app is stored account-owned (`owner_account`) with the subject kept as `publishedBy` attribution only. App ids are globally unique whatever the tier: even two accounts in one tenant that register the same id collide with `409 id_taken`.
 
 Errors: `400 invalid_body`, `400 invalid_target`, `400 invalid_source`, `403 forbidden`, `403 user_import_disabled`, `403 local_import_forbidden`, `409 id_taken`, and the source fetch codes of §96.
 
@@ -2532,7 +2534,7 @@ POST /app-management/artifacts
 
 `status: planned` · not served yet (`serverImplemented: false`) · added in `0.19.0`
 
-Body `{artifact, exec, map?}`: `artifact` is the built manifest (opaque to the wrapper), `exec` and `map` are base64 strings (the wrappers take bytes and encode); `map` is sent only when given. Answers `{id, version, outcome, target}` with `outcome` one of `registered`, `bumped`, `upgraded`, `unchanged` and `target` always `personal`. The body is returned unchanged.
+Body `{artifact, exec, map?}`: `artifact` is the built manifest (opaque to the wrapper), `exec` and `map` are base64 strings (the wrappers take bytes and encode); `map` is sent only when given. Answers `{id, version, outcome, target}` with `outcome` one of `registered`, `bumped`, `upgraded`, `unchanged` and `target` always the wire token `personal`, which is the **deprecated alias** for account-owned: the upload is registered as an account app owned by the caller's `{tenant, account}`, the subject is only `publishedBy` attribution, and the account's teammates can manage it — it is never visible to one subject. The body is returned unchanged.
 
 Errors: `400 invalid_body`, `400 invalid_target`, `403 user_import_disabled`, `403 forbidden`, `409 id_taken`, `413 artifact_too_large`, `422` publisher codes (`invalid_manifest`, `exec_sha_mismatch`, `map_sha_mismatch`, `map_missing`, `manifest_mismatch`, `version_conflict`, `protocol_trigger_not_allowed`, …), `503 blob_store_unavailable`.
 

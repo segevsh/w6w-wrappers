@@ -441,15 +441,23 @@ w6w app-management remove <id>
 ```
 
 **Scope.** `list --scope` is `all` (the default), `account`, `tenant` or `personal`.
+`personal` is the **deprecated wire alias** for the account tier: it is sent as typed and
+accepted, but a row it selects is account-owned — visible to your `{tenant, account}`
+teammates, never to a single subject. The server never reports an app as subject-private,
+and teammates in one account share the apps they register.
 `--sort` is `name` (the default), `-name`, `recent` or `-recent`; write a
 leading-dash value as `--sort=-recent`. `--cursor` takes the previous page's
 `nextCursor`; it is not combined with `--snapshot`, and the server refuses both
 together.
 
 **Target.** `--target` on `preview` and `register` is `account`, `tenant` or
-`personal`. The CLI sends what you type and never checks it: the server decides
-which targets you may use. The `targets` list in `w6w app-management list --json`
-says which.
+`personal`. `personal` is the **deprecated alias** for `account`: it carries the same
+availability and the same import policy (the tenant's `allow_user_app_import`, or an
+operator), and an app it registers is owned by `{tenant, account}` with the caller's
+subject recorded as attribution (`publishedBy`) only. The id must sit under an active namespace your tenant holds, or the server answers
+`403 namespace_not_owned` (or `namespace_owned` when another tenant holds it). The CLI sends what you type and
+never checks it: the server decides which targets you may use. The `targets` list in
+`w6w app-management list --json` says which.
 
 **Source.** `<source>` takes two forms. A canonical remote ref
 (`github:owner/repo`) is sent as a string. A value whose first non-space
