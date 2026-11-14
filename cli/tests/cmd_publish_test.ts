@@ -359,3 +359,58 @@ Deno.test('main(): `--version "1.2.3\\n"` is a usage error before package.json o
     await Deno.remove(dir, { recursive: true });
   }
 });
+
+// --- 403 namespace_not_owned: the pinned refusal envelope (multiple prefixes / none) ------
+
+const NOT_OWNED = {
+  multiple: "io.w6w.demo is not under a prefix you own; your active prefixes are acme. and beta.",
+  none: "you own no namespace prefix; ask an operator to assign one to your tenant",
+};
+
+function notOwned(message: string): () => Response {
+  return () => json(403, { error: { code: "namespace_not_owned", message } });
+}
+
+function assertClean(everything: string) {
+  assert(!everything.includes(BEARER), "bearer absent");
+  assert(!everything.includes(EXEC_B64), "base64 exec absent");
+  assert(!everything.includes('"raw"'), "raw envelope absent");
+  assert(!everything.includes("app.js.map"), "map absent");
+}
+
+for (const [label, message] of Object.entries(NOT_OWNED)) {
+  Deno.test(`apps publish: 403 namespace_not_owned (${label}) keeps code and message`, async () => {
+    const r = await publish({ positionals: [await appDir()] }, {
+      map: true,
+      reply: notOwned(message),
+    });
+    assert(r.error instanceof ApiError);
+    const e = r.error as ApiError;
+    assertEquals(e.code, "namespace_not_owned");
+    assertEquals(e.status, 403);
+    assertEquals(e.raw, null);
+    assertStringIncludes(e.message, `namespace_not_owned: ${message}`);
+    assertEquals(r.code, undefined, "no success return");
+    assertEquals(r.stdout, "", "no success output");
+    assertEquals(r.seen.requests.length, 1, "no second request");
+    assert(await gone(r.seen.outs[0]), "temp dir gone");
+    assertClean(`${r.stdout}\n${r.stderr}\n${e.message}\n${e.stack}`);
+  });
+
+  Deno.test(`main(): 403 namespace_not_owned (${label}) exits nonzero with the message`, async () => {
+    const dir = await appDir();
+    try {
+      const ran = await viaMain(["apps", "publish"], dir, notOwned(message));
+      assert(ran.code !== 0, "nonzero exit");
+      assertEquals(ran.requests.length, 1);
+      const all = `${ran.stdout}\n${ran.stderr}`;
+      assertStringIncludes(all, "namespace_not_owned");
+      assertStringIncludes(all, message);
+      assert(!ran.stdout.includes("registered"), "no success output");
+      assertClean(all);
+      assert(await gone(outOf(ran.runs[0])), "temp dir gone");
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  });
+}
