@@ -185,10 +185,16 @@ builder through it, and a missing Deno is an error that names this prerequisite.
 
 `w6w apps init <id> [--template deno|node] [--dir <path>]` scaffolds a new app (default
 template `deno`, default directory `./<id>`): `package.json`, `deno.json`, `index.ts`, one
-auth, one action, one poll trigger, one health check, tests, a `.github/workflows/w6w.yml`
-that runs validate and build, and a README. It needs no
-network, and refuses a non-empty target directory. `<id>` must be a valid app id (lowercase
-letters, digits and single hyphens), else it is a usage error.
+auth, one action, one poll trigger, one health check, tests, a bundled `assets/icon.svg` wired
+in as `appearance.icon`, an `author` the build requires, a `.github/workflows/w6w.yml` that
+runs validate and build, and a README. The `deno` template also carries `deno task validate`
+and `deno task build`. It needs no network, and refuses a non-empty target directory.
+
+`<id>` must be the dotted reverse-DNS id the builder accepts: lowercase letters, digits and
+hyphens in two or more dot-separated segments, as in `com.example.demo-app`. A non-dotted id
+(say `demo-app`) is a usage error (exit `1`) that names the rule and suggests
+`com.example.<slug>`;
+nothing is written, and a rejected id is never silently rewritten into an accepted one.
 
 `w6w apps validate [dir] [--resolution sibling|registry] [--builder <spec>]` checks the app
 in `[dir]` (default: the current directory) with the builder's `--validate` mode. It prints

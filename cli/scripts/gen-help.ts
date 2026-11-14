@@ -311,15 +311,21 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
     "w6w build app ./apps/2chat",
     "w6w build app ./apps/2chat --out ./out/2chat --pack ./w6w-pack.json",
   ],
-  "apps.init": ["w6w apps init demo-app", "w6w apps init demo-app --template node --dir ./demo"],
-  "apps.validate": ["w6w apps validate", "w6w apps validate ./demo-app --resolution registry"],
+  "apps.init": [
+    "w6w apps init com.example.demo-app",
+    "w6w apps init com.example.demo-app --template node --dir ./demo",
+  ],
+  "apps.validate": [
+    "w6w apps validate",
+    "w6w apps validate ./com.example.demo-app --resolution registry",
+  ],
   "apps.build": [
-    "w6w apps build ./demo-app",
-    "w6w apps build ./demo-app --out ./out --pack ./w6w-pack.json",
+    "w6w apps build ./com.example.demo-app",
+    "w6w apps build ./com.example.demo-app --out ./out --pack ./w6w-pack.json",
   ],
   "appManagement.publishArtifact": [
-    "w6w apps publish ./demo-app",
-    "w6w apps publish ./demo-app --version 1.2.3",
+    "w6w apps publish ./com.example.demo-app",
+    "w6w apps publish ./com.example.demo-app --version 1.2.3",
   ],
   "apps.list": ["w6w apps list", "w6w apps list --scope personal --limit 20"],
   "version": ["w6w version", "w6w version --json", "w6w --version"],
@@ -699,7 +705,10 @@ const PARAM_HELP: Record<string, string> = {
     "Output root: writes <out>/<id>/<version>/{app.js,manifest.json} and <out>/index.json",
   "build.app.pack":
     "A pack or index JSON file (with an `apps` array) to update with the built entry; created if missing",
-  "apps.init.id": "The app id (lowercase letters, digits and single hyphens)",
+  "apps.init.id":
+    "The app id: the builder's dotted reverse-DNS form — two or more dot-separated segments of " +
+    "lowercase letters, digits and hyphens (e.g. com.example.demo-app); a non-dotted id is a " +
+    "usage error suggesting com.example.<slug>",
   "apps.init.template": "Template variant: deno (default) or node",
   "apps.init.dir": "Directory to create (default: ./<id>); must be missing or empty",
   "apps.validate.dir": "The app directory (default: the current directory)",
