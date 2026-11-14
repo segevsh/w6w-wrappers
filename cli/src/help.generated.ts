@@ -2695,8 +2695,8 @@ export const HELP_TREE: HelpTree = {
             },
           ],
           "examples": [
-            "w6w apps publish ./demo-app",
-            "w6w apps publish ./demo-app --version 1.2.3",
+            "w6w apps publish ./com.example.demo-app",
+            "w6w apps publish ./com.example.demo-app --version 1.2.3",
           ],
           "notes": [
             'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
@@ -2724,7 +2724,8 @@ export const HELP_TREE: HelpTree = {
               "name": "id",
               "kind": "argument",
               "display": "<id>",
-              "description": "The app id (lowercase letters, digits and single hyphens)",
+              "description":
+                "The app id: the builder's dotted reverse-DNS form — two or more dot-separated segments of lowercase letters, digits and hyphens (e.g. com.example.demo-app); a non-dotted id is a usage error suggesting com.example.<slug>",
               "required": true,
             },
             {
@@ -2750,8 +2751,8 @@ export const HELP_TREE: HelpTree = {
             },
           ],
           "examples": [
-            "w6w apps init demo-app",
-            "w6w apps init demo-app --template node --dir ./demo",
+            "w6w apps init com.example.demo-app",
+            "w6w apps init com.example.demo-app --template node --dir ./demo",
           ],
           "notes": [],
         },
@@ -2805,7 +2806,7 @@ export const HELP_TREE: HelpTree = {
           ],
           "examples": [
             "w6w apps validate",
-            "w6w apps validate ./demo-app --resolution registry",
+            "w6w apps validate ./com.example.demo-app --resolution registry",
           ],
           "notes": [],
         },
@@ -2962,8 +2963,8 @@ export const HELP_TREE: HelpTree = {
             },
           ],
           "examples": [
-            "w6w apps build ./demo-app",
-            "w6w apps build ./demo-app --out ./out --pack ./w6w-pack.json",
+            "w6w apps build ./com.example.demo-app",
+            "w6w apps build ./com.example.demo-app --out ./out --pack ./w6w-pack.json",
           ],
           "notes": [],
         },
