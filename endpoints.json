@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable surface contract for all w6w wrappers. Source of truth for conformance tests. Keep in sync with docs/endpoints.md.",
-  "contractVersion": "0.18.0",
+  "contractVersion": "0.19.0",
   "$basePathComment": "Empty since 0.2.0: the server serves its routes at the ROOT of its own host (https://api.w6w.io/vars, not .../api/vars). Clients append nothing to the configured origin.",
   "basePath": "",
   "defaultBaseUrl": "https://api.w6w.io",
@@ -3428,6 +3428,44 @@
       "notes": "Nothing is unwrapped: the body is returned exactly as sent. The legacy import shapes (app: 201 or 200; pack: 201, 207 or 200) plus `target`. Codes: `400 invalid_body`, `400 invalid_target`, `400 invalid_source`, `403 forbidden`, `403 user_import_disabled`, `403 local_import_forbidden`, `409 id_taken`, `424 fetch_failed`, `424 source_requires_grant`, `429 source_rate_limited`, `424 source_timeout`, `424 source_too_large`."
     },
     {
+      "name": "appManagement.publishArtifact",
+      "summary": "Publish a built app artifact (manifest + bundle) to the caller's personal catalog.",
+      "method": "POST",
+      "path": "/app-management/artifacts",
+      "status": "planned",
+      "serverImplemented": false,
+      "params": [
+        {
+          "name": "artifact",
+          "in": "body",
+          "type": "object",
+          "required": true,
+          "$comment": "The built app manifest, passed through opaque; the server verifies `artifact.exec.sha256` / `artifact.map.sha256` against the uploaded bytes."
+        },
+        {
+          "name": "exec",
+          "in": "body",
+          "type": "string",
+          "required": true,
+          "$comment": "The bundle (`app.js`) bytes, base64. The SDK takes bytes and encodes."
+        },
+        {
+          "name": "map",
+          "in": "body",
+          "type": "string",
+          "required": false,
+          "$comment": "The source map bytes, base64; sent only when given."
+        }
+      ],
+      "returns": "PublishArtifactResult",
+      "naming": {
+        "ts": "client.appManagement.publishArtifact({ artifact, exec, map? }, opts?)",
+        "python": "client.app_management.publish_artifact(artifact, exec, map=None)",
+        "cli": "w6w apps publish [dir] [--version <semver>] [--builder <spec>]"
+      },
+      "notes": "Added in 0.19.0. The route is not deployed yet: `planned` / `serverImplemented: false` until it is. Nothing is unwrapped: the body is returned exactly as sent, `{ id, version, outcome: \"registered\" | \"bumped\" | \"upgraded\" | \"unchanged\", target: \"personal\" }`. The artifact is always caller-private (target `personal`). Codes: `400 invalid_body`, `400 invalid_target`, `403 user_import_disabled`, `403 forbidden`, `409 id_taken`, `413 artifact_too_large`, `422` publisher codes (`invalid_manifest`, `exec_sha_mismatch`, `map_sha_mismatch`, `map_missing`, `manifest_mismatch`, `version_conflict`, `protocol_trigger_not_allowed`, …), `503 blob_store_unavailable`."
+    },
+    {
       "name": "appManagement.updateSource",
       "summary": "Validate a candidate source and, if it loads, make it the app's active source.",
       "method": "PUT",
@@ -4202,7 +4240,7 @@
       },
       {
         "name": "build.app",
-        "summary": "Test and build an app folder into a self-describing bundle (local only, no API call).",
+        "summary": "Alias of apps build: build an app folder with the canonical app builder (local only).",
         "status": "live",
         "naming": "w6w build app <folder> [--out <dir>] [--pack <file>]",
         "params": [
@@ -4220,6 +4258,152 @@
           },
           {
             "name": "pack",
+            "in": "query",
+            "type": "string",
+            "required": false
+          }
+        ]
+      },
+      {
+        "name": "apps.init",
+        "summary": "Scaffold a new app (deno or node template) in a new directory (local only, no API call).",
+        "status": "live",
+        "naming": "w6w apps init <id> [--template deno|node] [--dir <path>]",
+        "params": [
+          {
+            "name": "id",
+            "in": "argument",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "template",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "dir",
+            "in": "query",
+            "type": "string",
+            "required": false
+          }
+        ]
+      },
+      {
+        "name": "apps.validate",
+        "summary": "Validate an app folder with the canonical app builder (local only, needs Deno).",
+        "status": "live",
+        "naming": "w6w apps validate [dir] [--resolution sibling|registry] [--builder <spec>]",
+        "params": [
+          {
+            "name": "dir",
+            "in": "argument",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "resolution",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "builder",
+            "in": "query",
+            "type": "string",
+            "required": false
+          }
+        ]
+      },
+      {
+        "name": "apps.list",
+        "summary": "Alias of app-management list: list the apps installed on the host.",
+        "status": "live",
+        "naming": "w6w apps list [--scope <scope>] [--q <q>] [--sort <sort>] [--compact] [--snapshot <t>] [--cursor <c>] [--offset <n>] [--limit <n>]",
+        "params": [
+          {
+            "name": "scope",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "compact",
+            "in": "query",
+            "type": "boolean",
+            "required": false
+          },
+          {
+            "name": "snapshot",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "integer",
+            "required": false
+          }
+        ]
+      },
+      {
+        "name": "apps.build",
+        "summary": "Build an app folder into the canonical artifact layout with the app builder (local only, needs Deno).",
+        "status": "live",
+        "naming": "w6w apps build [dir] [-o|--out <dir>] [--pack <file>] [--resolution sibling|registry] [--builder <spec>]",
+        "params": [
+          {
+            "name": "dir",
+            "in": "argument",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "out",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "pack",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "resolution",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "builder",
             "in": "query",
             "type": "string",
             "required": false

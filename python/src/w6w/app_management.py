@@ -24,9 +24,11 @@ is a ``404 unknown_app``.
 
 from __future__ import annotations
 
+import base64
 from typing import Any, Dict, List, Mapping, Optional, Protocol, Union
 
 from ._http import HttpResponse, path
+from .types import PublishArtifactResult
 
 #: A source: a canonical remote ref string, or ``{"folder": {"grant", "path"}}``.
 SourceInput = Union[str, Mapping[str, Any]]
@@ -134,6 +136,28 @@ class AppManagementApi:
             body["paths"] = paths
         res = self._host.request("POST", "/app-management/apps", body=body)
         return res.body
+
+    def publish_artifact(
+        self,
+        artifact: Mapping[str, Any],
+        exec: bytes,
+        map: Optional[bytes] = None,
+    ) -> PublishArtifactResult:
+        """Upload a built app artifact (caller-private, `target: "personal"`).
+
+        :param artifact: The built `manifest.json`, as an object.
+        :param exec: The built `app.js` bytes; sent base64-encoded.
+        :param map: The `app.js.map` bytes; sent only when given.
+        :returns: `{id, version, outcome, target}`; `version` is the server's.
+        """
+        body: Dict[str, Any] = {
+            "artifact": artifact,
+            "exec": base64.b64encode(exec).decode("ascii"),
+        }
+        if map is not None:
+            body["map"] = base64.b64encode(map).decode("ascii")
+        res = self._host.request("POST", "/app-management/artifacts", body=body)
+        return res.body  # type: ignore[no-any-return]
 
     def update_source(
         self, id: str, source: SourceInput, expected_revision: int

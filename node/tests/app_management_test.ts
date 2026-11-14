@@ -163,3 +163,33 @@ Deno.test("a 409 stale_source rejects as ApiError carrying the code", async () =
   assertEquals(err.code, "stale_source");
   assertEquals(err.status, 409);
 });
+
+Deno.test("publishArtifact: POST body is exactly {artifact, exec b64}; map only when given; bytes 0x00-0xFF round-trip", async () => {
+  const reply = { id: "a", version: "1.0.0", outcome: "registered", target: "personal" };
+  const { client, calls } = setup(reply, 201);
+  const all = Uint8Array.from({ length: 256 }, (_, i) => i);
+  const artifact = { id: "a", version: "1.0.0" };
+  assertEquals(await client.appManagement.publishArtifact({ artifact, exec: all }), reply);
+  assertEquals(calls[0].method, "POST");
+  assertEquals(calls[0].url.pathname, "/app-management/artifacts");
+  const sent = calls[0].body as Record<string, unknown>;
+  assertEquals(Object.keys(sent).sort(), ["artifact", "exec"]);
+  assertEquals(sent.artifact, artifact);
+  const back = Uint8Array.from(atob(sent.exec as string), (c) => c.charCodeAt(0));
+  assertEquals(back, all);
+
+  await client.appManagement.publishArtifact({ artifact, exec: all, map: Uint8Array.of(0, 255) });
+  const sent2 = calls[1].body as Record<string, unknown>;
+  assertEquals(Object.keys(sent2).sort(), ["artifact", "exec", "map"]);
+  assertEquals(sent2.map, "AP8=");
+});
+
+Deno.test("publishArtifact: a 409 id_taken rejects as ApiError carrying the code", async () => {
+  const { client } = setup({ error: { code: "id_taken", message: "taken" } }, 409);
+  const err = await assertRejects(
+    () => client.appManagement.publishArtifact({ artifact: {}, exec: new Uint8Array(1) }),
+    ApiError,
+  ) as ApiError;
+  assertEquals(err.status, 409);
+  assertEquals(err.code, "id_taken");
+});

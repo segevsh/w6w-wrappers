@@ -289,3 +289,43 @@ Deno.test("every `w6w app-management` command in the help tree is registered, an
   for (const path of documented) assert(Object.hasOwn(COMMANDS, path), `\`${path}\` is not wired`);
   assertEquals(documented.length, 7);
 });
+
+Deno.test("apps list is the very handler app-management list is registered as", () => {
+  assert(COMMANDS["apps list"] === COMMANDS["app-management list"]);
+  assert(COMMANDS["apps list"] === APP_MANAGEMENT_COMMANDS["app-management list"]);
+});
+
+Deno.test("apps list prints exactly what app-management list prints for one response", async () => {
+  const page = { apps: [{ id: "sg", version: "1.0.0" }], total: 1, offset: 0 };
+  const run = async (path: string[]) => {
+    const stdout: string[] = [];
+    const { createOutput, NO_CONFIG, NO_ENV, NO_STDIN, NO_STORE } = await import("../mod.ts");
+    const { W6WClient } = await import("@w6w/sdk");
+    const fetch: FetchLike = () => Promise.resolve(json(200, page));
+    const out = createOutput({ stdout: (t) => stdout.push(t), stderr: () => {} }, {
+      json: true,
+      noColor: true,
+    });
+    // deno-lint-ignore no-explicit-any
+    const context: any = {
+      command: { naming: path.join(" "), path },
+      invocation: {
+        command: path,
+        positionals: [],
+        globals: { json: true, noColor: true, version: false, help: false },
+        options: {},
+      },
+      out,
+      client: () => new W6WClient({ baseUrl: BASE, token: "t", fetch }),
+      env: NO_ENV,
+      stored: NO_CONFIG,
+      store: NO_STORE,
+      stdin: NO_STDIN,
+    };
+    await COMMANDS[path.join(" ")](context);
+    return stdout.join("\n");
+  };
+  const viaApps = await run(["apps", "list"]);
+  assertEquals(viaApps, await run(["app-management", "list"]));
+  assertStringIncludes(viaApps, '"sg"');
+});

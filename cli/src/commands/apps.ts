@@ -1,15 +1,26 @@
 /**
- * `w6w apps by-ids <ids>` — look up apps by id.
+ * The `apps` command group.
  *
- * `<ids>` is one comma-separated argument (`sendgrid,slack`). The SDK dedupes and
- * chunks to the server's cap of 100 per request, so the CLI imposes no limit of
- * its own. An id that matches no app is simply absent from the result.
+ * `apps by-ids <ids>` is a server lookup: `<ids>` is one comma-separated argument
+ * (`sendgrid,slack`). The SDK dedupes and chunks to the server's cap of 100 per
+ * request, so the CLI imposes no limit of its own. An id that matches no app is
+ * simply absent from the result.
+ *
+ * `apps build` is local and lives in `./build.ts`, because the `build app` alias and
+ * the pack lock are one handler with one seam; registering it here keeps every
+ * `apps …` spelling in this map (and `w6w build app` pointing at the same handler).
+ *
+ * `apps publish` (build → upload) is in `./publish.ts`; `apps list` is the very handler object
+ * `app-management list` is registered under (exported from `./app-management.ts`).
  *
  * @module
  */
 
 import type { CommandHandler, CommandRegistry } from "../../mod.ts";
 import type { Styles } from "../output.ts";
+import { listManagedApps } from "./app-management.ts";
+import { appsBuild } from "./build.ts";
+import { appsPublish } from "./publish.ts";
 import { argument, noExtraArguments, table } from "./shared.ts";
 import type { AppSummary } from "@w6w/sdk";
 
@@ -32,4 +43,7 @@ const byIds: CommandHandler = async (context) => {
 
 export const APP_COMMANDS: CommandRegistry = {
   "apps by-ids": byIds,
+  "apps build": appsBuild,
+  "apps list": listManagedApps,
+  "apps publish": appsPublish,
 };

@@ -1,38 +1,53 @@
 /**
- * `w6w build app <folder> [--out <dir>] [--pack <file>]` — turn an app folder into a
- * self-describing bundle, locally.
+ * `w6w apps build [dir] [-o|--out <dir>] [--pack <file>] [--resolution sibling|registry]`
+ * `w6w build app <folder> [--out <dir>] [--pack <file>]` — build an app folder into
+ * the canonical artifact, locally.
  *
- * Declared in `endpoints.json` `cli.commands[]` (CLI-only: no API operation sits behind
- * it, so the node and python lanes do not implement it). It never touches the network.
+ * Both names are the **same handler**: `build app` predates the `apps` group and is
+ * kept as an alias, so a script written against it keeps working and there is one
+ * place where a build can go wrong (intake F-2).
  *
- * The folder is a Node package: a `package.json` with a `w6w` block, `version`,
- * `scripts.test`, `scripts.build` and a `main` that names the built single-file ESM
- * bundle. The command runs `npm run test`, then `npm run build` (both streamed to
- * stderr so `--json` stdout stays one document), and then writes, under the output
- * directory:
+ * The CLI does not bundle an app. It resolves the directory, decides how `@w6w/*`
+ * imports should resolve (the flag if given, otherwise read off the app's
+ * `deno.json`), and spawns the canonical `@w6w/app-build` builder through
+ * {@linkcode runBuilder} — the default spec is {@linkcode DEFAULT_BUILDER}, and
+ * `--builder` is the only way to change it. Everything downstream of that spawn is
+ * the builder's: the artifact layout `<out>/<id>/<version>/{app.js,manifest.json}`
+ * plus `<out>/index.json`, the manifest's shape, and the refusal codes. A second
+ * implementation of any of it would be free to disagree with the published one.
  *
- * - `app.js` — the built file, byte for byte; its sha256 is the app's **digest**;
- * - `manifest.json` — deterministic (no timestamps), with the app's definition read
- *   by importing the built file, and the names of its function-valued hooks. Every
- *   relative file the `w6w` block points at (icons) is embedded in its `app` block as a
- *   `data:` URI, so the bundle is self-contained.
+ * So the command's stdout is **the builder's index entry** — the record from
+ * `<out>/index.json` for the app that was just built (`id`, `version`, `execSha256`,
+ * `digest`, `sourceDigest`) — emitted as one document. Under `--json` it is that
+ * object unchanged; otherwise one line naming the app and where it landed.
  *
- * Nothing is written unless the tests and the build both pass. With `--pack`, the
- * pack or index file is updated with the app's `id`, `version` and `digest` — a
- * re-read, modify and rename done under an exclusive `<pack>.lock`, so many builds may
- * share one pack concurrently.
+ * The old in-process pipeline is gone with it: no `npm run test`, no `npm run
+ * build`, no import of a built bundle, and no `manifestVersion:"1"` manifest. A
+ * folder that is not a w6w app is the builder's refusal to make, reported with the
+ * builder's own words.
  *
- * Host access follows the package's rule (see `src/store-fs.ts`): `node:` modules are
- * imported through a non-literal specifier with structural types, so this compiles
- * under the npm build's `"types": []` and runs under Deno and Node alike. The `npm`
- * process is behind {@linkcode useBuildRunner}, the test suite's seam.
+ * With `--pack`, the pack file is updated with the built app's canonical entry — a
+ * re-read, modify and rename done under an exclusive `<pack>.lock`, so many builds
+ * may share one pack concurrently. Host access follows the package's rule (see
+ * `src/store-fs.ts`): `node:` modules are imported through a non-literal specifier
+ * with structural types. The Deno process is behind {@linkcode useToolchainRunner}.
  *
  * @module
  */
 
 import type { CommandContext, CommandHandler, CommandRegistry } from "../../mod.ts";
-import { VERSION } from "../../mod.ts";
-import { argument, noExtraArguments, textFlag, usageError } from "./shared.ts";
+import {
+  appDir,
+  builderArgs,
+  DEFAULT_BUILDER,
+  type Resolution,
+  resolveResolution,
+  runBuilder,
+  type ToolchainResult,
+} from "../app-toolchain.ts";
+import { EXIT_SUCCESS } from "../exit.ts";
+import type { Styles } from "../output.ts";
+import { noExtraArguments, textFlag, usageError } from "./shared.ts";
 
 // ---------------------------------------------------------------------------
 // Host seam
@@ -43,9 +58,8 @@ interface Stat {
 }
 
 interface Fs {
-  readFile(path: string): Promise<Uint8Array>;
   readFile(path: string, encoding: "utf8"): Promise<string>;
-  writeFile(path: string, data: Uint8Array | string): Promise<void>;
+  writeFile(path: string, data: string): Promise<void>;
   mkdir(path: string, options: { recursive: true }): Promise<unknown>;
   stat(path: string): Promise<Stat & { mtimeMs: number }>;
   open(path: string, flags: "wx"): Promise<{ close(): Promise<void> }>;
@@ -62,7 +76,6 @@ interface Path {
 interface Host {
   fs: Fs;
   path: Path;
-  fileUrl(path: string): string;
 }
 
 let hostPromise: Promise<Host> | undefined;
@@ -72,55 +85,12 @@ function host(): Promise<Host> {
   hostPromise ??= (async () => {
     const fsName = "node:fs/promises";
     const pathName = "node:path";
-    const urlName = "node:url";
-    const fs = (await import(fsName)) as Fs;
-    const path = (await import(pathName)) as Path;
-    const url = (await import(urlName)) as { pathToFileURL(path: string): { href: string } };
-    return { fs, path, fileUrl: (p) => url.pathToFileURL(p).href };
+    return {
+      fs: (await import(fsName)) as Fs,
+      path: (await import(pathName)) as Path,
+    };
   })();
   return hostPromise;
-}
-
-/** Runs `npm <args>` in `cwd` with its output on stderr; resolves to the exit code. */
-export type BuildRunner = (args: string[], cwd: string) => Promise<number>;
-
-interface SpawnedChild {
-  on(event: "error", listener: (error: Error) => void): unknown;
-  on(event: "close", listener: (code: number | null) => void): unknown;
-}
-
-const hostRunner: BuildRunner = async (args, cwd) => {
-  const name = "node:child_process";
-  const { spawn } = (await import(name)) as {
-    spawn(
-      command: string,
-      args: string[],
-      options: { cwd: string; stdio: unknown[]; shell: boolean },
-    ): SpawnedChild;
-  };
-  const windows = (globalThis as { process?: { platform?: string } }).process?.platform ===
-      "win32" ||
-    (globalThis as { Deno?: { build?: { os?: string } } }).Deno?.build?.os === "windows";
-  return await new Promise<number>((resolve, reject) => {
-    // stdout is redirected to stderr (fd 2) so the command's own stdout stays clean.
-    const child = spawn("npm", args, { cwd, stdio: ["ignore", 2, 2], shell: windows });
-    child.on("error", reject);
-    child.on("close", (code) => resolve(code ?? 1));
-  });
-};
-
-let runner: BuildRunner = hostRunner;
-
-/**
- * Replace the `npm` runner — the test suite's seam. Returns a function that restores
- * the previous one.
- */
-export function useBuildRunner(replacement: BuildRunner): () => void {
-  const previous = runner;
-  runner = replacement;
-  return () => {
-    runner = previous;
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -133,78 +103,90 @@ function isObject(value: unknown): value is Json {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", bytes as unknown as ArrayBuffer);
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-async function isFile(fs: Fs, path: string): Promise<boolean> {
-  try {
-    return (await fs.stat(path)).isFile();
-  } catch {
-    return false;
-  }
-}
-
-async function readJson(fs: Fs, path: string): Promise<unknown> {
-  return JSON.parse(await fs.readFile(path, "utf8"));
+function nonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function toJson(value: unknown): string {
   return JSON.stringify(value, null, 2) + "\n";
 }
 
-function nonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length > 0;
+/** The last few lines the builder wrote, quoted in a failure nobody can read otherwise. */
+function said(result: ToolchainResult): string {
+  const stream = result.stderr.trim() === "" ? result.stdout : result.stderr;
+  const lines = stream
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "")
+    .slice(-5);
+  return lines.join("\n");
 }
 
-/** Names of an item's function-valued properties, in declaration order. */
-function hookNames(item: unknown): string[] {
-  if (!isObject(item)) return [];
-  return Object.keys(item).filter((key) => typeof item[key] === "function");
+/** A build the builder refused: its own stderr lines, never a re-statement of them. */
+function buildFailure(dir: string, result: ToolchainResult): Error {
+  const detail = said(result);
+  return new Error(
+    `the app builder could not build \`${dir}\` (exit ${result.code}).` +
+      (detail === "" ? "" : `\n${detail}`),
+  );
 }
 
-/** The JSON form of one definition item, plus the hooks it carries. */
-function describeItem(item: unknown): unknown {
-  const plain = JSON.parse(JSON.stringify(item ?? null)) as unknown;
-  if (!isObject(plain)) return plain;
-  return { ...plain, hooks: hookNames(item) };
+/**
+ * One app's line in `<out>/index.json` — the canonical record, and what this command
+ * prints.
+ */
+export interface BuildEntry {
+  id: string;
+  version: string;
+  execSha256: string;
+  digest: string;
+  sourceDigest: string;
+  [key: string]: unknown;
 }
 
-const DEFINITION_LISTS = ["actions", "auth", "triggers", "healthChecks"] as const;
-
-function describeDefinition(definition: unknown): Json {
-  if (!isObject(definition)) {
-    throw new Error("the built file's default export is not an app definition (an object).");
+/**
+ * The entry the builder wrote for the app just built.
+ *
+ * Read from `<out>/index.json` rather than parsed out of stdout: `index.json` is the
+ * builder's published record in both of its modes, so it is the one place the CLI
+ * and the builder cannot drift apart on.
+ */
+async function readEntry(
+  h: Host,
+  out: string,
+  dir: string,
+): Promise<BuildEntry> {
+  const indexPath = h.path.join(out, "index.json");
+  let text: string;
+  try {
+    text = await h.fs.readFile(indexPath, "utf8");
+  } catch {
+    throw new Error(
+      `the app builder wrote no \`${indexPath}\`, so \`${dir}\` was not built.`,
+    );
   }
-  const result: Json = {};
-  for (const key of DEFINITION_LISTS) {
-    const value = definition[key];
-    const list = value === undefined || value === null
-      ? []
-      : Array.isArray(value)
-      ? value
-      : [value];
-    result[key] = list.map(describeItem);
+  let index: unknown;
+  try {
+    index = JSON.parse(text);
+  } catch {
+    throw new Error(`\`${indexPath}\` is not valid JSON.`);
   }
-  for (const key of Object.keys(definition)) {
-    if ((DEFINITION_LISTS as readonly string[]).includes(key)) continue;
-    const value = definition[key];
-    if (typeof value === "function" || value === undefined) continue;
-    result[key] = JSON.parse(JSON.stringify(value)) as unknown;
+  const apps = isObject(index) && Array.isArray(index.apps) ? index.apps : undefined;
+  if (apps === undefined || apps.length !== 1) {
+    throw new Error(
+      `\`${indexPath}\` does not carry exactly one app; a single-folder build writes one entry.`,
+    );
   }
-  return result;
+  const entry = apps[0];
+  if (!isObject(entry) || !nonEmptyString(entry.id) || !nonEmptyString(entry.version)) {
+    throw new Error(`\`${indexPath}\` entry has no \`id\` and \`version\`.`);
+  }
+  return entry as BuildEntry;
 }
 
 // ---------------------------------------------------------------------------
 // Pack file
 // ---------------------------------------------------------------------------
-
-interface PackEntry {
-  id: string;
-  version: string;
-  digest: string;
-}
 
 interface PackFile {
   path: string;
@@ -235,14 +217,15 @@ async function readPackText(h: Host, path: string): Promise<string | undefined> 
   }
 }
 
-/** Validates the pack up front, so a bad file fails before test/build. */
+/** Validates the pack up front, so a bad file fails before anything is built. */
 async function checkPack(context: CommandContext, h: Host, packFlag: string): Promise<PackFile> {
   const path = h.path.resolve(packFlag);
   const data = parsePack(context, packFlag, await readPackText(h, path));
   return { path, dir: h.path.dirname(path), data };
 }
 
-function updatePack(h: Host, pack: PackFile, folder: string, entry: PackEntry): void {
+/** Applies the built app's canonical entry: by `path` if a line names this folder, else by `id`. */
+function updatePack(h: Host, pack: PackFile, folder: string, entry: BuildEntry): void {
   const apps = pack.data.apps;
   const byPath = apps.find((item) =>
     isObject(item) && typeof item.path === "string" &&
@@ -301,7 +284,7 @@ async function commitPack(
   packFlag: string,
   pack: PackFile,
   folder: string,
-  entry: PackEntry,
+  entry: BuildEntry,
 ): Promise<void> {
   await h.fs.mkdir(pack.dir, { recursive: true });
   await withPackLock(h, pack.path, async () => {
@@ -322,191 +305,61 @@ async function commitPack(
 }
 
 // ---------------------------------------------------------------------------
-// Assets
-// ---------------------------------------------------------------------------
-
-const MIME_TYPES: Record<string, string> = {
-  svg: "image/svg+xml",
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  webp: "image/webp",
-  gif: "image/gif",
-  ico: "image/x-icon",
-};
-
-function base64(bytes: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  }
-  return btoa(binary);
-}
-
-/**
- * Every string leaf of `value` that names an existing relative file, replaced in place by
- * a `data:` URI. `http(s):` and `data:` values are not relative paths and stay as they are.
- */
-async function embedAssets(
-  h: Host,
-  folder: string,
-  value: unknown,
-  skip: Set<string>,
-  context: CommandContext,
-): Promise<unknown> {
-  if (typeof value === "string") {
-    if (!(value.startsWith("./") || value.startsWith("../"))) return value;
-    const source = h.path.resolve(folder, value);
-    if (skip.has(source) || !(await isFile(h.fs, source))) return value;
-    const dot = source.lastIndexOf(".");
-    const extension = dot < 0 ? "" : source.slice(dot + 1).toLowerCase();
-    const mime = MIME_TYPES[extension];
-    if (mime === undefined) {
-      throw usageError(
-        context,
-        `cannot embed \`${value}\`: unsupported asset type \`${
-          extension ? "." + extension : "(none)"
-        }\` ` +
-          `(supported: ${Object.keys(MIME_TYPES).map((e) => "." + e).join(", ")}).`,
-      );
-    }
-    return `data:${mime};base64,${base64(await h.fs.readFile(source))}`;
-  }
-  if (Array.isArray(value)) {
-    const out: unknown[] = [];
-    for (const item of value) out.push(await embedAssets(h, folder, item, skip, context));
-    return out;
-  }
-  if (isObject(value)) {
-    const out: Json = {};
-    for (const key of Object.keys(value)) {
-      out[key] = await embedAssets(h, folder, value[key], skip, context);
-    }
-    return out;
-  }
-  return value;
-}
-
-// ---------------------------------------------------------------------------
 // The command
 // ---------------------------------------------------------------------------
 
-const buildApp: CommandHandler = async (context) => {
-  const folderArg = argument(context, 0, "an app folder, like `./apps/2chat`");
+/** Where the artifact landed: `<out>/<id>/<version>`. */
+function artifactDir(h: Host, out: string, entry: BuildEntry): string {
+  return h.path.join(out, entry.id, entry.version);
+}
+
+const appsBuild: CommandHandler = async (context) => {
+  const dir = await appDir(context.invocation.positionals[0]);
   noExtraArguments(context, 1);
+
   const outFlag = textFlag(context, "out");
   const packFlag = textFlag(context, "pack");
+  const spec = textFlag(context, "builder") ?? DEFAULT_BUILDER;
+  const flag = textFlag(context, "resolution");
 
   const h = await host();
-  const { fs, path } = h;
-  const folder = path.resolve(folderArg);
+  // Relative to the invocation, not to the app: `-o out` names the same directory
+  // wherever the app folder lives. Absent, it is the builder's own default, `./out`.
+  const out = h.path.resolve(outFlag ?? "out");
 
-  // 1. package.json
-  const packagePath = path.join(folder, "package.json");
-  let pkg: unknown;
+  let resolution: Resolution;
   try {
-    pkg = await readJson(fs, packagePath);
+    resolution = await resolveResolution(dir, flag);
   } catch (error) {
-    const reason = error instanceof SyntaxError ? "is not valid JSON" : "could not be read";
-    throw usageError(context, `\`${packagePath}\` ${reason}.`);
+    // A `--resolution` that is neither `sibling` nor `registry` is a bad invocation,
+    // not a builder problem: report it with the command's own usage line.
+    throw usageError(context, (error as Error).message);
   }
-  if (!isObject(pkg)) throw usageError(context, `\`${packagePath}\` is not a JSON object.`);
-  const block = pkg.w6w;
-  const scripts = isObject(pkg.scripts) ? pkg.scripts : {};
-  const missing: string[] = [];
-  if (!isObject(block) || !nonEmptyString(block.id)) missing.push("w6w.id");
-  if (!nonEmptyString(pkg.version)) missing.push("version");
-  if (!nonEmptyString(scripts.test)) missing.push("scripts.test");
-  if (!nonEmptyString(scripts.build)) missing.push("scripts.build");
-  if (!nonEmptyString(pkg.main)) missing.push("main");
-  if (missing.length > 0) {
-    throw usageError(context, `\`${packagePath}\` is missing: ${missing.join(", ")}.`);
-  }
-  const w6w = block as Json;
-  const id = w6w.id as string;
-  const version = pkg.version as string;
 
+  // Before the spawn, so a malformed pack fails before a build is paid for.
   const pack = packFlag === undefined ? undefined : await checkPack(context, h, packFlag);
 
-  // 2-3. test, then build
-  for (const script of ["test", "build"]) {
-    const code = await runner(["run", script], folder);
-    if (code !== 0) {
-      throw new Error(`\`npm run ${script}\` failed with exit code ${code}. Nothing was written.`);
-    }
-  }
+  const argv = await builderArgs(spec, dir, "build", { out, resolution });
+  const result = await runBuilder(argv, dir);
+  if (result.code !== 0) throw buildFailure(dir, result);
 
-  // 4. the built file
-  const builtFile = path.resolve(folder, pkg.main as string);
-  if (!(await isFile(fs, builtFile))) {
-    throw new Error(`the build did not produce \`${builtFile}\` (package.json \`main\`).`);
-  }
-  const bytes = await fs.readFile(builtFile);
-  const digest = await sha256Hex(bytes);
+  const entry = await readEntry(h, out, dir);
+  if (pack) await commitPack(context, h, packFlag as string, pack, dir, entry);
 
-  // 7. definition (before anything is written, so an unloadable bundle writes nothing)
-  let definition: Json;
-  try {
-    const module = (await import(h.fileUrl(builtFile))) as { default?: unknown };
-    definition = describeDefinition(module.default);
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(`could not load \`${builtFile}\`: ${reason}`);
-  }
-
-  // 6. assets (resolved before writing, for the same reason)
-  const appBlock: Json = { ...w6w };
-  const skip = new Set<string>();
-  if (typeof appBlock.entry === "string") skip.add(path.resolve(folder, appBlock.entry));
-  delete appBlock.entry;
-  delete appBlock.build;
-  delete appBlock.internal;
-  const app = await embedAssets(h, folder, appBlock, skip, context) as Json;
-
-  // 5. output
-  const out = outFlag === undefined ? path.dirname(builtFile) : path.resolve(outFlag);
-  await fs.mkdir(out, { recursive: true });
-  const execTarget = path.join(out, "app.js");
-  if (path.resolve(execTarget) !== builtFile) await fs.writeFile(execTarget, bytes);
-
-  // 8. manifest
-  const manifest = {
-    manifestVersion: "1",
-    id,
-    name: pkg.name,
-    version,
-    description: pkg.description,
-    license: pkg.license,
-    app,
-    exec: { file: "app.js", sha256: digest, bytes: bytes.length, format: "esm" },
-    digest,
-    definition,
-    builder: `@w6w/cli@${VERSION}`,
-  };
-  await fs.writeFile(path.join(out, "manifest.json"), toJson(manifest));
-
-  // 9. pack
-  if (pack) {
-    await commitPack(context, h, packFlag as string, pack, folder, { id, version, digest });
-  }
-
-  // 10. result
-  const files = ["app.js", "manifest.json"];
-  const payload = {
-    id,
-    version,
-    digest,
-    out,
-    files,
-    ...(pack ? { pack: pack.path } : {}),
-  };
   context.out.emit(
-    payload,
-    () => `built ${id}@${version} → ${out} (sha256 ${digest.slice(0, 12)})`,
+    entry,
+    (styles: Styles) =>
+      `${styles.green("built")} ${styles.bold(`${entry.id}@${entry.version}`)} → ${
+        artifactDir(h, out, entry)
+      }`,
   );
+  return EXIT_SUCCESS;
 };
 
-/** `w6w build app`. */
+/** `w6w build app` — the alias `w6w apps build` is registered under, in `apps.ts`. */
+export { appsBuild };
+
+/** `w6w build app` (alias of `apps build`). */
 export const BUILD_COMMANDS: CommandRegistry = {
-  "build app": buildApp,
+  "build app": appsBuild,
 };
