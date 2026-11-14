@@ -192,7 +192,8 @@ and `deno task build`. It needs no network, and refuses a non-empty target direc
 
 `<id>` must be the dotted reverse-DNS id the builder accepts: lowercase letters, digits and
 hyphens in two or more dot-separated segments, as in `com.example.demo-app`. A non-dotted id
-(say `demo-app`) is a usage error that names the rule and suggests `com.example.<slug>`;
+(say `demo-app`) is a usage error (exit `1`) that names the rule and suggests
+`com.example.<slug>`;
 nothing is written, and a rejected id is never silently rewritten into an accepted one.
 
 `w6w apps validate [dir] [--resolution sibling|registry] [--builder <spec>]` checks the app
