@@ -7,6 +7,7 @@ server body. No case needs a live server.
 
 from __future__ import annotations
 
+import base64
 import email.message
 import io
 import json
@@ -150,6 +151,33 @@ class AppManagementOpsTest(unittest.TestCase):
         self.assertEqual(
             sent(calls[0]), {"target": "tenant", "source": FOLDER, "paths": ["a", "b"]}
         )
+
+    def test_publish_artifact_sends_exact_body_and_returns_it_unchanged(self) -> None:
+        out = {"id": "a", "version": "1.0.1", "outcome": "bumped", "target": "personal"}
+        api, calls = client(responding(out, 201))
+        fixture = bytes(range(256))
+        manifest = {"id": "a", "version": "1.0.0"}
+        self.assertEqual(api.app_management.publish_artifact(manifest, fixture), out)
+        self.assertEqual(calls[0].get_method(), "POST")
+        self.assertEqual(calls[0].full_url, BASE + "/app-management/artifacts")
+        body = sent(calls[0])
+        self.assertEqual(set(body), {"artifact", "exec"})
+        self.assertEqual(body["artifact"], manifest)
+        self.assertEqual(base64.b64decode(body["exec"]), fixture)
+
+    def test_publish_artifact_sends_map_only_when_given(self) -> None:
+        api, calls = client(responding({"id": "a"}, 201))
+        api.app_management.publish_artifact({}, b"\x00\xff", map=b"\x80{}")
+        body = sent(calls[0])
+        self.assertEqual(set(body), {"artifact", "exec", "map"})
+        self.assertEqual(base64.b64decode(body["map"]), b"\x80{}")
+
+    def test_publish_artifact_409_id_taken_surfaces_its_code(self) -> None:
+        api, _calls = client(raising_http(409, "id_taken"))
+        with self.assertRaises(ApiError) as ctx:
+            api.app_management.publish_artifact({}, b"x")
+        self.assertEqual(ctx.exception.status, 409)
+        self.assertEqual(ctx.exception.code, "id_taken")
 
     def test_update_source_sends_expected_revision_camel_case(self) -> None:
         result = {"outcome": "registry_updated"}

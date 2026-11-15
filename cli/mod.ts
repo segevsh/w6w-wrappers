@@ -215,6 +215,21 @@ type Routed =
  */
 const RUN_APP_FLAG: FlagSpec = { name: "--app", alias: null, type: "string" };
 
+/** `apps build` and its alias `build app` — the only commands whose `--out` has the `-o` short form. */
+function isBuildCommand(command: HelpCommand): boolean {
+  const path = command.path.join(" ");
+  return path === "apps build" || path === "build app";
+}
+
+/**
+ * Commands whose own flag deliberately reuses a global flag's name, so the global
+ * spelling does not apply to them: `apps publish --version <semver>` is a string, while
+ * `w6w --version` stays the boolean banner flag everywhere else.
+ */
+const GLOBAL_NAME_OVERRIDES: Record<string, readonly string[]> = {
+  "apps publish": ["--version"],
+};
+
 /**
  * The flags a command declares for itself, lifted out of the generated help
  * tree so the parser and the help text cannot disagree about them.
@@ -230,8 +245,11 @@ function commandFlagSpecs(command: HelpCommand): FlagSpec[] {
   for (const param of command.params) {
     if (param.kind !== "flag") continue;
     const [name, ...rest] = param.display.split(" ");
-    if (globals.has(name)) continue;
-    specs.push({ name, alias: null, type: rest.length > 0 ? "string" : "boolean" });
+    if (globals.has(name) && !GLOBAL_NAME_OVERRIDES[command.path.join(" ")]?.includes(name)) {
+      continue;
+    }
+    const alias = name === "--out" && isBuildCommand(command) ? "-o" : null;
+    specs.push({ name, alias, type: rest.length > 0 ? "string" : "boolean" });
   }
   if (command.path.length === 1 && command.path[0] === "run") specs.push(RUN_APP_FLAG);
   return specs;
@@ -259,8 +277,11 @@ function commandFlagSpecs(command: HelpCommand): FlagSpec[] {
  */
 function parseInvocation(argv: string[]) {
   const first = parse(argv);
-  if (first.ok) return first;
-  const resolution = resolve(first.command);
+  // `apps publish --version 1.2.3` parses cleanly as the boolean global plus a stray operand,
+  // so a command that reuses a global's name must be re-parsed with its own spec.
+  const firstCommand = first.ok ? first.invocation.command : first.command;
+  if (first.ok && !GLOBAL_NAME_OVERRIDES[firstCommand.join(" ")]) return first;
+  const resolution = resolve(firstCommand);
   if (resolution.kind !== "command") return first;
   const specs = commandFlagSpecs(resolution.command);
   if (specs.length === 0) return first;

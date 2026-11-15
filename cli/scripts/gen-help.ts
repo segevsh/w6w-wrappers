@@ -311,6 +311,23 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
     "w6w build app ./apps/2chat",
     "w6w build app ./apps/2chat --out ./out/2chat --pack ./w6w-pack.json",
   ],
+  "apps.init": [
+    "w6w apps init com.example.demo-app",
+    "w6w apps init com.example.demo-app --template node --dir ./demo",
+  ],
+  "apps.validate": [
+    "w6w apps validate",
+    "w6w apps validate ./com.example.demo-app --resolution registry",
+  ],
+  "apps.build": [
+    "w6w apps build ./com.example.demo-app",
+    "w6w apps build ./com.example.demo-app --out ./out --pack ./w6w-pack.json",
+  ],
+  "appManagement.publishArtifact": [
+    "w6w apps publish ./com.example.demo-app",
+    "w6w apps publish ./com.example.demo-app --version 1.2.3",
+  ],
+  "apps.list": ["w6w apps list", "w6w apps list --scope personal --limit 20"],
   "version": ["w6w version", "w6w version --json", "w6w --version"],
   "ls": [
     "w6w ls workflows",
@@ -683,12 +700,44 @@ const PARAM_HELP: Record<string, string> = {
     "The API token to save, or `-` to read it from standard input (default when input is piped)",
   "config.set-base-url.url":
     "The API origin to save, like https://api.example.com (a trailing slash is dropped)",
-  "build.app.folder":
-    "The app directory: a package.json with a `w6w` block, version, scripts.test, scripts.build and main",
+  "build.app.folder": "The app directory (alias of `apps build`; default: the current directory)",
   "build.app.out":
-    "Where to write app.js and manifest.json (icons are embedded in it as data: URIs; default: the directory of the built file)",
+    "Output root: writes <out>/<id>/<version>/{app.js,manifest.json} and <out>/index.json",
   "build.app.pack":
-    "A pack or index JSON file (with an `apps` array) to update with the app's id, version and digest; created if missing",
+    "A pack or index JSON file (with an `apps` array) to update with the built entry; created if missing",
+  "apps.init.id":
+    "The app id: the builder's dotted reverse-DNS form — two or more dot-separated segments of " +
+    "lowercase letters, digits and hyphens (e.g. com.example.demo-app); a non-dotted id is a " +
+    "usage error suggesting com.example.<slug>",
+  "apps.init.template": "Template variant: deno (default) or node",
+  "apps.init.dir": "Directory to create (default: ./<id>); must be missing or empty",
+  "apps.validate.dir": "The app directory (default: the current directory)",
+  "apps.validate.resolution":
+    "How @w6w/* imports resolve: sibling or registry (default: registry when the app's deno.json maps @w6w/types to jsr:, else sibling)",
+  "apps.validate.builder":
+    "The app builder spec to run (default: jsr:@w6w/app-build@0.2.0/cli); a path or file: URL for a local builder",
+  "apps.build.dir": "The app directory (default: the current directory)",
+  "apps.build.out":
+    "Output root: writes <out>/<id>/<version>/{app.js,manifest.json} and <out>/index.json (`-o` is shorthand)",
+  "apps.build.pack":
+    "A pack or index JSON file (with an `apps` array) to update with the built entry; created if missing",
+  "apps.build.resolution":
+    "How @w6w/* imports resolve: sibling or registry (default: registry when the app's deno.json maps @w6w/types to jsr:, else sibling)",
+  "apps.build.builder":
+    "The app builder spec to run (default: jsr:@w6w/app-build@0.2.0/cli); a path or file: URL for a local builder",
+  "appManagement.publishArtifact.dir": "The app directory (default: the current directory)",
+  "appManagement.publishArtifact.version":
+    "Semver to write into the app's package.json before building (rewritten in place; default: leave it as is)",
+  "appManagement.publishArtifact.builder":
+    "The app builder spec to run (default: jsr:@w6w/app-build@0.2.0/cli); a path or file: URL for a local builder",
+  "apps.list.scope": "Which apps: all (default), account, tenant or personal",
+  "apps.list.q": "Search text",
+  "apps.list.sort": "Order: name (default), -name, recent or -recent",
+  "apps.list.compact": "Return compact rows",
+  "apps.list.snapshot": "Snapshot token from a previous page (not with --cursor)",
+  "apps.list.cursor": "The previous page's nextCursor (not with --snapshot)",
+  "apps.list.offset": "Row offset",
+  "apps.list.limit": "Page size",
   "ls.kind":
     "What to list: integrations | workflows | functions | endpoints (endpoints is unstable)",
   "ls.project": "Project to scope to (workflows only; other kinds ignore it)",
@@ -894,11 +943,33 @@ const PARAM_HELP: Record<string, string> = {
 };
 
 /**
+ * Flags and arguments a command takes that are not part of the operation's wire shape:
+ * `apps publish` builds locally first, so it also takes the app directory, `--version` and
+ * `--builder`. They are appended to the operation's params for help and the parser only.
+ */
+const CLI_ONLY_PARAMS: Record<string, ContractParam[]> = {
+  "appManagement.publishArtifact": [
+    { name: "dir", in: "argument", type: "string", required: false },
+    { name: "version", in: "query", type: "string", required: false },
+    { name: "builder", in: "query", type: "string", required: false },
+  ],
+};
+
+function withCliOnlyParams(operation: ContractOperation): ContractOperation {
+  const extra = CLI_ONLY_PARAMS[operation.name];
+  return extra ? { ...operation, params: [...operation.params, ...extra] } : operation;
+}
+
+/**
  * Contract parameters whose handler never reads them, so the help must not show
  * them (wiring them is a follow-up, not a help edit). Keyed `<operation>.<param>`.
  * Exported so `tests/help_test.ts` can exempt exactly this set and nothing wider.
  */
 export const HIDDEN_PARAMS: ReadonlySet<string> = new Set([
+  // `apps publish` reads the built tree from disk; the wire body is assembled, never typed.
+  "appManagement.publishArtifact.artifact",
+  "appManagement.publishArtifact.exec",
+  "appManagement.publishArtifact.map",
   "workflows.run.variables",
   "workflows.run.trigger",
   "workflows.runVersion.variables",
@@ -1130,6 +1201,8 @@ export function commandPathOf(naming: string): string[] {
 
 interface NamingSurface {
   positionals: Set<string>;
+  /** Positionals spelled `[name]` (no angle brackets) in the naming: optional arguments. */
+  optionalPositionals: Set<string>;
   flags: Map<string, string | null>;
 }
 
@@ -1143,6 +1216,7 @@ function namingSurface(naming: string, pathLength: number): NamingSurface {
   const tokens = naming.trim().split(/\s+/).slice(1 + pathLength);
   const bare = (t: string) => t.replace(/^\[+/, "").replace(/\]+$/, "");
   const positionals = new Set<string>();
+  const optionalPositionals = new Set<string>();
   const flags = new Map<string, string | null>();
   for (let i = 0; i < tokens.length; i++) {
     const token = bare(tokens[i]);
@@ -1157,9 +1231,14 @@ function namingSurface(naming: string, pathLength: number): NamingSurface {
     } else {
       const match = /^<(.+)>$/.exec(token);
       if (match) positionals.add(match[1]);
+      else if (tokens[i].startsWith("[") && /^[a-z][A-Za-z0-9]*$/.test(token)) {
+        // `[dir]`: an optional positional spelled without angle brackets.
+        positionals.add(token);
+        optionalPositionals.add(token);
+      }
     }
   }
-  return { positionals, flags };
+  return { positionals, optionalPositionals, flags };
 }
 
 function describeParam(operation: string, param: string): string {
@@ -1234,14 +1313,17 @@ function buildParams(
     const description = describeParam(operation.name, param.name);
     const positional = POSITIONAL_ALIASES[key] ?? param.name;
     if (!override && surface.positionals.has(positional)) {
+      const optional = surface.optionalPositionals.has(positional);
       params.push({
         name: param.name,
         kind: "argument",
-        display: `<${positional}>`,
+        display: optional ? `[${positional}]` : `<${positional}>`,
         description,
         required: param.required,
       });
-      usageParts.push(param.required ? `<${positional}>` : `[<${positional}>]`);
+      usageParts.push(
+        optional ? `[${positional}]` : param.required ? `<${positional}>` : `[<${positional}>]`,
+      );
       continue;
     }
     const flag = override?.flag ?? `--${kebab(param.name)}`;
@@ -1327,7 +1409,7 @@ export function buildHelpTree(contract: Contract): Record<string, unknown> {
           `place: \`${operation.naming.cli}\` (expected one or two command tokens).`,
       );
     }
-    const { params, usageTail } = buildParams(operation, path, jsonFlag);
+    const { params, usageTail } = buildParams(withCliOnlyParams(operation), path, jsonFlag);
     const aliases = operation.cliAlias ? [commandPathOf(operation.cliAlias)] : [];
     const notes = [...(COMMAND_NOTES[operation.name] ?? [])];
     if (operation.status === "planned") {

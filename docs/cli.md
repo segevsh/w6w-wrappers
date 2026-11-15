@@ -176,30 +176,48 @@ token saved for host A is not sent to host B, so after switching hosts run
 `w6w auth login` for the new one (until then commands exit `1` naming
 `w6w auth login`, before any request).
 
-## `build` — build an app folder
+## `apps init | validate | build` — the app toolchain
 
-`w6w build app <folder> [--out <dir>] [--pack <file>] [--json]` is CLI-only and local: it
-makes no API call (so, like `config`, it is not a contract operation and the node and python
-lanes do not implement it). `<folder>` is a Node package whose `package.json` has a `w6w`
-block with `id`, plus `version`, `scripts.test`, `scripts.build` and a `main` naming the
-built single-file ESM bundle; a missing field is a usage error (exit `1`).
+These three are CLI-only and local: they make no API call (so, like `config`, they are not
+contract operations and the node and python lanes do not implement them). **They need
+[Deno](https://deno.com) on `PATH`**; `validate` and `build` run the canonical `@w6w/app-build`
+builder through it, and a missing Deno is an error that names this prerequisite.
 
-It runs `npm run test`, then `npm run build` (both streamed to stderr, so `--json` stdout stays
-one document; a non-zero exit stops the command and writes nothing). It then writes to `--out`
-(default: the built file's directory) `app.js` (a copy of `main`) and `manifest.json` (2-space
-indent, no timestamps): `id`, `name`, `version`, `app`, `exec`, `digest` (the sha256 of
-`app.js`), the `definition` read by importing the bundle with each item's function-valued
-`hooks`, and `builder`. Every relative file the `w6w` block points at (icons) is embedded in
-`app` as a `data:<mime>;base64,…` URI in place of the path (`.svg`, `.png`, `.jpg`/`.jpeg`,
-`.webp`, `.gif`, `.ico`; any other extension is an error and nothing is written); `http(s):` and
-`data:` values are left alone, and paths outside the app folder (`../_shared/icon.svg`) are fine
-if the file exists.
+`w6w apps init <id> [--template deno|node] [--dir <path>]` scaffolds a new app (default
+template `deno`, default directory `./<id>`): `package.json`, `deno.json`, `index.ts`, one
+auth, one action, one poll trigger, one health check, tests, a bundled `assets/icon.svg` wired
+in as `appearance.icon`, an `author` the build requires, a `.github/workflows/w6w.yml` that
+runs validate and build, and a README. The `deno` template also carries `deno task validate`
+and `deno task build`. It needs no network, and refuses a non-empty target directory.
+
+`<id>` must be the dotted reverse-DNS id the builder accepts: lowercase letters, digits and
+hyphens in two or more dot-separated segments, as in `com.example.demo-app`. A non-dotted id
+(say `demo-app`) is a usage error (exit `1`) that names the rule and suggests
+`com.example.<slug>`;
+nothing is written, and a rejected id is never silently rewritten into an accepted one.
+
+`w6w apps validate [dir] [--resolution sibling|registry] [--builder <spec>]` checks the app
+in `[dir]` (default: the current directory) with the builder's `--validate` mode. It prints
+the builder's one JSON line with `--json`; otherwise `ok <id>@<version>` or one
+`code: message` line per problem, and exits `1` on any error.
+
+`w6w apps build [dir] [-o|--out <dir>] [--pack <file>] [--resolution sibling|registry]
+[--builder <spec>]` builds the app into the canonical layout
+`<out>/<id>/<version>/{app.js,manifest.json}` plus `<out>/index.json` (`--out` defaults to
+`./out`) and prints the builder's index entry (`id`, `version`, `execSha256`, `digest`,
+`sourceDigest`). `w6w build app <folder> [--out <dir>] [--pack <file>]` is an alias of it and
+runs the same handler.
+
+`--resolution` chooses how `@w6w/*` imports resolve: `registry` (published `jsr:` packages) or
+`sibling` (a monorepo checkout). Absent, it is `registry` when the app's `deno.json` maps
+`@w6w/types` to a `jsr:` specifier, else `sibling`. `--builder` overrides the builder spec
+(default `jsr:@w6w/app-build@0.2.0/cli`; a local path or `file:` spec is run with its nearest
+`deno.json`); there is no environment variable for it.
 
 `--pack` names a JSON file with an `apps` array (created as `{ "apps": [] }` if missing). The
-entry whose `path` resolves to the folder, else whose `id` matches, gets `id`, `version` and
-`digest` set; otherwise `{ id, version, digest }` is appended. Other fields and keys are
-kept. The update is a re-read, modify and rename done under an exclusive `<pack>.lock`, so many
-builds can share one pack in parallel. `--json` prints `{id, version, digest, out, files, pack?}`.
+entry whose `path` resolves to the folder, else whose `id` matches, takes the built entry;
+otherwise it is appended. Other fields and keys are kept. The update is a re-read, modify and
+rename done under an exclusive `<pack>.lock`, so many builds can share one pack in parallel.
 
 ## `ls` — list a kind
 
@@ -423,15 +441,23 @@ w6w app-management remove <id>
 ```
 
 **Scope.** `list --scope` is `all` (the default), `account`, `tenant` or `personal`.
+`personal` is the **deprecated wire alias** for the account tier: it is sent as typed and
+accepted, but a row it selects is account-owned — visible to your `{tenant, account}`
+teammates, never to a single subject. The server never reports an app as subject-private,
+and teammates in one account share the apps they register.
 `--sort` is `name` (the default), `-name`, `recent` or `-recent`; write a
 leading-dash value as `--sort=-recent`. `--cursor` takes the previous page's
 `nextCursor`; it is not combined with `--snapshot`, and the server refuses both
 together.
 
 **Target.** `--target` on `preview` and `register` is `account`, `tenant` or
-`personal`. The CLI sends what you type and never checks it: the server decides
-which targets you may use. The `targets` list in `w6w app-management list --json`
-says which.
+`personal`. `personal` is the **deprecated alias** for `account`: it carries the same
+availability and the same import policy (the tenant's `allow_user_app_import`, or an
+operator), and an app it registers is owned by `{tenant, account}` with the caller's
+subject recorded as attribution (`publishedBy`) only. The id must sit under an active namespace your tenant holds, or the server answers
+`403 namespace_not_owned` (or `namespace_owned` when another tenant holds it). The CLI sends what you type and
+never checks it: the server decides which targets you may use. The `targets` list in
+`w6w app-management list --json` says which.
 
 **Source.** `<source>` takes two forms. A canonical remote ref
 (`github:owner/repo`) is sent as a string. A value whose first non-space

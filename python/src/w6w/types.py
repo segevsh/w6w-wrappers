@@ -38,7 +38,7 @@ which returns the parsed body untouched.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal, Mapping, Optional, Union
+from typing import Any, Dict, List, Literal, Mapping, Optional, TypedDict, Union
 from uuid import uuid4
 
 from ._http import HttpResponse
@@ -732,6 +732,19 @@ ManagementTarget = Literal["account", "tenant", "personal"]
 
 #: How a sync or source edit ended. Closed: `failed` is still a 200, with `error`.
 SyncOutcome = Literal["registry_updated", "definition_unchanged", "failed"]
+
+#: How a published artifact landed: first time, a new version, an upgrade of the
+#: same version's bytes, or byte-identical to what was already there.
+PublishArtifactOutcome = Literal["registered", "bumped", "upgraded", "unchanged"]
+
+
+class PublishArtifactResult(TypedDict):
+    """`appManagement.publishArtifact`'s 201/200 body. `version` is the server's."""
+
+    id: str
+    version: str
+    outcome: PublishArtifactOutcome
+    target: Literal["personal"]
 
 
 @dataclass(frozen=True)

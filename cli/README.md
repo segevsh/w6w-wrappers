@@ -33,7 +33,9 @@ w6w auth status                                # base URL, where it came from, m
 w6w auth logout
 w6w config get-base-url                        # effective base URL and its source
 w6w config set-base-url https://w6w.example.com  # save it (tokens are per host: auth login again)
-w6w build app ./my-app --pack ./w6w-pack.json   # test, build and describe an app folder (local only)
+w6w apps init com.example.my-app              # scaffold a new app (local only)
+w6w apps validate ./com.example.my-app        # validate it with the canonical builder (needs Deno)
+w6w apps build ./com.example.my-app --pack ./w6w-pack.json  # build it (`w6w build app` is an alias)
 ```
 
 The token is stored per user (`~/.config/w6w/config.json`, or `$XDG_CONFIG_HOME/w6w/…`;
@@ -112,6 +114,53 @@ w6w team invite --email dev@example.com --role member
 Add `--json` to any command for raw JSON instead of a table — the shape to script against. Errors go
 to stderr as `w6w: <message>`; colour is used only on a terminal and is turned off by `--no-color`
 or `NO_COLOR`.
+
+### apps init
+
+`w6w apps init <id> [--template deno|node] [--dir <path>]` scaffolds a new app into `./<id>` from a
+bundled template, with no network. It refuses a non-empty directory.
+
+`<id>` must be the dotted reverse-DNS id the canonical builder accepts — two or more dot-separated
+segments of lowercase letters, digits and hyphens, e.g. `com.example.my-app` (the same rule as the
+builder's `ID_RE`, so a scaffolded app validates as scaffolded). A non-dotted id is a usage error
+that names the rule and suggests a `com.example.<slug>` spelling; it is never rewritten silently.
+
+The scaffold ships in the manifest under `w6w` what the build requires: an `author`, and an
+`appearance.icon` pointing at the bundled `assets/icon.svg`. The `deno` template also has
+`test`/`validate`/`build` tasks, so `deno task test`, `deno task validate` and `deno task build` all
+work in the new directory.
+
+### apps validate
+
+`w6w apps validate [dir] [--resolution sibling|registry] [--builder <spec>]` checks the app with the
+canonical `@w6w/app-build` builder. It needs [Deno](https://deno.com) on `PATH`.
+
+### apps build
+
+`w6w apps build [dir] [-o|--out <dir>] [--pack <file>] [--resolution sibling|registry]
+[--builder <spec>]`
+builds the app to `<out>/<id>/<version>/{app.js,manifest.json}` plus `<out>/index.json` and prints
+the index entry. `w6w build app` is an alias. Needs Deno.
+
+### apps publish
+
+`w6w apps publish [dir] [--version <semver>] [--builder <spec>]` builds the app (as `apps build`
+does, into a temporary directory) and uploads the built manifest, `app.js` and `app.js.map` to the
+**caller's personal tier**: the app is private to you, never shared with the tenant or the catalog.
+It prints what the server answered (`id`, `version`, `outcome`, `target`); the version shown is the
+server's, not the local one.
+
+`--version` rewrites the `version` in the app's `package.json` **in place**, before the build; it
+must be a semantic version (`1.2.3`), otherwise nothing is built or sent. It is a value flag for
+this command only: plain `w6w --version` still prints the version banner. There is no
+command-specific credential flag; authentication is the CLI's normal client resolution
+(config/login, and the global `--token` / `W6W_TOKEN`), and the upload goes only to the configured
+base URL. Needs Deno. The server route is `planned` until it is deployed.
+
+### apps list
+
+`w6w apps list` is the same command as `w6w app-management list` (same flags, same output): the apps
+installed on the host.
 
 ### Known limitations
 
