@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable surface contract for all w6w wrappers. Source of truth for conformance tests. Keep in sync with docs/endpoints.md.",
-  "contractVersion": "0.19.0",
+  "contractVersion": "0.20.0",
   "$basePathComment": "Empty since 0.2.0: the server serves its routes at the ROOT of its own host (https://api.w6w.io/vars, not .../api/vars). Clients append nothing to the configured origin.",
   "basePath": "",
   "defaultBaseUrl": "https://api.w6w.io",
@@ -3432,8 +3432,8 @@
       "summary": "Publish a built app artifact (manifest + bundle) to the caller's personal catalog.",
       "method": "POST",
       "path": "/app-management/artifacts",
-      "status": "planned",
-      "serverImplemented": false,
+      "status": "required",
+      "serverImplemented": true,
       "params": [
         {
           "name": "artifact",
@@ -3463,7 +3463,7 @@
         "python": "client.app_management.publish_artifact(artifact, exec, map=None)",
         "cli": "w6w apps publish [dir] [--version <semver>] [--builder <spec>]"
       },
-      "notes": "Added in 0.19.0. The route is not deployed yet: `planned` / `serverImplemented: false` until it is. Nothing is unwrapped: the body is returned exactly as sent, `{ id, version, outcome: \"registered\" | \"bumped\" | \"upgraded\" | \"unchanged\", target: \"personal\" }`. The artifact is always caller-private (target `personal`). Codes: `400 invalid_body`, `400 invalid_target`, `403 user_import_disabled`, `403 forbidden`, `409 id_taken`, `413 artifact_too_large`, `422` publisher codes (`invalid_manifest`, `exec_sha_mismatch`, `map_sha_mismatch`, `map_missing`, `manifest_mismatch`, `version_conflict`, `protocol_trigger_not_allowed`, …), `503 blob_store_unavailable`."
+      "notes": "Added in 0.20.0; served since the app-publishing deploy of 2026-11-15. Nothing is unwrapped: the body is returned exactly as sent, `{ id, version, outcome: \"registered\" | \"bumped\" | \"upgraded\" | \"unchanged\", target: \"personal\" }`. The artifact is always caller-private (target `personal`). Codes: `400 invalid_body`, `400 invalid_target`, `403 user_import_disabled`, `403 forbidden`, `403` namespace/publisher refusals (`namespace_not_owned`, `namespace_owned`, `namespace_reserved`, `publisher_suspended`, `tier_mismatch`), `409 id_taken`, `413 artifact_too_large`, `422` publisher codes (`invalid_manifest`, `exec_sha_mismatch`, `map_sha_mismatch`, `map_missing`, `manifest_mismatch`, `version_conflict`, `protocol_trigger_not_allowed`, …), `503 blob_store_unavailable`."
     },
     {
       "name": "appManagement.updateSource",

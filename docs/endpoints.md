@@ -2550,11 +2550,11 @@ No body. Answers `{removed}`, a count of removed versions. Errors: the `:id` err
 POST /app-management/artifacts
 ```
 
-`status: planned` · not served yet (`serverImplemented: false`) · added in `0.19.0`
+`status: required` · `serverImplemented: true` — implemented 2026-11-15 · added in `0.20.0`
 
 Body `{artifact, exec, map?}`: `artifact` is the built manifest (opaque to the wrapper), `exec` and `map` are base64 strings (the wrappers take bytes and encode); `map` is sent only when given. Answers `{id, version, outcome, target}` with `outcome` one of `registered`, `bumped`, `upgraded`, `unchanged` and `target` always the wire token `personal`, which is the **deprecated alias** for account-owned: the upload is registered as an account app owned by the caller's `{tenant, account}`, the subject is only `publishedBy` attribution, and the account's teammates can manage it — it is never visible to one subject. The body is returned unchanged.
 
-Errors: `400 invalid_body`, `400 invalid_target`, `403 user_import_disabled`, `403 forbidden`, `409 id_taken`, `413 artifact_too_large`, `422` publisher codes (`invalid_manifest`, `exec_sha_mismatch`, `map_sha_mismatch`, `map_missing`, `manifest_mismatch`, `version_conflict`, `protocol_trigger_not_allowed`, …), `503 blob_store_unavailable`.
+Errors: `400 invalid_body`, `400 invalid_target`, `403 user_import_disabled`, `403 forbidden`, `403` namespace/publisher refusals (`namespace_not_owned`, `namespace_owned`, `namespace_reserved`, `publisher_suspended`, `tier_mismatch`), `409 id_taken`, `413 artifact_too_large`, `422` publisher codes (`invalid_manifest`, `exec_sha_mismatch`, `map_sha_mismatch`, `map_missing`, `manifest_mismatch`, `version_conflict`, `protocol_trigger_not_allowed`, …), `503 blob_store_unavailable`.
 
 ---
 
@@ -2873,6 +2873,13 @@ unstable `console.endpoints` namespace.
 > on the OAuth start, `refreshable` on an app's auth methods, and the `422 credential_invalid`
 > sign-in refusal with `error.hookCode` — is node `console` only, since connection create /
 > update / OAuth stay out of this contract.
+
+> **At contract `0.20.0` one app-management operation was added** (§100a):
+> `appManagement.publishArtifact` (`POST /app-management/artifacts`), the upload behind
+> `w6w apps publish`. It went in as `planned` and was flipped to `required` once the server
+> route shipped on 2026-11-15. The operation count goes from 122 to 123. The CLI's
+> `apps init` / `validate` / `build` run the local `@w6w/app-build` toolchain and call no
+> operation.
 
 ---
 

@@ -293,6 +293,13 @@ added; the count stays 122. The write side is console-only, for the same D-E2 re
 sign-in refusal carries `error.hookCode`, read from `ApiError.raw` in every lane; no lane adds an
 error field.
 
+## App artifact publishing
+
+Contract `0.20.0` adds one operation, `appManagement.publishArtifact`, in node
+(`client.appManagement.publishArtifact`), python (`client.app_management.publish_artifact`) and
+the cli (`w6w apps publish`, which builds with `@w6w/app-build` and then uploads). The count goes
+from 122 to 123. react is a derived lane and does not wrap it.
+
 ## Data stores
 
 Contract `0.15.0` adds the 14 `dataStores.*` operations, taking the contract from 107 to 121
