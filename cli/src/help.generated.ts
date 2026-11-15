@@ -99,7 +99,7 @@ export interface HelpExitCode {
 /** The command tree, generated from the shared wrapper surface contract. */
 export const HELP_TREE: HelpTree = {
   "binary": "w6w",
-  "contractVersion": "0.19.0",
+  "contractVersion": "0.20.0",
   "tagline": "command-line client for the w6w workflow platform",
   "usage": "w6w <command> [options]",
   "docsUrl": "https://w6w.dev/docs/cli",
@@ -2661,7 +2661,7 @@ export const HELP_TREE: HelpTree = {
             "publish a built app artifact (manifest + bundle) to the caller's personal catalog",
           "usage": "w6w apps publish [dir] [options]",
           "naming": "w6w apps publish [dir] [--version <semver>] [--builder <spec>]",
-          "status": "planned",
+          "status": "required",
           "params": [
             {
               "name": "dir",
@@ -2698,9 +2698,7 @@ export const HELP_TREE: HelpTree = {
             "w6w apps publish ./com.example.demo-app",
             "w6w apps publish ./com.example.demo-app --version 1.2.3",
           ],
-          "notes": [
-            'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
-          ],
+          "notes": [],
         },
         {
           "operation": "apps.init",

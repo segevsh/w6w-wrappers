@@ -1422,7 +1422,7 @@ export interface PublishArtifactInput {
   map?: Uint8Array;
 }
 
-/** The `POST /app-management/artifacts` body (contract 0.19.0), returned unchanged. */
+/** The `POST /app-management/artifacts` body (contract 0.20.0), returned unchanged. */
 export interface PublishArtifactResult {
   id: string;
   version: string;
