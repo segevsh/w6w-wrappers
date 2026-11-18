@@ -3538,7 +3538,7 @@
         "python": "client.app_management.update_source(id, source, expected_revision)",
         "cli": "w6w app-management update-source <id> <source> --expected-revision <n>"
       },
-      "notes": "Nothing is unwrapped: the body is returned exactly as sent. `SyncResult.outcome` is closed: `registry_updated`, `definition_unchanged` or `failed` (a `failed` outcome is still a 200 with `error:{code,message}`). The active source changes only on `registry_updated` or `definition_unchanged`. Codes: `400 invalid_path` (malformed id), `404 unknown_app` (also when the caller cannot see the app), `403 forbidden` (visible but not managed, or global and the caller is not an operator). `409 artifact_backed`, `409 stale_source` (revision mismatch), `403 local_import_forbidden`, `400 invalid_source`, `400 invalid_body`."
+      "notes": "Nothing is unwrapped: the body is returned exactly as sent. `SyncResult.outcome` is closed: `registry_updated`, `definition_unchanged`, `package_missing` (the package no longer lists the app; the installed version still runs) or `failed` (a `failed` outcome is still a 200 with `error:{code,message}`). The active source changes only on `registry_updated` or `definition_unchanged`. Codes: `400 invalid_path` (malformed id), `404 unknown_app` (also when the caller cannot see the app), `403 forbidden` (visible but not managed, or global and the caller is not an operator). `409 artifact_backed`, `409 stale_source` (revision mismatch), `403 local_import_forbidden`, `400 invalid_source`, `400 invalid_body`."
     },
     {
       "name": "appManagement.sync",
@@ -3568,7 +3568,7 @@
         "python": "client.app_management.sync(id, expected_revision=None)",
         "cli": "w6w app-management sync <id> [--expected-revision <n>]"
       },
-      "notes": "Nothing is unwrapped: the body is returned exactly as sent. `SyncResult.outcome` is closed: `registry_updated`, `definition_unchanged` or `failed` (a `failed` outcome is still a 200 with `error:{code,message}`). The body is `{}`, or `{expectedRevision}` when given. Codes: `400 invalid_path` (malformed id), `404 unknown_app` (also when the caller cannot see the app), `403 forbidden` (visible but not managed, or global and the caller is not an operator). `409 artifact_backed`, `409 no_source`, `409 stale_source` (only when `expectedRevision` was sent), `409 sync_conflict` (lost the locked-write race), `403 local_import_forbidden`."
+      "notes": "Nothing is unwrapped: the body is returned exactly as sent. `SyncResult.outcome` is closed: `registry_updated`, `definition_unchanged`, `package_missing` (the package no longer lists the app; the installed version still runs) or `failed` (a `failed` outcome is still a 200 with `error:{code,message}`). The body is `{}`, or `{expectedRevision}` when given. Codes: `400 invalid_path` (malformed id), `404 unknown_app` (also when the caller cannot see the app), `403 forbidden` (visible but not managed, or global and the caller is not an operator). `409 artifact_backed`, `409 no_source`, `409 stale_source` (only when `expectedRevision` was sent), `409 sync_conflict` (lost the locked-write race), `403 local_import_forbidden`."
     },
     {
       "name": "appManagement.remove",
