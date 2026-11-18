@@ -600,3 +600,29 @@ Deno.test("apps package: a pack the builder cannot read is refused", async () =>
   );
   assertEquals(await exists(`${out}/w6w`), false);
 });
+
+Deno.test("apps package: routes through main(); a failing app exits nonzero with no index.json", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  const restore = packageBuilder([], "io.w6w.beta");
+  const err: string[] = [];
+  let code: number;
+  try {
+    code = await main(
+      [
+        "apps",
+        "package",
+        `${PACKAGE_FIXTURE}w6w-pack.json`,
+        "--out",
+        out,
+        "--resolution",
+        "registry",
+      ],
+      { stdout: () => {}, stderr: (t) => err.push(t) },
+      { commands: COMMANDS },
+    );
+  } finally {
+    restore();
+  }
+  assert(code !== 0, `expected nonzero exit, got ${code}; ${err.join("\n")}`);
+  assertEquals(await exists(`${out}/w6w/index.json`), false);
+});

@@ -3016,6 +3016,70 @@ export const HELP_TREE: HelpTree = {
           ],
           "notes": [],
         },
+        {
+          "operation": "apps.package",
+          "path": [
+            "apps",
+            "package",
+          ],
+          "name": "package",
+          "aliases": [],
+          "summary":
+            "Build a pack into a w6w registry package tree (<out>/w6w/index.json + <id>/<version>/…); never publishes (local only, needs Deno).",
+          "short":
+            "Build a pack into a w6w registry package tree (<out>/w6w/index.json + <id>/<version>/…); never publishes (local only, needs Deno)",
+          "headline":
+            "build a pack into a w6w registry package tree (<out>/w6w/index.json + <id>/<version>/…); never publishes (local only, needs Deno)",
+          "usage": "w6w apps package <pack> [options]",
+          "naming":
+            "w6w apps package <pack> [-o|--out <dir>] [--resolution sibling|registry] [--builder <spec>]",
+          "status": "live",
+          "params": [
+            {
+              "name": "pack",
+              "kind": "argument",
+              "display": "<pack>",
+              "description": "The pack source (w6w-pack.json) listing the apps to build",
+              "required": true,
+            },
+            {
+              "name": "out",
+              "kind": "flag",
+              "display": "--out <value>",
+              "description":
+                "Output root (default: the current directory): writes <out>/w6w/index.json and <out>/w6w/<id>/<version>/…; nothing is written if any app fails (`-o` is shorthand)",
+              "required": false,
+            },
+            {
+              "name": "resolution",
+              "kind": "flag",
+              "display": "--resolution <value>",
+              "description":
+                "How @w6w/* imports resolve: sibling or registry (default: registry when the app's deno.json maps @w6w/types to jsr:, else sibling)",
+              "required": false,
+            },
+            {
+              "name": "builder",
+              "kind": "flag",
+              "display": "--builder <spec>",
+              "description":
+                "The app builder spec to run (default: jsr:@w6w/app-build@0.2.0/cli); a path or file: URL for a local builder",
+              "required": false,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w apps package ./w6w-pack.json",
+            "w6w apps package ./w6w-pack.json --out ./dist",
+          ],
+          "notes": [],
+        },
       ],
       "options": [],
       "examples": [
@@ -7218,6 +7282,10 @@ export const COMMAND_PATHS: string[][] = [
   [
     "apps",
     "build",
+  ],
+  [
+    "apps",
+    "package",
   ],
   [
     "dashboard",

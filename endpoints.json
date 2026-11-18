@@ -4449,6 +4449,38 @@
         ]
       },
       {
+        "name": "apps.package",
+        "summary": "Build a pack into a w6w registry package tree (<out>/w6w/index.json + <id>/<version>/…); never publishes (local only, needs Deno).",
+        "status": "live",
+        "naming": "w6w apps package <pack> [-o|--out <dir>] [--resolution sibling|registry] [--builder <spec>]",
+        "params": [
+          {
+            "name": "pack",
+            "in": "argument",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "out",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "resolution",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "builder",
+            "in": "query",
+            "type": "string",
+            "required": false
+          }
+        ]
+      },
+      {
         "name": "version",
         "summary": "Show this CLI's version and the server's version and composition (no identity).",
         "status": "live",
