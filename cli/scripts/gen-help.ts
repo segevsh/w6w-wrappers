@@ -744,6 +744,8 @@ const PARAM_HELP: Record<string, string> = {
     "Package name written to package.json (jsr.json derives from it); used only when those files are created (default: w6w-apps-<pack dir>)",
   "apps.package.version":
     "Version written to package.json/jsr.json; used only when those files are created (default: 0.1.0)",
+  "apps.package.license":
+    "SPDX license written to jsr.json when it is created and neither the pack nor package.json declares one (default: UNLICENSED)",
   "appManagement.publishArtifact.dir": "The app directory (default: the current directory)",
   "appManagement.publishArtifact.version":
     "Semver to write into the app's package.json before building (rewritten in place; default: leave it as is)",

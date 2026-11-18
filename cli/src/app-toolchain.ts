@@ -333,13 +333,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export async function packageApps(
   packPath: string,
   out: string,
-  options: { builder: string; resolution?: Resolution; name?: string; version?: string },
+  options: {
+    builder: string;
+    resolution?: Resolution;
+    name?: string;
+    version?: string;
+    license?: string;
+  },
 ): Promise<PackagedApp[]> {
   const { fs, path, sha256 } = await packHost();
   const pack = path.resolve(packPath);
   let paths: string[];
+  let packLicense: string | undefined;
   try {
     const data: unknown = JSON.parse(await fs.readFile(pack, "utf8"));
+    if (isRecord(data) && typeof data.license === "string" && data.license !== "") {
+      packLicense = data.license;
+    }
     const apps = isRecord(data) && Array.isArray(data.apps) ? data.apps : undefined;
     if (apps === undefined) throw new Error("no `apps` array");
     paths = apps.map((a) => {
@@ -358,7 +368,7 @@ export async function packageApps(
   const manifests = await planManifests(
     absOut,
     path.dirname(pack).split(/[\\/]/).pop() ?? "",
-    options,
+    { ...options, packLicense },
   );
   await fs.mkdir(absOut, { recursive: true });
   const stage = await fs.mkdtemp(path.join(absOut, ".w6w-stage-"));
@@ -453,7 +463,7 @@ function remoteImports(imports: unknown): string[] {
 async function planManifests(
   absOut: string,
   fallbackName: string,
-  options: { name?: string; version?: string },
+  options: { name?: string; version?: string; license?: string; packLicense?: string },
 ): Promise<[string, Record<string, unknown>][]> {
   const { fs, path } = await packHost();
   const read = async (file: string): Promise<string | undefined> => {
@@ -473,12 +483,14 @@ async function planManifests(
   const version = options.version ?? "0.1.0";
 
   const pkgText = await read("package.json");
+  let pkgLicense: string | undefined;
   if (pkgText === undefined) {
     plan.push(["package.json", { name, version, keywords: [KEYWORD], files: ["w6w/"] }]);
   } else {
     try {
       const pkg: unknown = JSON.parse(pkgText);
       if (!isRecord(pkg)) throw new Error("not a JSON object");
+      if (typeof pkg.license === "string" && pkg.license !== "") pkgLicense = pkg.license;
       for (const key of DEPENDENCY_KEYS) {
         if (key in pkg) failures.push(`package.json: \`${key}\` is not allowed (even empty)`);
       }
@@ -513,6 +525,7 @@ async function planManifests(
     plan.push(["jsr.json", {
       name: name.startsWith("@") ? name : `@w6w-apps/${name.replace(/^w6w-apps-/, "")}`,
       version,
+      license: pkgLicense ?? options.packLicense ?? options.license ?? "UNLICENSED",
       exports: "./w6w/index.json",
       publish: { include: ["jsr.json", "w6w/"] },
     }]);
