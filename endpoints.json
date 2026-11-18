@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable surface contract for all w6w wrappers. Source of truth for conformance tests. Keep in sync with docs/endpoints.md.",
-  "contractVersion": "0.20.0",
+  "contractVersion": "0.21.0",
   "$basePathComment": "Empty since 0.2.0: the server serves its routes at the ROOT of its own host (https://api.w6w.io/vars, not .../api/vars). Clients append nothing to the configured origin.",
   "basePath": "",
   "defaultBaseUrl": "https://api.w6w.io",
@@ -3388,6 +3388,44 @@
         "cli": "w6w app-management preview <source> --target <target>"
       },
       "notes": "Nothing is unwrapped: the body is returned exactly as sent. Answers `{kind:'app', sourceRef, app}` or `{kind:'pack', sourceRef, pack, entries}`; `entries[].alreadyRegistered` covers only apps the caller manages. The body is built from `source` and `target` only. Codes: `400 invalid_body`, `400 invalid_target`, `400 invalid_source`, `403 forbidden`, `403 local_import_forbidden`, `424 fetch_failed`, `424 source_requires_grant`, `429 source_rate_limited`, `424 source_timeout`, `424 source_too_large`."
+    },
+    {
+      "name": "appManagement.discover",
+      "summary": "Search an npm or JSR registry for installable w6w apps.",
+      "method": "GET",
+      "path": "/app-management/discover",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "registry",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "$comment": "`npm` or `jsr`; the server defaults to `npm`. Sent only when given."
+        },
+        {
+          "name": "q",
+          "in": "query",
+          "type": "string",
+          "required": true,
+          "$comment": "1..100 characters."
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "number",
+          "required": false,
+          "$comment": "1..50; the server defaults to 20. Sent only when given."
+        }
+      ],
+      "returns": "AppManagementDiscoverResult",
+      "naming": {
+        "ts": "client.appManagement.discover(input, opts?)",
+        "python": "client.app_management.discover(registry=None, q=..., limit=None)",
+        "cli": "w6w apps search <q> [--registry npm|jsr] [--limit <n>]"
+      },
+      "notes": "Answers `{registry, q, items:[{name, version, description|null, link, ref, installed}]}`; `ref` is `<registry>:<name>@^<version>` and `installed` covers only scopes the caller manages. Codes: `400 invalid_query` (unknown or duplicate param, bad registry/q/limit), `424 registry_unavailable`."
     },
     {
       "name": "appManagement.register",
