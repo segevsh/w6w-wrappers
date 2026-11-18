@@ -395,7 +395,7 @@ hand-declared rather than contract-driven.
 
 `w6w agents create` and `w6w agents update` take the sampling options of an
 agent's model call as flags, assembled into the `modelOptions` body object
-(contract 0.12.0):
+(contract 0.12.1):
 
 ```text
 --temperature <n>         0 to 2
@@ -421,7 +421,7 @@ collection. `--visibility` with `--purpose skill` is a usage error.
 ## `context-entries` — context entries outside any collection
 
 `w6w context-entries` manages text entries that do not belong to one collection
-(contract 0.12.0; the SDK's `client.contextEntries.*`). The nested
+(contract 0.12.1; the SDK's `client.contextEntries.*`). The nested
 `w6w context entries-*` commands keep working for collection-scoped entries.
 
 ```

@@ -107,7 +107,7 @@ export class W6WClient {
   readonly skills: SkillsApi;
   /** Context collections and text entries. */
   readonly context: ContextApi;
-  /** Top-level context entries (contract 0.12.0). */
+  /** Top-level context entries (contract 0.12.1). */
   readonly contextEntries: ContextEntriesApi;
   /** Agent drafts (never runnable). */
   readonly agents: AgentsApi;
