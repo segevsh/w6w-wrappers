@@ -323,6 +323,10 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
     "w6w apps build ./com.example.demo-app",
     "w6w apps build ./com.example.demo-app --out ./out --pack ./w6w-pack.json",
   ],
+  "apps.package": [
+    "w6w apps package ./w6w-pack.json",
+    "w6w apps package ./w6w-pack.json --out ./dist",
+  ],
   "appManagement.publishArtifact": [
     "w6w apps publish ./com.example.demo-app",
     "w6w apps publish ./com.example.demo-app --version 1.2.3",
@@ -478,6 +482,10 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
   ],
   "appManagement.get": ["w6w app-management get sendgrid"],
   "appManagement.preview": ["w6w app-management preview github:acme/app --target account"],
+  "appManagement.discover": [
+    "w6w apps search hello",
+    "w6w apps search hello --registry jsr --limit 5",
+  ],
   "appManagement.register": [
     "w6w app-management register github:acme/app --target account",
     `w6w app-management register '{"folder":{"grant":"sgr_01HQ8N","path":"./my-app"}}' --target personal`,
@@ -725,6 +733,17 @@ const PARAM_HELP: Record<string, string> = {
     "How @w6w/* imports resolve: sibling or registry (default: registry when the app's deno.json maps @w6w/types to jsr:, else sibling)",
   "apps.build.builder":
     "The app builder spec to run (default: jsr:@w6w/app-build@0.2.0/cli); a path or file: URL for a local builder",
+  "apps.package.pack": "The pack source (w6w-pack.json) listing the apps to build",
+  "apps.package.out":
+    "Output root (default: dist): writes <out>/w6w/index.json and <out>/w6w/<id>/<version>/…; nothing is written if any app fails (`-o` is shorthand)",
+  "apps.package.resolution":
+    "How @w6w/* imports resolve: sibling or registry (default: registry when the app's deno.json maps @w6w/types to jsr:, else sibling)",
+  "apps.package.builder":
+    "The app builder spec to run (default: jsr:@w6w/app-build@0.2.0/cli); a path or file: URL for a local builder",
+  "apps.package.name":
+    "Package name written to package.json (jsr.json derives from it); used only when those files are created (default: w6w-apps-<pack dir>)",
+  "apps.package.version":
+    "Version written to package.json/jsr.json; used only when those files are created (default: 0.1.0)",
   "appManagement.publishArtifact.dir": "The app directory (default: the current directory)",
   "appManagement.publishArtifact.version":
     "Semver to write into the app's package.json before building (rewritten in place; default: leave it as is)",
@@ -924,6 +943,9 @@ const PARAM_HELP: Record<string, string> = {
     'A canonical remote ref (e.g. github:owner/repo), or a JSON object {"folder":{"grant":"…","path":"…"}} naming a path inside a granted server folder',
   "appManagement.preview.target":
     "Where it would go: account, tenant or personal (the server's targets list says which you may use)",
+  "appManagement.discover.registry": "Registry to search: npm (default) or jsr",
+  "appManagement.discover.q": "Search text",
+  "appManagement.discover.limit": "Maximum results (a positive integer)",
   "appManagement.register.source":
     'A canonical remote ref (e.g. github:owner/repo), or a JSON object {"folder":{"grant":"…","path":"…"}} naming a path inside a granted server folder',
   "appManagement.register.target":

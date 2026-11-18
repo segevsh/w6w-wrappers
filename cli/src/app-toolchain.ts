@@ -268,3 +268,255 @@ export async function builderArgs(
   if (extra.resolution !== undefined) argv.push("--resolution", extra.resolution);
   return argv;
 }
+
+// ---------------------------------------------------------------------------
+// Registry package (`apps package`)
+// ---------------------------------------------------------------------------
+
+interface PackFs {
+  readFile(path: string, encoding: "utf8"): Promise<string>;
+  readdir(path: string): Promise<string[]>;
+  writeFile(path: string, data: string): Promise<void>;
+  mkdir(path: string, options: { recursive: true }): Promise<unknown>;
+  mkdtemp(prefix: string): Promise<string>;
+  rename(from: string, to: string): Promise<void>;
+  rm(path: string, options: { force: true; recursive: true }): Promise<void>;
+}
+
+async function packHost(): Promise<{ fs: PackFs; path: Path; sha256: (text: string) => string }> {
+  const fsName = "node:fs/promises";
+  const pathName = "node:path";
+  const cryptoName = "node:crypto";
+  const crypto = (await import(cryptoName)) as {
+    createHash(alg: "sha256"): { update(data: string): { digest(enc: "hex"): string } };
+  };
+  return {
+    fs: (await import(fsName)) as PackFs,
+    path: (await import(pathName)) as Path,
+    sha256: (text) => crypto.createHash("sha256").update(text).digest("hex"),
+  };
+}
+
+/** One app in `<out>/w6w/index.json`. */
+export interface PackagedApp {
+  id: string;
+  version: string;
+  execSha256: string;
+  digest?: string;
+  sourceDigest?: string;
+  [key: string]: unknown;
+}
+
+/** Thrown by {@linkcode packageApps}: every failure, nothing written to `<out>/w6w`. */
+export class PackageFailure extends Error {
+  constructor(readonly failures: string[]) {
+    super(`packaging failed; nothing was written:\n${failures.map((f) => `  - ${f}`).join("\n")}`);
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Builds every app a pack source lists with the SAME builder `apps build` uses
+ * ({@linkcode builderArgs} + {@linkcode runBuilder}), into a staging directory beside
+ * `<out>`, and only when ALL of them built moves the result to `<out>/w6w`
+ * (`index.json` + `<id>/<version>/…`). Any failure leaves `<out>/w6w` untouched.
+ *
+ * `execSha256` in the index is the sha-256 of the `app.js` actually written; a
+ * builder-reported value that disagrees is a failure.
+ *
+ * @param packPath The `w6w-pack.json` of the source; each `apps[].path` is relative to it.
+ * @throws {PackageFailure} When the pack is unreadable or any app fails.
+ */
+export async function packageApps(
+  packPath: string,
+  out: string,
+  options: { builder: string; resolution?: Resolution; name?: string; version?: string },
+): Promise<PackagedApp[]> {
+  const { fs, path, sha256 } = await packHost();
+  const pack = path.resolve(packPath);
+  let paths: string[];
+  try {
+    const data: unknown = JSON.parse(await fs.readFile(pack, "utf8"));
+    const apps = isRecord(data) && Array.isArray(data.apps) ? data.apps : undefined;
+    if (apps === undefined) throw new Error("no `apps` array");
+    paths = apps.map((a) => {
+      if (!isRecord(a) || typeof a.path !== "string" || a.path === "") {
+        throw new Error("every app needs a `path`");
+      }
+      return path.resolve(path.dirname(pack), a.path);
+    });
+    if (paths.length === 0) throw new Error("`apps` is empty");
+  } catch (error) {
+    throw new PackageFailure([`\`${packPath}\`: ${(error as Error).message}`]);
+  }
+
+  const absOut = path.resolve(out);
+  // Validate existing publish manifests BEFORE anything is built or written.
+  const manifests = await planManifests(
+    absOut,
+    path.dirname(pack).split(/[\\/]/).pop() ?? "",
+    options,
+  );
+  await fs.mkdir(absOut, { recursive: true });
+  const stage = await fs.mkdtemp(path.join(absOut, ".w6w-stage-"));
+  try {
+    const built: PackagedApp[] = [];
+    const failures: string[] = [];
+    for (const [i, dir] of paths.entries()) {
+      const raw = path.join(stage, "raw", String(i));
+      try {
+        const resolution = options.resolution ?? await resolveResolution(dir);
+        const result = await runBuilder(
+          await builderArgs(options.builder, dir, "build", { out: raw, resolution }),
+          dir,
+        );
+        if (result.code !== 0) {
+          const said = (result.stderr.trim() || result.stdout.trim()).split("\n").slice(-3).join(
+            " | ",
+          );
+          throw new Error(`the builder exited ${result.code}${said ? `: ${said}` : ""}`);
+        }
+        const index: unknown = JSON.parse(await fs.readFile(path.join(raw, "index.json"), "utf8"));
+        const entries = isRecord(index) && Array.isArray(index.apps) ? index.apps : [];
+        const entry = entries[0];
+        if (
+          entries.length !== 1 || !isRecord(entry) || typeof entry.id !== "string" ||
+          typeof entry.version !== "string"
+        ) {
+          throw new Error("the builder's index.json does not carry exactly one app");
+        }
+        const from = path.join(raw, entry.id, entry.version);
+        const execSha256 = sha256(await fs.readFile(path.join(from, "app.js"), "utf8"));
+        if (entry.execSha256 !== undefined && entry.execSha256 !== execSha256) {
+          throw new Error(`reported execSha256 does not match the built app.js`);
+        }
+        const to = path.join(stage, "w6w", entry.id, entry.version);
+        await fs.mkdir(path.dirname(to), { recursive: true });
+        await fs.rename(from, to);
+        built.push({ ...entry, id: entry.id, version: entry.version, execSha256 });
+      } catch (error) {
+        failures.push(`${dir}: ${(error as Error).message}`);
+      }
+    }
+    if (failures.length > 0) throw new PackageFailure(failures);
+    await fs.mkdir(path.join(stage, "w6w"), { recursive: true });
+    await fs.writeFile(
+      path.join(stage, "w6w", "index.json"),
+      JSON.stringify({ apps: built, failures: [] }, null, 2) + "\n",
+    );
+    await fs.rm(path.join(absOut, "w6w"), { force: true, recursive: true });
+    await fs.rename(path.join(stage, "w6w"), path.join(absOut, "w6w"));
+    for (const [file, body] of manifests) {
+      await fs.writeFile(path.join(absOut, file), JSON.stringify(body, null, 2) + "\n");
+    }
+    return built;
+  } finally {
+    await fs.rm(stage, { force: true, recursive: true });
+  }
+}
+
+const DEPENDENCY_KEYS = [
+  "dependencies",
+  "devDependencies",
+  "optionalDependencies",
+  "peerDependencies",
+  "bundledDependencies",
+  "bundleDependencies",
+];
+const KEYWORD = "w6w-app";
+const JSR_CONFIGS = ["jsr.json", "deno.json", "deno.jsonc"];
+
+/** Parses JSON, tolerating `//` and `/* *\/` comments outside strings (for `deno.jsonc`). */
+function parseJsonc(text: string): unknown {
+  const stripped = text.replace(
+    /"(?:[^"\\]|\\.)*"|\/\/[^\n]*|\/\*[\s\S]*?\*\//g,
+    (m) => m.startsWith('"') ? m : "",
+  );
+  return JSON.parse(stripped);
+}
+
+function remoteImports(imports: unknown): string[] {
+  if (!isRecord(imports)) return [];
+  return Object.entries(imports)
+    .filter(([, v]) => typeof v === "string" && /^(npm|jsr):/.test(v))
+    .map(([k]) => k);
+}
+
+/**
+ * Decides which publish manifests to write into `<out>` and validates the ones already there.
+ * Returns `[fileName, body]` for the absent ones; throws {@linkcode PackageFailure} (before
+ * anything is written) for an existing one that would make the package carry dependencies.
+ */
+async function planManifests(
+  absOut: string,
+  fallbackName: string,
+  options: { name?: string; version?: string },
+): Promise<[string, Record<string, unknown>][]> {
+  const { fs, path } = await packHost();
+  const read = async (file: string): Promise<string | undefined> => {
+    try {
+      return await fs.readFile(path.join(absOut, file), "utf8");
+    } catch (error) {
+      if ((error as { code?: string }).code === "ENOENT") return undefined;
+      throw error;
+    }
+  };
+  const failures: string[] = [];
+  const plan: [string, Record<string, unknown>][] = [];
+  const name = options.name ??
+    `w6w-apps-${
+      fallbackName.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^[-.]+/, "") || "pack"
+    }`;
+  const version = options.version ?? "0.1.0";
+
+  const pkgText = await read("package.json");
+  if (pkgText === undefined) {
+    plan.push(["package.json", { name, version, keywords: [KEYWORD], files: ["w6w/"] }]);
+  } else {
+    try {
+      const pkg: unknown = JSON.parse(pkgText);
+      if (!isRecord(pkg)) throw new Error("not a JSON object");
+      for (const key of DEPENDENCY_KEYS) {
+        if (key in pkg) failures.push(`package.json: \`${key}\` is not allowed (even empty)`);
+      }
+      if (!Array.isArray(pkg.keywords) || !pkg.keywords.includes(KEYWORD)) {
+        failures.push(`package.json: \`keywords\` must include \`${KEYWORD}\``);
+      }
+      for (const k of remoteImports(pkg.imports)) {
+        failures.push(`package.json: import \`${k}\` points at an npm:/jsr: specifier`);
+      }
+    } catch (error) {
+      failures.push(`package.json: ${(error as Error).message}`);
+    }
+  }
+
+  let existing: string | undefined;
+  for (const file of JSR_CONFIGS) {
+    const text = await read(file);
+    if (text === undefined) continue;
+    existing = file;
+    try {
+      const cfg = parseJsonc(text);
+      if (!isRecord(cfg)) throw new Error("not a JSON object");
+      for (const k of remoteImports(cfg.imports)) {
+        failures.push(`${file}: import \`${k}\` points at an npm:/jsr: specifier`);
+      }
+    } catch (error) {
+      failures.push(`${file}: ${(error as Error).message}`);
+    }
+    break;
+  }
+  if (existing === undefined) {
+    plan.push(["jsr.json", {
+      name: name.startsWith("@") ? name : `@w6w-apps/${name.replace(/^w6w-apps-/, "")}`,
+      version,
+      exports: "./w6w/index.json",
+      publish: { include: ["jsr.json", "w6w/"] },
+    }]);
+  }
+  if (failures.length > 0) throw new PackageFailure(failures);
+  return plan;
+}

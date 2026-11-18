@@ -737,6 +737,10 @@ SyncOutcome = Literal["registry_updated", "definition_unchanged", "failed"]
 #: same version's bytes, or byte-identical to what was already there.
 PublishArtifactOutcome = Literal["registered", "bumped", "upgraded", "unchanged"]
 
+#: The two package registries `appManagement.discover` searches. Closed: a third
+#: registry is a contract change.
+DiscoverRegistry = Literal["npm", "jsr"]
+
 
 class PublishArtifactResult(TypedDict):
     """`appManagement.publishArtifact`'s 201/200 body. `version` is the server's."""
@@ -745,6 +749,35 @@ class PublishArtifactResult(TypedDict):
     version: str
     outcome: PublishArtifactOutcome
     target: Literal["personal"]
+
+
+class AppManagementDiscoverItem(TypedDict):
+    """One search hit from `appManagement.discover`."""
+
+    #: The package name, as the registry spells it.
+    name: str
+    #: The version the hit resolved to.
+    version: str
+    #: The package's own description, or `None` when it has none.
+    description: Optional[str]
+    #: A link a human can open (the registry page).
+    link: str
+    #: The source ref to hand to `preview`/`register`: `<registry>:<name>@^<version>`.
+    ref: str
+    #: At least one app of this package is installed in a scope the caller manages.
+    installed: bool
+
+
+class AppManagementDiscoverResult(TypedDict):
+    """`appManagement.discover`'s body: the registry searched, the query, the hits.
+
+    `items` is empty when nothing matched; an unavailable registry is a
+    `424 registry_unavailable` error, not an empty list.
+    """
+
+    registry: DiscoverRegistry
+    q: str
+    items: List[AppManagementDiscoverItem]
 
 
 @dataclass(frozen=True)

@@ -99,7 +99,7 @@ export interface HelpExitCode {
 /** The command tree, generated from the shared wrapper surface contract. */
 export const HELP_TREE: HelpTree = {
   "binary": "w6w",
-  "contractVersion": "0.20.0",
+  "contractVersion": "0.21.0",
   "tagline": "command-line client for the w6w workflow platform",
   "usage": "w6w <command> [options]",
   "docsUrl": "https://w6w.dev/docs/cli",
@@ -2646,6 +2646,56 @@ export const HELP_TREE: HelpTree = {
           "notes": [],
         },
         {
+          "operation": "appManagement.discover",
+          "path": [
+            "apps",
+            "search",
+          ],
+          "name": "search",
+          "aliases": [],
+          "summary": "Search an npm or JSR registry for installable w6w apps.",
+          "short": "Search an npm or JSR registry for installable w6w apps",
+          "headline": "search an npm or JSR registry for installable w6w apps",
+          "usage": "w6w apps search <q> [options]",
+          "naming": "w6w apps search <q> [--registry npm|jsr] [--limit <n>]",
+          "status": "required",
+          "params": [
+            {
+              "name": "registry",
+              "kind": "flag",
+              "display": "--registry <value>",
+              "description": "Registry to search: npm (default) or jsr",
+              "required": false,
+            },
+            {
+              "name": "q",
+              "kind": "argument",
+              "display": "<q>",
+              "description": "Search text",
+              "required": true,
+            },
+            {
+              "name": "limit",
+              "kind": "flag",
+              "display": "--limit <n>",
+              "description": "Maximum results (a positive integer)",
+              "required": false,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w apps search hello",
+            "w6w apps search hello --registry jsr --limit 5",
+          ],
+          "notes": [],
+        },
+        {
           "operation": "appManagement.publishArtifact",
           "path": [
             "apps",
@@ -2963,6 +3013,86 @@ export const HELP_TREE: HelpTree = {
           "examples": [
             "w6w apps build ./com.example.demo-app",
             "w6w apps build ./com.example.demo-app --out ./out --pack ./w6w-pack.json",
+          ],
+          "notes": [],
+        },
+        {
+          "operation": "apps.package",
+          "path": [
+            "apps",
+            "package",
+          ],
+          "name": "package",
+          "aliases": [],
+          "summary":
+            "Build a pack into a w6w registry package tree (<out>/w6w/index.json + <id>/<version>/…); never publishes (local only, needs Deno).",
+          "short":
+            "Build a pack into a w6w registry package tree (<out>/w6w/index.json + <id>/<version>/…); never publishes (local only, needs Deno)",
+          "headline":
+            "build a pack into a w6w registry package tree (<out>/w6w/index.json + <id>/<version>/…); never publishes (local only, needs Deno)",
+          "usage": "w6w apps package <pack> [options]",
+          "naming":
+            "w6w apps package <pack> [-o|--out <dir>] [--resolution sibling|registry] [--builder <spec>] [--name <pkg>] [--version <v>]",
+          "status": "live",
+          "params": [
+            {
+              "name": "pack",
+              "kind": "argument",
+              "display": "<pack>",
+              "description": "The pack source (w6w-pack.json) listing the apps to build",
+              "required": true,
+            },
+            {
+              "name": "out",
+              "kind": "flag",
+              "display": "--out <value>",
+              "description":
+                "Output root (default: dist): writes <out>/w6w/index.json and <out>/w6w/<id>/<version>/…; nothing is written if any app fails (`-o` is shorthand)",
+              "required": false,
+            },
+            {
+              "name": "resolution",
+              "kind": "flag",
+              "display": "--resolution <value>",
+              "description":
+                "How @w6w/* imports resolve: sibling or registry (default: registry when the app's deno.json maps @w6w/types to jsr:, else sibling)",
+              "required": false,
+            },
+            {
+              "name": "builder",
+              "kind": "flag",
+              "display": "--builder <spec>",
+              "description":
+                "The app builder spec to run (default: jsr:@w6w/app-build@0.2.0/cli); a path or file: URL for a local builder",
+              "required": false,
+            },
+            {
+              "name": "name",
+              "kind": "flag",
+              "display": "--name <pkg>",
+              "description":
+                "Package name written to package.json (jsr.json derives from it); used only when those files are created (default: w6w-apps-<pack dir>)",
+              "required": false,
+            },
+            {
+              "name": "version",
+              "kind": "flag",
+              "display": "--version <v>",
+              "description":
+                "Version written to package.json/jsr.json; used only when those files are created (default: 0.1.0)",
+              "required": false,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w apps package ./w6w-pack.json",
+            "w6w apps package ./w6w-pack.json --out ./dist",
           ],
           "notes": [],
         },
@@ -7147,6 +7277,10 @@ export const COMMAND_PATHS: string[][] = [
   ],
   [
     "apps",
+    "search",
+  ],
+  [
+    "apps",
     "publish",
   ],
   [
@@ -7164,6 +7298,10 @@ export const COMMAND_PATHS: string[][] = [
   [
     "apps",
     "build",
+  ],
+  [
+    "apps",
+    "package",
   ],
   [
     "dashboard",

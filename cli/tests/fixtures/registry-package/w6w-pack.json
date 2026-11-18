@@ -1,0 +1,6 @@
+{
+  "apps": [
+    { "path": "apps/io.w6w.alpha" },
+    { "path": "apps/io.w6w.beta" }
+  ]
+}
