@@ -516,3 +516,87 @@ Deno.test("-o is the short form of --out on `apps build` and `build app`, throug
     assertEquals(calls[0].argv.slice(-4), ["-o", out, "--resolution", "registry"]);
   }
 });
+
+// ---------------------------------------------------------------------------
+// `apps package`
+// ---------------------------------------------------------------------------
+
+const PACKAGE_FIXTURE = new URL("./fixtures/registry-package/", import.meta.url).pathname;
+
+/** The fake builder for the fixture: the app id is the folder's name, `app.js` is unique per app. */
+function packageBuilder(calls: Call[], failOn?: string) {
+  return useToolchainRunner(async (argv, cwd) => {
+    calls.push({ argv, cwd });
+    const id = cwd.split("/").pop() as string;
+    if (id === failOn) return { code: 1, stdout: "", stderr: "boom" };
+    const entry: BuildEntry = { ...ENTRY, id, execSha256: undefined as unknown as string };
+    delete (entry as Record<string, unknown>).execSha256;
+    const out = outOf(argv);
+    const at = `${out}/${id}/0.1.0`;
+    await Deno.mkdir(at, { recursive: true });
+    await Deno.writeTextFile(`${at}/app.js`, `// ${id}\n`);
+    await Deno.writeTextFile(`${at}/manifest.json`, JSON.stringify({ id }));
+    await Deno.writeTextFile(`${out}/index.json`, JSON.stringify({ apps: [entry] }));
+    return { code: 0, stdout: "", stderr: "" };
+  });
+}
+
+async function sha256Hex(text: string): Promise<string> {
+  const bytes = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)),
+  );
+  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function runPackage(out: string, failOn?: string) {
+  const calls: Call[] = [];
+  const restore = packageBuilder(calls, failOn);
+  const { context: ctx, stderr } = context({
+    positionals: [`${PACKAGE_FIXTURE}w6w-pack.json`],
+    options: { out, resolution: "registry" },
+  });
+  try {
+    const code = await COMMANDS["apps package"](ctx);
+    return { code, calls, stderr, error: undefined as Error | undefined };
+  } catch (error) {
+    return { code: undefined, calls, stderr, error: error as Error };
+  } finally {
+    restore();
+  }
+}
+
+Deno.test("apps package: writes w6w/index.json with execSha256 = sha-256 of each app.js", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  const run = await runPackage(out);
+  assertEquals(run.error, undefined);
+  assertEquals(run.calls.length, 2);
+  const index = JSON.parse(await Deno.readTextFile(`${out}/w6w/index.json`));
+  assertEquals(index.apps.map((a: BuildEntry) => a.id), ["io.w6w.alpha", "io.w6w.beta"]);
+  for (const app of index.apps as BuildEntry[]) {
+    const js = await Deno.readTextFile(`${out}/w6w/${app.id}/${app.version}/app.js`);
+    assertEquals(app.execSha256, await sha256Hex(js));
+    assert(await exists(`${out}/w6w/${app.id}/${app.version}/manifest.json`));
+  }
+  // staging is gone
+  assertEquals([...Deno.readDirSync(out)].map((e) => e.name), ["w6w"]);
+});
+
+Deno.test("apps package: one app failing writes nothing to <out>/w6w", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  const run = await runPackage(out, "io.w6w.beta");
+  assert(run.error !== undefined);
+  assertStringIncludes(run.error.message, "io.w6w.beta");
+  assertEquals(await exists(`${out}/w6w`), false);
+  assertEquals([...Deno.readDirSync(out)].length, 0);
+});
+
+Deno.test("apps package: a pack the builder cannot read is refused", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  const { context: ctx } = context({ positionals: [`${out}/missing.json`], options: { out } });
+  await assertRejects(
+    () => Promise.resolve(COMMANDS["apps package"](ctx)),
+    Error,
+    "nothing was written",
+  );
+  assertEquals(await exists(`${out}/w6w`), false);
+});

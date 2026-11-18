@@ -26,6 +26,7 @@
 import type { CommandContext, CommandHandler, CommandRegistry } from "../../mod.ts";
 import type { Styles } from "../output.ts";
 import { listManagedApps } from "./app-management.ts";
+import { DEFAULT_BUILDER, packageApps, PackageFailure } from "../app-toolchain.ts";
 import { appsBuild } from "./build.ts";
 import { appsPublish } from "./publish.ts";
 import { argument, noExtraArguments, table, textFlag, usageError } from "./shared.ts";
@@ -95,10 +96,35 @@ const search: CommandHandler = async (context) => {
   context.out.emit(result, (styles) => renderDiscover(result, styles));
 };
 
+/** `apps package <pack> --out <dir>`: build a pack source into a publishable `<dir>/w6w` tree. */
+const appsPackage: CommandHandler = async (context) => {
+  const pack = argument(context, 0, "the pack file (w6w-pack.json)");
+  noExtraArguments(context, 1);
+  const out = textFlag(context, "out") ?? "dist";
+  const resolution = textFlag(context, "resolution");
+  if (resolution !== undefined && resolution !== "sibling" && resolution !== "registry") {
+    throw usageError(context, "`--resolution` must be `sibling` or `registry`.");
+  }
+  try {
+    const apps = await packageApps(pack, out, {
+      builder: textFlag(context, "builder") ?? DEFAULT_BUILDER,
+      resolution,
+    });
+    context.out.emit(
+      { out, apps },
+      (styles) => `${styles.green("packaged")} ${apps.length} app(s) → ${out}/w6w`,
+    );
+  } catch (error) {
+    if (error instanceof PackageFailure) throw new Error(error.message);
+    throw error;
+  }
+};
+
 export const APP_COMMANDS: CommandRegistry = {
   "apps by-ids": byIds,
   "apps build": appsBuild,
   "apps list": listManagedApps,
+  "apps package": appsPackage,
   "apps publish": appsPublish,
   "apps search": search,
 };

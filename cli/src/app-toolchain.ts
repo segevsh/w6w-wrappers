@@ -268,3 +268,144 @@ export async function builderArgs(
   if (extra.resolution !== undefined) argv.push("--resolution", extra.resolution);
   return argv;
 }
+
+// ---------------------------------------------------------------------------
+// Registry package (`apps package`)
+// ---------------------------------------------------------------------------
+
+interface PackFs {
+  readFile(path: string, encoding: "utf8"): Promise<string>;
+  readdir(path: string): Promise<string[]>;
+  writeFile(path: string, data: string): Promise<void>;
+  mkdir(path: string, options: { recursive: true }): Promise<unknown>;
+  mkdtemp(prefix: string): Promise<string>;
+  rename(from: string, to: string): Promise<void>;
+  rm(path: string, options: { force: true; recursive: true }): Promise<void>;
+}
+
+async function packHost(): Promise<{ fs: PackFs; path: Path; sha256: (text: string) => string }> {
+  const fsName = "node:fs/promises";
+  const pathName = "node:path";
+  const cryptoName = "node:crypto";
+  const crypto = (await import(cryptoName)) as {
+    createHash(alg: "sha256"): { update(data: string): { digest(enc: "hex"): string } };
+  };
+  return {
+    fs: (await import(fsName)) as PackFs,
+    path: (await import(pathName)) as Path,
+    sha256: (text) => crypto.createHash("sha256").update(text).digest("hex"),
+  };
+}
+
+/** One app in `<out>/w6w/index.json`. */
+export interface PackagedApp {
+  id: string;
+  version: string;
+  execSha256: string;
+  digest?: string;
+  sourceDigest?: string;
+  [key: string]: unknown;
+}
+
+/** Thrown by {@linkcode packageApps}: every failure, nothing written to `<out>/w6w`. */
+export class PackageFailure extends Error {
+  constructor(readonly failures: string[]) {
+    super(`packaging failed; nothing was written:\n${failures.map((f) => `  - ${f}`).join("\n")}`);
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Builds every app a pack source lists with the SAME builder `apps build` uses
+ * ({@linkcode builderArgs} + {@linkcode runBuilder}), into a staging directory beside
+ * `<out>`, and only when ALL of them built moves the result to `<out>/w6w`
+ * (`index.json` + `<id>/<version>/…`). Any failure leaves `<out>/w6w` untouched.
+ *
+ * `execSha256` in the index is the sha-256 of the `app.js` actually written; a
+ * builder-reported value that disagrees is a failure.
+ *
+ * @param packPath The `w6w-pack.json` of the source; each `apps[].path` is relative to it.
+ * @throws {PackageFailure} When the pack is unreadable or any app fails.
+ */
+export async function packageApps(
+  packPath: string,
+  out: string,
+  options: { builder: string; resolution?: Resolution },
+): Promise<PackagedApp[]> {
+  const { fs, path, sha256 } = await packHost();
+  const pack = path.resolve(packPath);
+  let paths: string[];
+  try {
+    const data: unknown = JSON.parse(await fs.readFile(pack, "utf8"));
+    const apps = isRecord(data) && Array.isArray(data.apps) ? data.apps : undefined;
+    if (apps === undefined) throw new Error("no `apps` array");
+    paths = apps.map((a) => {
+      if (!isRecord(a) || typeof a.path !== "string" || a.path === "") {
+        throw new Error("every app needs a `path`");
+      }
+      return path.resolve(path.dirname(pack), a.path);
+    });
+    if (paths.length === 0) throw new Error("`apps` is empty");
+  } catch (error) {
+    throw new PackageFailure([`\`${packPath}\`: ${(error as Error).message}`]);
+  }
+
+  const absOut = path.resolve(out);
+  await fs.mkdir(absOut, { recursive: true });
+  const stage = await fs.mkdtemp(path.join(absOut, ".w6w-stage-"));
+  try {
+    const built: PackagedApp[] = [];
+    const failures: string[] = [];
+    for (const [i, dir] of paths.entries()) {
+      const raw = path.join(stage, "raw", String(i));
+      try {
+        const resolution = options.resolution ?? await resolveResolution(dir);
+        const result = await runBuilder(
+          await builderArgs(options.builder, dir, "build", { out: raw, resolution }),
+          dir,
+        );
+        if (result.code !== 0) {
+          const said = (result.stderr.trim() || result.stdout.trim()).split("\n").slice(-3).join(
+            " | ",
+          );
+          throw new Error(`the builder exited ${result.code}${said ? `: ${said}` : ""}`);
+        }
+        const index: unknown = JSON.parse(await fs.readFile(path.join(raw, "index.json"), "utf8"));
+        const entries = isRecord(index) && Array.isArray(index.apps) ? index.apps : [];
+        const entry = entries[0];
+        if (
+          entries.length !== 1 || !isRecord(entry) || typeof entry.id !== "string" ||
+          typeof entry.version !== "string"
+        ) {
+          throw new Error("the builder's index.json does not carry exactly one app");
+        }
+        const from = path.join(raw, entry.id, entry.version);
+        const execSha256 = sha256(await fs.readFile(path.join(from, "app.js"), "utf8"));
+        if (entry.execSha256 !== undefined && entry.execSha256 !== execSha256) {
+          throw new Error(`reported execSha256 does not match the built app.js`);
+        }
+        const to = path.join(stage, "w6w", entry.id, entry.version);
+        await fs.mkdir(path.dirname(to), { recursive: true });
+        await fs.rename(from, to);
+        built.push({ ...entry, id: entry.id, version: entry.version, execSha256 });
+      } catch (error) {
+        failures.push(`${dir}: ${(error as Error).message}`);
+      }
+    }
+    if (failures.length > 0) throw new PackageFailure(failures);
+    await fs.mkdir(path.join(stage, "w6w"), { recursive: true });
+    await fs.writeFile(
+      path.join(stage, "w6w", "index.json"),
+      JSON.stringify({ apps: built, failures: [] }, null, 2) + "\n",
+    );
+    await fs.rm(path.join(absOut, "w6w"), { force: true, recursive: true });
+    await fs.rename(path.join(stage, "w6w"), path.join(absOut, "w6w"));
+    // TODO(S5): write/validate package.json and jsr.json here (hook point).
+    return built;
+  } finally {
+    await fs.rm(stage, { force: true, recursive: true });
+  }
+}
