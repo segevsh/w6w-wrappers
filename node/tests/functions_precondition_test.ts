@@ -6,7 +6,8 @@
  * sibling of the `function` envelope, never a field inside it.
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects } from "./assert.ts";
 import { W6WClient } from "../src/client.ts";
 import type { FetchLike } from "../src/config.ts";
 import { ApiError } from "../src/errors.ts";
@@ -43,7 +44,7 @@ function json(body: unknown, status = 200): Response {
 
 const SAVED = { function: { id: "fn_1", key: "send-email" }, updatedAt: TOKEN };
 
-Deno.test("functions.update sends the precondition header only when given", async () => {
+test("functions.update sends the precondition header only when given", async () => {
   const c = client(() => json(SAVED, 201));
   const def = { key: "send-email", inputs: [] };
 
@@ -53,10 +54,13 @@ Deno.test("functions.update sends the precondition header only when given", asyn
   await c.client.functions.update("fn_1", def, { ifUnmodifiedSince: "" });
   await c.client.functions.update("fn_1", def, { ifUnmodifiedSince: TOKEN });
 
-  assertEquals(c.calls.map((x) => x.headers.get(H)), [null, null, null, null, TOKEN]);
+  assertEquals(
+    c.calls.map((x) => x.headers.get(H)),
+    [null, null, null, null, TOKEN],
+  );
 });
 
-Deno.test("functions.create and update return the TOP-LEVEL updatedAt with {id, key}", async () => {
+test("functions.create and update return the TOP-LEVEL updatedAt with {id, key}", async () => {
   const c = client(() => json(SAVED, 201));
 
   const created = await c.client.functions.create({ key: "send-email", inputs: [] });
@@ -66,7 +70,7 @@ Deno.test("functions.create and update return the TOP-LEVEL updatedAt with {id, 
   assertEquals(updated, { id: "fn_1", key: "send-email", updatedAt: TOKEN });
 });
 
-Deno.test("functions.create never sends the precondition header", async () => {
+test("functions.create never sends the precondition header", async () => {
   const c = client(() => json(SAVED, 201));
 
   await c.client.functions.create({ key: "send-email", inputs: [] });
@@ -74,7 +78,7 @@ Deno.test("functions.create never sends the precondition header", async () => {
   assertEquals(c.calls[0].headers.get(H), null);
 });
 
-Deno.test("functions.get exposes updatedAt as a sibling of valid, outside the definition", async () => {
+test("functions.get exposes updatedAt as a sibling of valid, outside the definition", async () => {
   const stored = { key: "send-email", inputs: [] };
   const c = client(() => json({ function: stored, valid: true, updatedAt: TOKEN }));
 
@@ -84,9 +88,9 @@ Deno.test("functions.get exposes updatedAt as a sibling of valid, outside the de
   assertEquals(Object.hasOwn(res.function, "updatedAt"), false);
 });
 
-Deno.test("functions.update rejects a stale write as ApiError 409 function_stale", async () => {
+test("functions.update rejects a stale write as ApiError 409 function_stale", async () => {
   const c = client(() =>
-    json({ error: { code: "function_stale", message: "The Function changed." } }, 409)
+    json({ error: { code: "function_stale", message: "The Function changed." } }, 409),
   );
 
   const err = await assertRejects(
@@ -97,7 +101,7 @@ Deno.test("functions.update rejects a stale write as ApiError 409 function_stale
   assertEquals([err.status, err.code], [409, "function_stale"]);
 });
 
-Deno.test("functions.update surfaces 400 invalid_precondition as ApiError", async () => {
+test("functions.update surfaces 400 invalid_precondition as ApiError", async () => {
   const c = client(() => json({ error: { code: "invalid_precondition", message: "Bad." } }, 400));
 
   const err = await assertRejects(

@@ -4,7 +4,8 @@
  * no `console.models.complete` — `client.modelRoutes.complete` is the one way.
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects } from "../assert.ts";
 import { ApiError } from "../../src/errors.ts";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
@@ -35,7 +36,7 @@ function setup(respond: (call: Call) => unknown, status = 200) {
   return { m: client.console.models, calls, client };
 }
 
-Deno.test("updateModel PATCHes and unwraps `model`", async () => {
+test("updateModel PATCHes and unwraps `model`", async () => {
   const { m, calls } = setup(() => ({ model: { id: "mdl_1", status: "blocked" } }));
   const r = await m.updateModel("mdl_1", { status: "blocked" });
   assertEquals(r.id, "mdl_1");
@@ -44,7 +45,7 @@ Deno.test("updateModel PATCHes and unwraps `model`", async () => {
   assertEquals(JSON.parse(calls[0].body!), { status: "blocked" });
 });
 
-Deno.test("putRates PUTs and unwraps `rate`", async () => {
+test("putRates PUTs and unwraps `rate`", async () => {
   const { m, calls } = setup(() => ({ rate: { id: "r1", source: "tenant" } }), 201);
   const r = await m.putRates("mdl_1", { effectiveFrom: "2026-01-01", rates: { input: 1 } });
   assertEquals(r.id, "r1");
@@ -53,7 +54,7 @@ Deno.test("putRates PUTs and unwraps `rate`", async () => {
   assertEquals(JSON.parse(calls[0].body!), { effectiveFrom: "2026-01-01", rates: { input: 1 } });
 });
 
-Deno.test("discover POSTs {connection} and returns the body", async () => {
+test("discover POSTs {connection} and returns the body", async () => {
   const body = { added: ["a"], updated: [], deprecated: ["b"] };
   const { m, calls } = setup(() => body);
   assertEquals(await m.discover("conn_1"), body);
@@ -62,19 +63,21 @@ Deno.test("discover POSTs {connection} and returns the body", async () => {
   assertEquals(JSON.parse(calls[0].body!), { connection: "conn_1" });
 });
 
-Deno.test("providers unwraps `providers`", async () => {
+test("providers unwraps `providers`", async () => {
   const { m, calls } = setup(() => ({
-    providers: [{
-      appId: "io.w6w.openai",
-      provider: "openai",
-      installed: true,
-      designation: { modelTypes: ["llm"] },
-      designationSource: "manifest",
-      operations: {
-        discover: { supported: true },
-        complete: { supported: false, reason: "no adapter" },
+    providers: [
+      {
+        appId: "io.w6w.openai",
+        provider: "openai",
+        installed: true,
+        designation: { modelTypes: ["llm"] },
+        designationSource: "manifest",
+        operations: {
+          discover: { supported: true },
+          complete: { supported: false, reason: "no adapter" },
+        },
       },
-    }],
+    ],
   }));
   const rows = await m.providers();
   assertEquals(rows[0].provider, "openai");
@@ -82,7 +85,7 @@ Deno.test("providers unwraps `providers`", async () => {
   assertEquals(calls[0].url, "https://api.example.com/models/providers");
 });
 
-Deno.test("budgets: list, create, update, delete, usage", async () => {
+test("budgets: list, create, update, delete, usage", async () => {
   // The server answers budget writes FLAT (`c.json(created, 201)`), not under `budget`.
   const budget = {
     id: "mbg_1",
@@ -124,23 +127,30 @@ Deno.test("budgets: list, create, update, delete, usage", async () => {
   assertEquals(calls[4].url, "https://api.example.com/model-budgets/mbg_1/usage?project=p1");
 });
 
-Deno.test("budgets: update/delete/usage omit ?project= when none is given", async () => {
+test("budgets: update/delete/usage omit ?project= when none is given", async () => {
   const { m, calls } = setup((c) =>
-    c.method === "DELETE" ? null : c.url.includes("/usage") ? { budgetId: "mbg_1" } : {
-      id: "mbg_1",
-    }
+    c.method === "DELETE"
+      ? null
+      : c.url.includes("/usage")
+        ? { budgetId: "mbg_1" }
+        : {
+            id: "mbg_1",
+          },
   );
   await m.updateBudget("mbg_1", { window: "day" });
   await m.deleteBudget("mbg_1");
   await m.budgetUsage("mbg_1");
-  assertEquals(calls.map((c) => c.url), [
-    "https://api.example.com/model-budgets/mbg_1",
-    "https://api.example.com/model-budgets/mbg_1",
-    "https://api.example.com/model-budgets/mbg_1/usage",
-  ]);
+  assertEquals(
+    calls.map((c) => c.url),
+    [
+      "https://api.example.com/model-budgets/mbg_1",
+      "https://api.example.com/model-budgets/mbg_1",
+      "https://api.example.com/model-budgets/mbg_1/usage",
+    ],
+  );
 });
 
-Deno.test("budgets: a write answered without a budget object is bad_response", async () => {
+test("budgets: a write answered without a budget object is bad_response", async () => {
   const { m } = setup(() => ({ ok: true }));
   const err = await assertRejects(
     () =>
@@ -155,9 +165,9 @@ Deno.test("budgets: a write answered without a budget object is bad_response", a
   assertEquals(err.code, "bad_response");
 });
 
-Deno.test("routes: create, update, delete take project and encode the name", async () => {
+test("routes: create, update, delete take project and encode the name", async () => {
   const { m, calls } = setup((c) =>
-    c.method === "DELETE" ? { ok: true } : { route: { name: "a b" } }
+    c.method === "DELETE" ? { ok: true } : { route: { name: "a b" } },
   );
   await m.createRoute({ name: "chat", model: "mdl_1", connection: "c1" }, { project: "p1" });
   assertEquals(calls[0].method, "POST");
@@ -171,12 +181,12 @@ Deno.test("routes: create, update, delete take project and encode the name", asy
   assertEquals(calls[2].url, "https://api.example.com/model-routes/a%20b?project=p1");
 });
 
-Deno.test("there is no console.models.complete", () => {
+test("there is no console.models.complete", () => {
   const { m } = setup(() => ({}));
   assertEquals("complete" in m, false);
 });
 
-Deno.test("routes: credentialSelection bodies are forwarded as given", async () => {
+test("routes: credentialSelection bodies are forwarded as given", async () => {
   const { m, calls } = setup(() => ({ route: { name: "chat" } }));
   await m.createRoute({
     name: "chat",
@@ -193,13 +203,13 @@ Deno.test("routes: credentialSelection bodies are forwarded as given", async () 
       fallbacks: [{ model: "mdl_2", credentialSelection: { mode: "invoking_user" } }],
     }),
   );
-  // deno-fmt-ignore
+  // biome-ignore format: the @ts-expect-error must stay on the line directly above the statement
   // @ts-expect-error legacy `connection` and `credentialSelection` are never both
   const _both: ModelRouteInput = { name: "x", model: "m", connection: "c", credentialSelection: { mode: "invoking_user" } };
   assertEquals(typeof _both, "object");
 });
 
-Deno.test("routeReadiness GETs /readiness with project and returns the body as-is", async () => {
+test("routeReadiness GETs /readiness with project and returns the body as-is", async () => {
   const body: ModelRouteReadiness = {
     ready: false,
     credentialMode: "invoking_user",

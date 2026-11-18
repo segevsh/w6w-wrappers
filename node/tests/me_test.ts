@@ -12,7 +12,8 @@
  * object.
  */
 
-import { assertEquals, assertNotEquals, assertRejects, assertStringIncludes } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertNotEquals, assertRejects, assertStringIncludes } from "./assert.ts";
 import { W6WClient } from "../src/client.ts";
 import type { FetchLike } from "../src/config.ts";
 import { ApiError } from "../src/errors.ts";
@@ -71,7 +72,7 @@ const IDENTITY = {
   role: "admin",
 };
 
-Deno.test("me: a flat body with no versions parses cleanly", async () => {
+test("me: a flat body with no versions parses cleanly", async () => {
   // This is what a server that has not grown the versions block yet returns —
   // and what the existing identity handler returns today. It must be a clean
   // parse, not a partial one: `versions` is optional and additive.
@@ -95,7 +96,7 @@ Deno.test("me: a flat body with no versions parses cleanly", async () => {
   assertEquals(c.calls[0].headers.get("content-type"), null);
 });
 
-Deno.test("me: versions.wrapper is filled in by the client", async () => {
+test("me: versions.wrapper is filled in by the client", async () => {
   const c = client(() => json(IDENTITY));
 
   const me = await c.client.me();
@@ -109,7 +110,7 @@ Deno.test("me: versions.wrapper is filled in by the client", async () => {
   assertNotEquals(VERSION, "");
 });
 
-Deno.test("me: an unrecognised key inside versions is tolerated, not rejected", async () => {
+test("me: an unrecognised key inside versions is tolerated, not rejected", async () => {
   // `versions` is an OPEN string map. The server adding a key is a purely
   // additive change and an installed client must keep working — so the unknown
   // key has to survive the round trip and stay reachable.
@@ -121,7 +122,7 @@ Deno.test("me: an unrecognised key inside versions is tolerated, not rejected", 
         // A key this release has never heard of.
         scheduler: "2026.07.27",
       },
-    })
+    }),
   );
 
   const me = await c.client.me();
@@ -133,11 +134,11 @@ Deno.test("me: an unrecognised key inside versions is tolerated, not rejected", 
   // And an unknown key at the TOP level survives too — interfaces are
   // structural, and nothing here validates against a closed schema.
   const withExtra = client(() => json({ ...IDENTITY, plan: "enterprise" }));
-  const extra = await withExtra.client.me() as Me & { plan?: string };
+  const extra = (await withExtra.client.me()) as Me & { plan?: string };
   assertEquals(extra.plan, "enterprise");
 });
 
-Deno.test("me: a server-supplied versions.wrapper is not clobbered", async () => {
+test("me: a server-supplied versions.wrapper is not clobbered", async () => {
   // The client's own version is a DEFAULT, not an override. A host that has a
   // better answer than "whatever version is installed locally" must win, or the
   // fill would quietly rewrite a fact the server reported.
@@ -149,12 +150,12 @@ Deno.test("me: a server-supplied versions.wrapper is not clobbered", async () =>
   assertNotEquals(me.versions?.wrapper, VERSION);
 });
 
-Deno.test("me: a 401 unauthorized reaches the caller as an ApiError", async () => {
+test("me: a 401 unauthorized reaches the caller as an ApiError", async () => {
   // The transport does not refresh, retry or re-auth (§3): a 401 raises and
   // stops, with the server's own code intact so a CLI can map it to an exit
   // code without parsing prose.
   const c = client(() =>
-    json({ error: { code: "unauthorized", message: "Invalid token." } }, 401, "Unauthorized")
+    json({ error: { code: "unauthorized", message: "Invalid token." } }, 401, "Unauthorized"),
   );
 
   const err = await assertRejects(() => c.client.me(), ApiError);
@@ -164,7 +165,7 @@ Deno.test("me: a 401 unauthorized reaches the caller as an ApiError", async () =
   assertEquals(err.message, "Invalid token.");
 });
 
-Deno.test("me: a 200 whose body is an array is bad_response, not a degenerate Me", async () => {
+test("me: a 200 whose body is an array is bad_response, not a degenerate Me", async () => {
   // `typeof [] === "object"` and `[] !== null`, so the guard next door used to
   // pass an array straight through to the spread. Measured against the shipped
   // code before this fix:
@@ -186,7 +187,7 @@ Deno.test("me: a 200 whose body is an array is bad_response, not a degenerate Me
   }
 });
 
-Deno.test("me: a versions block that is not an object is not spread into keys", async () => {
+test("me: a versions block that is not an object is not spread into keys", async () => {
   // A server answering `versions: "1.2.3"` used to yield
   // {"versions":{"0":"1","1":".","2":"2",…}} — junk that satisfies
   // Record<string, string> and is therefore invisible to the compiler. The
@@ -205,7 +206,7 @@ Deno.test("me: a versions block that is not an object is not spread into keys", 
   assertEquals((await withNull.client.me()).versions, { wrapper: VERSION });
 });
 
-Deno.test("me: a 200 whose body is not an object is bad_response", async () => {
+test("me: a 200 whose body is not an object is bad_response", async () => {
   // Guarded rather than spread: a proxy answering `200 "ok"` must fail as a
   // shape problem here, not return a Me whose only populated field is the
   // `versions.wrapper` this client just added.
@@ -218,9 +219,9 @@ Deno.test("me: a 200 whose body is not an object is bad_response", async () => {
   assertStringIncludes(err.message, "not an identity object");
 });
 
-Deno.test("me: a server that sends {server, composition} yields them beside wrapper", async () => {
+test("me: a server that sends {server, composition} yields them beside wrapper", async () => {
   const c = client(() =>
-    json({ ...IDENTITY, versions: { server: "1.2.3", composition: "core:a,server:b" } })
+    json({ ...IDENTITY, versions: { server: "1.2.3", composition: "core:a,server:b" } }),
   );
 
   const me = await c.client.me();
@@ -229,7 +230,7 @@ Deno.test("me: a server that sends {server, composition} yields them beside wrap
   assertEquals(me.versions?.server, "1.2.3");
 });
 
-Deno.test("me: capabilities pass through; absent stays absent", async () => {
+test("me: capabilities pass through; absent stays absent", async () => {
   const on = client(() => json({ ...IDENTITY, capabilities: { userScopedCredentials: true } }));
   assertEquals((await on.client.me()).capabilities?.userScopedCredentials, true);
   const old = client(() => json(IDENTITY));

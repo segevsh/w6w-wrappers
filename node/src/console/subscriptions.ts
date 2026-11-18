@@ -62,12 +62,7 @@ export type TriggerType = "webhook" | "poll" | "protocol";
  * Where a subscription is in its registration lifecycle. Only `registered`
  * subscriptions receive events.
  */
-export type SubscriptionStatus =
-  | "pending"
-  | "registered"
-  | "failed"
-  | "destroying"
-  | "paused";
+export type SubscriptionStatus = "pending" | "registered" | "failed" | "destroying" | "paused";
 
 /**
  * A (trigger → workflow) binding. Field-for-field per

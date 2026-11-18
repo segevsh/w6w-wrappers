@@ -9,7 +9,8 @@
  * returned the envelope object wholesale.
  */
 
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals } from "../assert.ts";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import type { Project } from "../../src/console/projects.ts";
@@ -77,7 +78,7 @@ function client(respond: (call: Call) => Response): { client: W6WClient; calls: 
   };
 }
 
-Deno.test("console.projects: list/create/delete are functions on a constructed client", () => {
+test("console.projects: list/create/delete are functions on a constructed client", () => {
   // Runtime, not type-level: a namespace that silently lost a method would
   // still typecheck everywhere else in this suite.
   const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
@@ -86,7 +87,7 @@ Deno.test("console.projects: list/create/delete are functions on a constructed c
   assertEquals(typeof c.console.projects.delete, "function");
 });
 
-Deno.test("console.projects.list unwraps the envelope and returns the array", async () => {
+test("console.projects.list unwraps the envelope and returns the array", async () => {
   const c = client(() => json({ projects: [PROJECT_A, PROJECT_B] }));
 
   const res = await c.client.console.projects.list();
@@ -100,7 +101,7 @@ Deno.test("console.projects.list unwraps the envelope and returns the array", as
   assertEquals(c.calls[0].headers.get("authorization"), "Bearer tok_1");
 });
 
-Deno.test("console.projects.create sends { name } verbatim and unwraps the singular envelope", async () => {
+test("console.projects.create sends { name } verbatim and unwraps the singular envelope", async () => {
   const c = client(() => json({ project: PROJECT_A }, 201));
 
   const created = await c.client.console.projects.create("Acme");
@@ -111,7 +112,7 @@ Deno.test("console.projects.create sends { name } verbatim and unwraps the singu
   assertEquals(JSON.parse(c.calls[0].body ?? "null"), { name: "Acme" });
 });
 
-Deno.test("console.projects.delete sends DELETE to the right path and resolves void, discarding {ok:true}", async () => {
+test("console.projects.delete sends DELETE to the right path and resolves void, discarding {ok:true}", async () => {
   const c = client(() => json({ ok: true }));
 
   const res = await c.client.console.projects.delete("proj_1");
@@ -122,7 +123,7 @@ Deno.test("console.projects.delete sends DELETE to the right path and resolves v
   assertEquals(c.calls[0].body, null);
 });
 
-Deno.test("console.projects.delete percent-encodes the id via the `path` tag, not string concatenation", async () => {
+test("console.projects.delete percent-encodes the id via the `path` tag, not string concatenation", async () => {
   const c = client(() => json({ ok: true }));
 
   await c.client.console.projects.delete("proj a");

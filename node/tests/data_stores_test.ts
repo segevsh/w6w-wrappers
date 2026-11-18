@@ -6,7 +6,8 @@
  * default. No live server is needed (`docs/implementation.md` §9).
  */
 
-import { assert, assertEquals, assertInstanceOf, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import { assert, assertEquals, assertInstanceOf, assertRejects } from "./assert.ts";
 import { W6WClient } from "../src/client.ts";
 import type { FetchLike } from "../src/config.ts";
 import { ApiError } from "../src/errors.ts";
@@ -65,7 +66,11 @@ const CASES: Case[] = [
     run: (c, o) => c.dataStores.list({ kind: "table", cursor: "cur1", limit: 5, ...o }),
     method: "GET",
     path: "/data-stores",
-    query: [["kind", "table"], ["cursor", "cur1"], ["limit", "5"]],
+    query: [
+      ["kind", "table"],
+      ["cursor", "cur1"],
+      ["limit", "5"],
+    ],
     body: null,
     reads: true,
   },
@@ -81,12 +86,15 @@ const CASES: Case[] = [
   {
     name: "create",
     run: (c, o) =>
-      c.dataStores.create({
-        kind: "table",
-        name: "people",
-        description: "d",
-        schema: { columns: [{ name: "age", type: "integer", required: true }] },
-      }, o),
+      c.dataStores.create(
+        {
+          kind: "table",
+          name: "people",
+          description: "d",
+          schema: { columns: [{ name: "age", type: "integer", required: true }] },
+        },
+        o,
+      ),
     method: "POST",
     path: "/data-stores",
     query: [],
@@ -138,7 +146,11 @@ const CASES: Case[] = [
       c.dataStores.entries.list("ds_1", { prefix: "u:", cursor: "c2", limit: 10, ...o }),
     method: "GET",
     path: "/data-stores/ds_1/entries",
-    query: [["prefix", "u:"], ["cursor", "c2"], ["limit", "10"]],
+    query: [
+      ["prefix", "u:"],
+      ["cursor", "c2"],
+      ["limit", "10"],
+    ],
     body: null,
     reads: true,
   },
@@ -205,14 +217,23 @@ const CASES: Case[] = [
   {
     name: "entries.query",
     run: (c, o) =>
-      c.dataStores.entries.query("ds_1", {
-        where: { age: 3, city: "x y" },
-        order: "-age",
-        limit: 7,
-      }, o),
+      c.dataStores.entries.query(
+        "ds_1",
+        {
+          where: { age: 3, city: "x y" },
+          order: "-age",
+          limit: 7,
+        },
+        o,
+      ),
     method: "GET",
     path: "/data-stores/ds_1/entries",
-    query: [["where[age]", "3"], ["where[city]", "x y"], ["order", "-age"], ["limit", "7"]],
+    query: [
+      ["where[age]", "3"],
+      ["where[city]", "x y"],
+      ["order", "-age"],
+      ["limit", "7"],
+    ],
     body: null,
     reads: true,
   },
@@ -243,7 +264,7 @@ function checkCall(c: Case, call: Call, project: string | undefined) {
 }
 
 for (const c of CASES) {
-  Deno.test(`dataStores ${c.name}: per-call project beats the client default`, async () => {
+  test(`dataStores ${c.name}: per-call project beats the client default`, async () => {
     const { fetch, calls } = fakeFetch((call) => answer(c, call));
     const client = new W6WClient({
       baseUrl: "https://api.example.com",
@@ -256,7 +277,7 @@ for (const c of CASES) {
     checkCall(c, calls[0], "prj_call");
   });
 
-  Deno.test(`dataStores ${c.name}: client default project is used`, async () => {
+  test(`dataStores ${c.name}: client default project is used`, async () => {
     const { fetch, calls } = fakeFetch((call) => answer(c, call));
     const client = new W6WClient({
       baseUrl: "https://api.example.com",
@@ -268,7 +289,7 @@ for (const c of CASES) {
     checkCall(c, calls[0], "prj_default");
   });
 
-  Deno.test(`dataStores ${c.name}: no project anywhere sends none`, async () => {
+  test(`dataStores ${c.name}: no project anywhere sends none`, async () => {
     const { fetch, calls } = fakeFetch((call) => answer(c, call));
     const client = new W6WClient({ baseUrl: "https://api.example.com", token: "t", fetch });
     await c.run(client, {});
@@ -276,7 +297,7 @@ for (const c of CASES) {
   });
 
   if (c.reads) {
-    Deno.test(`dataStores ${c.name}: forwards signal`, async () => {
+    test(`dataStores ${c.name}: forwards signal`, async () => {
       const { fetch, calls } = fakeFetch((call) => answer(c, call));
       const client = new W6WClient({ baseUrl: "https://api.example.com", token: "t", fetch });
       const ac = new AbortController();
@@ -286,7 +307,7 @@ for (const c of CASES) {
   }
 }
 
-Deno.test("dataStores: every one of the 14 methods is covered by a case", () => {
+test("dataStores: every one of the 14 methods is covered by a case", () => {
   const covered = new Set(CASES.map((c) => c.name.replace(/ \(.*\)$/, "")));
   assertEquals(
     [...covered].sort(),
@@ -309,19 +330,19 @@ Deno.test("dataStores: every one of the 14 methods is covered by a case", () => 
   );
 });
 
-Deno.test("dataStores.exportCsv returns the body verbatim", async () => {
+test("dataStores.exportCsv returns the body verbatim", async () => {
   const { fetch } = fakeFetch(() => new Response('"name"\r\n1\r\n', { status: 200 }));
   const client = new W6WClient({ baseUrl: "https://api.example.com", token: "t", fetch });
   assertEquals(await client.dataStores.exportCsv("ds_1"), '"name"\r\n1\r\n');
 });
 
-Deno.test("dataStores.importCsv returns { imported }", async () => {
+test("dataStores.importCsv returns { imported }", async () => {
   const { fetch } = fakeFetch(() => json({ imported: 2 }));
   const client = new W6WClient({ baseUrl: "https://api.example.com", token: "t", fetch });
   assertEquals(await client.dataStores.importCsv("ds_1", "a\n1\n2\n"), { imported: 2 });
 });
 
-Deno.test("dataStores.list returns the page with nextCursor absent when the server omits it", async () => {
+test("dataStores.list returns the page with nextCursor absent when the server omits it", async () => {
   const { fetch } = fakeFetch(() => json({ items: [] }));
   const client = new W6WClient({ baseUrl: "https://api.example.com", token: "t", fetch });
   const page = await client.dataStores.list();
@@ -335,13 +356,11 @@ const invalidValue = {
   error: { code: "invalid_value", message: "bad age", field: "value", row: 2, column: "age" },
 };
 
-for (
-  const [label, run] of [
-    ["entries.set", (c: W6WClient) => c.dataStores.entries.set("ds_1", "k", { value: 1 })],
-    ["importCsv", (c: W6WClient) => c.dataStores.importCsv("ds_1", "age\nx\n")],
-  ] as [string, (c: W6WClient) => Promise<unknown>][]
-) {
-  Deno.test(`dataStores ${label}: 400 invalid_value keeps field/row/column on raw`, async () => {
+for (const [label, run] of [
+  ["entries.set", (c: W6WClient) => c.dataStores.entries.set("ds_1", "k", { value: 1 })],
+  ["importCsv", (c: W6WClient) => c.dataStores.importCsv("ds_1", "age\nx\n")],
+] as [string, (c: W6WClient) => Promise<unknown>][]) {
+  test(`dataStores ${label}: 400 invalid_value keeps field/row/column on raw`, async () => {
     const { fetch } = fakeFetch(() => json(invalidValue, 400));
     const client = new W6WClient({ baseUrl: "https://api.example.com", token: "t", fetch });
     const err = await assertRejects(() => run(client), ApiError);
@@ -355,15 +374,13 @@ for (
   });
 }
 
-for (
-  const [status, code, run] of [
-    [400, "invalid_key", (c: W6WClient) => c.dataStores.entries.set("ds_1", "", { value: 1 })],
-    [400, "invalid_cursor", (c: W6WClient) => c.dataStores.list({ cursor: "zz" })],
-    [400, "unknown_project", (c: W6WClient) => c.dataStores.list({ project: "nope" })],
-    [404, "data_store_not_found", (c: W6WClient) => c.dataStores.exportCsv("ds_x")],
-  ] as [number, string, (c: W6WClient) => Promise<unknown>][]
-) {
-  Deno.test(`dataStores: ${status} ${code} passes through as ApiError`, async () => {
+for (const [status, code, run] of [
+  [400, "invalid_key", (c: W6WClient) => c.dataStores.entries.set("ds_1", "", { value: 1 })],
+  [400, "invalid_cursor", (c: W6WClient) => c.dataStores.list({ cursor: "zz" })],
+  [400, "unknown_project", (c: W6WClient) => c.dataStores.list({ project: "nope" })],
+  [404, "data_store_not_found", (c: W6WClient) => c.dataStores.exportCsv("ds_x")],
+] as [number, string, (c: W6WClient) => Promise<unknown>][]) {
+  test(`dataStores: ${status} ${code} passes through as ApiError`, async () => {
     const { fetch } = fakeFetch(() => json({ error: { code, message: "m" } }, status));
     const client = new W6WClient({ baseUrl: "https://api.example.com", token: "t", fetch });
     const err = await assertRejects(() => run(client), ApiError);

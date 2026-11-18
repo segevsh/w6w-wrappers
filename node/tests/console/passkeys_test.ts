@@ -13,7 +13,8 @@
  * percent-encoded where it is caller-supplied.
  */
 
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertStringIncludes } from "../assert.ts";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import type {
@@ -84,20 +85,18 @@ const VERIFY_RESPONSE: PasskeyAuthenticationVerifyResponse = {
   expiresIn: 3600,
 };
 
-Deno.test("console.passkeys: all six operations are functions on a constructed client", () => {
+test("console.passkeys: all six operations are functions on a constructed client", () => {
   // Runtime, not type-level: a namespace that silently lost a method would
   // still typecheck everywhere else in this suite.
   const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
-  for (
-    const name of [
-      "registrationOptions",
-      "registrationVerify",
-      "authenticationOptions",
-      "authenticationVerify",
-      "list",
-      "revoke",
-    ] as const
-  ) {
+  for (const name of [
+    "registrationOptions",
+    "registrationVerify",
+    "authenticationOptions",
+    "authenticationVerify",
+    "list",
+    "revoke",
+  ] as const) {
     assertEquals(
       typeof c.console.passkeys[name],
       "function",
@@ -106,78 +105,66 @@ Deno.test("console.passkeys: all six operations are functions on a constructed c
   }
 });
 
-Deno.test(
-  "console.passkeys.registrationOptions POSTs /me/passkeys/options with body {}",
-  async () => {
-    const c = client(() => json(CEREMONY_OPTIONS));
+test("console.passkeys.registrationOptions POSTs /me/passkeys/options with body {}", async () => {
+  const c = client(() => json(CEREMONY_OPTIONS));
 
-    const res = await c.client.console.passkeys.registrationOptions();
+  const res = await c.client.console.passkeys.registrationOptions();
 
-    assertEquals(res, CEREMONY_OPTIONS);
-    assertEquals(c.calls.length, 1);
-    assertEquals(c.calls[0].method, "POST");
-    assertEquals(c.calls[0].url, "https://api.example.com/me/passkeys/options");
-    assertEquals(JSON.parse(c.calls[0].body ?? "null"), {});
-  },
-);
+  assertEquals(res, CEREMONY_OPTIONS);
+  assertEquals(c.calls.length, 1);
+  assertEquals(c.calls[0].method, "POST");
+  assertEquals(c.calls[0].url, "https://api.example.com/me/passkeys/options");
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), {});
+});
 
-Deno.test(
-  "console.passkeys.registrationVerify POSTs /me/passkeys and unwraps the passkey envelope",
-  async () => {
-    const c = client(() => json({ passkey: PASSKEY }, 201));
+test("console.passkeys.registrationVerify POSTs /me/passkeys and unwraps the passkey envelope", async () => {
+  const c = client(() => json({ passkey: PASSKEY }, 201));
 
-    const res = await c.client.console.passkeys.registrationVerify({
-      challengeToken: "cht_placeholder_1",
-      response: { id: "cred_placeholder_1", type: "public-key" },
-      label: "MacBook Touch ID",
-    });
+  const res = await c.client.console.passkeys.registrationVerify({
+    challengeToken: "cht_placeholder_1",
+    response: { id: "cred_placeholder_1", type: "public-key" },
+    label: "MacBook Touch ID",
+  });
 
-    assertEquals(res, PASSKEY);
-    assertEquals(c.calls[0].method, "POST");
-    assertEquals(c.calls[0].url, "https://api.example.com/me/passkeys");
-    assertEquals(JSON.parse(c.calls[0].body ?? "null"), {
-      challengeToken: "cht_placeholder_1",
-      response: { id: "cred_placeholder_1", type: "public-key" },
-      label: "MacBook Touch ID",
-    });
-  },
-);
+  assertEquals(res, PASSKEY);
+  assertEquals(c.calls[0].method, "POST");
+  assertEquals(c.calls[0].url, "https://api.example.com/me/passkeys");
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), {
+    challengeToken: "cht_placeholder_1",
+    response: { id: "cred_placeholder_1", type: "public-key" },
+    label: "MacBook Touch ID",
+  });
+});
 
-Deno.test(
-  "console.passkeys.authenticationOptions POSTs /auth/passkey/options with body {}",
-  async () => {
-    const c = client(() => json(CEREMONY_OPTIONS));
+test("console.passkeys.authenticationOptions POSTs /auth/passkey/options with body {}", async () => {
+  const c = client(() => json(CEREMONY_OPTIONS));
 
-    const res = await c.client.console.passkeys.authenticationOptions();
+  const res = await c.client.console.passkeys.authenticationOptions();
 
-    assertEquals(res, CEREMONY_OPTIONS);
-    assertEquals(c.calls[0].method, "POST");
-    assertEquals(c.calls[0].url, "https://api.example.com/auth/passkey/options");
-    assertEquals(JSON.parse(c.calls[0].body ?? "null"), {});
-  },
-);
+  assertEquals(res, CEREMONY_OPTIONS);
+  assertEquals(c.calls[0].method, "POST");
+  assertEquals(c.calls[0].url, "https://api.example.com/auth/passkey/options");
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), {});
+});
 
-Deno.test(
-  "console.passkeys.authenticationVerify POSTs /auth/passkey/verify and mints a session, like login",
-  async () => {
-    const c = client(() => json(VERIFY_RESPONSE));
+test("console.passkeys.authenticationVerify POSTs /auth/passkey/verify and mints a session, like login", async () => {
+  const c = client(() => json(VERIFY_RESPONSE));
 
-    const res = await c.client.console.passkeys.authenticationVerify({
-      challengeToken: "cht_placeholder_1",
-      response: { id: "cred_placeholder_1", type: "public-key" },
-    });
+  const res = await c.client.console.passkeys.authenticationVerify({
+    challengeToken: "cht_placeholder_1",
+    response: { id: "cred_placeholder_1", type: "public-key" },
+  });
 
-    assertEquals(res, VERIFY_RESPONSE);
-    assertEquals(c.calls[0].method, "POST");
-    assertEquals(c.calls[0].url, "https://api.example.com/auth/passkey/verify");
-    assertEquals(JSON.parse(c.calls[0].body ?? "null"), {
-      challengeToken: "cht_placeholder_1",
-      response: { id: "cred_placeholder_1", type: "public-key" },
-    });
-  },
-);
+  assertEquals(res, VERIFY_RESPONSE);
+  assertEquals(c.calls[0].method, "POST");
+  assertEquals(c.calls[0].url, "https://api.example.com/auth/passkey/verify");
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), {
+    challengeToken: "cht_placeholder_1",
+    response: { id: "cred_placeholder_1", type: "public-key" },
+  });
+});
 
-Deno.test("console.passkeys.list GETs /me/passkeys and unwraps the passkeys envelope", async () => {
+test("console.passkeys.list GETs /me/passkeys and unwraps the passkeys envelope", async () => {
   const c = client(() => json({ passkeys: [PASSKEY] }));
 
   const res = await c.client.console.passkeys.list();
@@ -188,7 +175,7 @@ Deno.test("console.passkeys.list GETs /me/passkeys and unwraps the passkeys enve
   assertEquals(c.calls[0].body, null);
 });
 
-Deno.test("console.passkeys.revoke DELETEs /me/passkeys/:id and resolves void", async () => {
+test("console.passkeys.revoke DELETEs /me/passkeys/:id and resolves void", async () => {
   const c = client(() => new Response(null, { status: 204 }));
 
   const res = await c.client.console.passkeys.revoke("pk_1");
@@ -198,7 +185,7 @@ Deno.test("console.passkeys.revoke DELETEs /me/passkeys/:id and resolves void", 
   assertEquals(c.calls[0].url, "https://api.example.com/me/passkeys/pk_1");
 });
 
-Deno.test("console.passkeys.revoke: the id is percent-encoded into the route", async () => {
+test("console.passkeys.revoke: the id is percent-encoded into the route", async () => {
   // Same gap as the vars/documents suites: an id fixture that already encodes
   // to itself would leave a dropped `path` tag invisible. An id carrying `/`
   // and `#` makes the tag load-bearing.
@@ -209,85 +196,73 @@ Deno.test("console.passkeys.revoke: the id is percent-encoded into the route", a
   assertStringIncludes(c.calls[0].url, "pk%2F1%23x");
 });
 
-Deno.test(
-  "authenticationOptions/authenticationVerify send NO authorization header, even on a client holding a token",
-  async () => {
-    const c = client(() => json(CEREMONY_OPTIONS));
-    await c.client.console.passkeys.authenticationOptions();
-    assertEquals(c.calls[0].headers.get("authorization"), null);
+test("authenticationOptions/authenticationVerify send NO authorization header, even on a client holding a token", async () => {
+  const c = client(() => json(CEREMONY_OPTIONS));
+  await c.client.console.passkeys.authenticationOptions();
+  assertEquals(c.calls[0].headers.get("authorization"), null);
 
-    const c2 = client(() => json(VERIFY_RESPONSE));
-    await c2.client.console.passkeys.authenticationVerify({
-      challengeToken: "cht_placeholder_1",
-      response: { id: "cred_placeholder_1" },
-    });
-    assertEquals(c2.calls[0].headers.get("authorization"), null);
-  },
-);
+  const c2 = client(() => json(VERIFY_RESPONSE));
+  await c2.client.console.passkeys.authenticationVerify({
+    challengeToken: "cht_placeholder_1",
+    response: { id: "cred_placeholder_1" },
+  });
+  assertEquals(c2.calls[0].headers.get("authorization"), null);
+});
 
-Deno.test(
-  "authenticationOptions/authenticationVerify work on a TOKENLESS client — the actual bug requireAuth fixes",
-  async () => {
-    const fake = fakeFetch(() => json(CEREMONY_OPTIONS));
-    const c = new W6WClient({ baseUrl: "https://api.example.com", fetch: fake.fetch }); // no token
+test("authenticationOptions/authenticationVerify work on a TOKENLESS client — the actual bug requireAuth fixes", async () => {
+  const fake = fakeFetch(() => json(CEREMONY_OPTIONS));
+  const c = new W6WClient({ baseUrl: "https://api.example.com", fetch: fake.fetch }); // no token
 
-    // Must resolve, not throw ConfigError.
-    const res = await c.console.passkeys.authenticationOptions();
-    assertEquals(res, CEREMONY_OPTIONS);
+  // Must resolve, not throw ConfigError.
+  const res = await c.console.passkeys.authenticationOptions();
+  assertEquals(res, CEREMONY_OPTIONS);
 
-    const fake2 = fakeFetch(() => json(VERIFY_RESPONSE));
-    const c2 = new W6WClient({ baseUrl: "https://api.example.com", fetch: fake2.fetch });
-    const res2 = await c2.console.passkeys.authenticationVerify({
-      challengeToken: "cht_placeholder_1",
-      response: { id: "cred_placeholder_1" },
-    });
-    assertEquals(res2, VERIFY_RESPONSE);
-  },
-);
+  const fake2 = fakeFetch(() => json(VERIFY_RESPONSE));
+  const c2 = new W6WClient({ baseUrl: "https://api.example.com", fetch: fake2.fetch });
+  const res2 = await c2.console.passkeys.authenticationVerify({
+    challengeToken: "cht_placeholder_1",
+    response: { id: "cred_placeholder_1" },
+  });
+  assertEquals(res2, VERIFY_RESPONSE);
+});
 
-Deno.test(
-  "registrationOptions/registrationVerify/list/revoke DO send the bearer — the opposite mutant",
-  async () => {
-    const c1 = client(() => json(CEREMONY_OPTIONS));
-    await c1.client.console.passkeys.registrationOptions();
-    assertEquals(c1.calls[0].headers.get("authorization"), "Bearer tok_1");
+test("registrationOptions/registrationVerify/list/revoke DO send the bearer — the opposite mutant", async () => {
+  const c1 = client(() => json(CEREMONY_OPTIONS));
+  await c1.client.console.passkeys.registrationOptions();
+  assertEquals(c1.calls[0].headers.get("authorization"), "Bearer tok_1");
 
-    const c2 = client(() => json({ passkey: PASSKEY }, 201));
-    await c2.client.console.passkeys.registrationVerify({
-      challengeToken: "cht_placeholder_1",
-      response: { id: "cred_placeholder_1" },
-    });
-    assertEquals(c2.calls[0].headers.get("authorization"), "Bearer tok_1");
+  const c2 = client(() => json({ passkey: PASSKEY }, 201));
+  await c2.client.console.passkeys.registrationVerify({
+    challengeToken: "cht_placeholder_1",
+    response: { id: "cred_placeholder_1" },
+  });
+  assertEquals(c2.calls[0].headers.get("authorization"), "Bearer tok_1");
 
-    const c3 = client(() => json({ passkeys: [PASSKEY] }));
-    await c3.client.console.passkeys.list();
-    assertEquals(c3.calls[0].headers.get("authorization"), "Bearer tok_1");
+  const c3 = client(() => json({ passkeys: [PASSKEY] }));
+  await c3.client.console.passkeys.list();
+  assertEquals(c3.calls[0].headers.get("authorization"), "Bearer tok_1");
 
-    const c4 = client(() => new Response(null, { status: 204 }));
-    await c4.client.console.passkeys.revoke("pk_1");
-    assertEquals(c4.calls[0].headers.get("authorization"), "Bearer tok_1");
-  },
-);
+  const c4 = client(() => new Response(null, { status: 204 }));
+  await c4.client.console.passkeys.revoke("pk_1");
+  assertEquals(c4.calls[0].headers.get("authorization"), "Bearer tok_1");
+});
 
-Deno.test(
-  "console.passkeys: the WebAuthn response payload travels in the body, never the URL",
-  async () => {
-    const c = client(() => json({ passkey: PASSKEY }, 201));
-    await c.client.console.passkeys.registrationVerify({
-      challengeToken: "cht_placeholder_1",
-      response: { id: "cred_secret_placeholder", clientDataJSON: "cdj_placeholder" },
-    });
-    assertEquals(c.calls[0].url.includes("?"), false);
-    assertEquals(c.calls[0].url.includes("cred_secret_placeholder"), false);
-    assertStringIncludes(c.calls[0].body ?? "", "cred_secret_placeholder");
+test("console.passkeys: the WebAuthn response payload travels in the body, never the URL", async () => {
+  const c = client(() => json({ passkey: PASSKEY }, 201));
+  await c.client.console.passkeys.registrationVerify({
+    challengeToken: "cht_placeholder_1",
+    response: { id: "cred_secret_placeholder", clientDataJSON: "cdj_placeholder" },
+  });
+  assertEquals(c.calls[0].url.includes("?"), false);
+  assertEquals(c.calls[0].url.includes("cred_secret_placeholder"), false);
+  assertStringIncludes(c.calls[0].body ?? "", "cred_secret_placeholder");
 
-    const c2 = client(() => json(VERIFY_RESPONSE));
-    await c2.client.console.passkeys.authenticationVerify({
-      challengeToken: "cht_placeholder_1",
-      response: { id: "cred_secret_placeholder", clientDataJSON: "cdj_placeholder" },
-    });
-    assertEquals(c2.calls[0].url.includes("?"), false);
-    assertEquals(c2.calls[0].url.includes("cred_secret_placeholder"), false);
-    assertStringIncludes(c2.calls[0].body ?? "", "cred_secret_placeholder");
-  },
-);
+  const c2 = client(() => json(VERIFY_RESPONSE));
+  await c2.client.console.passkeys.authenticationVerify({
+    challengeToken: "cht_placeholder_1",
+    response: { id: "cred_secret_placeholder", clientDataJSON: "cdj_placeholder" },
+  });
+  assertEquals(c2.calls[0].url.includes("?"), false);
+  assertEquals(c2.calls[0].url.includes("cred_secret_placeholder"), false);
+  assertStringIncludes(c2.calls[0].body ?? "", "cred_secret_placeholder");
+});

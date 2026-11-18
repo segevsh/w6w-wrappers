@@ -9,7 +9,8 @@
  * holds a token must still send no bearer on any of the three.
  */
 
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals } from "../assert.ts";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import type { LoginProviders, OtpVerifyResponse } from "../../src/console/otp.ts";
@@ -65,7 +66,7 @@ const VERIFY_RESPONSE: OtpVerifyResponse = {
   expiresIn: 3600,
 };
 
-Deno.test("console.otp: all three operations are functions on a constructed client", () => {
+test("console.otp: all three operations are functions on a constructed client", () => {
   // Runtime, not type-level: a namespace that silently lost a method would
   // still typecheck everywhere else in this suite.
   const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
@@ -74,89 +75,74 @@ Deno.test("console.otp: all three operations are functions on a constructed clie
   }
 });
 
-Deno.test(
-  "console.otp.loginProviders GETs /auth/login-providers and unwraps the providers envelope",
-  async () => {
-    const c = client(() => json({ providers: PROVIDERS }));
+test("console.otp.loginProviders GETs /auth/login-providers and unwraps the providers envelope", async () => {
+  const c = client(() => json({ providers: PROVIDERS }));
 
-    const res = await c.client.console.otp.loginProviders();
+  const res = await c.client.console.otp.loginProviders();
 
-    assertEquals(res, PROVIDERS);
-    assertEquals(c.calls.length, 1);
-    assertEquals(c.calls[0].method, "GET");
-    assertEquals(c.calls[0].url, "https://api.example.com/auth/login-providers");
-    assertEquals(c.calls[0].body, null);
-  },
-);
+  assertEquals(res, PROVIDERS);
+  assertEquals(c.calls.length, 1);
+  assertEquals(c.calls[0].method, "GET");
+  assertEquals(c.calls[0].url, "https://api.example.com/auth/login-providers");
+  assertEquals(c.calls[0].body, null);
+});
 
-Deno.test(
-  "console.otp.requestCode POSTs /auth/otp/request with {email} and resolves void",
-  async () => {
-    const c = client(() => json({ ok: true }, 202));
+test("console.otp.requestCode POSTs /auth/otp/request with {email} and resolves void", async () => {
+  const c = client(() => json({ ok: true }, 202));
 
-    const res = await c.client.console.otp.requestCode({ email: "alice@example.com" });
+  const res = await c.client.console.otp.requestCode({ email: "alice@example.com" });
 
-    assertEquals(res, undefined);
-    assertEquals(c.calls[0].method, "POST");
-    assertEquals(c.calls[0].url, "https://api.example.com/auth/otp/request");
-    assertEquals(JSON.parse(c.calls[0].body ?? "null"), { email: "alice@example.com" });
-  },
-);
+  assertEquals(res, undefined);
+  assertEquals(c.calls[0].method, "POST");
+  assertEquals(c.calls[0].url, "https://api.example.com/auth/otp/request");
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), { email: "alice@example.com" });
+});
 
-Deno.test(
-  "console.otp.verifyCode POSTs /auth/otp/verify with {email, code} and mints a session",
-  async () => {
-    const c = client(() => json(VERIFY_RESPONSE));
+test("console.otp.verifyCode POSTs /auth/otp/verify with {email, code} and mints a session", async () => {
+  const c = client(() => json(VERIFY_RESPONSE));
 
-    const res = await c.client.console.otp.verifyCode({
-      email: "alice@example.com",
-      code: "123456",
-    });
+  const res = await c.client.console.otp.verifyCode({
+    email: "alice@example.com",
+    code: "123456",
+  });
 
-    assertEquals(res, VERIFY_RESPONSE);
-    assertEquals(c.calls[0].method, "POST");
-    assertEquals(c.calls[0].url, "https://api.example.com/auth/otp/verify");
-    assertEquals(JSON.parse(c.calls[0].body ?? "null"), {
-      email: "alice@example.com",
-      code: "123456",
-    });
-  },
-);
+  assertEquals(res, VERIFY_RESPONSE);
+  assertEquals(c.calls[0].method, "POST");
+  assertEquals(c.calls[0].url, "https://api.example.com/auth/otp/verify");
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), {
+    email: "alice@example.com",
+    code: "123456",
+  });
+});
 
-Deno.test(
-  "console.otp: all three methods send NO authorization header, even on a client holding a token",
-  async () => {
-    const c1 = client(() => json({ providers: PROVIDERS }));
-    await c1.client.console.otp.loginProviders();
-    assertEquals(c1.calls[0].headers.get("authorization"), null);
+test("console.otp: all three methods send NO authorization header, even on a client holding a token", async () => {
+  const c1 = client(() => json({ providers: PROVIDERS }));
+  await c1.client.console.otp.loginProviders();
+  assertEquals(c1.calls[0].headers.get("authorization"), null);
 
-    const c2 = client(() => json({ ok: true }, 202));
-    await c2.client.console.otp.requestCode({ email: "alice@example.com" });
-    assertEquals(c2.calls[0].headers.get("authorization"), null);
+  const c2 = client(() => json({ ok: true }, 202));
+  await c2.client.console.otp.requestCode({ email: "alice@example.com" });
+  assertEquals(c2.calls[0].headers.get("authorization"), null);
 
-    const c3 = client(() => json(VERIFY_RESPONSE));
-    await c3.client.console.otp.verifyCode({ email: "alice@example.com", code: "123456" });
-    assertEquals(c3.calls[0].headers.get("authorization"), null);
-  },
-);
+  const c3 = client(() => json(VERIFY_RESPONSE));
+  await c3.client.console.otp.verifyCode({ email: "alice@example.com", code: "123456" });
+  assertEquals(c3.calls[0].headers.get("authorization"), null);
+});
 
-Deno.test(
-  "console.otp: all three methods work on a TOKENLESS client — the actual bug requireAuth fixes",
-  async () => {
-    const fake1 = fakeFetch(() => json({ providers: PROVIDERS }));
-    const c1 = new W6WClient({ baseUrl: "https://api.example.com", fetch: fake1.fetch }); // no token
-    // Must resolve, not throw ConfigError.
-    const res1 = await c1.console.otp.loginProviders();
-    assertEquals(res1, PROVIDERS);
+test("console.otp: all three methods work on a TOKENLESS client — the actual bug requireAuth fixes", async () => {
+  const fake1 = fakeFetch(() => json({ providers: PROVIDERS }));
+  const c1 = new W6WClient({ baseUrl: "https://api.example.com", fetch: fake1.fetch }); // no token
+  // Must resolve, not throw ConfigError.
+  const res1 = await c1.console.otp.loginProviders();
+  assertEquals(res1, PROVIDERS);
 
-    const fake2 = fakeFetch(() => json({ ok: true }, 202));
-    const c2 = new W6WClient({ baseUrl: "https://api.example.com", fetch: fake2.fetch });
-    await c2.console.otp.requestCode({ email: "alice@example.com" });
-    assertEquals(fake2.calls.length, 1);
+  const fake2 = fakeFetch(() => json({ ok: true }, 202));
+  const c2 = new W6WClient({ baseUrl: "https://api.example.com", fetch: fake2.fetch });
+  await c2.console.otp.requestCode({ email: "alice@example.com" });
+  assertEquals(fake2.calls.length, 1);
 
-    const fake3 = fakeFetch(() => json(VERIFY_RESPONSE));
-    const c3 = new W6WClient({ baseUrl: "https://api.example.com", fetch: fake3.fetch });
-    const res3 = await c3.console.otp.verifyCode({ email: "alice@example.com", code: "123456" });
-    assertEquals(res3, VERIFY_RESPONSE);
-  },
-);
+  const fake3 = fakeFetch(() => json(VERIFY_RESPONSE));
+  const c3 = new W6WClient({ baseUrl: "https://api.example.com", fetch: fake3.fetch });
+  const res3 = await c3.console.otp.verifyCode({ email: "alice@example.com", code: "123456" });
+  assertEquals(res3, VERIFY_RESPONSE);
+});

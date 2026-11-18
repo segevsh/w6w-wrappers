@@ -18,7 +18,8 @@
  * responses.
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects } from "../assert.ts";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import { ApiError } from "../../src/errors.ts";
@@ -76,7 +77,7 @@ function client(respond: (call: Call) => Response): { client: W6WClient; calls: 
   };
 }
 
-Deno.test("console.schedules: get/upsert/delete are functions on a constructed client", () => {
+test("console.schedules: get/upsert/delete are functions on a constructed client", () => {
   // Runtime, not type-level: a namespace that silently lost a method would
   // still typecheck everywhere else in this suite.
   const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
@@ -85,7 +86,7 @@ Deno.test("console.schedules: get/upsert/delete are functions on a constructed c
   assertEquals(typeof c.console.schedules.delete, "function");
 });
 
-Deno.test("console.schedules.get unwraps the envelope and returns the schedule", async () => {
+test("console.schedules.get unwraps the envelope and returns the schedule", async () => {
   const c = client(() => json({ schedule: SCHEDULE }));
 
   const res = await c.client.console.schedules.get("wf_1");
@@ -97,7 +98,7 @@ Deno.test("console.schedules.get unwraps the envelope and returns the schedule",
   assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_1/schedule");
 });
 
-Deno.test("console.schedules.get on a 404 `no_schedule` resolves null, does not throw", async () => {
+test("console.schedules.get on a 404 `no_schedule` resolves null, does not throw", async () => {
   const c = client(() => json({ error: { code: "no_schedule", message: "Not scheduled." } }, 404));
 
   const res = await c.client.console.schedules.get("wf_1");
@@ -105,9 +106,9 @@ Deno.test("console.schedules.get on a 404 `no_schedule` resolves null, does not 
   assertEquals(res, null);
 });
 
-Deno.test("console.schedules.get on a 404 `unknown_workflow` ALSO resolves null — the client does not discriminate by code, only by status", async () => {
+test("console.schedules.get on a 404 `unknown_workflow` ALSO resolves null — the client does not discriminate by code, only by status", async () => {
   const c = client(() =>
-    json({ error: { code: "unknown_workflow", message: "No such workflow." } }, 404)
+    json({ error: { code: "unknown_workflow", message: "No such workflow." } }, 404),
   );
 
   const res = await c.client.console.schedules.get("wf_missing");
@@ -115,19 +116,16 @@ Deno.test("console.schedules.get on a 404 `unknown_workflow` ALSO resolves null 
   assertEquals(res, null);
 });
 
-Deno.test("console.schedules.get on a non-404 error still throws — the catch does not swallow every error", async () => {
+test("console.schedules.get on a non-404 error still throws — the catch does not swallow every error", async () => {
   const c = client(() => json({ error: { code: "internal_error", message: "boom" } }, 500));
 
-  const err = await assertRejects(
-    () => c.client.console.schedules.get("wf_1"),
-    ApiError,
-  );
+  const err = await assertRejects(() => c.client.console.schedules.get("wf_1"), ApiError);
 
   assertEquals(err.status, 500);
   assertEquals(err.code, "internal_error");
 });
 
-Deno.test("console.schedules.upsert sends the body verbatim and unwraps the envelope", async () => {
+test("console.schedules.upsert sends the body verbatim and unwraps the envelope", async () => {
   const c = client(() => json({ schedule: SCHEDULE }));
 
   const res = await c.client.console.schedules.upsert("wf_1", {
@@ -141,7 +139,7 @@ Deno.test("console.schedules.upsert sends the body verbatim and unwraps the enve
   assertEquals(JSON.parse(c.calls[0].body ?? "null"), { cron: "*/5 * * * *", enabled: true });
 });
 
-Deno.test("console.schedules.delete sends DELETE to the right path and resolves void, discarding {ok:true}", async () => {
+test("console.schedules.delete sends DELETE to the right path and resolves void, discarding {ok:true}", async () => {
   const c = client(() => json({ ok: true }));
 
   const res = await c.client.console.schedules.delete("wf_1");
@@ -152,21 +150,18 @@ Deno.test("console.schedules.delete sends DELETE to the right path and resolves 
   assertEquals(c.calls[0].body, null);
 });
 
-Deno.test("console.schedules.delete does not swallow a 404 — it is not a silent success, unlike get", async () => {
+test("console.schedules.delete does not swallow a 404 — it is not a silent success, unlike get", async () => {
   const c = client(() =>
-    json({ error: { code: "unknown_workflow", message: "No such workflow." } }, 404)
+    json({ error: { code: "unknown_workflow", message: "No such workflow." } }, 404),
   );
 
-  const err = await assertRejects(
-    () => c.client.console.schedules.delete("wf_missing"),
-    ApiError,
-  );
+  const err = await assertRejects(() => c.client.console.schedules.delete("wf_missing"), ApiError);
 
   assertEquals(err.status, 404);
   assertEquals(err.code, "unknown_workflow");
 });
 
-Deno.test("console.schedules.get percent-encodes the workflowId via the `path` tag, not string concatenation", async () => {
+test("console.schedules.get percent-encodes the workflowId via the `path` tag, not string concatenation", async () => {
   const c = client(() => json({ schedule: SCHEDULE }));
 
   await c.client.console.schedules.get("wf/1");

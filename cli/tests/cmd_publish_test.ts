@@ -1,8 +1,8 @@
 /**
- * `w6w apps publish [dir] [--version <semver>] [--builder <spec>]`.
+ * `w6w apps publish [dir] [--version <semver>]`.
  *
- * The app builder is never started: the Deno spawn is replaced
- * ({@linkcode useToolchainRunner}) by a fake that writes the canonical artifact tree.
+ * The vendored assembler is never loaded: it is replaced ({@linkcode useAssembler}) by a
+ * fake that writes the canonical artifact tree.
  * The upload goes through the real SDK against a fake `fetch`, so what is asserted is
  * the request on the wire. Most cases drive the handler directly; the `main()` cases at the
  * end prove the real command line parses `--version <semver>` as a string for this command.
@@ -14,7 +14,7 @@ import type { FetchLike } from "@w6w/sdk";
 import type { CliIo, CommandContext, EnvReader, Invocation } from "../mod.ts";
 import { createOutput, main, NO_CONFIG, NO_ENV, NO_STDIN, NO_STORE } from "../mod.ts";
 import { COMMANDS } from "../src/commands/index.ts";
-import { useToolchainRunner } from "../src/app-toolchain.ts";
+import { type BuildResult, useAssembler } from "../src/app-toolchain.ts";
 
 const BEARER = "t_secret_bearer_value";
 const ID = "io.w6w.demo";
@@ -44,25 +44,34 @@ async function appDir(
   return dir;
 }
 
-function outOf(argv: string[]): string {
-  return argv[argv.indexOf("-o") + 1];
-}
-
-async function fabricate(argv: string[], withMap: boolean): Promise<void> {
-  const out = outOf(argv);
+async function fabricate(out: string, withMap: boolean): Promise<BuildResult> {
   const at = `${out}/${ID}/${BUILT}`;
   await Deno.mkdir(at, { recursive: true });
   await Deno.writeTextFile(`${at}/manifest.json`, JSON.stringify(MANIFEST));
   await Deno.writeFile(`${at}/app.js`, EXEC);
   if (withMap) await Deno.writeTextFile(`${at}/app.js.map`, "{}");
-  await Deno.writeTextFile(
-    `${out}/index.json`,
-    JSON.stringify({ apps: [{ id: ID, version: BUILT }] }),
-  );
+  return {
+    id: ID,
+    version: BUILT,
+    execSha256: "a".repeat(64),
+    digest: "b".repeat(64),
+    digestVersion: 2,
+    sourceDigest: "c".repeat(64),
+    outDir: at,
+  };
+}
+
+/** An assembler whose `assembleApp` is `fn`; validating alone is never what publish does. */
+function assemblerOf(fn: (dir: string, out: string) => Promise<BuildResult>) {
+  return useAssembler({
+    assembleApp: fn,
+    validateAssembled: () => Promise.reject(new Error("publish never only validates")),
+  });
 }
 
 interface Seen {
-  runs: string[][];
+  /** The app directory of every packaging run. */
+  runs: string[];
   outs: string[];
   requests: { url: string; method: string; auth: string | null; body: string }[];
   /** `package.json`'s `version` as it was when the runner was invoked. */
@@ -72,25 +81,23 @@ interface Seen {
 async function publish(
   invoked: { positionals?: string[]; options?: Record<string, string> },
   opts: {
-    build?: { code: number; stderr?: string };
+    build?: { code: string; message: string };
     reply?: () => Response;
     map?: boolean;
   } = {},
 ) {
   const seen: Seen = { runs: [], outs: [], requests: [], pkgAtBuild: [] };
   const dir = invoked.positionals?.[0];
-  const restore = useToolchainRunner(async (argv, cwd) => {
-    seen.runs.push(argv);
+  const restore = assemblerOf(async (appDir, out) => {
+    seen.runs.push(appDir);
+    seen.outs.push(out);
     try {
-      seen.pkgAtBuild.push(JSON.parse(await Deno.readTextFile(`${cwd}/package.json`)).version);
+      seen.pkgAtBuild.push(JSON.parse(await Deno.readTextFile(`${appDir}/package.json`)).version);
     } catch { /* no package.json */ }
-    if (opts.build && opts.build.code !== 0) {
-      seen.outs.push(outOf(argv));
-      return { code: opts.build.code, stdout: "", stderr: opts.build.stderr ?? "" };
+    if (opts.build) {
+      throw Object.assign(new Error(opts.build.message), { code: opts.build.code });
     }
-    seen.outs.push(outOf(argv));
-    await fabricate(argv, opts.map === true);
-    return { code: 0, stdout: "", stderr: "" };
+    return await fabricate(out, opts.map === true);
   });
   const fetch: FetchLike = (url, init) => {
     const headers = new Headers(init?.headers as HeadersInit);
@@ -125,7 +132,7 @@ async function publish(
       short: "",
       headline: "",
       usage: "",
-      naming: "w6w apps publish [dir] [--version <semver>] [--builder <spec>]",
+      naming: "w6w apps publish [dir] [--version <semver>]",
       status: "live",
       params: [],
       examples: [],
@@ -223,11 +230,11 @@ Deno.test("apps publish --version nope: usage error, nothing built or sent", asy
   }
 });
 
-Deno.test("apps publish: a build failure uploads nothing and removes the temp dir", async () => {
+Deno.test("apps publish: a packaging refusal uploads nothing and removes the temp dir", async () => {
   const r = await publish({ positionals: [await appDir()] }, {
-    build: { code: 1, stderr: "refused: bad manifest" },
+    build: { code: "entry_missing", message: "`dist/app.js` does not exist" },
   });
-  assertStringIncludes((r.error as Error).message, "refused: bad manifest");
+  assertStringIncludes((r.error as Error).message, "entry_missing: `dist/app.js` does not exist");
   assertEquals(r.seen.requests.length, 0);
   assert(await gone(r.seen.outs[0]));
 });
@@ -261,12 +268,12 @@ Deno.test("apps publish: takes no credential flag or extra positional", async ()
 // --- the real command line (`main()`): `--version` is a string flag here only -------------
 
 async function viaMain(argv: string[], dir: string, reply?: () => Response) {
-  const runs: string[][] = [];
+  /** The output root of every packaging run. */
+  const runs: string[] = [];
   const requests: { url: string; body: string }[] = [];
-  const restore = useToolchainRunner(async (args) => {
-    runs.push(args);
-    await fabricate(args, false);
-    return { code: 0, stdout: "", stderr: "" };
+  const restore = assemblerOf(async (_appDir, out) => {
+    runs.push(out);
+    return await fabricate(out, false);
   });
   const fetch: FetchLike = (url, init) => {
     requests.push({ url, body: typeof init?.body === "string" ? init.body : "" });
@@ -340,14 +347,13 @@ Deno.test("main(): an upload refusal (409 id_taken) exits nonzero and leaks noth
     assertStringIncludes(all, "id_taken");
     assert(!all.includes(BEARER), "bearer absent");
     assert(!all.includes(EXEC_B64), "base64 exec absent");
-    const out = outOf(ran.runs[0]);
-    assert(await gone(out), "temp dir gone");
+    assert(await gone(ran.runs[0]), "temp dir gone");
   } finally {
     await Deno.remove(dir, { recursive: true });
   }
 });
 
-Deno.test('main(): `--version "1.2.3\\n"` is a usage error before package.json or the builder', async () => {
+Deno.test('main(): `--version "1.2.3\\n"` is a usage error before package.json or packaging', async () => {
   const dir = await appDir();
   try {
     const ran = await viaMain(["apps", "publish", "--version", "1.2.3\n"], dir);
@@ -355,6 +361,22 @@ Deno.test('main(): `--version "1.2.3\\n"` is a usage error before package.json o
     assertEquals(ran.runs.length, 0);
     assertEquals(ran.requests.length, 0);
     assertEquals(JSON.parse(await Deno.readTextFile(`${dir}/package.json`)).version, "0.0.1");
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("main(): `apps publish --builder` is an unknown flag now; nothing packaged or sent", async () => {
+  const dir = await appDir();
+  try {
+    const ran = await viaMain(
+      ["apps", "publish", "--builder", "jsr:@w6w/app-build@0.2.0/cli"],
+      dir,
+    );
+    assertEquals(ran.code, 1);
+    assertStringIncludes(ran.stderr, "--builder");
+    assertEquals(ran.runs.length, 0);
+    assertEquals(ran.requests.length, 0);
   } finally {
     await Deno.remove(dir, { recursive: true });
   }
@@ -408,7 +430,7 @@ for (const [label, message] of Object.entries(NOT_OWNED)) {
       assertStringIncludes(all, message);
       assert(!ran.stdout.includes("registered"), "no success output");
       assertClean(all);
-      assert(await gone(outOf(ran.runs[0])), "temp dir gone");
+      assert(await gone(ran.runs[0]), "temp dir gone");
     } finally {
       await Deno.remove(dir, { recursive: true });
     }

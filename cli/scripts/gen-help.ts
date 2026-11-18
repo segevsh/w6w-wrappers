@@ -313,15 +313,19 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
   ],
   "apps.init": [
     "w6w apps init com.example.demo-app",
-    "w6w apps init com.example.demo-app --template node --dir ./demo",
+    "w6w apps init com.example.demo-app --dir ./demo",
   ],
   "apps.validate": [
     "w6w apps validate",
-    "w6w apps validate ./com.example.demo-app --resolution registry",
+    "w6w apps validate ./com.example.demo-app --json",
   ],
   "apps.build": [
     "w6w apps build ./com.example.demo-app",
     "w6w apps build ./com.example.demo-app --out ./out --pack ./w6w-pack.json",
+  ],
+  "apps.package": [
+    "w6w apps package ./w6w-pack.json",
+    "w6w apps package ./w6w-pack.json --out ./dist",
   ],
   "appManagement.publishArtifact": [
     "w6w apps publish ./com.example.demo-app",
@@ -478,6 +482,10 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
   ],
   "appManagement.get": ["w6w app-management get sendgrid"],
   "appManagement.preview": ["w6w app-management preview github:acme/app --target account"],
+  "appManagement.discover": [
+    "w6w apps search hello",
+    "w6w apps search hello --registry jsr --limit 5",
+  ],
   "appManagement.register": [
     "w6w app-management register github:acme/app --target account",
     `w6w app-management register '{"folder":{"grant":"sgr_01HQ8N","path":"./my-app"}}' --target personal`,
@@ -702,34 +710,37 @@ const PARAM_HELP: Record<string, string> = {
     "The API origin to save, like https://api.example.com (a trailing slash is dropped)",
   "build.app.folder": "The app directory (alias of `apps build`; default: the current directory)",
   "build.app.out":
-    "Output root: writes <out>/<id>/<version>/{app.js,manifest.json} and <out>/index.json",
+    "Output root: writes <out>/<id>/<version>/{app.js,manifest.json[,app.js.map]} and <out>/index.json",
   "build.app.pack":
     "A pack or index JSON file (with an `apps` array) to update with the built entry; created if missing",
   "apps.init.id":
     "The app id: the builder's dotted reverse-DNS form — two or more dot-separated segments of " +
     "lowercase letters, digits and hyphens (e.g. com.example.demo-app); a non-dotted id is a " +
     "usage error suggesting com.example.<slug>",
-  "apps.init.template": "Template variant: deno (default) or node",
+  "apps.init.template":
+    "Template variant: node (the default and only one; the deno template was removed)",
   "apps.init.dir": "Directory to create (default: ./<id>); must be missing or empty",
-  "apps.validate.dir": "The app directory (default: the current directory)",
-  "apps.validate.resolution":
-    "How @w6w/* imports resolve: sibling or registry (default: registry when the app's deno.json maps @w6w/types to jsr:, else sibling)",
-  "apps.validate.builder":
-    "The app builder spec to run (default: jsr:@w6w/app-build@0.2.0/cli); a path or file: URL for a local builder",
-  "apps.build.dir": "The app directory (default: the current directory)",
+  "apps.validate.dir":
+    "The app directory (default: the current directory); its package.json names the built JS in w6w.entry (else main)",
+  "apps.build.dir":
+    "The app directory (default: the current directory); its package.json names the built JS in w6w.entry (else main)",
   "apps.build.out":
-    "Output root: writes <out>/<id>/<version>/{app.js,manifest.json} and <out>/index.json (`-o` is shorthand)",
+    "Output root: writes <out>/<id>/<version>/{app.js,manifest.json[,app.js.map]} and <out>/index.json (`-o` is shorthand)",
   "apps.build.pack":
     "A pack or index JSON file (with an `apps` array) to update with the built entry; created if missing",
-  "apps.build.resolution":
-    "How @w6w/* imports resolve: sibling or registry (default: registry when the app's deno.json maps @w6w/types to jsr:, else sibling)",
-  "apps.build.builder":
-    "The app builder spec to run (default: jsr:@w6w/app-build@0.2.0/cli); a path or file: URL for a local builder",
+  "apps.package.pack":
+    "The pack source (w6w-pack.json) listing the apps to package (each already built)",
+  "apps.package.out":
+    "Output root (default: dist): writes <out>/w6w/index.json and <out>/w6w/<id>/<version>/…; nothing is written if any app fails (`-o` is shorthand)",
+  "apps.package.name":
+    "Package name written to package.json (jsr.json derives from it); used only when those files are created (default: w6w-apps-<pack dir>)",
+  "apps.package.version":
+    "Version written to package.json/jsr.json; used only when those files are created (default: 0.1.0)",
+  "apps.package.license":
+    "SPDX license written to jsr.json when it is created and neither the pack nor package.json declares one (default: UNLICENSED)",
   "appManagement.publishArtifact.dir": "The app directory (default: the current directory)",
   "appManagement.publishArtifact.version":
-    "Semver to write into the app's package.json before building (rewritten in place; default: leave it as is)",
-  "appManagement.publishArtifact.builder":
-    "The app builder spec to run (default: jsr:@w6w/app-build@0.2.0/cli); a path or file: URL for a local builder",
+    "Semver to write into the app's package.json before packaging (rewritten in place; default: leave it as is)",
   "apps.list.scope": "Which apps: all (default), account, tenant or personal",
   "apps.list.q": "Search text",
   "apps.list.sort": "Order: name (default), -name, recent or -recent",
@@ -924,6 +935,9 @@ const PARAM_HELP: Record<string, string> = {
     'A canonical remote ref (e.g. github:owner/repo), or a JSON object {"folder":{"grant":"…","path":"…"}} naming a path inside a granted server folder',
   "appManagement.preview.target":
     "Where it would go: account, tenant or personal (the server's targets list says which you may use)",
+  "appManagement.discover.registry": "Registry to search: npm (default) or jsr",
+  "appManagement.discover.q": "Search text",
+  "appManagement.discover.limit": "Maximum results (a positive integer)",
   "appManagement.register.source":
     'A canonical remote ref (e.g. github:owner/repo), or a JSON object {"folder":{"grant":"…","path":"…"}} naming a path inside a granted server folder',
   "appManagement.register.target":
@@ -944,14 +958,13 @@ const PARAM_HELP: Record<string, string> = {
 
 /**
  * Flags and arguments a command takes that are not part of the operation's wire shape:
- * `apps publish` builds locally first, so it also takes the app directory, `--version` and
- * `--builder`. They are appended to the operation's params for help and the parser only.
+ * `apps publish` packages locally first, so it also takes the app directory and `--version`.
+ * They are appended to the operation's params for help and the parser only.
  */
 const CLI_ONLY_PARAMS: Record<string, ContractParam[]> = {
   "appManagement.publishArtifact": [
     { name: "dir", in: "argument", type: "string", required: false },
     { name: "version", in: "query", type: "string", required: false },
-    { name: "builder", in: "query", type: "string", required: false },
   ],
 };
 

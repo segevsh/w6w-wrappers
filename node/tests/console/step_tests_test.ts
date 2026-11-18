@@ -8,7 +8,8 @@
  * does not discard it to `void`.
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects } from "../assert.ts";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import { ApiError } from "../../src/errors.ts";
@@ -88,19 +89,16 @@ function client(respond: (call: Call) => Response): { client: W6WClient; calls: 
   };
 }
 
-Deno.test(
-  "console.stepTests: save/list/recordRun are functions on a constructed client",
-  () => {
-    // Runtime, not type-level: a namespace that silently lost a method would
-    // still typecheck everywhere else in this suite.
-    const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
-    assertEquals(typeof c.console.stepTests.save, "function");
-    assertEquals(typeof c.console.stepTests.list, "function");
-    assertEquals(typeof c.console.stepTests.recordRun, "function");
-  },
-);
+test("console.stepTests: save/list/recordRun are functions on a constructed client", () => {
+  // Runtime, not type-level: a namespace that silently lost a method would
+  // still typecheck everywhere else in this suite.
+  const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
+  assertEquals(typeof c.console.stepTests.save, "function");
+  assertEquals(typeof c.console.stepTests.list, "function");
+  assertEquals(typeof c.console.stepTests.recordRun, "function");
+});
 
-Deno.test("console.stepTests.save sends the body verbatim and unwraps the stepTest envelope", async () => {
+test("console.stepTests.save sends the body verbatim and unwraps the stepTest envelope", async () => {
   const c = client(() => json({ stepTest: STEP_TEST_A }, 201));
 
   const res = await c.client.console.stepTests.save("wf_1", "nd_1", {
@@ -120,7 +118,7 @@ Deno.test("console.stepTests.save sends the body verbatim and unwraps the stepTe
   });
 });
 
-Deno.test("console.stepTests.save propagates a 404 as ApiError", async () => {
+test("console.stepTests.save propagates a 404 as ApiError", async () => {
   const c = client(() => json({ error: { code: "unknown_workflow", message: "Not found." } }, 404));
 
   const err = await assertRejects(
@@ -132,7 +130,7 @@ Deno.test("console.stepTests.save propagates a 404 as ApiError", async () => {
   assertEquals(err.code, "unknown_workflow");
 });
 
-Deno.test("console.stepTests.list unwraps the stepTests envelope", async () => {
+test("console.stepTests.list unwraps the stepTests envelope", async () => {
   const c = client(() => json({ stepTests: [STEP_TEST_A, STEP_TEST_B] }));
 
   const res = await c.client.console.stepTests.list("wf_1", "nd_1");
@@ -144,39 +142,36 @@ Deno.test("console.stepTests.list unwraps the stepTests envelope", async () => {
   assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_1/steps/nd_1/tests");
 });
 
-Deno.test(
-  "console.stepTests.recordRun unwraps `run` and RETURNS the real row — does not discard to void",
-  async () => {
-    const RUN: StepTestRun = {
-      id: "steprun_1",
-      stepTestId: "stept_1",
-      workflowId: "wf_1",
-      stepId: "nd_1",
-      status: "succeeded",
-      input: { foo: "bar" },
-      output: { ok: true },
-      error: null,
-      createdAt: "2026-01-01T00:00:00Z",
-    };
-    const c = client(() => json({ run: RUN }, 201));
+test("console.stepTests.recordRun unwraps `run` and RETURNS the real row — does not discard to void", async () => {
+  const RUN: StepTestRun = {
+    id: "steprun_1",
+    stepTestId: "stept_1",
+    workflowId: "wf_1",
+    stepId: "nd_1",
+    status: "succeeded",
+    input: { foo: "bar" },
+    output: { ok: true },
+    error: null,
+    createdAt: "2026-01-01T00:00:00Z",
+  };
+  const c = client(() => json({ run: RUN }, 201));
 
-    const run = await c.client.console.stepTests.recordRun("wf_1", "nd_1", {
-      stepTestId: "stept_1",
-      status: "succeeded",
-      output: { ok: true },
-    });
+  const run = await c.client.console.stepTests.recordRun("wf_1", "nd_1", {
+    stepTestId: "stept_1",
+    status: "succeeded",
+    output: { ok: true },
+  });
 
-    // A mutant that discarded this to void would resolve undefined here
-    // instead of the real row.
-    assertEquals(run.id, "steprun_1");
-    assertEquals(run.status, "succeeded");
-    assertEquals(run.stepTestId, "stept_1");
-    assertEquals(c.calls[0].method, "POST");
-    assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_1/steps/nd_1/test-runs");
-  },
-);
+  // A mutant that discarded this to void would resolve undefined here
+  // instead of the real row.
+  assertEquals(run.id, "steprun_1");
+  assertEquals(run.status, "succeeded");
+  assertEquals(run.stepTestId, "stept_1");
+  assertEquals(c.calls[0].method, "POST");
+  assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_1/steps/nd_1/test-runs");
+});
 
-Deno.test("console.stepTests.recordRun sends the body verbatim, no extra keys injected", async () => {
+test("console.stepTests.recordRun sends the body verbatim, no extra keys injected", async () => {
   const c = client(() =>
     json(
       {
@@ -193,7 +188,7 @@ Deno.test("console.stepTests.recordRun sends the body verbatim, no extra keys in
         },
       },
       201,
-    )
+    ),
   );
 
   await c.client.console.stepTests.recordRun("wf_1", "nd_1", { status: "succeeded" });
@@ -201,31 +196,26 @@ Deno.test("console.stepTests.recordRun sends the body verbatim, no extra keys in
   assertEquals(JSON.parse(c.calls[0].body ?? "null"), { status: "succeeded" });
 });
 
-Deno.test("console.stepTests.save percent-encodes workflowId and stepId via the `path` tag", async () => {
+test("console.stepTests.save percent-encodes workflowId and stepId via the `path` tag", async () => {
   const c = client(() => json({ stepTest: STEP_TEST_A }, 201));
 
   await c.client.console.stepTests.save("wf 1", "nd 1", { input: {}, with: {} });
 
-  assertEquals(
-    c.calls[0].url,
-    "https://api.example.com/workflows/wf%201/steps/nd%201/tests",
-  );
+  assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf%201/steps/nd%201/tests");
 });
 
-Deno.test("console.stepTests.list percent-encodes workflowId and stepId via the `path` tag", async () => {
+test("console.stepTests.list percent-encodes workflowId and stepId via the `path` tag", async () => {
   const c = client(() => json({ stepTests: [] }));
 
   await c.client.console.stepTests.list("wf 1", "nd 1");
 
-  assertEquals(
-    c.calls[0].url,
-    "https://api.example.com/workflows/wf%201/steps/nd%201/tests",
-  );
+  assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf%201/steps/nd%201/tests");
 });
 
 // --- step meta ---------------------------------------------------------------
 
-type Equals<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true
+type Equals<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+  ? true
   : false;
 
 const _lastRunMeta: Equals<StepTest["lastRunMeta"], StepMeta | null | undefined> = true;
@@ -234,7 +224,7 @@ const _bodyMeta: Equals<Parameters<StepTestsApi["recordRun"]>[2]["meta"], unknow
 
 const META: StepMeta = { app: "a", version: "1.0.0", action: "x", connectionId: null };
 
-Deno.test("console.stepTests.list returns lastRunMeta verbatim and a legacy row without it", async () => {
+test("console.stepTests.list returns lastRunMeta verbatim and a legacy row without it", async () => {
   const withMeta: StepTest = { ...STEP_TEST_A, lastRunMeta: META };
   const c = client(() => json({ stepTests: [withMeta, STEP_TEST_B] }));
 
@@ -244,7 +234,7 @@ Deno.test("console.stepTests.list returns lastRunMeta verbatim and a legacy row 
   assertEquals("lastRunMeta" in res[1], false);
 });
 
-Deno.test("console.stepTests.recordRun posts meta verbatim and returns the row's meta verbatim", async () => {
+test("console.stepTests.recordRun posts meta verbatim and returns the row's meta verbatim", async () => {
   const RUN: StepTestRun = {
     id: "steprun_1",
     stepTestId: null,

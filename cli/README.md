@@ -33,9 +33,9 @@ w6w auth status                                # base URL, where it came from, m
 w6w auth logout
 w6w config get-base-url                        # effective base URL and its source
 w6w config set-base-url https://w6w.example.com  # save it (tokens are per host: auth login again)
-w6w apps init com.example.my-app              # scaffold a new app (local only)
-w6w apps validate ./com.example.my-app        # validate it with the canonical builder (runs on the bundled Deno)
-w6w apps build ./com.example.my-app --pack ./w6w-pack.json  # build it (`w6w build app` is an alias)
+w6w apps init com.example.my-app              # scaffold a new app (local only; Node + npm)
+w6w apps validate ./com.example.my-app        # check its built JavaScript packages as a w6w app
+w6w apps build ./com.example.my-app --pack ./w6w-pack.json  # package it (`w6w build app` is an alias)
 ```
 
 The token is stored per user (`~/.config/w6w/config.json`, or `$XDG_CONFIG_HOME/w6w/…`;
@@ -117,53 +117,72 @@ or `NO_COLOR`.
 
 ### apps init
 
-`w6w apps init <id> [--template deno|node] [--dir <path>]` scaffolds a new app into `./<id>` from a
-bundled template, with no network. It refuses a non-empty directory.
+`w6w apps init <id> [--template node] [--dir <path>]` scaffolds a new app into `./<id>` from a
+bundled template, with no network. It refuses a non-empty directory. `node` is the only template
+(and the default); `--template deno` is a usage error that says it was removed.
 
-`<id>` must be the dotted reverse-DNS id the canonical builder accepts — two or more dot-separated
-segments of lowercase letters, digits and hyphens, e.g. `com.example.my-app` (the same rule as the
-builder's `ID_RE`, so a scaffolded app validates as scaffolded). A non-dotted id is a usage error
-that names the rule and suggests a `com.example.<slug>` spelling; it is never rewritten silently.
+`<id>` must be the dotted reverse-DNS id the packager accepts — two or more dot-separated segments
+of lowercase letters, digits and hyphens, e.g. `com.example.my-app` (so a scaffolded app validates
+as scaffolded). A non-dotted id is a usage error that names the rule and suggests a
+`com.example.<slug>` spelling; it is never rewritten silently.
 
-The scaffold ships in the manifest under `w6w` what the build requires: an `author`, and an
-`appearance.icon` pointing at the bundled `assets/icon.svg`. The `deno` template also has
-`test`/`validate`/`build` tasks, so `deno task test`, `deno task validate` and `deno task build` all
-work in the new directory.
+The scaffold is a plain Node + npm project: TypeScript sources under `src/` (an API-key auth, one
+action, one poll trigger with its own small poll helper, one health check), `tests/` run by
+`node:test`, and `assets/icon.svg`. `package.json` carries the manifest under `w6w` — `author`,
+`appearance.icon`, and `w6w.entry: "./dist/app.js"` — plus the scripts:
+
+| script             | what it runs                                                                      |
+| ------------------ | --------------------------------------------------------------------------------- |
+| `npm run build`    | esbuild (a devDependency of the app) → one self-contained ESM `dist/app.js` + map |
+| `npm test`         | `node --test` over `tests/`                                                       |
+| `npm run validate` | `w6w apps validate`                                                               |
+| `npm run package`  | `npm run build && w6w apps build -o out`                                          |
+
+`.github/workflows/w6w.yml` runs `npm ci`, the typecheck, build, tests, `validate` and `package`.
+
+### Bring your own build
+
+A w6w app reaches the CLI **already built**: one self-contained ESM JavaScript file that
+default-exports the app, produced by whatever bundler you like (esbuild, tsup, rollup, …).
+`package.json` names it in `w6w.entry` (else `main`); it must be a `.js`/`.mjs` file inside the app
+folder. `apps validate`, `apps build` and `apps publish` compile nothing: they load that file to
+describe the app, generate the manifest, inline the assets and compute the digests. The packager is
+core's `@w6w/app-build` assembler vendored into the npm package, so these commands need **only
+Node** — no Deno, no JSR, no network.
+
+If your build writes a source map — a trailing `//# sourceMappingURL=<file>` comment, else
+`<entry>.map` beside the entry — it is packaged as `app.js.map` (its `sources` rewritten relative to
+the app) and recorded in the manifest; without one, no map is packaged. A map left over from an
+earlier build sits at `<entry>.map` too, so clean `dist/` when you turn source maps off.
 
 ### apps validate
 
-`w6w apps validate [dir] [--resolution sibling|registry] [--builder <spec>]` checks the app with the
-canonical `@w6w/app-build` builder.
-
-`validate`, `build` and `publish` run on Deno, and the npm package brings its own: the official
-`@deno/<platform>` binary (Deno 2.8.2) is an optional dependency, so nothing has to be installed or
-on `PATH`. The binary is picked in this order: `$W6W_DENO`; the running Deno, when the CLI itself
-runs under Deno; the bundled one; `$DENO_INSTALL/bin/deno`, then `~/.deno/bin/deno`; and last `deno`
-on `PATH`. Where no bundled build exists (musl/Alpine, 32-bit) one of the others must be present,
-and a missing Deno is an error that names this prerequisite.
+`w6w apps validate [dir]` runs every check `apps build` runs on the app in `[dir]` (default: the
+current directory) and writes nothing. It prints `ok <id>@<version>`, or one `code: message` line
+per refusal and exits `1`; `--json` prints the one `{"ok":…}` report line either way.
 
 ### apps build
 
-`w6w apps build [dir] [-o|--out <dir>] [--pack <file>] [--resolution sibling|registry]
-[--builder <spec>]`
-builds the app to `<out>/<id>/<version>/{app.js,manifest.json}` plus `<out>/index.json` and prints
-the index entry. `w6w build app` is an alias. Runs on Deno (bundled; see `apps validate`).
+`w6w apps build [dir] [-o|--out <dir>] [--pack <file>]` packages the app into
+`<out>/<id>/<version>/{app.js,manifest.json[,app.js.map]}` plus `<out>/index.json` (default `out`:
+`./out`) and prints the index entry. A refusal is printed as `code: message` and exits `1`. `--pack`
+updates a pack file under an exclusive `<pack>.lock`. `w6w build app` is an alias.
 
 ### apps publish
 
-`w6w apps publish [dir] [--version <semver>] [--builder <spec>]` builds the app (as `apps build`
-does, into a temporary directory) and uploads the built manifest, `app.js` and `app.js.map` to the
-**caller's personal tier**: the app is private to you, never shared with the tenant or the catalog.
-It prints what the server answered (`id`, `version`, `outcome`, `target`); the version shown is the
-server's, not the local one.
+`w6w apps publish [dir] [--version <semver>]` packages the app (as `apps build` does, into a
+temporary directory) and uploads the built manifest, `app.js` and `app.js.map` to the **caller's
+personal tier**: the app is private to you, never shared with the tenant or the catalog. It prints
+what the server answered (`id`, `version`, `outcome`, `target`); the version shown is the server's,
+not the local one.
 
-`--version` rewrites the `version` in the app's `package.json` **in place**, before the build; it
-must be a semantic version (`1.2.3`), otherwise nothing is built or sent. It is a value flag for
+`--version` rewrites the `version` in the app's `package.json` **in place**, before packaging; it
+must be a semantic version (`1.2.3`), otherwise nothing is packaged or sent. It is a value flag for
 this command only: plain `w6w --version` still prints the version banner. There is no
 command-specific credential flag; authentication is the CLI's normal client resolution
 (config/login, and the global `--token` / `W6W_TOKEN`), and the upload goes only to the configured
-base URL. Runs on Deno (bundled; see `apps validate`). The server route is `planned` until it is
-deployed.
+base URL. Like `apps build`, it packages the JavaScript you built (see
+[Bring your own build](#bring-your-own-build)). The server route is `planned` until it is deployed.
 
 ### apps list
 

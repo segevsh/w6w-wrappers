@@ -10,7 +10,8 @@
  * (`RequestOptions.requireAuth` defaults `true`).
  */
 
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals } from "../assert.ts";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import type { DashboardStats } from "../../src/console/dashboard.ts";
@@ -84,9 +85,10 @@ const STATS: DashboardStats = {
 /**
  * Compile-time exact-type pin on the widened `recent` row: a field made
  * optional (`?:`) or non-nullable no longer satisfies `Equals`, so this file
- * fails `deno check` rather than silently accepting a drifted wire shape.
+ * fails `npm run typecheck` rather than silently accepting a drifted wire shape.
  */
-type Equals<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true
+type Equals<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+  ? true
   : false;
 type RecentRow = DashboardStats["recent"][number];
 const _functionId: Equals<RecentRow["functionId"], string | null> = true;
@@ -107,14 +109,14 @@ function client(respond: (call: Call) => Response): { client: W6WClient; calls: 
   };
 }
 
-Deno.test("console.dashboard: stats is a function on a constructed client", () => {
+test("console.dashboard: stats is a function on a constructed client", () => {
   // Runtime, not type-level: a namespace that silently lost the method would
   // still typecheck everywhere else in this suite.
   const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
   assertEquals(typeof c.console.dashboard.stats, "function");
 });
 
-Deno.test("console.dashboard.stats resolves with the payload VERBATIM — no unwrap()", async () => {
+test("console.dashboard.stats resolves with the payload VERBATIM — no unwrap()", async () => {
   const c = client(() => json(STATS));
 
   const res = await c.client.console.dashboard.stats();
@@ -128,7 +130,7 @@ Deno.test("console.dashboard.stats resolves with the payload VERBATIM — no unw
   assertEquals(c.calls[0].method, "GET");
 });
 
-Deno.test("console.dashboard.stats forwards from/to/bucket as query params", async () => {
+test("console.dashboard.stats forwards from/to/bucket as query params", async () => {
   const c = client(() => json(STATS));
 
   await c.client.console.dashboard.stats({
@@ -144,7 +146,7 @@ Deno.test("console.dashboard.stats forwards from/to/bucket as query params", asy
   );
 });
 
-Deno.test("console.dashboard.stats with no params sends no query string", async () => {
+test("console.dashboard.stats with no params sends no query string", async () => {
   const c = client(() => json(STATS));
 
   await c.client.console.dashboard.stats();
@@ -152,13 +154,10 @@ Deno.test("console.dashboard.stats with no params sends no query string", async 
   assertEquals(c.calls[0].url, "https://api.example.com/dashboard/stats");
 });
 
-Deno.test(
-  "console.dashboard.stats DOES send the bearer — it is authenticated, unlike console.auth's public trio",
-  async () => {
-    const c = client(() => json(STATS));
+test("console.dashboard.stats DOES send the bearer — it is authenticated, unlike console.auth's public trio", async () => {
+  const c = client(() => json(STATS));
 
-    await c.client.console.dashboard.stats();
+  await c.client.console.dashboard.stats();
 
-    assertEquals(c.calls[0].headers.get("authorization"), "Bearer tok_1");
-  },
-);
+  assertEquals(c.calls[0].headers.get("authorization"), "Bearer tok_1");
+});

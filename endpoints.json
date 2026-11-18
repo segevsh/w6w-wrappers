@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable surface contract for all w6w wrappers. Source of truth for conformance tests. Keep in sync with docs/endpoints.md.",
-  "contractVersion": "0.20.0",
+  "contractVersion": "0.21.0",
   "$basePathComment": "Empty since 0.2.0: the server serves its routes at the ROOT of its own host (https://api.w6w.io/vars, not .../api/vars). Clients append nothing to the configured origin.",
   "basePath": "",
   "defaultBaseUrl": "https://api.w6w.io",
@@ -3390,6 +3390,44 @@
       "notes": "Nothing is unwrapped: the body is returned exactly as sent. Answers `{kind:'app', sourceRef, app}` or `{kind:'pack', sourceRef, pack, entries}`; `entries[].alreadyRegistered` covers only apps the caller manages. The body is built from `source` and `target` only. Codes: `400 invalid_body`, `400 invalid_target`, `400 invalid_source`, `403 forbidden`, `403 local_import_forbidden`, `424 fetch_failed`, `424 source_requires_grant`, `429 source_rate_limited`, `424 source_timeout`, `424 source_too_large`."
     },
     {
+      "name": "appManagement.discover",
+      "summary": "Search an npm or JSR registry for installable w6w apps.",
+      "method": "GET",
+      "path": "/app-management/discover",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "registry",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "$comment": "`npm` or `jsr`; the server defaults to `npm`. Sent only when given."
+        },
+        {
+          "name": "q",
+          "in": "query",
+          "type": "string",
+          "required": true,
+          "$comment": "1..100 characters."
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "number",
+          "required": false,
+          "$comment": "1..50; the server defaults to 20. Sent only when given."
+        }
+      ],
+      "returns": "AppManagementDiscoverResult",
+      "naming": {
+        "ts": "client.appManagement.discover(input, opts?)",
+        "python": "client.app_management.discover(registry=None, q=..., limit=None)",
+        "cli": "w6w apps search <q> [--registry npm|jsr] [--limit <n>]"
+      },
+      "notes": "Answers `{registry, q, items:[{name, version, description|null, link, ref, installed}]}`; `ref` is `<registry>:<name>@^<version>` and `installed` covers only scopes the caller manages. Codes: `400 invalid_query` (unknown or duplicate param, bad registry/q/limit), `424 registry_unavailable`."
+    },
+    {
       "name": "appManagement.register",
       "summary": "Register an app or pack from a source into a target.",
       "method": "POST",
@@ -3461,7 +3499,7 @@
       "naming": {
         "ts": "client.appManagement.publishArtifact({ artifact, exec, map? }, opts?)",
         "python": "client.app_management.publish_artifact(artifact, exec, map=None)",
-        "cli": "w6w apps publish [dir] [--version <semver>] [--builder <spec>]"
+        "cli": "w6w apps publish [dir] [--version <semver>]"
       },
       "notes": "Added in 0.20.0; served since the app-publishing deploy of 2026-11-15. Nothing is unwrapped: the body is returned exactly as sent, `{ id, version, outcome: \"registered\" | \"bumped\" | \"upgraded\" | \"unchanged\", target: \"personal\" }`. The artifact is always caller-private (target `personal`). Codes: `400 invalid_body`, `400 invalid_target`, `403 user_import_disabled`, `403 forbidden`, `403` namespace/publisher refusals (`namespace_not_owned`, `namespace_owned`, `namespace_reserved`, `publisher_suspended`, `tier_mismatch`), `409 id_taken`, `413 artifact_too_large`, `422` publisher codes (`invalid_manifest`, `exec_sha_mismatch`, `map_sha_mismatch`, `map_missing`, `manifest_mismatch`, `version_conflict`, `protocol_trigger_not_allowed`, …), `503 blob_store_unavailable`."
     },
@@ -3500,7 +3538,7 @@
         "python": "client.app_management.update_source(id, source, expected_revision)",
         "cli": "w6w app-management update-source <id> <source> --expected-revision <n>"
       },
-      "notes": "Nothing is unwrapped: the body is returned exactly as sent. `SyncResult.outcome` is closed: `registry_updated`, `definition_unchanged` or `failed` (a `failed` outcome is still a 200 with `error:{code,message}`). The active source changes only on `registry_updated` or `definition_unchanged`. Codes: `400 invalid_path` (malformed id), `404 unknown_app` (also when the caller cannot see the app), `403 forbidden` (visible but not managed, or global and the caller is not an operator). `409 artifact_backed`, `409 stale_source` (revision mismatch), `403 local_import_forbidden`, `400 invalid_source`, `400 invalid_body`."
+      "notes": "Nothing is unwrapped: the body is returned exactly as sent. `SyncResult.outcome` is closed: `registry_updated`, `definition_unchanged`, `package_missing` (the package no longer lists the app; the installed version still runs) or `failed` (a `failed` outcome is still a 200 with `error:{code,message}`). The active source changes only on `registry_updated` or `definition_unchanged`. Codes: `400 invalid_path` (malformed id), `404 unknown_app` (also when the caller cannot see the app), `403 forbidden` (visible but not managed, or global and the caller is not an operator). `409 artifact_backed`, `409 stale_source` (revision mismatch), `403 local_import_forbidden`, `400 invalid_source`, `400 invalid_body`."
     },
     {
       "name": "appManagement.sync",
@@ -3530,7 +3568,7 @@
         "python": "client.app_management.sync(id, expected_revision=None)",
         "cli": "w6w app-management sync <id> [--expected-revision <n>]"
       },
-      "notes": "Nothing is unwrapped: the body is returned exactly as sent. `SyncResult.outcome` is closed: `registry_updated`, `definition_unchanged` or `failed` (a `failed` outcome is still a 200 with `error:{code,message}`). The body is `{}`, or `{expectedRevision}` when given. Codes: `400 invalid_path` (malformed id), `404 unknown_app` (also when the caller cannot see the app), `403 forbidden` (visible but not managed, or global and the caller is not an operator). `409 artifact_backed`, `409 no_source`, `409 stale_source` (only when `expectedRevision` was sent), `409 sync_conflict` (lost the locked-write race), `403 local_import_forbidden`."
+      "notes": "Nothing is unwrapped: the body is returned exactly as sent. `SyncResult.outcome` is closed: `registry_updated`, `definition_unchanged`, `package_missing` (the package no longer lists the app; the installed version still runs) or `failed` (a `failed` outcome is still a 200 with `error:{code,message}`). The body is `{}`, or `{expectedRevision}` when given. Codes: `400 invalid_path` (malformed id), `404 unknown_app` (also when the caller cannot see the app), `403 forbidden` (visible but not managed, or global and the caller is not an operator). `409 artifact_backed`, `409 no_source`, `409 stale_source` (only when `expectedRevision` was sent), `409 sync_conflict` (lost the locked-write race), `403 local_import_forbidden`."
     },
     {
       "name": "appManagement.remove",
@@ -4240,7 +4278,7 @@
       },
       {
         "name": "build.app",
-        "summary": "Alias of apps build: build an app folder with the canonical app builder (local only).",
+        "summary": "Alias of apps build: package an app folder's built JavaScript into the canonical artifact (local only).",
         "status": "live",
         "naming": "w6w build app <folder> [--out <dir>] [--pack <file>]",
         "params": [
@@ -4266,9 +4304,9 @@
       },
       {
         "name": "apps.init",
-        "summary": "Scaffold a new app (deno or node template) in a new directory (local only, no API call).",
+        "summary": "Scaffold a new app (TypeScript, built and tested with Node and npm only) in a new directory (local only, no API call).",
         "status": "live",
-        "naming": "w6w apps init <id> [--template deno|node] [--dir <path>]",
+        "naming": "w6w apps init <id> [--template node] [--dir <path>]",
         "params": [
           {
             "name": "id",
@@ -4292,25 +4330,13 @@
       },
       {
         "name": "apps.validate",
-        "summary": "Validate an app folder with the canonical app builder (local only, needs Deno).",
+        "summary": "Check that an app folder's built JavaScript packages as a w6w app (local only, Node only).",
         "status": "live",
-        "naming": "w6w apps validate [dir] [--resolution sibling|registry] [--builder <spec>]",
+        "naming": "w6w apps validate [dir]",
         "params": [
           {
             "name": "dir",
             "in": "argument",
-            "type": "string",
-            "required": false
-          },
-          {
-            "name": "resolution",
-            "in": "query",
-            "type": "string",
-            "required": false
-          },
-          {
-            "name": "builder",
-            "in": "query",
             "type": "string",
             "required": false
           }
@@ -4374,9 +4400,9 @@
       },
       {
         "name": "apps.build",
-        "summary": "Build an app folder into the canonical artifact layout with the app builder (local only, needs Deno).",
+        "summary": "Package an app folder's built JavaScript into the canonical artifact layout (local only, Node only).",
         "status": "live",
-        "naming": "w6w apps build [dir] [-o|--out <dir>] [--pack <file>] [--resolution sibling|registry] [--builder <spec>]",
+        "naming": "w6w apps build [dir] [-o|--out <dir>] [--pack <file>]",
         "params": [
           {
             "name": "dir",
@@ -4395,15 +4421,41 @@
             "in": "query",
             "type": "string",
             "required": false
+          }
+        ]
+      },
+      {
+        "name": "apps.package",
+        "summary": "Package a pack's already-built apps into a w6w registry package tree (<out>/w6w/index.json + <id>/<version>/…); never publishes (local only, needs only Node).",
+        "status": "live",
+        "naming": "w6w apps package <pack> [-o|--out <dir>] [--name <pkg>] [--version <v>] [--license <spdx>]",
+        "params": [
+          {
+            "name": "pack",
+            "in": "argument",
+            "type": "string",
+            "required": true
           },
           {
-            "name": "resolution",
+            "name": "out",
             "in": "query",
             "type": "string",
             "required": false
           },
           {
-            "name": "builder",
+            "name": "name",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "license",
             "in": "query",
             "type": "string",
             "required": false

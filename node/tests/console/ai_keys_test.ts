@@ -3,7 +3,8 @@
  * method builds (method, path, exact body) and its response handling.
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects } from "../assert.ts";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import { ApiError } from "../../src/errors.ts";
@@ -39,7 +40,7 @@ const BASE = "https://api.example.com";
 
 const DEF = { providerAppId: "openai", connectionId: "conn_1", status: "active" };
 
-Deno.test("aiKeys.defaults GETs /me/ai-keys/defaults and unwraps `defaults`", async () => {
+test("aiKeys.defaults GETs /me/ai-keys/defaults and unwraps `defaults`", async () => {
   const c = setup(() => json({ defaults: [DEF] }));
   const res = await c.client.console.aiKeys.defaults();
   assertEquals(res, [DEF]);
@@ -48,7 +49,7 @@ Deno.test("aiKeys.defaults GETs /me/ai-keys/defaults and unwraps `defaults`", as
   assertEquals(c.calls[0].body, null);
 });
 
-Deno.test("aiKeys.setDefault PUTs exactly {connectionId} and unwraps `default`", async () => {
+test("aiKeys.setDefault PUTs exactly {connectionId} and unwraps `default`", async () => {
   const c = setup(() => json({ default: DEF }));
   const res = await c.client.console.aiKeys.setDefault("open/ai", "conn_1");
   assertEquals(res, DEF);
@@ -57,7 +58,7 @@ Deno.test("aiKeys.setDefault PUTs exactly {connectionId} and unwraps `default`",
   assertEquals(c.calls[0].body, JSON.stringify({ connectionId: "conn_1" }));
 });
 
-Deno.test("aiKeys.clearDefault DELETEs and resolves on 204", async () => {
+test("aiKeys.clearDefault DELETEs and resolves on 204", async () => {
   const c = setup(() => new Response(null, { status: 204 }));
   assertEquals(await c.client.console.aiKeys.clearDefault("openai"), undefined);
   assertEquals(c.calls[0].method, "DELETE");
@@ -65,14 +66,12 @@ Deno.test("aiKeys.clearDefault DELETEs and resolves on 204", async () => {
   assertEquals(c.calls[0].body, null);
 });
 
-for (
-  const [status, code] of [
-    [403, "user_context_required"],
-    [409, "credential_scope_mismatch"],
-    [403, "ai_credential_policy_denied"],
-  ] as const
-) {
-  Deno.test(`aiKeys.setDefault propagates ${code} unchanged`, async () => {
+for (const [status, code] of [
+  [403, "user_context_required"],
+  [409, "credential_scope_mismatch"],
+  [403, "ai_credential_policy_denied"],
+] as const) {
+  test(`aiKeys.setDefault propagates ${code} unchanged`, async () => {
     const c = setup(() => json({ error: { code, message: "no" } }, status));
     const err = await assertRejects(
       () => c.client.console.aiKeys.setDefault("openai", "conn_1"),

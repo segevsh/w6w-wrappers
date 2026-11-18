@@ -7,7 +7,8 @@
  * `fetch`, like `tests/exchange_test.ts`.
  */
 
-import { assert, assertEquals, assertInstanceOf, assertRejects, assertThrows } from "@std/assert";
+import { test } from "node:test";
+import { assert, assertEquals, assertInstanceOf, assertRejects, assertThrows } from "./assert.ts";
 import * as barrel from "../mod.ts";
 import * as consoleBarrel from "../src/console/mod.ts";
 import { ApiError, ConfigError } from "../src/errors.ts";
@@ -83,7 +84,7 @@ const BAD_CONSTRUCTION: Array<[string, Record<string, unknown>]> = [
 ];
 
 for (const [name, over] of BAD_CONSTRUCTION) {
-  Deno.test(`createEmbedSessionClient: ${name} throws ConfigError, no request, no secret`, () => {
+  test(`createEmbedSessionClient: ${name} throws ConfigError, no request, no secret`, () => {
     const fake = fakeFetch(() => json(SUCCESS_BODY));
     const err = assertThrows(
       () => createEmbedSessionClient({ ...opts({ fetch: fake.fetch }), ...over } as never),
@@ -94,9 +95,9 @@ for (const [name, over] of BAD_CONSTRUCTION) {
   });
 }
 
-Deno.test("createEmbedSessionClient: an omitted baseUrl defaults to https://api.w6w.io and ignores W6W_BASE_URL", async () => {
-  const saved = Deno.env.get("W6W_BASE_URL");
-  Deno.env.set("W6W_BASE_URL", "https://env.example.com");
+test("createEmbedSessionClient: an omitted baseUrl defaults to https://api.w6w.io and ignores W6W_BASE_URL", async () => {
+  const saved = process.env.W6W_BASE_URL;
+  process.env.W6W_BASE_URL = "https://env.example.com";
   try {
     const fake = fakeFetch(() => json(SUCCESS_BODY));
     const { baseUrl: _omitted, ...rest } = opts({ fetch: fake.fetch });
@@ -105,14 +106,14 @@ Deno.test("createEmbedSessionClient: an omitted baseUrl defaults to https://api.
     assertEquals(fake.calls.length, 1);
     assertEquals(fake.calls[0].url, "https://api.w6w.io/auth/exchange");
   } finally {
-    if (saved === undefined) Deno.env.delete("W6W_BASE_URL");
-    else Deno.env.set("W6W_BASE_URL", saved);
+    if (saved === undefined) delete process.env.W6W_BASE_URL;
+    else process.env.W6W_BASE_URL = saved;
   }
 });
 
-Deno.test("createEmbedSessionClient: construction never reads W6W_BASE_URL (an invalid env value does not throw)", async () => {
-  const saved = Deno.env.get("W6W_BASE_URL");
-  Deno.env.set("W6W_BASE_URL", "/api");
+test("createEmbedSessionClient: construction never reads W6W_BASE_URL (an invalid env value does not throw)", async () => {
+  const saved = process.env.W6W_BASE_URL;
+  process.env.W6W_BASE_URL = "/api";
   try {
     const fake = fakeFetch(() => json(SUCCESS_BODY));
     const { baseUrl: _omitted, ...rest } = opts({ fetch: fake.fetch });
@@ -120,12 +121,12 @@ Deno.test("createEmbedSessionClient: construction never reads W6W_BASE_URL (an i
     await client.create({ subject: "u1", accountRef: "ref_1" });
     assertEquals(fake.calls[0].url, "https://api.w6w.io/auth/exchange");
   } finally {
-    if (saved === undefined) Deno.env.delete("W6W_BASE_URL");
-    else Deno.env.set("W6W_BASE_URL", saved);
+    if (saved === undefined) delete process.env.W6W_BASE_URL;
+    else process.env.W6W_BASE_URL = saved;
   }
 });
 
-Deno.test("createEmbedSessionClient: refuses a browser-like runtime (window + document)", () => {
+test("createEmbedSessionClient: refuses a browser-like runtime (window + document)", () => {
   const g = globalThis as Record<string, unknown>;
   const hadWindow = "window" in g;
   const hadDocument = "document" in g;
@@ -151,7 +152,7 @@ Deno.test("createEmbedSessionClient: refuses a browser-like runtime (window + do
   assertEquals(fake.calls.length, 0);
 });
 
-Deno.test("createEmbedSessionClient: only window (no document) is not a browser", () => {
+test("createEmbedSessionClient: only window (no document) is not a browser", () => {
   const g = globalThis as Record<string, unknown>;
   const hadWindow = "window" in g;
   const savedWindow = g.window;
@@ -178,7 +179,7 @@ const BAD_REFS: Array<[string, unknown]> = [
 ];
 
 for (const [name, ref] of BAD_REFS) {
-  Deno.test(`create(): accountRef ${name} throws ConfigError with zero requests`, async () => {
+  test(`create(): accountRef ${name} throws ConfigError with zero requests`, async () => {
     const fake = fakeFetch(() => json(SUCCESS_BODY));
     const client = createEmbedSessionClient(opts({ fetch: fake.fetch }));
     const err = await assertRejects(
@@ -191,7 +192,7 @@ for (const [name, ref] of BAD_REFS) {
 }
 
 for (const subject of ["", "  ", undefined, 5]) {
-  Deno.test(`create(): subject ${JSON.stringify(subject) ?? "undefined"} throws ConfigError with zero requests`, async () => {
+  test(`create(): subject ${JSON.stringify(subject) ?? "undefined"} throws ConfigError with zero requests`, async () => {
     const fake = fakeFetch(() => json(SUCCESS_BODY));
     const client = createEmbedSessionClient(opts({ fetch: fake.fetch }));
     const err = await assertRejects(
@@ -203,7 +204,7 @@ for (const subject of ["", "  ", undefined, 5]) {
   });
 }
 
-Deno.test("create(): a missing input object is a ConfigError, not a TypeError", async () => {
+test("create(): a missing input object is a ConfigError, not a TypeError", async () => {
   const fake = fakeFetch(() => json(SUCCESS_BODY));
   const client = createEmbedSessionClient(opts({ fetch: fake.fetch }));
   await assertRejects(() => client.create(undefined as never), ConfigError);
@@ -214,9 +215,9 @@ Deno.test("create(): a missing input object is a ConfigError, not a TypeError", 
 // acc.3 — wire + shape
 // ---------------------------------------------------------------------------
 
-Deno.test("create(): one POST /auth/exchange, Basic header, exact body, curated 7-key result", async () => {
+test("create(): one POST /auth/exchange, Basic header, exact body, curated 7-key result", async () => {
   const fake = fakeFetch(() =>
-    json({ ...SUCCESS_BODY, user: { ...SUCCESS_BODY.user, subject: "u1" } })
+    json({ ...SUCCESS_BODY, user: { ...SUCCESS_BODY.user, subject: "u1" } }),
   );
   const client = createEmbedSessionClient(
     opts({ fetch: fake.fetch, now: () => 1_700_000_000_000 }),
@@ -227,10 +228,7 @@ Deno.test("create(): one POST /auth/exchange, Basic header, exact body, curated 
   assertEquals(fake.calls.length, 1);
   assertEquals(fake.calls[0].method, "POST");
   assertEquals(fake.calls[0].url, `${BASE}/auth/exchange`);
-  assertEquals(
-    fake.calls[0].headers.get("authorization"),
-    `Basic ${btoa(`client_1:${SECRET}`)}`,
-  );
+  assertEquals(fake.calls[0].headers.get("authorization"), `Basic ${btoa(`client_1:${SECRET}`)}`);
   assertEquals(fake.calls[0].body, '{"subject":"u1","account":"co-9"}');
 
   assertEquals(Object.keys(session).sort(), [
@@ -254,14 +252,14 @@ Deno.test("create(): one POST /auth/exchange, Basic header, exact body, curated 
   assert(!JSON.stringify(session).includes(SECRET));
 });
 
-Deno.test("create(): subject is sent verbatim, never trimmed", async () => {
+test("create(): subject is sent verbatim, never trimmed", async () => {
   const fake = fakeFetch(() => json(SUCCESS_BODY));
   const client = createEmbedSessionClient(opts({ fetch: fake.fetch }));
   await client.create({ subject: " u1 ", accountRef: "co-9" });
   assertEquals(fake.calls[0].body, '{"subject":" u1 ","account":"co-9"}');
 });
 
-Deno.test("create(): the clock is sampled BEFORE the request", async () => {
+test("create(): the clock is sampled BEFORE the request", async () => {
   let t = 1_700_000_000_000;
   const fake = fakeFetch(() => {
     t += 60_000; // the exchange "takes" a minute; expiresAt must not include it
@@ -272,7 +270,7 @@ Deno.test("create(): the clock is sampled BEFORE the request", async () => {
   assertEquals(session.expiresAt, "2023-11-14T22:28:20.000Z");
 });
 
-Deno.test("create(): the default clock is Date.now", async () => {
+test("create(): the default clock is Date.now", async () => {
   const fake = fakeFetch(() => json(SUCCESS_BODY));
   const client = createEmbedSessionClient(opts({ fetch: fake.fetch }));
   const before = Date.now();
@@ -281,16 +279,14 @@ Deno.test("create(): the default clock is Date.now", async () => {
   assert(at >= before + 900_000 && at <= Date.now() + 900_000);
 });
 
-for (
-  const [name, body] of [
-    ["null body", null],
-    ["no user", { token: "t", expiresIn: 900 }],
-    ["non-numeric expiresIn", { ...SUCCESS_BODY, expiresIn: "900" }],
-    ["absurd expiresIn", { ...SUCCESS_BODY, expiresIn: 1e300 }],
-    ["no token", { ...SUCCESS_BODY, token: undefined }],
-  ] as Array<[string, unknown]>
-) {
-  Deno.test(`create(): a malformed exchange response (${name}) is an ApiError bad_response`, async () => {
+for (const [name, body] of [
+  ["null body", null],
+  ["no user", { token: "t", expiresIn: 900 }],
+  ["non-numeric expiresIn", { ...SUCCESS_BODY, expiresIn: "900" }],
+  ["absurd expiresIn", { ...SUCCESS_BODY, expiresIn: 1e300 }],
+  ["no token", { ...SUCCESS_BODY, token: undefined }],
+] as Array<[string, unknown]>) {
+  test(`create(): a malformed exchange response (${name}) is an ApiError bad_response`, async () => {
     const fake = fakeFetch(() => json(body));
     const client = createEmbedSessionClient(opts({ fetch: fake.fetch }));
     const err = await assertRejects(
@@ -306,15 +302,13 @@ for (
 // acc.4 — errors and secrets
 // ---------------------------------------------------------------------------
 
-for (
-  const [status, code] of [
-    [401, "invalid_client"],
-    [401, "tenant_disabled"],
-    [400, "invalid_account"],
-    [429, "rate_limited"],
-  ] as Array<[number, string]>
-) {
-  Deno.test(`create(): server ${code} (${status}) surfaces as ApiError with that status+code`, async () => {
+for (const [status, code] of [
+  [401, "invalid_client"],
+  [401, "tenant_disabled"],
+  [400, "invalid_account"],
+  [429, "rate_limited"],
+] as Array<[number, string]>) {
+  test(`create(): server ${code} (${status}) surfaces as ApiError with that status+code`, async () => {
     const fake = fakeFetch(() => json({ error: { code, message: `server says ${code}` } }, status));
     const client = createEmbedSessionClient(opts({ fetch: fake.fetch }));
     const err = await assertRejects(
@@ -329,7 +323,7 @@ for (
   });
 }
 
-Deno.test("create(): a network failure is an ApiError that does not carry the secret", async () => {
+test("create(): a network failure is an ApiError that does not carry the secret", async () => {
   const fetch: FetchLike = () => Promise.reject(new TypeError(`boom`));
   const client = createEmbedSessionClient(opts({ fetch }));
   const err = await assertRejects(
@@ -340,7 +334,7 @@ Deno.test("create(): a network failure is an ApiError that does not carry the se
   assertNoSecret(err);
 });
 
-Deno.test("two instances with different credentials, called interleaved, each send their own header", async () => {
+test("two instances with different credentials, called interleaved, each send their own header", async () => {
   const fake = fakeFetch(() => json(SUCCESS_BODY));
   const a = createEmbedSessionClient(
     opts({ fetch: fake.fetch, clientId: "client_a", clientSecret: "secret_a" }),
@@ -365,11 +359,11 @@ Deno.test("two instances with different credentials, called interleaved, each se
 // acc.6 — barrels
 // ---------------------------------------------------------------------------
 
-Deno.test("createEmbedSessionClient is not a key of ../mod.ts or ../src/console/mod.ts", () => {
+test("createEmbedSessionClient is not a key of ../mod.ts or ../src/console/mod.ts", () => {
   assertEquals("createEmbedSessionClient" in barrel, false);
   assertEquals("createEmbedSessionClient" in consoleBarrel, false);
 });
 
-Deno.test("createEmbedSessionClient is a function on its own subpath module", () => {
+test("createEmbedSessionClient is a function on its own subpath module", () => {
   assertEquals(typeof createEmbedSessionClient, "function");
 });

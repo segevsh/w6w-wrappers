@@ -1,6 +1,8 @@
 /** `client.assets.*` against an injected fake `fetch`: byte bodies in and out. */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { readFile } from "node:fs/promises";
+import { test } from "node:test";
+import { assertEquals, assertRejects } from "./assert.ts";
 import { W6WClient } from "../src/client.ts";
 import type { FetchLike } from "../src/config.ts";
 import { ApiError } from "../src/errors.ts";
@@ -38,7 +40,7 @@ async function sha256Hex(b: Uint8Array): Promise<string> {
   return [...d].map((x) => x.toString(16).padStart(2, "0")).join("");
 }
 
-Deno.test("assets.uploads.putEntry sends the exact bytes as octet-stream and unwraps entry", async () => {
+test("assets.uploads.putEntry sends the exact bytes as octet-stream and unwraps entry", async () => {
   const { client, calls } = fake(() => json({ entry: { index: 2, state: "received" } }));
   const out = await client.assets.uploads.putEntry("up_1", 2, BYTES);
   assertEquals(out, { index: 2, state: "received" } as unknown as typeof out);
@@ -51,29 +53,29 @@ Deno.test("assets.uploads.putEntry sends the exact bytes as octet-stream and unw
   assertEquals([...sent], [...BYTES]);
 });
 
-Deno.test("assets.content and archiveDownload return exact non-UTF-8 bytes", async () => {
-  const { client, calls } = fake(() =>
-    new Response(BYTES, { headers: { "content-type": "application/octet-stream" } })
+test("assets.content and archiveDownload return exact non-UTF-8 bytes", async () => {
+  const { client, calls } = fake(
+    () => new Response(BYTES, { headers: { "content-type": "application/octet-stream" } }),
   );
-  assertEquals([...await client.assets.content("a 1", "v1", "f1")], [...BYTES]);
+  assertEquals([...(await client.assets.content("a 1", "v1", "f1"))], [...BYTES]);
   assertEquals(calls[0].url, "https://api.test/assets/a%201/versions/v1/files/f1/content");
-  assertEquals([...await client.assets.archiveDownload("a1", "v1")], [...BYTES]);
+  assertEquals([...(await client.assets.archiveDownload("a1", "v1"))], [...BYTES]);
   assertEquals(calls[1].url, "https://api.test/assets/a1/versions/v1/archive");
 });
 
-Deno.test("byte mode non-2xx raises the typed error with the envelope code", async () => {
+test("byte mode non-2xx raises the typed error with the envelope code", async () => {
   const { client } = fake(() => json({ error: { code: "not_found", message: "nope" } }, 404));
   const e = await assertRejects(() => client.assets.content("a", "v", "f"), ApiError);
   assertEquals((e as ApiError).code, "not_found");
   assertEquals((e as ApiError).status, 404);
   const { client: c2 } = fake(() =>
-    json({ error: { code: "payload_too_large", message: "x" } }, 413)
+    json({ error: { code: "payload_too_large", message: "x" } }, 413),
   );
   const e2 = await assertRejects(() => c2.assets.uploads.putEntry("u", 0, BYTES), ApiError);
   assertEquals((e2 as ApiError).code, "payload_too_large");
 });
 
-Deno.test("JSON ops hit the right paths and unwrap envelopes", async () => {
+test("JSON ops hit the right paths and unwrap envelopes", async () => {
   const { client, calls } = fake((c) => {
     if (c.url.endsWith("/versions")) return json({ versions: [{ id: "v1" }] });
     if (c.method === "POST" && c.url.endsWith("/archive")) return json({ asset: { id: "a1" } });
@@ -95,14 +97,17 @@ Deno.test("JSON ops hit the right paths and unwrap envelopes", async () => {
     entries: [],
   });
   assertEquals(created.upload.id, "u1");
-  assertEquals(calls.map((c) => `${c.method} ${new URL(c.url).pathname}`), [
-    "GET /assets/a1",
-    "GET /assets/a1/versions",
-    "POST /assets/a1/archive",
-    "GET /assets/a1/versions/v1/files",
-    "DELETE /assets/a1",
-    "POST /asset-uploads",
-  ]);
+  assertEquals(
+    calls.map((c) => `${c.method} ${new URL(c.url).pathname}`),
+    [
+      "GET /assets/a1",
+      "GET /assets/a1/versions",
+      "POST /assets/a1/archive",
+      "GET /assets/a1/versions/v1/files",
+      "DELETE /assets/a1",
+      "POST /asset-uploads",
+    ],
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -140,7 +145,7 @@ const SETTINGS = {
   updatedAt: "2026-01-01T00:00:00Z",
 };
 
-Deno.test("console.storage.bindings calls the §P6 storage-binding paths", async () => {
+test("console.storage.bindings calls the §P6 storage-binding paths", async () => {
   const { client, calls } = fake((c) => {
     if (c.url.endsWith("/migrate")) {
       return json({ bindingId: "b1", toRevisionId: "rev_2", enqueued: 3 }, 202);
@@ -183,7 +188,7 @@ Deno.test("console.storage.bindings calls the §P6 storage-binding paths", async
   });
 });
 
-Deno.test("console.storage.settings reads and patches /agent-settings", async () => {
+test("console.storage.settings reads and patches /agent-settings", async () => {
   const { client, calls } = fake(() => json(SETTINGS));
   const s = client.console.storage.settings;
 
@@ -191,25 +196,26 @@ Deno.test("console.storage.settings reads and patches /agent-settings", async ()
   const patched = await s.patch({ maxFileBytes: 1048576, retentionDays: null });
   assertEquals(patched.settings.retentionDays, 30);
 
-  assertEquals(calls.map((c) => `${c.method} ${new URL(c.url).pathname}`), [
-    "GET /agent-settings",
-    "PATCH /agent-settings",
-  ]);
+  assertEquals(
+    calls.map((c) => `${c.method} ${new URL(c.url).pathname}`),
+    ["GET /agent-settings", "PATCH /agent-settings"],
+  );
   // `null` is a value ("clear back to the default"), so it must survive as `null`.
   assertEquals(JSON.parse(calls[1].body as string), { maxFileBytes: 1048576, retentionDays: null });
 });
 
-Deno.test("console.storage is console-only: endpoints.json lists none of it", async () => {
-  const text = await Deno.readTextFile(new URL("../../endpoints.json", import.meta.url));
+test("console.storage is console-only: endpoints.json lists none of it", async () => {
+  const text = await readFile(new URL("../../endpoints.json", import.meta.url), "utf8");
   const contract = JSON.parse(text) as {
     operations: { name: string; path?: string; naming?: { ts?: string } }[];
   };
-  const listed = contract.operations.filter((op) =>
-    (op.path ?? "").includes("/storage-bindings") ||
-    (op.path ?? "").includes("/agent-settings") ||
-    op.name.startsWith("storage.") ||
-    op.name.startsWith("agentSettings.") ||
-    (op.naming?.ts ?? "").includes("console.storage")
+  const listed = contract.operations.filter(
+    (op) =>
+      (op.path ?? "").includes("/storage-bindings") ||
+      (op.path ?? "").includes("/agent-settings") ||
+      op.name.startsWith("storage.") ||
+      op.name.startsWith("agentSettings.") ||
+      (op.naming?.ts ?? "").includes("console.storage"),
   );
   assertEquals(listed, []);
 
@@ -229,7 +235,7 @@ Deno.test("console.storage is console-only: endpoints.json lists none of it", as
   }
 });
 
-Deno.test("assets.uploads.create/finalize pass the server's index and the linked skill/entry through untouched", async () => {
+test("assets.uploads.create/finalize pass the server's index and the linked skill/entry through untouched", async () => {
   // The server, not the caller, assigns each entry's `index`: a response may list entries
   // in an order unlike the request's, and finalize may carry the linked skill or entry.
   const created = {
@@ -258,7 +264,7 @@ Deno.test("assets.uploads.create/finalize pass the server's index and the linked
     skillVersion: { id: "sv_1", skillId: "sk_1", version: 1 },
   };
   const { client, calls } = fake((call) =>
-    call.url.endsWith("/finalize") ? json(finalized) : json(created)
+    call.url.endsWith("/finalize") ? json(finalized) : json(created),
   );
   const st = await client.assets.uploads.create({
     purpose: "skill",
@@ -270,7 +276,13 @@ Deno.test("assets.uploads.create/finalize pass the server's index and the linked
   });
   // Request order is SKILL.md, a.txt; the server's indexes are the reverse.
   assertEquals(JSON.parse(calls[0].body as string).entries[0].path, "SKILL.md");
-  assertEquals(st.entries.map((e) => [e.path, e.index]), [["a.txt", 0], ["SKILL.md", 1]]);
+  assertEquals(
+    st.entries.map((e) => [e.path, e.index]),
+    [
+      ["a.txt", 0],
+      ["SKILL.md", 1],
+    ],
+  );
   const fin = await client.assets.uploads.finalize("up_1");
   assertEquals(fin.skill?.id, "sk_1");
   assertEquals(fin.skillVersion?.id, "sv_1");

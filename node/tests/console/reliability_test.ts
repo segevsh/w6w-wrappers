@@ -9,7 +9,8 @@
  * key the server never sends and raise `bad_response` on every real call).
  */
 
-import { assertEquals, assertMatch } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertMatch } from "../assert.ts";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import type { ReliabilityServices } from "../../src/console/reliability.ts";
@@ -66,34 +67,31 @@ function client(respond: (call: Call) => Response): { client: W6WClient; calls: 
   };
 }
 
-Deno.test("console.reliability: list is a function on a constructed client", () => {
+test("console.reliability: list is a function on a constructed client", () => {
   // Runtime, not type-level: a namespace that silently lost the method would
   // still typecheck everywhere else in this suite.
   const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
   assertEquals(typeof c.console.reliability.list, "function");
 });
 
-Deno.test(
-  "console.reliability.list resolves with the payload VERBATIM — no unwrap()",
-  async () => {
-    const c = client(() => json(BOARD));
+test("console.reliability.list resolves with the payload VERBATIM — no unwrap()", async () => {
+  const c = client(() => json(BOARD));
 
-    const board = await c.client.console.reliability.list("prj_1", ["app_a"], 30, 5);
+  const board = await c.client.console.reliability.list("prj_1", ["app_a"], 30, 5);
 
-    // Deep-equals the mocked payload exactly: a tree that wrongly called
-    // unwrap(res, "reliability") would reject instead of resolving here, since
-    // the mocked body carries no "reliability" key — this assertion is on
-    // promise RESOLUTION as much as on shape.
-    assertEquals(board, BOARD);
-    assertEquals(c.calls.length, 1);
-    assertMatch(
-      c.calls[0].url,
-      /^https:\/\/api\.example\.com\/reliability\/services\?project=prj_1&apps=app_a&days=30&limit=5$/,
-    );
-  },
-);
+  // Deep-equals the mocked payload exactly: a tree that wrongly called
+  // unwrap(res, "reliability") would reject instead of resolving here, since
+  // the mocked body carries no "reliability" key — this assertion is on
+  // promise RESOLUTION as much as on shape.
+  assertEquals(board, BOARD);
+  assertEquals(c.calls.length, 1);
+  assertMatch(
+    c.calls[0].url,
+    /^https:\/\/api\.example\.com\/reliability\/services\?project=prj_1&apps=app_a&days=30&limit=5$/,
+  );
+});
 
-Deno.test("console.reliability.list omits `limit` entirely when not given", async () => {
+test("console.reliability.list omits `limit` entirely when not given", async () => {
   const c = client(() => json(BOARD));
 
   await c.client.console.reliability.list("prj_1", ["app_a"], 30);
@@ -105,7 +103,7 @@ Deno.test("console.reliability.list omits `limit` entirely when not given", asyn
   assertEquals(c.calls[0].url.includes("limit"), false);
 });
 
-Deno.test("console.reliability.list always sends its required project", async () => {
+test("console.reliability.list always sends its required project", async () => {
   const c = client(() => json(BOARD));
 
   await c.client.console.reliability.list("prj_1", ["app_a"]);
@@ -116,7 +114,7 @@ Deno.test("console.reliability.list always sends its required project", async ()
   );
 });
 
-Deno.test("console.reliability.list sends the bearer like any other request", async () => {
+test("console.reliability.list sends the bearer like any other request", async () => {
   const c = client(() => json(BOARD));
 
   await c.client.console.reliability.list("prj_1", ["app_a"]);

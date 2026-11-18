@@ -15,7 +15,8 @@
  * lighter bar for dead code.
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects } from "../assert.ts";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import { ApiError } from "../../src/errors.ts";
@@ -104,25 +105,22 @@ function client(respond: (call: Call) => Response): { client: W6WClient; calls: 
   };
 }
 
-Deno.test(
-  "console.subscriptions: list/listForWorkflow/get/create/delete/listEvents/requeueEvent are functions on a constructed client",
-  () => {
-    // Runtime, not type-level: a namespace that silently lost a method would
-    // still typecheck everywhere else in this suite. Covers the 4
-    // zero-caller methods' lighter test bar (presence + wire-shape below).
-    const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
-    assertEquals(typeof c.console.subscriptions.list, "function");
-    assertEquals(typeof c.console.subscriptions.listForWorkflow, "function");
-    assertEquals(typeof c.console.subscriptions.get, "function");
-    assertEquals(typeof c.console.subscriptions.create, "function");
-    assertEquals(typeof c.console.subscriptions.delete, "function");
-    assertEquals(typeof c.console.subscriptions.retryRegistration, "function");
-    assertEquals(typeof c.console.subscriptions.listEvents, "function");
-    assertEquals(typeof c.console.subscriptions.requeueEvent, "function");
-  },
-);
+test("console.subscriptions: list/listForWorkflow/get/create/delete/listEvents/requeueEvent are functions on a constructed client", () => {
+  // Runtime, not type-level: a namespace that silently lost a method would
+  // still typecheck everywhere else in this suite. Covers the 4
+  // zero-caller methods' lighter test bar (presence + wire-shape below).
+  const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
+  assertEquals(typeof c.console.subscriptions.list, "function");
+  assertEquals(typeof c.console.subscriptions.listForWorkflow, "function");
+  assertEquals(typeof c.console.subscriptions.get, "function");
+  assertEquals(typeof c.console.subscriptions.create, "function");
+  assertEquals(typeof c.console.subscriptions.delete, "function");
+  assertEquals(typeof c.console.subscriptions.retryRegistration, "function");
+  assertEquals(typeof c.console.subscriptions.listEvents, "function");
+  assertEquals(typeof c.console.subscriptions.requeueEvent, "function");
+});
 
-Deno.test("console.subscriptions.list unwraps the `subscriptions` envelope", async () => {
+test("console.subscriptions.list unwraps the `subscriptions` envelope", async () => {
   const c = client(() => json({ subscriptions: [SUB_A, SUB_B] }));
 
   const res = await c.client.console.subscriptions.list();
@@ -134,20 +132,17 @@ Deno.test("console.subscriptions.list unwraps the `subscriptions` envelope", asy
   assertEquals(c.calls[0].url, "https://api.example.com/subscriptions");
 });
 
-Deno.test(
-  "console.subscriptions.listForWorkflow sends the right path and unwraps the `subscriptions` envelope",
-  async () => {
-    const c = client(() => json({ subscriptions: [SUB_A] }));
+test("console.subscriptions.listForWorkflow sends the right path and unwraps the `subscriptions` envelope", async () => {
+  const c = client(() => json({ subscriptions: [SUB_A] }));
 
-    const res = await c.client.console.subscriptions.listForWorkflow("wf_1");
+  const res = await c.client.console.subscriptions.listForWorkflow("wf_1");
 
-    assertEquals(res, [SUB_A]);
-    assertEquals(c.calls[0].method, "GET");
-    assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_1/subscriptions");
-  },
-);
+  assertEquals(res, [SUB_A]);
+  assertEquals(c.calls[0].method, "GET");
+  assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_1/subscriptions");
+});
 
-Deno.test("console.subscriptions.get unwraps the `subscription` envelope", async () => {
+test("console.subscriptions.get unwraps the `subscription` envelope", async () => {
   const c = client(() => json({ subscription: SUB_A }));
 
   const res = await c.client.console.subscriptions.get("sub_1");
@@ -157,7 +152,7 @@ Deno.test("console.subscriptions.get unwraps the `subscription` envelope", async
   assertEquals(c.calls[0].url, "https://api.example.com/subscriptions/sub_1");
 });
 
-Deno.test("console.subscriptions.retryRegistration POSTs the encoded retry path and unwraps", async () => {
+test("console.subscriptions.retryRegistration POSTs the encoded retry path and unwraps", async () => {
   const retried: Subscription = { ...SUB_A, status: "registered", nodeId: "n1", lastFireAt: null };
   const c = client(() => json({ subscription: retried }));
 
@@ -169,7 +164,7 @@ Deno.test("console.subscriptions.retryRegistration POSTs the encoded retry path 
   assertEquals(c.calls[0].url, "https://api.example.com/subscriptions/sub%2F1/retry-registration");
 });
 
-Deno.test("console.subscriptions.retryRegistration throws ApiError on 409 not_retryable", async () => {
+test("console.subscriptions.retryRegistration throws ApiError on 409 not_retryable", async () => {
   const c = client(() => json({ error: { code: "not_retryable", message: "no" } }, 409));
   const err = await assertRejects(
     () => c.client.console.subscriptions.retryRegistration("sub_1"),
@@ -179,9 +174,9 @@ Deno.test("console.subscriptions.retryRegistration throws ApiError on 409 not_re
   assertEquals(err.code, "not_retryable");
 });
 
-Deno.test("console.subscriptions.get throws ApiError on a 404, no null-coalescing", async () => {
+test("console.subscriptions.get throws ApiError on a 404, no null-coalescing", async () => {
   const c = client(() =>
-    json({ error: { code: "unknown_subscription", message: "No such subscription." } }, 404)
+    json({ error: { code: "unknown_subscription", message: "No such subscription." } }, 404),
   );
 
   const err = await assertRejects(
@@ -193,137 +188,113 @@ Deno.test("console.subscriptions.get throws ApiError on a 404, no null-coalescin
   assertEquals(err.code, "unknown_subscription");
 });
 
-Deno.test(
-  "console.subscriptions.create sends the right path segments and body, unwraps the `subscription` envelope",
-  async () => {
-    const c = client(() => json({ subscription: SUB_A }, 201));
+test("console.subscriptions.create sends the right path segments and body, unwraps the `subscription` envelope", async () => {
+  const c = client(() => json({ subscription: SUB_A }, 201));
 
-    const res = await c.client.console.subscriptions.create("app_x", "new-message", {
-      workflowId: "wf_1",
-      connectionId: null,
-      params: { a: 1 },
-    });
+  const res = await c.client.console.subscriptions.create("app_x", "new-message", {
+    workflowId: "wf_1",
+    connectionId: null,
+    params: { a: 1 },
+  });
 
-    assertEquals(res, SUB_A);
-    assertEquals(c.calls[0].method, "POST");
-    assertEquals(
-      c.calls[0].url,
-      "https://api.example.com/apps/app_x/triggers/new-message/subscriptions",
-    );
-    assertEquals(JSON.parse(c.calls[0].body ?? "null"), {
-      workflowId: "wf_1",
-      connectionId: null,
-      params: { a: 1 },
-    });
-  },
-);
+  assertEquals(res, SUB_A);
+  assertEquals(c.calls[0].method, "POST");
+  assertEquals(
+    c.calls[0].url,
+    "https://api.example.com/apps/app_x/triggers/new-message/subscriptions",
+  );
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), {
+    workflowId: "wf_1",
+    connectionId: null,
+    params: { a: 1 },
+  });
+});
 
-Deno.test(
-  "console.subscriptions.create percent-encodes both appId and triggerKey via the `path` tag",
-  async () => {
-    const c = client(() => json({ subscription: SUB_A }, 201));
+test("console.subscriptions.create percent-encodes both appId and triggerKey via the `path` tag", async () => {
+  const c = client(() => json({ subscription: SUB_A }, 201));
 
-    await c.client.console.subscriptions.create("app/x", "new message", { workflowId: "wf_1" });
+  await c.client.console.subscriptions.create("app/x", "new message", { workflowId: "wf_1" });
 
-    assertEquals(
-      c.calls[0].url,
-      "https://api.example.com/apps/app%2Fx/triggers/new%20message/subscriptions",
-    );
-  },
-);
+  assertEquals(
+    c.calls[0].url,
+    "https://api.example.com/apps/app%2Fx/triggers/new%20message/subscriptions",
+  );
+});
 
-Deno.test(
-  "console.subscriptions.delete sends DELETE to the right path and resolves void, discarding {ok:true}",
-  async () => {
-    const c = client(() => json({ ok: true }));
+test("console.subscriptions.delete sends DELETE to the right path and resolves void, discarding {ok:true}", async () => {
+  const c = client(() => json({ ok: true }));
 
-    const res = await c.client.console.subscriptions.delete("sub_1");
+  const res = await c.client.console.subscriptions.delete("sub_1");
 
-    assertEquals(res, undefined);
-    assertEquals(c.calls[0].method, "DELETE");
-    assertEquals(c.calls[0].url, "https://api.example.com/subscriptions/sub_1");
-  },
-);
+  assertEquals(res, undefined);
+  assertEquals(c.calls[0].method, "DELETE");
+  assertEquals(c.calls[0].url, "https://api.example.com/subscriptions/sub_1");
+});
 
-Deno.test(
-  "console.subscriptions.delete percent-encodes the id via the `path` tag, not string concatenation",
-  async () => {
-    const c = client(() => json({ ok: true }));
+test("console.subscriptions.delete percent-encodes the id via the `path` tag, not string concatenation", async () => {
+  const c = client(() => json({ ok: true }));
 
-    await c.client.console.subscriptions.delete("sub/1");
+  await c.client.console.subscriptions.delete("sub/1");
 
-    assertEquals(c.calls[0].url, "https://api.example.com/subscriptions/sub%2F1");
-  },
-);
+  assertEquals(c.calls[0].url, "https://api.example.com/subscriptions/sub%2F1");
+});
 
-Deno.test(
-  "console.subscriptions.listEvents sends the right path and unwraps the `events` envelope",
-  async () => {
-    const c = client(() => json({ events: [EVENT] }));
+test("console.subscriptions.listEvents sends the right path and unwraps the `events` envelope", async () => {
+  const c = client(() => json({ events: [EVENT] }));
 
-    const res = await c.client.console.subscriptions.listEvents("sub_1");
+  const res = await c.client.console.subscriptions.listEvents("sub_1");
 
-    assertEquals(res, [EVENT]);
-    assertEquals(c.calls[0].method, "GET");
-    assertEquals(c.calls[0].url, "https://api.example.com/subscriptions/sub_1/events");
-  },
-);
+  assertEquals(res, [EVENT]);
+  assertEquals(c.calls[0].method, "GET");
+  assertEquals(c.calls[0].url, "https://api.example.com/subscriptions/sub_1/events");
+});
 
-Deno.test(
-  "console.subscriptions.requeueEvent sends POST to the right path and resolves void, discarding {ok:true}",
-  async () => {
-    const c = client(() => json({ ok: true }));
+test("console.subscriptions.requeueEvent sends POST to the right path and resolves void, discarding {ok:true}", async () => {
+  const c = client(() => json({ ok: true }));
 
-    const res = await c.client.console.subscriptions.requeueEvent("evt_1");
+  const res = await c.client.console.subscriptions.requeueEvent("evt_1");
 
-    assertEquals(res, undefined);
-    assertEquals(c.calls[0].method, "POST");
-    assertEquals(c.calls[0].url, "https://api.example.com/trigger-events/evt_1/requeue");
-  },
-);
+  assertEquals(res, undefined);
+  assertEquals(c.calls[0].method, "POST");
+  assertEquals(c.calls[0].url, "https://api.example.com/trigger-events/evt_1/requeue");
+});
 
-Deno.test(
-  "console.subscriptions.requeueEvent propagates a 404 requeue_failed as ApiError, not a swallowed success",
-  async () => {
-    const c = client(() =>
-      json(
-        {
-          error: { code: "requeue_failed", message: "Event not found or not in `failed` status." },
-        },
-        404,
-      )
-    );
+test("console.subscriptions.requeueEvent propagates a 404 requeue_failed as ApiError, not a swallowed success", async () => {
+  const c = client(() =>
+    json(
+      {
+        error: { code: "requeue_failed", message: "Event not found or not in `failed` status." },
+      },
+      404,
+    ),
+  );
 
-    const err = await assertRejects(
-      () => c.client.console.subscriptions.requeueEvent("evt_x"),
-      ApiError,
-    );
+  const err = await assertRejects(
+    () => c.client.console.subscriptions.requeueEvent("evt_x"),
+    ApiError,
+  );
 
-    assertEquals(err.status, 404);
-    assertEquals(err.code, "requeue_failed");
-  },
-);
+  assertEquals(err.status, 404);
+  assertEquals(err.code, "requeue_failed");
+});
 
-Deno.test(
-  "console.subscriptions.create: POSTs a body deep-equal to the input, intervalMs included",
-  async () => {
-    const input: SubscriptionCreateInput = {
-      workflowId: "wf_1",
-      connectionId: null,
-      params: {},
-      intervalMs: 420000,
-    };
-    const polled: Subscription = {
-      ...SUB_A,
-      type: "poll",
-      intervalMs: 420000,
-      status: "pending",
-    };
-    const { client: c, calls } = client(() => json({ subscription: polled }, 201));
-    const out = await c.console.subscriptions.create("app_x", "new-message", input);
-    assertEquals(calls.length, 1);
-    assertEquals(JSON.parse(calls[0].body ?? "null"), input);
-    assertEquals(out.intervalMs, 420000);
-    assertEquals(out.status, "pending");
-  },
-);
+test("console.subscriptions.create: POSTs a body deep-equal to the input, intervalMs included", async () => {
+  const input: SubscriptionCreateInput = {
+    workflowId: "wf_1",
+    connectionId: null,
+    params: {},
+    intervalMs: 420000,
+  };
+  const polled: Subscription = {
+    ...SUB_A,
+    type: "poll",
+    intervalMs: 420000,
+    status: "pending",
+  };
+  const { client: c, calls } = client(() => json({ subscription: polled }, 201));
+  const out = await c.console.subscriptions.create("app_x", "new-message", input);
+  assertEquals(calls.length, 1);
+  assertEquals(JSON.parse(calls[0].body ?? "null"), input);
+  assertEquals(out.intervalMs, 420000);
+  assertEquals(out.status, "pending");
+});

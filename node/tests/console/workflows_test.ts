@@ -14,7 +14,8 @@
  * - Every id-taking method routes its id through the `path` tag (percent-encoding).
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects } from "../assert.ts";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import { ApiError } from "../../src/errors.ts";
@@ -88,28 +89,25 @@ const RUN_SUMMARY_B: RunSummary = {
   finishedAt: null,
 };
 
-Deno.test(
-  "console.workflows: get/upsert/archive/delete/listRuns/getRun are functions on a constructed client, base workflows.list/run untouched",
-  () => {
-    // Runtime, not type-level: a namespace that silently lost a method would
-    // still typecheck everywhere else in this suite.
-    const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
-    assertEquals(typeof c.console.workflows.get, "function");
-    assertEquals(typeof c.console.workflows.upsert, "function");
-    assertEquals(typeof c.console.workflows.archive, "function");
-    assertEquals(typeof c.console.workflows.delete, "function");
-    assertEquals(typeof c.console.workflows.listRuns, "function");
-    assertEquals(typeof c.console.workflows.getRun, "function");
-    // Regression-proofs this task didn't accidentally remove or shadow the
-    // base methods it deliberately leaves alone.
-    assertEquals(typeof c.workflows.list, "function");
-    assertEquals(typeof c.workflows.run, "function");
-  },
-);
+test("console.workflows: get/upsert/archive/delete/listRuns/getRun are functions on a constructed client, base workflows.list/run untouched", () => {
+  // Runtime, not type-level: a namespace that silently lost a method would
+  // still typecheck everywhere else in this suite.
+  const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
+  assertEquals(typeof c.console.workflows.get, "function");
+  assertEquals(typeof c.console.workflows.upsert, "function");
+  assertEquals(typeof c.console.workflows.archive, "function");
+  assertEquals(typeof c.console.workflows.delete, "function");
+  assertEquals(typeof c.console.workflows.listRuns, "function");
+  assertEquals(typeof c.console.workflows.getRun, "function");
+  // Regression-proofs this task didn't accidentally remove or shadow the
+  // base methods it deliberately leaves alone.
+  assertEquals(typeof c.workflows.list, "function");
+  assertEquals(typeof c.workflows.run, "function");
+});
 
-Deno.test("console.workflows.get returns the body directly — no envelope key", async () => {
+test("console.workflows.get returns the body directly — no envelope key", async () => {
   const c = client(() =>
-    json({ workflow: { id: "wf_1", status: "draft" }, sourceRef: null, updatedAt: "T1" })
+    json({ workflow: { id: "wf_1", status: "draft" }, sourceRef: null, updatedAt: "T1" }),
   );
 
   const res = await c.client.console.workflows.get("wf_1");
@@ -125,7 +123,7 @@ Deno.test("console.workflows.get returns the body directly — no envelope key",
   assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_1");
 });
 
-Deno.test("console.workflows.archive returns the body directly — no envelope key", async () => {
+test("console.workflows.archive returns the body directly — no envelope key", async () => {
   const c = client(() => json({ workflow: { id: "wf_1", status: "archived" } }));
 
   const res = await c.client.console.workflows.archive("wf_1");
@@ -135,7 +133,7 @@ Deno.test("console.workflows.archive returns the body directly — no envelope k
   assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_1/archive");
 });
 
-Deno.test("console.workflows.listRuns DOES unwrap the runs envelope", async () => {
+test("console.workflows.listRuns DOES unwrap the runs envelope", async () => {
   const c = client(() => json({ runs: [RUN_SUMMARY_A, RUN_SUMMARY_B] }));
 
   const res = await c.client.console.workflows.listRuns("wf_1");
@@ -147,7 +145,7 @@ Deno.test("console.workflows.listRuns DOES unwrap the runs envelope", async () =
   assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_1/runs");
 });
 
-Deno.test("console.workflows.getRun DOES unwrap the run envelope", async () => {
+test("console.workflows.getRun DOES unwrap the run envelope", async () => {
   const c = client(() => json({ run: RUN_STATE_A }));
 
   const res = await c.client.console.workflows.getRun("run_1");
@@ -159,24 +157,24 @@ Deno.test("console.workflows.getRun DOES unwrap the run envelope", async () => {
   assertEquals(c.calls[0].url, "https://api.example.com/runs/run_1");
 });
 
-Deno.test("console.workflows.upsert sends the precondition header ONLY when supplied", async () => {
+test("console.workflows.upsert sends the precondition header ONLY when supplied", async () => {
   const c = client(() =>
-    json({ workflow: { id: "wf_1", name: "wf_1" }, scheduled: false, updatedAt: "T2" }, 201)
+    json({ workflow: { id: "wf_1", name: "wf_1" }, scheduled: false, updatedAt: "T2" }, 201),
   );
   await c.client.console.workflows.upsert({ id: "wf_1" }, { ifUnmodifiedSince: "T1" });
   assertEquals(c.calls[0].headers.get("x-w6w-if-unmodified-since"), "T1");
 
   const c2 = client(() =>
-    json({ workflow: { id: "wf_2", name: "wf_2" }, scheduled: false, updatedAt: "T1" }, 201)
+    json({ workflow: { id: "wf_2", name: "wf_2" }, scheduled: false, updatedAt: "T1" }, 201),
   );
   await c2.client.console.workflows.upsert({ id: "wf_2" });
   // Not just "falsy" — genuinely absent, never sent as "undefined" or "null".
   assertEquals(c2.calls[0].headers.has("x-w6w-if-unmodified-since"), false);
 });
 
-Deno.test("console.workflows.upsert sends the definition body verbatim, and ?project= only when supplied", async () => {
+test("console.workflows.upsert sends the definition body verbatim, and ?project= only when supplied", async () => {
   const c = client(() =>
-    json({ workflow: { id: "wf_1", name: "wf_1" }, scheduled: true, updatedAt: "T1" }, 201)
+    json({ workflow: { id: "wf_1", name: "wf_1" }, scheduled: true, updatedAt: "T1" }, 201),
   );
 
   await c.client.console.workflows.upsert({ id: "wf_1", steps: [] }, { project: "prj_a" });
@@ -186,9 +184,9 @@ Deno.test("console.workflows.upsert sends the definition body verbatim, and ?pro
   assertEquals(c.calls[0].method, "POST");
 });
 
-Deno.test("console.workflows.upsert omits ?project= entirely when not supplied", async () => {
+test("console.workflows.upsert omits ?project= entirely when not supplied", async () => {
   const c = client(() =>
-    json({ workflow: { id: "wf_2", name: "wf_2" }, scheduled: false, updatedAt: "T1" }, 201)
+    json({ workflow: { id: "wf_2", name: "wf_2" }, scheduled: false, updatedAt: "T1" }, 201),
   );
 
   await c.client.console.workflows.upsert({ id: "wf_2" });
@@ -196,12 +194,12 @@ Deno.test("console.workflows.upsert omits ?project= entirely when not supplied",
   assertEquals(c.calls[0].url, "https://api.example.com/workflows");
 });
 
-Deno.test("console.workflows.upsert returns the response body's three top-level keys directly", async () => {
+test("console.workflows.upsert returns the response body's three top-level keys directly", async () => {
   const c = client(() =>
     json(
       { workflow: { id: "wf_1", name: "wf_1", key: null }, scheduled: true, updatedAt: "T3" },
       201,
-    )
+    ),
   );
 
   const res = await c.client.console.workflows.upsert({ id: "wf_1" });
@@ -213,21 +211,18 @@ Deno.test("console.workflows.upsert returns the response body's three top-level 
   });
 });
 
-Deno.test("console.workflows.delete does NOT catch 409 workflow_not_archived — it propagates", async () => {
+test("console.workflows.delete does NOT catch 409 workflow_not_archived — it propagates", async () => {
   const c = client(() =>
-    json({ error: { code: "workflow_not_archived", message: "Archive first." } }, 409)
+    json({ error: { code: "workflow_not_archived", message: "Archive first." } }, 409),
   );
 
-  const err = await assertRejects(
-    () => c.client.console.workflows.delete("wf_1"),
-    ApiError,
-  );
+  const err = await assertRejects(() => c.client.console.workflows.delete("wf_1"), ApiError);
 
   assertEquals(err.status, 409);
   assertEquals(err.code, "workflow_not_archived");
 });
 
-Deno.test("console.workflows.delete sends DELETE to the right path and resolves void, discarding {ok:true}", async () => {
+test("console.workflows.delete sends DELETE to the right path and resolves void, discarding {ok:true}", async () => {
   const c = client(() => json({ ok: true }));
 
   const res = await c.client.console.workflows.delete("wf_1");
@@ -237,9 +232,9 @@ Deno.test("console.workflows.delete sends DELETE to the right path and resolves 
   assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_1");
 });
 
-Deno.test("console.workflows.get throws on a genuine non-2xx", async () => {
+test("console.workflows.get throws on a genuine non-2xx", async () => {
   const c = client(() =>
-    json({ error: { code: "unknown_workflow", message: "Not registered." } }, 404)
+    json({ error: { code: "unknown_workflow", message: "Not registered." } }, 404),
   );
 
   const err = await assertRejects(() => c.client.console.workflows.get("wf_missing"), ApiError);
@@ -248,9 +243,9 @@ Deno.test("console.workflows.get throws on a genuine non-2xx", async () => {
   assertEquals(err.code, "unknown_workflow");
 });
 
-Deno.test("console.workflows.listRuns throws on a genuine non-2xx", async () => {
+test("console.workflows.listRuns throws on a genuine non-2xx", async () => {
   const c = client(() =>
-    json({ error: { code: "unknown_workflow", message: "Not registered." } }, 404)
+    json({ error: { code: "unknown_workflow", message: "Not registered." } }, 404),
   );
 
   const err = await assertRejects(
@@ -262,33 +257,27 @@ Deno.test("console.workflows.listRuns throws on a genuine non-2xx", async () => 
   assertEquals(err.code, "unknown_workflow");
 });
 
-Deno.test("console.workflows.getRun throws on a genuine non-2xx", async () => {
+test("console.workflows.getRun throws on a genuine non-2xx", async () => {
   const c = client(() => json({ error: { code: "unknown_run", message: "Not found." } }, 404));
 
-  const err = await assertRejects(
-    () => c.client.console.workflows.getRun("run_missing"),
-    ApiError,
-  );
+  const err = await assertRejects(() => c.client.console.workflows.getRun("run_missing"), ApiError);
 
   assertEquals(err.status, 404);
   assertEquals(err.code, "unknown_run");
 });
 
-Deno.test("console.workflows.archive throws on a genuine non-2xx", async () => {
+test("console.workflows.archive throws on a genuine non-2xx", async () => {
   const c = client(() =>
-    json({ error: { code: "unknown_workflow", message: "Not registered." } }, 404)
+    json({ error: { code: "unknown_workflow", message: "Not registered." } }, 404),
   );
 
-  const err = await assertRejects(
-    () => c.client.console.workflows.archive("wf_missing"),
-    ApiError,
-  );
+  const err = await assertRejects(() => c.client.console.workflows.archive("wf_missing"), ApiError);
 
   assertEquals(err.status, 404);
   assertEquals(err.code, "unknown_workflow");
 });
 
-Deno.test("console.workflows.get percent-encodes id via the `path` tag", async () => {
+test("console.workflows.get percent-encodes id via the `path` tag", async () => {
   const c = client(() => json({ workflow: {}, sourceRef: null, updatedAt: "T1" }));
 
   await c.client.console.workflows.get("wf 1");
@@ -296,7 +285,7 @@ Deno.test("console.workflows.get percent-encodes id via the `path` tag", async (
   assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf%201");
 });
 
-Deno.test("console.workflows.archive percent-encodes id via the `path` tag", async () => {
+test("console.workflows.archive percent-encodes id via the `path` tag", async () => {
   const c = client(() => json({ workflow: {} }));
 
   await c.client.console.workflows.archive("wf 1");
@@ -304,7 +293,7 @@ Deno.test("console.workflows.archive percent-encodes id via the `path` tag", asy
   assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf%201/archive");
 });
 
-Deno.test("console.workflows.delete percent-encodes id via the `path` tag", async () => {
+test("console.workflows.delete percent-encodes id via the `path` tag", async () => {
   const c = client(() => json({ ok: true }));
 
   await c.client.console.workflows.delete("wf 1");
@@ -312,7 +301,7 @@ Deno.test("console.workflows.delete percent-encodes id via the `path` tag", asyn
   assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf%201");
 });
 
-Deno.test("console.workflows.listRuns percent-encodes id via the `path` tag", async () => {
+test("console.workflows.listRuns percent-encodes id via the `path` tag", async () => {
   const c = client(() => json({ runs: [] }));
 
   await c.client.console.workflows.listRuns("wf 1");
@@ -320,7 +309,7 @@ Deno.test("console.workflows.listRuns percent-encodes id via the `path` tag", as
   assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf%201/runs");
 });
 
-Deno.test("console.workflows.getRun percent-encodes runId via the `path` tag", async () => {
+test("console.workflows.getRun percent-encodes runId via the `path` tag", async () => {
   const c = client(() => json({ run: RUN_STATE_A }));
 
   await c.client.console.workflows.getRun("run 1");

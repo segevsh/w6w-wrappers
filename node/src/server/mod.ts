@@ -106,11 +106,7 @@ function requiredText(value: unknown, field: string, who: string): void {
  * @throws {ConfigError} When `clientId` contains `:` (indistinguishable from
  *   the Basic separator on decode) or either value is not latin-1.
  */
-function basicAuthHeader(
-  clientId: string,
-  clientSecret: string,
-  who = "exchangeToken",
-): string {
+function basicAuthHeader(clientId: string, clientSecret: string, who = "exchangeToken"): string {
   if (clientId.includes(":")) {
     throw new ConfigError(
       `${who}: \`clientId\` must not contain ":" — the server splits a ` +
@@ -167,9 +163,7 @@ function resolveFetch(fetchOption: FetchLike | undefined): FetchLike {
  *   call always passes `requireAuth: false`, which `request()` never grants a
  *   recovery attempt.
  */
-export async function exchangeToken(
-  options: ExchangeTokenOptions,
-): Promise<ExchangeTokenResult> {
+export async function exchangeToken(options: ExchangeTokenOptions): Promise<ExchangeTokenResult> {
   const { baseUrl, clientId, clientSecret, subject, account } = options;
 
   required(clientId, "clientId");
@@ -310,11 +304,16 @@ export function createEmbedSessionClient(options: EmbedSessionClientOptions): Em
 
       const expiresAtMs = t0 + res?.expiresIn * 1000;
       if (
-        res === null || res === undefined ||
-        typeof res.token !== "string" || typeof res.expiresIn !== "number" ||
-        Number.isNaN(new Date(expiresAtMs).getTime()) || res.user === null ||
-        typeof res.user !== "object" || typeof res.user.subject !== "string" ||
-        typeof res.user.tenant !== "string" || typeof res.user.account !== "string"
+        res === null ||
+        res === undefined ||
+        typeof res.token !== "string" ||
+        typeof res.expiresIn !== "number" ||
+        Number.isNaN(new Date(expiresAtMs).getTime()) ||
+        res.user === null ||
+        typeof res.user !== "object" ||
+        typeof res.user.subject !== "string" ||
+        typeof res.user.tenant !== "string" ||
+        typeof res.user.account !== "string"
       ) {
         throw new ApiError(
           200,

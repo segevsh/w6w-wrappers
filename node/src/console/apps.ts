@@ -395,31 +395,31 @@ export type PreviewSourceResponse =
  */
 export type ImportResponse =
   | {
-    kind: "app";
-    sourceRef: string;
-    app: Record<string, unknown>;
-    actions: ActionDef[];
-    registered: boolean;
-    latestAdvanced: boolean;
-  }
+      kind: "app";
+      sourceRef: string;
+      app: Record<string, unknown>;
+      actions: ActionDef[];
+      registered: boolean;
+      latestAdvanced: boolean;
+    }
   | {
-    kind: "pack";
-    sourceRef: string;
-    pack: PackPreviewInfo;
-    registered: number;
-    failed: number;
-    results: Array<
-      | {
-        path: string;
-        ok: true;
-        id: string;
-        version: string;
-        registered: boolean;
-        latestAdvanced: boolean;
-      }
-      | { path: string; ok: false; optional: boolean; error: { code: string; message: string } }
-    >;
-  };
+      kind: "pack";
+      sourceRef: string;
+      pack: PackPreviewInfo;
+      registered: number;
+      failed: number;
+      results: Array<
+        | {
+            path: string;
+            ok: true;
+            id: string;
+            version: string;
+            registered: boolean;
+            latestAdvanced: boolean;
+          }
+        | { path: string; ok: false; optional: boolean; error: { code: string; message: string } }
+      >;
+    };
 
 /**
  * `refresh`'s result — a re-import from the app's recorded source.
@@ -951,15 +951,15 @@ export class AppsApi {
     authKey: string,
     body: { displayName?: string; autoRefresh?: boolean } = {},
   ): Promise<{ authorizationUrl: string; state: string; expiresIn: number }> {
-    const res = await this.#host.request<
-      { authorizationUrl: string; state: string; expiresIn: number }
-    >(
-      {
-        method: "POST",
-        path: path`/apps/${appId}/oauth-config/${authKey}/authorize-url`,
-        body,
-      },
-    );
+    const res = await this.#host.request<{
+      authorizationUrl: string;
+      state: string;
+      expiresIn: number;
+    }>({
+      method: "POST",
+      path: path`/apps/${appId}/oauth-config/${authKey}/authorize-url`,
+      body,
+    });
     return res.body;
   }
 
@@ -1066,15 +1066,16 @@ export class AppsApi {
     params: Record<string, unknown>,
     opts: InvokeOptions = {},
   ): Promise<{ value: unknown; logs?: string[]; apiCalls?: ApiCallRecord[]; meta?: StepMeta }> {
-    const res = await this.#host.request<
-      { value: unknown; logs?: string[]; apiCalls?: ApiCallRecord[]; meta?: StepMeta }
-    >(
-      {
-        method: "POST",
-        path: path`/apps/${appId}/actions/${actionKey}/invoke`,
-        body: { params, ...opts },
-      },
-    );
+    const res = await this.#host.request<{
+      value: unknown;
+      logs?: string[];
+      apiCalls?: ApiCallRecord[];
+      meta?: StepMeta;
+    }>({
+      method: "POST",
+      path: path`/apps/${appId}/actions/${actionKey}/invoke`,
+      body: { params, ...opts },
+    });
     return res.body;
   }
 
@@ -1103,6 +1104,7 @@ export class AppsApi {
 
 /** True for the two codes meaning "the snapshot this walk holds is gone" (410 / 404). */
 function isSnapshotGone(err: unknown): boolean {
-  return err instanceof ApiError &&
-    (err.code === "snapshot_expired" || err.code === "unknown_snapshot");
+  return (
+    err instanceof ApiError && (err.code === "snapshot_expired" || err.code === "unknown_snapshot")
+  );
 }

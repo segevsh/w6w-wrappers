@@ -7,7 +7,8 @@
  * would otherwise agree with itself.
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects } from "./assert.ts";
 import { W6WClient } from "../src/client.ts";
 import type { FetchLike } from "../src/config.ts";
 import { ApiError } from "../src/errors.ts";
@@ -18,9 +19,7 @@ interface Call {
   body: string | null;
 }
 
-function client(
-  respond: (call: Call) => Response,
-): { client: W6WClient; calls: Call[] } {
+function client(respond: (call: Call) => Response): { client: W6WClient; calls: Call[] } {
   const calls: Call[] = [];
   const fetch: FetchLike = (input, init) => {
     calls.push({
@@ -75,7 +74,7 @@ const PUBLISHED = {
 };
 const REVERTED = { kind: "workflow", callableId: "wf_1", versionNumber: 1 };
 
-Deno.test("workflows version ops: exact method + path, and each unwrap rule", async () => {
+test("workflows version ops: exact method + path, and each unwrap rule", async () => {
   const c = client((call) => {
     if (call.url.endsWith("/versions")) return json(LIST);
     if (call.url.endsWith("/versions/2")) return json({ version: DETAIL });
@@ -92,17 +91,20 @@ Deno.test("workflows version ops: exact method + path, and each unwrap rule", as
   assertEquals(await w.enable("wf_1"), undefined);
   assertEquals(await w.disable("wf_1"), undefined);
 
-  assertEquals(c.calls.map((x) => `${x.method} ${x.url}`), [
-    `GET ${B}/workflows/wf_1/versions`,
-    `GET ${B}/workflows/wf_1/versions/2`,
-    `POST ${B}/workflows/wf_1/publish`,
-    `POST ${B}/workflows/wf_1/versions/1/revert`,
-    `POST ${B}/workflows/wf_1/enable`,
-    `POST ${B}/workflows/wf_1/disable`,
-  ]);
+  assertEquals(
+    c.calls.map((x) => `${x.method} ${x.url}`),
+    [
+      `GET ${B}/workflows/wf_1/versions`,
+      `GET ${B}/workflows/wf_1/versions/2`,
+      `POST ${B}/workflows/wf_1/publish`,
+      `POST ${B}/workflows/wf_1/versions/1/revert`,
+      `POST ${B}/workflows/wf_1/enable`,
+      `POST ${B}/workflows/wf_1/disable`,
+    ],
+  );
 });
 
-Deno.test("functions version ops: exact method + path, and each unwrap rule", async () => {
+test("functions version ops: exact method + path, and each unwrap rule", async () => {
   const c = client((call) => {
     if (call.url.endsWith("/versions")) return json(LIST);
     if (call.url.endsWith("/versions/2")) return json({ version: DETAIL });
@@ -119,17 +121,20 @@ Deno.test("functions version ops: exact method + path, and each unwrap rule", as
   assertEquals(await f.enable("fn_1"), undefined);
   assertEquals(await f.disable("fn_1"), undefined);
 
-  assertEquals(c.calls.map((x) => `${x.method} ${x.url}`), [
-    `GET ${B}/functions/fn_1/versions`,
-    `GET ${B}/functions/fn_1/versions/2`,
-    `POST ${B}/functions/fn_1/publish`,
-    `POST ${B}/functions/fn_1/versions/1/revert`,
-    `POST ${B}/functions/fn_1/enable`,
-    `POST ${B}/functions/fn_1/disable`,
-  ]);
+  assertEquals(
+    c.calls.map((x) => `${x.method} ${x.url}`),
+    [
+      `GET ${B}/functions/fn_1/versions`,
+      `GET ${B}/functions/fn_1/versions/2`,
+      `POST ${B}/functions/fn_1/publish`,
+      `POST ${B}/functions/fn_1/versions/1/revert`,
+      `POST ${B}/functions/fn_1/enable`,
+      `POST ${B}/functions/fn_1/disable`,
+    ],
+  );
 });
 
-Deno.test("workflows.runVersion: /run verb, wait query, body, and the run result", async () => {
+test("workflows.runVersion: /run verb, wait query, body, and the run result", async () => {
   const c = client(() => json({ runId: "run_1", status: "succeeded", steps: {} }, 200));
 
   const run = await c.client.workflows.runVersion("wf_1", 3, {
@@ -151,7 +156,7 @@ Deno.test("workflows.runVersion: /run verb, wait query, body, and the run result
   assertEquals(run.httpStatus, 200);
 });
 
-Deno.test("workflows.runVersion: no wait means no query; 202 is success", async () => {
+test("workflows.runVersion: no wait means no query; 202 is success", async () => {
   const c = client(() => json({ runId: "run_1", status: "queued" }, 202));
 
   const run = await c.client.workflows.runVersion("wf_1", 3);
@@ -162,7 +167,7 @@ Deno.test("workflows.runVersion: no wait means no query; 202 is success", async 
   assertEquals(run.terminal, false);
 });
 
-Deno.test("functions.runVersion: /invoke verb, payload becomes inputs, output unwrapped", async () => {
+test("functions.runVersion: /invoke verb, payload becomes inputs, output unwrapped", async () => {
   const c = client(() => json({ kind: "function", output: { ok: 1 }, invocationId: "inv_1" }));
 
   const out = await c.client.functions.runVersion("fn_1", 2, { payload: { to: "a" } });
@@ -173,7 +178,7 @@ Deno.test("functions.runVersion: /invoke verb, payload becomes inputs, output un
   assertEquals(out, { ok: 1 });
 });
 
-Deno.test("functions.runVersion: a null output is a successful run; a missing one is bad_response", async () => {
+test("functions.runVersion: a null output is a successful run; a missing one is bad_response", async () => {
   const ok = client(() => json({ output: null }));
   assertEquals(await ok.client.functions.runVersion("fn_1", 1), null);
   assertEquals(JSON.parse(ok.calls[0].body ?? "null"), { inputs: {} });
@@ -183,7 +188,7 @@ Deno.test("functions.runVersion: a null output is a successful run; a missing on
   assertEquals(err.code, "bad_response");
 });
 
-Deno.test("allowUnpublished is present only when true, for BOTH run methods", async () => {
+test("allowUnpublished is present only when true, for BOTH run methods", async () => {
   const w = client(() => json({ runId: "r", status: "queued" }, 202));
   await w.client.workflows.run("wf_1", { allowUnpublished: true });
   await w.client.workflows.run("wf_1", { allowUnpublished: false });
@@ -202,19 +207,19 @@ Deno.test("allowUnpublished is present only when true, for BOTH run methods", as
   assertEquals(f.calls[0].url, `${B}/functions/send-email/invoke`, "body, not query");
 });
 
-Deno.test("runVersion never sends allowUnpublished, even if a JS caller passes it", async () => {
+test("runVersion never sends allowUnpublished, even if a JS caller passes it", async () => {
   const w = client(() => json({ runId: "r", status: "queued" }, 202));
-  // deno-lint-ignore no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: deliberately calling outside the typed surface
   await w.client.workflows.runVersion("wf_1", 1, { allowUnpublished: true } as any);
   assertEquals(JSON.parse(w.calls[0].body ?? "null"), {});
 
   const f = client(() => json({ output: 1 }));
-  // deno-lint-ignore no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: deliberately calling outside the typed surface
   await f.client.functions.runVersion("fn_1", 1, { allowUnpublished: true } as any);
   assertEquals(JSON.parse(f.calls[0].body ?? "null"), { inputs: {} });
 });
 
-Deno.test("an id containing a slash is percent-encoded in every version path", async () => {
+test("an id containing a slash is percent-encoded in every version path", async () => {
   const c = client((call) => {
     if (call.url.endsWith("/versions/1")) return json({ version: DETAIL });
     if (call.url.endsWith("/revert")) return json({ reverted: REVERTED });
@@ -229,16 +234,19 @@ Deno.test("an id containing a slash is percent-encoded in every version path", a
   await c.client.functions.runVersion("a/b", 1);
   await c.client.functions.enable("a/b");
 
-  assertEquals(c.calls.map((x) => x.url), [
-    `${B}/workflows/a%2Fb/versions/1`,
-    `${B}/workflows/a%2Fb/versions/1/revert`,
-    `${B}/workflows/a%2Fb/versions/1/run`,
-    `${B}/functions/a%2Fb/versions/1/invoke`,
-    `${B}/functions/a%2Fb/enable`,
-  ]);
+  assertEquals(
+    c.calls.map((x) => x.url),
+    [
+      `${B}/workflows/a%2Fb/versions/1`,
+      `${B}/workflows/a%2Fb/versions/1/revert`,
+      `${B}/workflows/a%2Fb/versions/1/run`,
+      `${B}/functions/a%2Fb/versions/1/invoke`,
+      `${B}/functions/a%2Fb/enable`,
+    ],
+  );
 });
 
-Deno.test("a 4xx on a version op surfaces as ApiError with status, code and body intact", async () => {
+test("a 4xx on a version op surfaces as ApiError with status, code and body intact", async () => {
   const body = { error: { code: "unknown_version", message: "No version 9." } };
   const w = client(() => json(body, 404));
   const e1 = await assertRejects(() => w.client.workflows.getVersion("wf_1", 9), ApiError);
@@ -257,7 +265,7 @@ Deno.test("a 4xx on a version op surfaces as ApiError with status, code and body
   assertEquals(e3.code, "unknown_workflow");
 });
 
-Deno.test("getVersion / revert reject an envelope without its key as bad_response", async () => {
+test("getVersion / revert reject an envelope without its key as bad_response", async () => {
   const c = client(() => json({}));
   const e1 = await assertRejects(() => c.client.functions.getVersion("fn_1", 1), ApiError);
   assertEquals(e1.code, "bad_response");

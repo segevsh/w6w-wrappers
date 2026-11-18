@@ -69,8 +69,8 @@ Verified against `8f44b3d` plus this release diff. `console.connections.update` 
 3. **Conformance belongs to each contract lane, but React has a different
    guard.**
 
-   **verified: 2026-10-06** — Run node's `node/tests/conformance_test.ts`
-   through `deno task test`, python's `python/tests/test_surface.py` through
+   **verified: 2026-10-06** (node runner updated 2026-11-18) — Run node's
+   `node/tests/conformance_test.ts` through `npm test` (Node, since the node lane left Deno), python's `python/tests/test_surface.py` through
    `PYTHONPATH=src python3 -m unittest discover -s tests -t .`, and cli through
    `deno task test`. CI names those exact lane commands at
    `.github/workflows/release.yml:123-135`, while `docs/release.md:150-158`
@@ -115,7 +115,8 @@ Verified against `8f44b3d` plus this release diff. `console.connections.update` 
 
 4. **`VERSION` moves as a lockstep release fact.**
 
-   **verified: 2026-10-06** — Update node and cli `package.json` + `deno.json`,
+   **verified: 2026-10-06** — Update node `package.json` (node has no `deno.json` since
+   2026-11-18), cli `package.json` + `deno.json`,
    then Python's `pyproject.toml` + `src/w6w/_version.py`, with the React
    manifest/source copy in the same release change; `docs/release.md:128-148`
    lists the guarded files. The workflow compares those values against `VERSION`

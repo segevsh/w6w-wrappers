@@ -432,7 +432,8 @@ export class WorkflowsApi {
     // keeps the lanes in step too — python's idiomatic `isinstance(body, dict)`
     // rejects `[]` where `typeof [] === "object"` accepts it.
     if (
-      typeof body !== "object" || body === null ||
+      typeof body !== "object" ||
+      body === null ||
       typeof (body as { runId?: unknown }).runId !== "string" ||
       typeof (body as { status?: unknown }).status !== "string"
     ) {
@@ -552,9 +553,10 @@ export class WorkflowsApi {
     definition: WorkflowDefinition,
     options?: WorkflowWriteOptions,
   ): Promise<WorkflowSaveResult> {
-    const body = typeof definition.id === "string" && definition.id.length > 0
-      ? definition
-      : { ...definition, id: mintId("wf") };
+    const body =
+      typeof definition.id === "string" && definition.id.length > 0
+        ? definition
+        : { ...definition, id: mintId("wf") };
     return await this.#save(body, options);
   }
 

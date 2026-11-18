@@ -3,11 +3,12 @@
  * encoded), query or exact body, return value, and the typed 409.
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects } from "./assert.ts";
 import { W6WClient } from "../src/client.ts";
 import type { FetchLike } from "../src/config.ts";
 import { ApiError } from "../src/errors.ts";
-import type { SourceInput } from "../mod.ts";
+import type { SourceInput, SourceOptions, SourceView } from "../mod.ts";
 
 interface Call {
   method: string;
@@ -39,7 +40,7 @@ function setup(reply: unknown, status = 200): { client: W6WClient; calls: Call[]
   };
 }
 
-Deno.test("list: all options forwarded under their own names, body returned as sent", async () => {
+test("list: all options forwarded under their own names, body returned as sent", async () => {
   const page = { apps: [], scope: "tenant", snapshot: "s", total: 0, offset: 0, limit: 5 };
   const { client, calls } = setup(page);
   const got = await client.appManagement.list({
@@ -68,7 +69,7 @@ Deno.test("list: all options forwarded under their own names, body returned as s
   assertEquals(calls[0].raw, null);
 });
 
-Deno.test("list: falsy offset and compact are sent; omitted options are absent", async () => {
+test("list: falsy offset and compact are sent; omitted options are absent", async () => {
   const { client, calls } = setup({ apps: [] });
   await client.appManagement.list({ offset: 0, compact: false });
   assertEquals(Object.fromEntries(calls[0].url.searchParams), { offset: "0", compact: "false" });
@@ -76,7 +77,7 @@ Deno.test("list: falsy offset and compact are sent; omitted options are absent",
   assertEquals(calls[1].url.search, "");
 });
 
-Deno.test("get: GET with the id encoded", async () => {
+test("get: GET with the id encoded", async () => {
   const detail = { app: { id: "a/b" }, management: { class: "tenant" } };
   const { client, calls } = setup(detail);
   assertEquals(await client.appManagement.get("a/b"), detail as unknown);
@@ -85,7 +86,7 @@ Deno.test("get: GET with the id encoded", async () => {
   assertEquals(calls[0].raw, null);
 });
 
-Deno.test("preview: POST with exactly {source, target}; extra keys are not sent", async () => {
+test("preview: POST with exactly {source, target}; extra keys are not sent", async () => {
   const reply = { kind: "app", sourceRef: "github:o/r", app: { id: "x" } };
   const { client, calls } = setup(reply);
   const input = { source: "github:o/r", target: "tenant", extra: 1 } as unknown as {
@@ -98,7 +99,7 @@ Deno.test("preview: POST with exactly {source, target}; extra keys are not sent"
   assertEquals(calls[0].body, { source: "github:o/r", target: "tenant" });
 });
 
-Deno.test("register: no paths key unless given; folder source passes through; extra key dropped", async () => {
+test("register: no paths key unless given; folder source passes through; extra key dropped", async () => {
   const reply = { kind: "app", target: "personal", registered: true };
   const { client, calls } = setup(reply);
   const folder: SourceInput = { folder: { grant: "sgr_1", path: "./x/y" } };
@@ -123,7 +124,7 @@ Deno.test("register: no paths key unless given; folder source passes through; ex
   assertEquals(calls[1].body, { target: "account", source: "github:o/pack", paths: ["a", "b"] });
 });
 
-Deno.test("updateSource: PUT with exactly {source, expectedRevision}; 0 is sent", async () => {
+test("updateSource: PUT with exactly {source, expectedRevision}; 0 is sent", async () => {
   const reply = { appId: "a/b", outcome: "registry_updated" };
   const { client, calls } = setup(reply);
   const input = { source: "github:o/r@main", expectedRevision: 0, extra: true } as never;
@@ -133,7 +134,7 @@ Deno.test("updateSource: PUT with exactly {source, expectedRevision}; 0 is sent"
   assertEquals(calls[0].body, { source: "github:o/r@main", expectedRevision: 0 });
 });
 
-Deno.test("sync: {} by default, {expectedRevision} when given (0 included)", async () => {
+test("sync: {} by default, {expectedRevision} when given (0 included)", async () => {
   const reply = { appId: "a/b", outcome: "failed", error: { code: "fetch_failed", message: "m" } };
   const { client, calls } = setup(reply);
   assertEquals(await client.appManagement.sync("a/b"), reply as unknown);
@@ -146,7 +147,7 @@ Deno.test("sync: {} by default, {expectedRevision} when given (0 included)", asy
   assertEquals(calls[2].body, { expectedRevision: 3 });
 });
 
-Deno.test("remove: DELETE, no body, returns {removed}", async () => {
+test("remove: DELETE, no body, returns {removed}", async () => {
   const { client, calls } = setup({ removed: 2 });
   assertEquals(await client.appManagement.remove("a/b"), { removed: 2 });
   assertEquals(calls[0].method, "DELETE");
@@ -154,7 +155,7 @@ Deno.test("remove: DELETE, no body, returns {removed}", async () => {
   assertEquals(calls[0].raw, null);
 });
 
-Deno.test("a 409 stale_source rejects as ApiError carrying the code", async () => {
+test("a 409 stale_source rejects as ApiError carrying the code", async () => {
   const { client } = setup({ error: { code: "stale_source", message: "stale" } }, 409);
   const err = await assertRejects(
     () => client.appManagement.sync("a", { expectedRevision: 1 }),
@@ -164,7 +165,7 @@ Deno.test("a 409 stale_source rejects as ApiError carrying the code", async () =
   assertEquals(err.status, 409);
 });
 
-Deno.test("publishArtifact: POST body is exactly {artifact, exec b64}; map only when given; bytes 0x00-0xFF round-trip", async () => {
+test("publishArtifact: POST body is exactly {artifact, exec b64}; map only when given; bytes 0x00-0xFF round-trip", async () => {
   const reply = { id: "a", version: "1.0.0", outcome: "registered", target: "personal" };
   const { client, calls } = setup(reply, 201);
   const all = Uint8Array.from({ length: 256 }, (_, i) => i);
@@ -184,12 +185,39 @@ Deno.test("publishArtifact: POST body is exactly {artifact, exec b64}; map only 
   assertEquals(sent2.map, "AP8=");
 });
 
-Deno.test("publishArtifact: a 409 id_taken rejects as ApiError carrying the code", async () => {
+test("publishArtifact: a 409 id_taken rejects as ApiError carrying the code", async () => {
   const { client } = setup({ error: { code: "id_taken", message: "taken" } }, 409);
-  const err = await assertRejects(
+  const err = (await assertRejects(
     () => client.appManagement.publishArtifact({ artifact: {}, exec: new Uint8Array(1) }),
     ApiError,
-  ) as ApiError;
+  )) as ApiError;
   assertEquals(err.status, 409);
   assertEquals(err.code, "id_taken");
+});
+
+test("discover: GET with registry/q/limit; unset keys omitted", async () => {
+  const reply = { registry: "jsr", q: "hello", items: [] };
+  const { client, calls } = setup(reply);
+  assertEquals(
+    await client.appManagement.discover({ registry: "jsr", q: "hello", limit: 5 }),
+    reply as unknown,
+  );
+  assertEquals(calls[0].method, "GET");
+  assertEquals(calls[0].url.pathname, "/app-management/discover");
+  assertEquals(calls[0].url.search, "?registry=jsr&q=hello&limit=5");
+  await client.appManagement.discover({ q: "x y" });
+  assertEquals([...calls[1].url.searchParams.keys()], ["q"]);
+  assertEquals(calls[1].raw, null);
+});
+
+test("types: npm/jsr accepted as source kind and private-repo host", () => {
+  const kinds: SourceView["kind"][] = ["npm", "jsr"];
+  const hosts: SourceOptions["privateRepos"][number]["host"][] = ["npm", "jsr"];
+  assertEquals(
+    [kinds, hosts],
+    [
+      ["npm", "jsr"],
+      ["npm", "jsr"],
+    ],
+  );
 });

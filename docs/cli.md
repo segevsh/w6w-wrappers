@@ -178,50 +178,75 @@ token saved for host A is not sent to host B, so after switching hosts run
 
 ## `apps init | validate | build` — the app toolchain
 
-These three are CLI-only and local: they make no API call (so, like `config`, they are not contract
-operations and the node and python lanes do not implement them). `validate` and `build` run the
-canonical `@w6w/app-build` builder under [Deno](https://deno.com). The npm package brings its own:
-the official `@deno/<platform>` binary (Deno 2.8.2) is an optional dependency, so nothing has to be
-installed or on `PATH`. The binary is picked in this order: `$W6W_DENO`; the running Deno, when the
-CLI itself runs under Deno; the bundled one; `$DENO_INSTALL/bin/deno`, then `~/.deno/bin/deno`; and
-last `deno` on `PATH`. Where no bundled build exists (musl/Alpine, 32-bit) one of the others must be
-present, and a missing Deno is an error that names this prerequisite.
+These three are CLI-only and local: they make no API call (so, like `config`,
+they are not contract operations and the node and python lanes do not implement
+them). They need **only Node** — no Deno, no JSR, no network.
 
-`w6w apps init <id> [--template deno|node] [--dir <path>]` scaffolds a new app (default
-template `deno`, default directory `./<id>`): `package.json`, `deno.json`, `index.ts`, one
-auth, one action, one poll trigger, one health check, tests, a bundled `assets/icon.svg` wired
-in as `appearance.icon`, an `author` the build requires, a `.github/workflows/w6w.yml` that
-runs validate and build, and a README. The `deno` template also carries `deno task validate`
-and `deno task build`. It needs no network, and refuses a non-empty target directory.
+An app reaches the CLI already built. The developer bundles their TypeScript (or
+anything else) into one self-contained ESM file that default-exports the app,
+with whatever tool they like, and names it in `package.json` `w6w.entry` (else
+`main`; it must be a `.js`/`.mjs` file inside the app). `validate` and `build`
+compile nothing: they load that file to describe the app, generate the manifest,
+inline the assets and compute the digests, using core's `@w6w/app-build`
+assembler vendored into the npm package. A source map the build wrote — named by
+a trailing `//# sourceMappingURL=` comment, else `<entry>.map` — is packaged as
+`app.js.map`; without one no map is packaged.
 
-`<id>` must be the dotted reverse-DNS id the builder accepts: lowercase letters, digits and
-hyphens in two or more dot-separated segments, as in `com.example.demo-app`. A non-dotted id
-(say `demo-app`) is a usage error (exit `1`) that names the rule and suggests
-`com.example.<slug>`;
-nothing is written, and a rejected id is never silently rewritten into an accepted one.
+`w6w apps init <id> [--template node] [--dir <path>]` scaffolds a new app
+(default directory `./<id>`) as a plain Node + npm project: `package.json` (with
+`w6w.entry: "./dist/app.js"`), `tsconfig.json`, TypeScript sources under `src/`
+— one auth, one action, one poll trigger with its own poll helper, one health
+check —, `node:test` tests, a bundled `assets/icon.svg` wired in as
+`appearance.icon`, an `author` the packager requires, a
+`.github/workflows/w6w.yml` that runs `npm ci`, build, test, validate and
+package, and a README. Its scripts are `build` (esbuild, an app devDependency,
+to `dist/app.js` + `dist/app.js.map`), `test`, `validate` (`w6w apps validate`)
+and `package` (`npm run build && w6w apps build -o out`). `node` is the only
+template; `--template deno` is a usage error that says it was removed. It needs
+no network, and refuses a non-empty target directory.
 
-`w6w apps validate [dir] [--resolution sibling|registry] [--builder <spec>]` checks the app
-in `[dir]` (default: the current directory) with the builder's `--validate` mode. It prints
-the builder's one JSON line with `--json`; otherwise `ok <id>@<version>` or one
-`code: message` line per problem, and exits `1` on any error.
+`<id>` must be the dotted reverse-DNS id the packager accepts: lowercase
+letters, digits and hyphens in two or more dot-separated segments, as in
+`com.example.demo-app`. A non-dotted id (say `demo-app`) is a usage error (exit
+`1`) that names the rule and suggests `com.example.<slug>`; nothing is written,
+and a rejected id is never silently rewritten into an accepted one.
 
-`w6w apps build [dir] [-o|--out <dir>] [--pack <file>] [--resolution sibling|registry]
-[--builder <spec>]` builds the app into the canonical layout
-`<out>/<id>/<version>/{app.js,manifest.json}` plus `<out>/index.json` (`--out` defaults to
-`./out`) and prints the builder's index entry (`id`, `version`, `execSha256`, `digest`,
-`sourceDigest`). `w6w build app <folder> [--out <dir>] [--pack <file>]` is an alias of it and
+`w6w apps validate [dir]` runs every check `build` runs on the app in `[dir]`
+(default: the current directory) and writes nothing. It prints one JSON line
+with `--json` (`{"ok":true,"id","version"}` or
+`{"ok":false,"errors":[{"code","message"}]}`); otherwise `ok <id>@<version>` or
+one `code: message` line per problem, and exits `1` on any error.
+
+`w6w apps build [dir] [-o|--out <dir>] [--pack <file>]` packages the app into
+the canonical layout `<out>/<id>/<version>/{app.js,manifest.json[,app.js.map]}`
+plus `<out>/index.json` (`--out` defaults to `./out`) and prints the index entry
+(`id`, `version`, `execSha256`, `digest`, `digestVersion`, `sourceDigest`). A
+refusal is printed as `code: message` and exits `1`.
+`w6w build app <folder> [--out <dir>] [--pack <file>]` is an alias of it and
 runs the same handler.
 
-`--resolution` chooses how `@w6w/*` imports resolve: `registry` (published `jsr:` packages) or
-`sibling` (a monorepo checkout). Absent, it is `registry` when the app's `deno.json` maps
-`@w6w/types` to a `jsr:` specifier, else `sibling`. `--builder` overrides the builder spec
-(default `jsr:@w6w/app-build@0.2.0/cli`; a local path or `file:` spec is run with its nearest
-`deno.json`); there is no environment variable for it.
+`--pack` names a JSON file with an `apps` array (created as `{ "apps": [] }` if
+missing). The entry whose `path` resolves to the folder, else whose `id`
+matches, takes the built entry; otherwise it is appended. Other fields and keys
+are kept. The update is a re-read, modify and rename done under an exclusive
+`<pack>.lock`, so many builds can share one pack in parallel.
 
-`--pack` names a JSON file with an `apps` array (created as `{ "apps": [] }` if missing). The
-entry whose `path` resolves to the folder, else whose `id` matches, takes the built entry;
-otherwise it is appended. Other fields and keys are kept. The update is a re-read, modify and
-rename done under an exclusive `<pack>.lock`, so many builds can share one pack in parallel.
+`w6w apps search <q> [--registry npm|jsr] [--limit <n>]` searches an npm or JSR registry for
+installable w6w apps (`GET /app-management/discover`). `--registry` defaults to `npm`
+(the CLI always sends `registry`, `npm` when the flag is absent); `--limit` is 1..50. It lists each
+result's name, version, `ref` and whether it is already installed in a scope you manage;
+`--json` prints the response body.
+
+`w6w apps package <pack> [-o|--out <dir>] [--name <pkg>] [--version <v>] [--license <spdx>]`
+(`--out` defaults to `dist`) packages the apps of a pack file, each already built, with the same
+assembler as `apps build` into a registry package tree: `<out>/w6w/index.json` and
+`<out>/w6w/<id>/<version>/{app.js,manifest.json[,app.js.map]}`, where each `execSha256` in the
+index is the sha-256 of the written `app.js`. It needs only Node. If any app fails the command exits non-zero and
+writes nothing under `<out>/w6w`. When absent it also writes `<out>/package.json` (keyword
+`w6w-app`, no dependency fields, `files: ["w6w/"]`) and `<out>/jsr.json`; `--name` and
+`--version` apply only then. An existing `package.json` is validated and left byte-identical;
+it is refused if it has any dependency field, lacks the `w6w-app` keyword, or imports `npm:`
+or `jsr:`. The command never publishes; run `npm publish` or `jsr publish` yourself.
 
 ## `ls` — list a kind
 
@@ -382,7 +407,7 @@ hand-declared rather than contract-driven.
 
 `w6w agents create` and `w6w agents update` take the sampling options of an
 agent's model call as flags, assembled into the `modelOptions` body object
-(contract 0.12.0):
+(contract 0.12.1):
 
 ```text
 --temperature <n>         0 to 2
@@ -408,7 +433,7 @@ collection. `--visibility` with `--purpose skill` is a usage error.
 ## `context-entries` — context entries outside any collection
 
 `w6w context-entries` manages text entries that do not belong to one collection
-(contract 0.12.0; the SDK's `client.contextEntries.*`). The nested
+(contract 0.12.1; the SDK's `client.contextEntries.*`). The nested
 `w6w context entries-*` commands keep working for collection-scoped entries.
 
 ```

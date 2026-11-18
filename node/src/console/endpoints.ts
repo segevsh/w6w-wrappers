@@ -302,14 +302,18 @@ export class EndpointsApi {
    * @returns The whole response body — no envelope key to peel.
    * @throws {ApiError} `404 unknown_endpoint` when there is no such id.
    */
-  async get(
-    id: string,
-  ): Promise<
-    { endpoint: EndpointDef; invokeUrl: string; invokeUrlByKey?: string; updatedAt: string }
-  > {
-    const res = await this.#host.request<
-      { endpoint: EndpointDef; invokeUrl: string; invokeUrlByKey?: string; updatedAt: string }
-    >({
+  async get(id: string): Promise<{
+    endpoint: EndpointDef;
+    invokeUrl: string;
+    invokeUrlByKey?: string;
+    updatedAt: string;
+  }> {
+    const res = await this.#host.request<{
+      endpoint: EndpointDef;
+      invokeUrl: string;
+      invokeUrlByKey?: string;
+      updatedAt: string;
+    }>({
       method: "GET",
       path: path`/endpoints/${id}`,
     });
@@ -347,25 +351,23 @@ export class EndpointsApi {
   async upsert(
     definition: EndpointDef,
     options?: { ifUnmodifiedSince?: string | null },
-  ): Promise<
-    {
+  ): Promise<{
+    endpoint: { id: string; key: string };
+    invokeUrl: string;
+    invokeUrlByKey?: string;
+    updatedAt: string;
+  }> {
+    const {
+      updatedAt: _updatedAt,
+      valid: _valid,
+      ...body
+    } = definition as EndpointDef & Record<string, unknown>;
+    const res = await this.#host.request<{
       endpoint: { id: string; key: string };
       invokeUrl: string;
       invokeUrlByKey?: string;
       updatedAt: string;
-    }
-  > {
-    const { updatedAt: _updatedAt, valid: _valid, ...body } = definition as
-      & EndpointDef
-      & Record<string, unknown>;
-    const res = await this.#host.request<
-      {
-        endpoint: { id: string; key: string };
-        invokeUrl: string;
-        invokeUrlByKey?: string;
-        updatedAt: string;
-      }
-    >({
+    }>({
       method: "POST",
       path: "/endpoints",
       body,

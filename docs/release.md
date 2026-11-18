@@ -17,7 +17,7 @@ this repo.
 
 | Owner                                 | Does                                                                                                                                                                 | Does not                           |
 | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| **this repo** (`w6w-io/w6w-wrappers`) | owns [`../VERSION`](../VERSION); verifies every manifest agrees with it; runs conformance across every lane; tags; builds and publishes all five artifacts over OIDC | hold any registry credential       |
+| **this repo** (`w6w-io/w6w-wrappers`) | owns [`../VERSION`](../VERSION); verifies every manifest agrees with it; runs conformance across every lane; tags; builds and publishes all four artifacts over OIDC | hold any registry credential       |
 | **the monorepo** (`segevsh/w6w`)      | consumes this repo as a submodule at `packages/wrappers` and bumps its pointer after a release                                                                       | decide, gate, or trigger a release |
 
 One workflow file, `.github/workflows/release.yml`, does the whole thing. It
@@ -29,8 +29,7 @@ and on `workflow_dispatch` (for a dry run). **Merging a version bump, pushing a
 request and every push to `main`: one job, `verify`, that runs
 [`scripts/verify.sh`](../scripts/verify.sh) — the lockstep version check
 ([`scripts/check-lockstep.py`](../scripts/check-lockstep.py)) plus the `python`,
-`node`, `cli` and `react` lane gates (and `deno publish --dry-run`, `npm pack
---dry-run`). The pre-push hook runs the same file, so a check is added there,
+`node`, `cli` and `react` lane gates (and `npm pack --dry-run`). The pre-push hook runs the same file, so a check is added there,
 never only to `ci.yml`. It holds `contents: read` only — no secret, no
 `id-token`, no publish step — so it is safe on forks. Publishing stays in
 `release.yml`.
@@ -60,7 +59,6 @@ gh run watch <release-run-id> --repo w6w-io/w6w-wrappers --exit-status
 npm view @w6w/sdk version
 npm view @w6w/cli version
 npm view @w6w/react version
-curl -fsSL https://jsr.io/@w6w/sdk/meta.json
 ```
 
 Use the current `VERSION` in the release tag and title. Match each run to its
@@ -76,8 +74,8 @@ registration instructions are spelled out in
 `packages/core/.github/workflows/publish-types.yml:7-12`: _add a GitHub Actions
 publisher: org/repo, workflow filename_. When the wrappers lived in three repos,
 a single publishing job was impossible without stored registry tokens — a job in
-one repo cannot mint a credential registered to another. Now all five artifacts
-are built in **one** repo, so all five publishers register against
+one repo cannot mint a credential registered to another. Now all four artifacts
+are built in **one** repo, so all four publishers register against
 `w6w-io/w6w-wrappers` + `release.yml`, and the keyless posture the rest of this
 workspace already uses (`publish-types.yml` for npm and JSR,
 `server-deploy.yml:72-77` for GCP via Workload Identity Federation) applies here
@@ -105,20 +103,11 @@ Outward-facing, one-time, and human:
      Trusted Publisher → add a GitHub Actions publisher for
      `w6w-io/w6w-wrappers`, workflow `release.yml`. Not "pending"; the project
      already exists, this just adds OIDC as a second way to publish it.
-   - JSR: the `@w6w` scope already exists (`@w6w/types` is on it), and
-     `@w6w/sdk` is created and linked to `w6w-io/w6w-wrappers`. **`@w6w/cli` is
-     deliberately not on JSR** — the CLI is a binary (`npm i -g @w6w/cli`),
-     nothing imports it as a module, and JSR is for imported source. There is no
-     `jsr-cli` job; see the note beside `jsr-sdk` in `release.yml`. If the CLI
-     ever grows an importable surface, create the package under the scope on
-     jsr.io and link it to the repo (Settings → GitHub Actions on the package)
-     BEFORE restoring the job — unlinked, `npx jsr publish` has no OIDC binding
-     to use, and CI cannot bootstrap a package name.
    - PyPI: `w6w` — as a **pending publisher**, since the project does not exist
      yet. The first upload creates it.
 2. **Create the `pypi` GitHub environment** (Settings → Environments) on
-   `w6w-io/w6w-wrappers`, named to match the PyPI registration exactly. npm and
-   JSR bind on repo + workflow only, no environment involved.
+   `w6w-io/w6w-wrappers`, named to match the PyPI registration exactly. npm
+   binds on repo + workflow only, no environment involved.
 3. Nothing else. There is no repo to create, no token to mint, no secret to
    store.
 
@@ -134,7 +123,7 @@ There is no reserve-first option, and a pending publisher is not one.
 a pending publisher _"does **not** create a project or reserve a project's name
 **until** it is actually used to publish"_, and if someone else registers the
 name first, the pending publisher is **invalidated**. PyPI has no scopes — `w6w`
-is a flat global name, unlike the `@w6w` npm and JSR scopes, so it is
+is a flat global name, unlike the `@w6w` npm scope, so it is
 first-come.
 
 **Do not wait on the organization to publish it.** A `w6w` **Company**
@@ -170,8 +159,8 @@ human again, and is not optional.
    contract in the same checkout.
 2. **Bump `VERSION`.** It is the single source of truth and the only place a
    human types the new number.
-3. **Write that number into every manifest**, in the same commit — the ten files
-   step 5 checks, and no others: `node/package.json` + `node/deno.json` +
+3. **Write that number into every manifest**, in the same commit — the nine files
+   step 5 checks, and no others: `node/package.json` +
    `node/src/version.ts`, `cli/package.json` + `cli/deno.json` + `cli/mod.ts`,
    `python/pyproject.toml` + `python/src/w6w/_version.py`,
    `react/package.json` + `react/src/version.ts`. Never hand-pick a different
@@ -193,15 +182,14 @@ human again, and is not optional.
    A tag alone does not trigger this workflow. For a dry run, invoke
    `release.yml` via `workflow_dispatch` on the intended ref; it has no inputs
    and reads `VERSION` from that checkout.
-5. **`verify`** reads `VERSION` and compares it against the tag and the ten
-   version literals step 3 lists — three for `node` (two manifests and a source
+5. **`verify`** reads `VERSION` and compares it against the tag and the nine
+   version literals step 3 lists — two for `node` (one manifest and a source
    constant), three for `cli`, `pyproject.toml` and `_version.py` for python,
-   and two for `react` (one manifest and one source constant, as it carries no
-   `deno.json`) — echoing every value _before_ deciding, so a failing log
+   and two for `react` (one manifest and one source constant) — echoing every value _before_ deciding, so a failing log
    already answers "which one disagreed". Fails with `::error::` naming it. This
    mirrors `publish-types.yml:33-48` in the core repo.
 6. **`test`** (`needs: verify`) runs every lane's suite: `unittest` for python,
-   `deno task test` for `node` and `cli`. **The conformance runners live inside
+   `npm test` for `node` and `react`, `deno task test` for `cli`. **The conformance runners live inside
    those suites** — `python/tests/test_surface.py`, `cli/tests/help_test.ts`,
    `node/tests/conformance_test.ts`, and each lane's version guard — and they
    read `endpoints.json` and `VERSION` from the same checkout as siblings. So
@@ -217,15 +205,15 @@ human again, and is not optional.
 8. **Confirm every artifact landed**, then bump the monorepo's submodule pointer
    in a `chore(wrappers): bump submodule` commit.
 
-The `test` gate builds all three npm packages and the Python sdist/wheel, checks
-the npm tarball contents, and runs a JSR publishing dry run before any upload.
-These checks also run on `workflow_dispatch`. npm, JSR and PyPI releases cannot be unpublished in any
+The `test` gate builds all three npm packages and the Python sdist/wheel, and checks
+the npm tarball contents before any upload.
+These checks also run on `workflow_dispatch`. npm and PyPI releases cannot be unpublished in any
 way that helps — a version that exists on npm but failed to build for PyPI is a
 permanent inconsistency, and the only fix is burning a version number.
 
-## Notes on the npm and JSR lanes
+## Notes on the npm lanes
 
-Four JavaScript publishing jobs (`npm-sdk`, `npm-cli`, `npm-react`, `jsr-sdk`), and the
+Three JavaScript publishing jobs (`npm-sdk`, `npm-cli`, `npm-react`), and the
 shape is copied from the house pattern — `w6w-core`'s `publish-types.yml` ships
 `@w6w/types` to npm and JSR over OIDC with no stored credential. What was _not_
 copyable is written out here, because each item is a thing that would otherwise
@@ -248,7 +236,8 @@ be discovered at upload time:
   same gap earlier and for a different reason — see the note below.)
 - **`npm-sdk` and the `test` job's node build use `npm ci`; the `cli` and
   `react` lanes keep `npm install`.** `node/`, `cli/` and `react/` each commit a
-  `package-lock.json`. node's is self-contained (only `typescript`), so `npm ci`
+  `package-lock.json`. node's is self-contained (dev tooling only: `typescript`, `@biomejs/biome`,
+  `@types/node`), so `npm ci`
   reproduces it exactly. cli's and react's record `@w6w/sdk` as a **link to
   `../node`** (`"resolved": "../node", "link": true`), not a registry tarball,
   because the registry's latest `@w6w/sdk` can trail `VERSION` and the
@@ -257,8 +246,8 @@ be discovered at upload time:
   `../node/dist` to exist before cli's or react's build. Their own lane install
   stays `npm install`, which keeps the link and leaves the lock unchanged. A
   lock is never published, so the tarballs are unaffected. Dev and CI otherwise
-  run on the Deno tasks in `deno.json` for `node`/`cli` (react has no
-  `deno.json`; its own local gate is `npm test`). `dist/` is produced by
+  run on the npm scripts in `node/` and `react/` and on the Deno tasks in
+  `cli/deno.json`. `dist/` is produced by
   `tsc -p tsconfig.build.json`/`tsconfig.json` (the CLI additionally runs
   `scripts/fix-shebang.mjs`), and the CLI's and react's sources both import the
   bare specifier `@w6w/sdk`, which resolves from `node_modules` — not through
@@ -280,13 +269,7 @@ be discovered at upload time:
   of this very release commit, not whatever the registry's latest `@w6w/sdk`
   is (which can trail `VERSION`); it still runs after `npm-sdk`, so the version
   react's range names has been uploaded.
-- **JSR needs the `@w6w` scope to exist and each package linked to this repo**
-  before OIDC publishing works; confirmed with `deno publish --dry-run` for the
-  `node`/`cli` lanes, including the CLI's cross-package `@w6w/sdk` import. The
-  publish step itself is `npx --yes jsr publish` from the lane directory, no
-  build. There is no `jsr-react` job — react is a JSX+`react`-peer package, not
-  the `.ts`-source-verbatim shape JSR publishing here assumes.
-- **The trusted publishers for all five artifacts register against
+- **The trusted publishers for all four artifacts register against
   `w6w-io/w6w-wrappers` + `release.yml`**, exactly as PyPI's does. Registering
   them against the archived `w6w-node` / `w6w-cli` repos would have to be
   undone. **`@w6w/react` needs one extra, one-time step first**: unlike PyPI's
@@ -312,8 +295,8 @@ upgraded to npm 12 while the test gate used npm 11. `0.9.9` is the replacement
 lockstep release with the same pinned npm in testing and publishing.
 
 
-The gate is atomic. **The upload is not, and no design makes it so** — five
-registry uploads are five ways to fail, and registries have no cross-registry
+The gate is atomic. **The upload is not, and no design makes it so** — four
+registry uploads are four ways to fail, and registries have no cross-registry
 transaction to enlist in.
 
 - **Nothing uploads unless `verify` and `test` (including conformance) pass.** A
@@ -323,7 +306,7 @@ transaction to enlist in.
   workflow; the jobs that already succeeded will fail as duplicates, so prefer
   re-running the single failed job where the runner allows it.
 - **A genuinely half-published version has to be burned.** If npm accepted
-  `@w6w/sdk` and JSR rejected it, that number is spent — registries refuse to
+  `@w6w/sdk` and PyPI rejected `w6w`, that number is spent — registries refuse to
   overwrite. Bump `VERSION` to the next patch and release the whole set again,
   so the set is consistent at the new number. The half-published version is
   abandoned, not repaired.
@@ -331,8 +314,8 @@ transaction to enlist in.
   visible to anyone comparing versions across languages. Put the skipped number
   and the reason in the release notes rather than making them guess.
 
-The operator's rule of thumb: _if one upload was rejected, re-run it. If one
-package half-landed across its two registries, burn the version._
+The operator's rule of thumb: _if one upload was rejected, re-run it. If the set
+half-landed across its registries, burn the version._
 
 ## Prerelease
 

@@ -2,7 +2,8 @@
  * `client.console.aiCredentialPolicy.*`, against an injected fake `fetch`.
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects } from "../assert.ts";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import { ApiError } from "../../src/errors.ts";
@@ -38,7 +39,7 @@ const BASE = "https://api.example.com";
 
 const BODY = { policy: { mode: "user_only" }, effect: { accountRoutes: 3 } };
 
-Deno.test("aiCredentialPolicy.get GETs the path and returns the body unchanged", async () => {
+test("aiCredentialPolicy.get GETs the path and returns the body unchanged", async () => {
   const c = setup(() => json(BODY));
   assertEquals(await c.client.console.aiCredentialPolicy.get(), BODY);
   assertEquals(c.calls[0].method, "GET");
@@ -46,7 +47,7 @@ Deno.test("aiCredentialPolicy.get GETs the path and returns the body unchanged",
   assertEquals(c.calls[0].body, null);
 });
 
-Deno.test("aiCredentialPolicy.put sends exactly {mode} and returns the body unchanged", async () => {
+test("aiCredentialPolicy.put sends exactly {mode} and returns the body unchanged", async () => {
   const c = setup(() => json(BODY));
   assertEquals(await c.client.console.aiCredentialPolicy.put({ mode: "user_only" }), BODY);
   assertEquals(c.calls[0].method, "PUT");
@@ -54,16 +55,16 @@ Deno.test("aiCredentialPolicy.put sends exactly {mode} and returns the body unch
   assertEquals(c.calls[0].body, JSON.stringify({ mode: "user_only" }));
 });
 
-Deno.test("aiCredentialPolicy.put drops a smuggled extra key", async () => {
+test("aiCredentialPolicy.put drops a smuggled extra key", async () => {
   const c = setup(() => json(BODY));
   const widened = { mode: "both", tenant: "other", ownerSubject: "x" } as { mode: "both" };
   await c.client.console.aiCredentialPolicy.put(widened);
   assertEquals(c.calls[0].body, JSON.stringify({ mode: "both" }));
 });
 
-Deno.test("aiCredentialPolicy.put propagates a 403 ApiError unchanged", async () => {
+test("aiCredentialPolicy.put propagates a 403 ApiError unchanged", async () => {
   const c = setup(() =>
-    json({ error: { code: "ai_credential_policy_denied", message: "x" } }, 403)
+    json({ error: { code: "ai_credential_policy_denied", message: "x" } }, 403),
   );
   const err = await assertRejects(
     () => c.client.console.aiCredentialPolicy.put({ mode: "both" }),

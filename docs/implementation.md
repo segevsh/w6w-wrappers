@@ -37,32 +37,26 @@ by preference.
   globals only**: `fetch`, `Headers`, `Request`, `Response`, `URL`,
   `AbortController`, `TextEncoder`. No `node:` builtins in the client core, no
   `process`, no Deno-specific API outside the single env module (§2).
-- **Developed and tested with Deno**, inside the compose `api` service. The
-  gates are `deno check`, `deno test -A` and `deno coverage`:
-
-  ```bash
-  docker compose -f .devcontainer/docker-compose.yml exec -T api \
-    sh -c 'cd /app/packages/wrappers/node && deno task check && deno task test'
-  ```
-
-  Verified working in that container: `deno` 2.8.2, `deno test`, `deno check
-  <dir>`, `deno coverage`, and `jsr:@std/assert@^1.0.0`. Assertions come from
-  `@std/assert` — the only test idiom in the house.
-- **The npm `dist/` build is `tsc`, and runs in CI only.** `tsconfig.json` sets
-  **`rewriteRelativeImportExtensions: true`** so the Deno-style `./x.ts` import
-  specifiers in `src/` compile to `./x.js` in `dist/`. One source tree, two
-  registries: JSR publishes the TypeScript source verbatim (so every public API
-  needs an explicit return type to satisfy JSR's no-slow-types rule), npm
-  publishes compiled ESM + `.d.ts` from `dist/` (D7).
-- **Formatting/lint** follow the house Deno settings: `lineWidth: 100`,
-  `semiColons: true`, `singleQuote: false`, `lint.rules.tags: ["recommended"]`.
-
-**Why Deno-gated and not Node-gated:** this devcontainer host has **no `deno`
-binary and no local Node test runner convention** — Deno lives only in the
-compose `api` service with the repo root bind-mounted at `/app`, and there is no
-vitest/jest config anywhere in the workspace. Authoring Deno-first makes the
-test runner _and_ the coverage tool (§9) free; authoring Node-first would make
-both new choices in a repo with no precedent.
+- **npm only, Node only.** Both packages publish to npm alone; there is no JSR
+  release. The published `engines` floor stays `node >=18`; development and CI
+  run Node 24.
+- **`node/` is developed and tested with Node.** Its gates are `package.json`
+  scripts: `npm run typecheck` (`tsc --noEmit` over `mod.ts`, `src/`, `tests/`),
+  `npm run lint` and `npm run format:check` (Biome), `npm test` (`node --test`).
+  Tests run directly from the `.ts` source on Node 24's built-in type stripping —
+  `src/` and `tests/` use only erasable TypeScript (no enums, namespaces or
+  parameter properties) — and import `node:test`. Assertions come from
+  `tests/assert.ts`, a thin layer over `node:assert/strict` that keeps the
+  suite's assertion names and returns the caught error from `assertRejects` /
+  `assertThrows`.
+- **`cli/` is still Deno-gated** (`deno check`, `deno test -A`) until it moves to
+  Node the same way.
+- **The npm `dist/` build is `tsc`.** `tsconfig.build.json` sets
+  **`rewriteRelativeImportExtensions: true`** so the `./x.ts` import specifiers
+  in `src/` compile to `./x.js` in `dist/`, and npm publishes that compiled ESM +
+  `.d.ts` (D7).
+- **Formatting/lint** follow the house settings: `lineWidth: 100`, double quotes,
+  semicolons, 2-space indent, the linter's recommended rules.
 
 ### `python`
 
@@ -88,16 +82,10 @@ answer for a published client: it can never conflict with a user's pins.
 
 ### react (TypeScript, derived lane)
 
-- **Node, not Deno.** `react/` is gated by Node.js rather than the Deno
-  toolchain `node/` and `cli/` use above. Its tests exercise React components,
-  so they follow `packages/ui`'s `test-jsx-loader.mjs` + `jsdom` pattern — a
-  Deno test run has no DOM to mount into.
-- **`package.json` scripts** — `build`, `typecheck`, `test`, `lint`, `format` —
-  not `deno task`; there is no `deno.json` in this lane.
-- **npm-only distribution.** `@w6w/react` publishes to npm only, with no JSR
-  job: JSR's no-slow-types rule and the source-verbatim publish that `node/`
-  relies on (§1 above) have nothing to do with a lane that ships compiled
-  output.
+- **Node, like `node/`.** Its tests exercise React components, so they follow
+  `packages/ui`'s `test-jsx-loader.mjs` + `jsdom` pattern.
+- **`package.json` scripts** — `build`, `typecheck`, `test`, `lint`, `format`.
+- **npm-only distribution**, like every JavaScript lane.
 - **No conformance runner.** `react/` implements no operation in
   `endpoints.json` — it composes `node/`'s already-conformant client — so it has
   no `naming` entry to assert, and none of `node/tests/surface_test.ts`,
@@ -883,7 +871,8 @@ test suite.
 
 The mock seam is constructor-injected, for the same reason the credential is
 (§2): a module-patched global cannot be exercised twice differently in one
-process. `deno test` and `python3 -m unittest` both run the suite in-process.
+process. `node --test` (one process per test file), `deno test` and `python3 -m unittest` all
+run a file's tests in one process.
 
 ### Required tests
 
@@ -953,7 +942,8 @@ Plus these cross-cutting tests, once each per wrapper:
 Coverage is **measured and reported** in every wrapper's CI, and the gate is
 **90 %**.
 
-- node / cli: `deno coverage`
+- node: `npm run cov` (`node --test --experimental-test-coverage`).
+- cli: `deno coverage`
   (`deno test -A --coverage=cov && deno coverage cov`).
 - python: measured in CI; not runnable on this host (no `pip`, §1), so the gate
   lives in the CI job and the reason is written into the wrapper's README rather

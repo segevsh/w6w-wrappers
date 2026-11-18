@@ -16,7 +16,8 @@
  * forwards the string verbatim.
  */
 
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals } from "../assert.ts";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import type { ApiToken } from "../../src/console/tokens.ts";
@@ -90,22 +91,19 @@ function client(respond: (call: Call) => Response): { client: W6WClient; calls: 
   };
 }
 
-Deno.test(
-  "console.tokens: list/create/disable/enable/revoke are functions on a constructed client",
-  () => {
-    // Runtime, not type-level: a namespace that silently lost a method would
-    // still typecheck everywhere else in this suite.
-    const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
-    assertEquals(typeof c.console.tokens.list, "function");
-    assertEquals(typeof c.console.tokens.create, "function");
-    assertEquals(typeof c.console.tokens.disable, "function");
-    assertEquals(typeof c.console.tokens.enable, "function");
-    assertEquals(typeof c.console.tokens.revoke, "function");
-    assertEquals(typeof c.console.tokens.rotate, "function");
-  },
-);
+test("console.tokens: list/create/disable/enable/revoke are functions on a constructed client", () => {
+  // Runtime, not type-level: a namespace that silently lost a method would
+  // still typecheck everywhere else in this suite.
+  const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
+  assertEquals(typeof c.console.tokens.list, "function");
+  assertEquals(typeof c.console.tokens.create, "function");
+  assertEquals(typeof c.console.tokens.disable, "function");
+  assertEquals(typeof c.console.tokens.enable, "function");
+  assertEquals(typeof c.console.tokens.revoke, "function");
+  assertEquals(typeof c.console.tokens.rotate, "function");
+});
 
-Deno.test("console.tokens.list unwraps the tokens envelope", async () => {
+test("console.tokens.list unwraps the tokens envelope", async () => {
   const c = client(() => json({ tokens: [TOKEN_A, TOKEN_B] }));
 
   const res = await c.client.console.tokens.list();
@@ -117,66 +115,54 @@ Deno.test("console.tokens.list unwraps the tokens envelope", async () => {
   assertEquals(c.calls[0].url, "https://api.example.com/tokens");
 });
 
-Deno.test(
-  "console.tokens.create returns BOTH token and secret, with NO unwrap() call",
-  async () => {
-    const c = client(() => json({ token: TOKEN_A, secret: "tok_live_abc123" }, 201));
+test("console.tokens.create returns BOTH token and secret, with NO unwrap() call", async () => {
+  const c = client(() => json({ token: TOKEN_A, secret: "tok_live_abc123" }, 201));
 
-    const res = await c.client.console.tokens.create("ci-deploy");
+  const res = await c.client.console.tokens.create("ci-deploy");
 
-    // A mutant that wrapped this in unwrap(res, "token") would silently drop
-    // `secret` (unwrap returns only the `token` value); a mutant that
-    // returned `res.body.token` alone would drop it too. Both fail here.
-    assertEquals(res, { token: TOKEN_A, secret: "tok_live_abc123" });
-    assertEquals(c.calls[0].method, "POST");
-    assertEquals(c.calls[0].url, "https://api.example.com/tokens");
-    assertEquals(JSON.parse(c.calls[0].body ?? "null"), { name: "ci-deploy" });
-  },
-);
+  // A mutant that wrapped this in unwrap(res, "token") would silently drop
+  // `secret` (unwrap returns only the `token` value); a mutant that
+  // returned `res.body.token` alone would drop it too. Both fail here.
+  assertEquals(res, { token: TOKEN_A, secret: "tok_live_abc123" });
+  assertEquals(c.calls[0].method, "POST");
+  assertEquals(c.calls[0].url, "https://api.example.com/tokens");
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), { name: "ci-deploy" });
+});
 
-Deno.test(
-  "console.tokens.disable sends POST with {} body to /tokens/:id/disable and unwraps token",
-  async () => {
-    const c = client(() => json({ token: TOKEN_A }));
+test("console.tokens.disable sends POST with {} body to /tokens/:id/disable and unwraps token", async () => {
+  const c = client(() => json({ token: TOKEN_A }));
 
-    const res = await c.client.console.tokens.disable("tok_1");
+  const res = await c.client.console.tokens.disable("tok_1");
 
-    assertEquals(res, TOKEN_A);
-    assertEquals(c.calls[0].method, "POST");
-    assertEquals(c.calls[0].url, "https://api.example.com/tokens/tok_1/disable");
-    assertEquals(JSON.parse(c.calls[0].body ?? "null"), {});
-  },
-);
+  assertEquals(res, TOKEN_A);
+  assertEquals(c.calls[0].method, "POST");
+  assertEquals(c.calls[0].url, "https://api.example.com/tokens/tok_1/disable");
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), {});
+});
 
-Deno.test(
-  "console.tokens.enable sends POST with {} body to /tokens/:id/enable and unwraps token",
-  async () => {
-    const c = client(() => json({ token: TOKEN_A }));
+test("console.tokens.enable sends POST with {} body to /tokens/:id/enable and unwraps token", async () => {
+  const c = client(() => json({ token: TOKEN_A }));
 
-    const res = await c.client.console.tokens.enable("tok_1");
+  const res = await c.client.console.tokens.enable("tok_1");
 
-    assertEquals(res, TOKEN_A);
-    assertEquals(c.calls[0].method, "POST");
-    assertEquals(c.calls[0].url, "https://api.example.com/tokens/tok_1/enable");
-    assertEquals(JSON.parse(c.calls[0].body ?? "null"), {});
-  },
-);
+  assertEquals(res, TOKEN_A);
+  assertEquals(c.calls[0].method, "POST");
+  assertEquals(c.calls[0].url, "https://api.example.com/tokens/tok_1/enable");
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), {});
+});
 
-Deno.test(
-  "console.tokens.revoke sends POST with {} body to /tokens/:id/revoke and unwraps token",
-  async () => {
-    const c = client(() => json({ token: TOKEN_A }));
+test("console.tokens.revoke sends POST with {} body to /tokens/:id/revoke and unwraps token", async () => {
+  const c = client(() => json({ token: TOKEN_A }));
 
-    const res = await c.client.console.tokens.revoke("tok_1");
+  const res = await c.client.console.tokens.revoke("tok_1");
 
-    assertEquals(res, TOKEN_A);
-    assertEquals(c.calls[0].method, "POST");
-    assertEquals(c.calls[0].url, "https://api.example.com/tokens/tok_1/revoke");
-    assertEquals(JSON.parse(c.calls[0].body ?? "null"), {});
-  },
-);
+  assertEquals(res, TOKEN_A);
+  assertEquals(c.calls[0].method, "POST");
+  assertEquals(c.calls[0].url, "https://api.example.com/tokens/tok_1/revoke");
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), {});
+});
 
-Deno.test("console.tokens.disable percent-encodes id via the `path` tag", async () => {
+test("console.tokens.disable percent-encodes id via the `path` tag", async () => {
   const c = client(() => json({ token: TOKEN_A }));
 
   await c.client.console.tokens.disable("tok 1");
@@ -184,7 +170,7 @@ Deno.test("console.tokens.disable percent-encodes id via the `path` tag", async 
   assertEquals(c.calls[0].url, "https://api.example.com/tokens/tok%201/disable");
 });
 
-Deno.test("console.tokens.enable percent-encodes id via the `path` tag", async () => {
+test("console.tokens.enable percent-encodes id via the `path` tag", async () => {
   const c = client(() => json({ token: TOKEN_A }));
 
   await c.client.console.tokens.enable("tok 1");
@@ -192,7 +178,7 @@ Deno.test("console.tokens.enable percent-encodes id via the `path` tag", async (
   assertEquals(c.calls[0].url, "https://api.example.com/tokens/tok%201/enable");
 });
 
-Deno.test("console.tokens.revoke percent-encodes id via the `path` tag", async () => {
+test("console.tokens.revoke percent-encodes id via the `path` tag", async () => {
   const c = client(() => json({ token: TOKEN_A }));
 
   await c.client.console.tokens.revoke("tok 1");
@@ -200,7 +186,7 @@ Deno.test("console.tokens.revoke percent-encodes id via the `path` tag", async (
   assertEquals(c.calls[0].url, "https://api.example.com/tokens/tok%201/revoke");
 });
 
-Deno.test("console.tokens.create(string) sends exactly {name}", async () => {
+test("console.tokens.create(string) sends exactly {name}", async () => {
   const c = client(() => json({ token: TOKEN_A, secret: "s" }, 201));
 
   await c.client.console.tokens.create("ci");
@@ -211,7 +197,7 @@ Deno.test("console.tokens.create(string) sends exactly {name}", async () => {
   assertEquals(JSON.parse(c.calls[0].body ?? "null"), { name: "ci" });
 });
 
-Deno.test("console.tokens.create(options) sends scopes and allowedIps unmodified", async () => {
+test("console.tokens.create(options) sends scopes and allowedIps unmodified", async () => {
   const scopes = {
     v: 1 as const,
     invoke: { callables: ["fn_abc"] },
@@ -224,7 +210,7 @@ Deno.test("console.tokens.create(options) sends scopes and allowedIps unmodified
   }
 });
 
-Deno.test("console.tokens.create(options) omits undefined keys", async () => {
+test("console.tokens.create(options) omits undefined keys", async () => {
   const c = client(() => json({ token: TOKEN_A, secret: "s" }, 201));
 
   await c.client.console.tokens.create({ name: "ci", scopes: undefined, allowedIps: undefined });
@@ -232,7 +218,7 @@ Deno.test("console.tokens.create(options) omits undefined keys", async () => {
   assertEquals(c.calls[0].body, '{"name":"ci"}');
 });
 
-Deno.test("console.tokens.rotate POSTs to /tokens/:id/rotate and returns {token, secret}", async () => {
+test("console.tokens.rotate POSTs to /tokens/:id/rotate and returns {token, secret}", async () => {
   const c = client(() => json({ token: TOKEN_A, secret: "tok_live_new" }));
 
   const res = await c.client.console.tokens.rotate("tok_1");
@@ -242,7 +228,7 @@ Deno.test("console.tokens.rotate POSTs to /tokens/:id/rotate and returns {token,
   assertEquals(c.calls[0].url, "https://api.example.com/tokens/tok_1/rotate");
 });
 
-Deno.test("console.tokens.rotate percent-encodes id via the `path` tag", async () => {
+test("console.tokens.rotate percent-encodes id via the `path` tag", async () => {
   const c = client(() => json({ token: TOKEN_A, secret: "s" }));
 
   await c.client.console.tokens.rotate("tok 1");

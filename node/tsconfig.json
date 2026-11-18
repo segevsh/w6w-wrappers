@@ -1,0 +1,16 @@
+{
+  // Typecheck only (`npm run typecheck`): mod.ts, src/ and tests/ (plus examples/, which a test
+  // imports). The npm build is tsconfig.build.json, which keeps `types: []` so the published
+  // source can never lean on Node globals; tests run on Node and get @types/node here.
+  "extends": "./tsconfig.build.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "types": ["node"]
+  },
+  "include": ["mod.ts", "src/**/*.ts", "tests/**/*.ts", "examples/**/*.ts"],
+  "exclude": ["dist", "node_modules"]
+}

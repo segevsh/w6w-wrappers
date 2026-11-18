@@ -313,10 +313,10 @@ export async function request<T>(
       body: !hasBody
         ? undefined
         : bytesBody
-        ? (options.body as BodyInit)
-        : csvBody
-        ? String(options.body)
-        : JSON.stringify(options.body),
+          ? (options.body as BodyInit)
+          : csvBody
+            ? String(options.body)
+            : JSON.stringify(options.body),
       signal: options.signal,
     });
   } catch (err) {
@@ -327,14 +327,10 @@ export async function request<T>(
     // checked rather than matching only on `err.name === "AbortError"`
     // because it is the runtime-agnostic source of truth (the DOM/undici
     // `fetch` both set it synchronously before the promise rejects).
-    const cancelled = options.signal?.aborted === true ||
-      (err instanceof Error && err.name === "AbortError");
+    const cancelled =
+      options.signal?.aborted === true || (err instanceof Error && err.name === "AbortError");
     if (cancelled) {
-      throw new ApiError(
-        0,
-        "cancelled",
-        `Request cancelled (${options.method} ${url}).`,
-      );
+      throw new ApiError(0, "cancelled", `Request cancelled (${options.method} ${url}).`);
     }
     throw new ApiError(
       0,

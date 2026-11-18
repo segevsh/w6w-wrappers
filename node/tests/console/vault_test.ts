@@ -15,7 +15,9 @@
  * placeholder used only to prove the transport forwards the string verbatim.
  */
 
-import { assertEquals, assertFalse } from "@std/assert";
+import { readFile } from "node:fs/promises";
+import { test } from "node:test";
+import { assertEquals, assertFalse } from "../assert.ts";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import type { VaultSecretSummary } from "../../src/console/vault.ts";
@@ -81,22 +83,19 @@ function client(respond: (call: Call) => Response): { client: W6WClient; calls: 
   };
 }
 
-Deno.test(
-  "console.vault: list/get/create/update/delete/seal are functions on a constructed client",
-  () => {
-    // Runtime, not type-level: a namespace that silently lost a method would
-    // still typecheck everywhere else in this suite.
-    const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
-    assertEquals(typeof c.console.vault.list, "function");
-    assertEquals(typeof c.console.vault.get, "function");
-    assertEquals(typeof c.console.vault.create, "function");
-    assertEquals(typeof c.console.vault.update, "function");
-    assertEquals(typeof c.console.vault.delete, "function");
-    assertEquals(typeof c.console.vault.seal, "function");
-  },
-);
+test("console.vault: list/get/create/update/delete/seal are functions on a constructed client", () => {
+  // Runtime, not type-level: a namespace that silently lost a method would
+  // still typecheck everywhere else in this suite.
+  const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
+  assertEquals(typeof c.console.vault.list, "function");
+  assertEquals(typeof c.console.vault.get, "function");
+  assertEquals(typeof c.console.vault.create, "function");
+  assertEquals(typeof c.console.vault.update, "function");
+  assertEquals(typeof c.console.vault.delete, "function");
+  assertEquals(typeof c.console.vault.seal, "function");
+});
 
-Deno.test("console.vault.list unwraps the secrets envelope", async () => {
+test("console.vault.list unwraps the secrets envelope", async () => {
   const c = client(() => json({ secrets: [SECRET_A, SECRET_B] }));
 
   const res = await c.client.console.vault.list();
@@ -108,7 +107,7 @@ Deno.test("console.vault.list unwraps the secrets envelope", async () => {
   assertEquals(c.calls[0].url, "https://api.example.com/vault");
 });
 
-Deno.test("console.vault.get unwraps the secret envelope", async () => {
+test("console.vault.get unwraps the secret envelope", async () => {
   const c = client(() => json({ secret: SECRET_A }));
 
   const res = await c.client.console.vault.get("sec_1");
@@ -118,7 +117,7 @@ Deno.test("console.vault.get unwraps the secret envelope", async () => {
   assertEquals(c.calls[0].url, "https://api.example.com/vault/sec_1");
 });
 
-Deno.test("console.vault.create unwraps the secret envelope (201)", async () => {
+test("console.vault.create unwraps the secret envelope (201)", async () => {
   const c = client(() => json({ secret: SECRET_A }, 201));
 
   const res = await c.client.console.vault.create({
@@ -132,7 +131,7 @@ Deno.test("console.vault.create unwraps the secret envelope (201)", async () => 
   assertEquals(c.calls[0].url, "https://api.example.com/vault");
 });
 
-Deno.test("console.vault.update unwraps the secret envelope", async () => {
+test("console.vault.update unwraps the secret envelope", async () => {
   const c = client(() => json({ secret: SECRET_A }));
 
   const res = await c.client.console.vault.update("sec_1", { description: "Renamed" });
@@ -142,21 +141,18 @@ Deno.test("console.vault.update unwraps the secret envelope", async () => {
   assertEquals(c.calls[0].url, "https://api.example.com/vault/sec_1");
 });
 
-Deno.test(
-  "console.vault.seal unwraps from `sealed`, not `secret` — a mutant copying the wrong envelope key fails here",
-  async () => {
-    const c = client(() => json({ sealed: { type: "secret", ciphertext: "abc", iv: "def" } }));
+test("console.vault.seal unwraps from `sealed`, not `secret` — a mutant copying the wrong envelope key fails here", async () => {
+  const c = client(() => json({ sealed: { type: "secret", ciphertext: "abc", iv: "def" } }));
 
-    const res = await c.client.console.vault.seal("sk-live-123");
+  const res = await c.client.console.vault.seal("sk-live-123");
 
-    assertEquals(res, { type: "secret", ciphertext: "abc", iv: "def" });
-    assertEquals(JSON.parse(c.calls[0].body ?? "null"), { value: "sk-live-123" });
-    assertEquals(c.calls[0].method, "POST");
-    assertEquals(c.calls[0].url, "https://api.example.com/vault/seal");
-  },
-);
+  assertEquals(res, { type: "secret", ciphertext: "abc", iv: "def" });
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), { value: "sk-live-123" });
+  assertEquals(c.calls[0].method, "POST");
+  assertEquals(c.calls[0].url, "https://api.example.com/vault/seal");
+});
 
-Deno.test("console.vault.delete sends DELETE to the right path and resolves void", async () => {
+test("console.vault.delete sends DELETE to the right path and resolves void", async () => {
   const c = client(() => json({ ok: true }));
 
   const res = await c.client.console.vault.delete("sec_1");
@@ -166,37 +162,31 @@ Deno.test("console.vault.delete sends DELETE to the right path and resolves void
   assertEquals(c.calls[0].url, "https://api.example.com/vault/sec_1");
 });
 
-Deno.test(
-  "console.vault.create sends `value` verbatim, untouched — no trim/transform",
-  async () => {
-    const c = client(() => json({ secret: SECRET_A }, 201));
+test("console.vault.create sends `value` verbatim, untouched — no trim/transform", async () => {
+  const c = client(() => json({ secret: SECRET_A }, 201));
 
-    await c.client.console.vault.create({
-      name: "openai_key",
-      value: "sk- with spaces \n",
-      description: "d",
-    });
+  await c.client.console.vault.create({
+    name: "openai_key",
+    value: "sk- with spaces \n",
+    description: "d",
+  });
 
-    assertEquals(JSON.parse(c.calls[0].body ?? "null"), {
-      name: "openai_key",
-      value: "sk- with spaces \n",
-      description: "d",
-    });
-  },
-);
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), {
+    name: "openai_key",
+    value: "sk- with spaces \n",
+    description: "d",
+  });
+});
 
-Deno.test(
-  "console.vault.update sends `value` verbatim, untouched — no trim/transform",
-  async () => {
-    const c = client(() => json({ secret: SECRET_A }));
+test("console.vault.update sends `value` verbatim, untouched — no trim/transform", async () => {
+  const c = client(() => json({ secret: SECRET_A }));
 
-    await c.client.console.vault.update("sec_1", { value: "sk- with spaces \n" });
+  await c.client.console.vault.update("sec_1", { value: "sk- with spaces \n" });
 
-    assertEquals(JSON.parse(c.calls[0].body ?? "null"), { value: "sk- with spaces \n" });
-  },
-);
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), { value: "sk- with spaces \n" });
+});
 
-Deno.test("console.vault.get percent-encodes id via the `path` tag", async () => {
+test("console.vault.get percent-encodes id via the `path` tag", async () => {
   const c = client(() => json({ secret: SECRET_A }));
 
   await c.client.console.vault.get("sec 1");
@@ -204,7 +194,7 @@ Deno.test("console.vault.get percent-encodes id via the `path` tag", async () =>
   assertEquals(c.calls[0].url, "https://api.example.com/vault/sec%201");
 });
 
-Deno.test("console.vault.update percent-encodes id via the `path` tag", async () => {
+test("console.vault.update percent-encodes id via the `path` tag", async () => {
   const c = client(() => json({ secret: SECRET_A }));
 
   await c.client.console.vault.update("sec 1", { description: "d" });
@@ -212,7 +202,7 @@ Deno.test("console.vault.update percent-encodes id via the `path` tag", async ()
   assertEquals(c.calls[0].url, "https://api.example.com/vault/sec%201");
 });
 
-Deno.test("console.vault.delete percent-encodes id via the `path` tag", async () => {
+test("console.vault.delete percent-encodes id via the `path` tag", async () => {
   const c = client(() => json({ ok: true }));
 
   await c.client.console.vault.delete("sec 1");
@@ -220,23 +210,20 @@ Deno.test("console.vault.delete percent-encodes id via the `path` tag", async ()
   assertEquals(c.calls[0].url, "https://api.example.com/vault/sec%201");
 });
 
-Deno.test(
-  "VaultSecretSummary's interface body (read from src/console/vault.ts's own source text) never declares a `value` field",
-  async () => {
-    // Source-level structural check, not a runtime/type check: a fixture
-    // object satisfying a narrower interface also satisfies a wider one
-    // (structural typing), so nothing above this test — which only exercises
-    // JSON fixtures — can prove the TYPE itself never gains a `value` field.
-    // Mirrors the idiom in packages/studio/src/lib/no-direct-api-access.ts,
-    // which reads its own source text rather than trusting runtime behavior.
-    const src = await Deno.readTextFile(new URL("../../src/console/vault.ts", import.meta.url));
-    const match = src.match(/export interface VaultSecretSummary \{([^}]*)\}/);
-    if (!match) {
-      throw new Error("VaultSecretSummary interface not found in src/console/vault.ts");
-    }
-    // Anchored to a line START so a doc comment merely MENTIONING "value"
-    // (the interface's own JSDoc block, and the module docstring, both do)
-    // can never false-positive this gate.
-    assertFalse(/^\s*value\??\s*:/m.test(match[1]));
-  },
-);
+test("VaultSecretSummary's interface body (read from src/console/vault.ts's own source text) never declares a `value` field", async () => {
+  // Source-level structural check, not a runtime/type check: a fixture
+  // object satisfying a narrower interface also satisfies a wider one
+  // (structural typing), so nothing above this test — which only exercises
+  // JSON fixtures — can prove the TYPE itself never gains a `value` field.
+  // Mirrors the idiom in packages/studio/src/lib/no-direct-api-access.ts,
+  // which reads its own source text rather than trusting runtime behavior.
+  const src = await readFile(new URL("../../src/console/vault.ts", import.meta.url), "utf8");
+  const match = src.match(/export interface VaultSecretSummary \{([^}]*)\}/);
+  if (!match) {
+    throw new Error("VaultSecretSummary interface not found in src/console/vault.ts");
+  }
+  // Anchored to a line START so a doc comment merely MENTIONING "value"
+  // (the interface's own JSDoc block, and the module docstring, both do)
+  // can never false-positive this gate.
+  assertFalse(/^\s*value\??\s*:/m.test(match[1]));
+});

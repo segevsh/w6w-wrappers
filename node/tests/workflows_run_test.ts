@@ -15,7 +15,8 @@
  * route is served today.
  */
 
-import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects, assertStringIncludes } from "./assert.ts";
 import { W6WClient } from "../src/client.ts";
 import type { FetchLike } from "../src/config.ts";
 import { ApiError } from "../src/errors.ts";
@@ -73,7 +74,7 @@ function sentBody(call: Call): Record<string, unknown> {
   return JSON.parse(call.body ?? "null");
 }
 
-Deno.test("workflows.run: a 202 queued run is SUCCESS, and hands back the handle", async () => {
+test("workflows.run: a 202 queued run is SUCCESS, and hands back the handle", async () => {
   // The default path: no `wait`, so the server enqueues and answers immediately.
   // A wrapper that raised on a non-200 would fail here — 202 is the *normal*
   // outcome of this route, not an edge case.
@@ -98,7 +99,7 @@ Deno.test("workflows.run: a 202 queued run is SUCCESS, and hands back the handle
   assertEquals(sentBody(c.calls[0]), {});
 });
 
-Deno.test("workflows.run: ?wait=true returns the terminal 200 result", async () => {
+test("workflows.run: ?wait=true returns the terminal 200 result", async () => {
   const c = client(() =>
     json({
       runId: "run_01HQ",
@@ -107,7 +108,7 @@ Deno.test("workflows.run: ?wait=true returns the terminal 200 result", async () 
       error: null,
       nodes: { step_a: { status: "succeeded" } },
       steps: { step_a: { status: "succeeded" } },
-    })
+    }),
   );
 
   const run = await c.client.workflows.run("wf_01HQ", { wait: true });
@@ -123,7 +124,7 @@ Deno.test("workflows.run: ?wait=true returns the terminal 200 result", async () 
   assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_01HQ/run?wait=true");
 });
 
-Deno.test("workflows.run: a 200 carrying status 'failed' is RETURNED, never raised", async () => {
+test("workflows.run: a 200 carrying status 'failed' is RETURNED, never raised", async () => {
   // The single most-often-got-wrong semantic in this surface. A run-level
   // failure is reported in the envelope, not as an HTTP error, so this must be
   // an ordinary return value — an implementation that throws fails this case
@@ -135,7 +136,7 @@ Deno.test("workflows.run: a 200 carrying status 'failed' is RETURNED, never rais
       output: null,
       error: { code: "step_failed", message: "sendgrid rejected the payload" },
       steps: { step_a: { status: "failed" } },
-    })
+    }),
   );
 
   const run = await c.client.workflows.run("wf_01HQ", { wait: true });
@@ -148,7 +149,7 @@ Deno.test("workflows.run: a 200 carrying status 'failed' is RETURNED, never rais
   // Mapping this to a non-zero exit is the CLI's job, not the SDK's.
 });
 
-Deno.test("workflows.run: a ?wait= timeout comes back as a 202 with the current status", async () => {
+test("workflows.run: a ?wait= timeout comes back as a 202 with the current status", async () => {
   // The server waited up to its own timeout and gave up; the run is still
   // going. Also a success, and the reason `httpStatus` is exposed at all: the
   // body alone cannot tell this apart from a run that was never waited on.
@@ -162,7 +163,7 @@ Deno.test("workflows.run: a ?wait= timeout comes back as a 202 with the current 
   assertEquals(c.calls.length, 1, "no client-side retry after a server-side timeout");
 });
 
-Deno.test("workflows.run: variables and trigger reach the request body", async () => {
+test("workflows.run: variables and trigger reach the request body", async () => {
   const c = client(() => json({ runId: "run_01HQ", status: "queued" }, 202));
 
   await c.client.workflows.run("wf_01HQ", {
@@ -186,7 +187,7 @@ Deno.test("workflows.run: variables and trigger reach the request body", async (
   assertEquals(off.calls[0].url, "https://api.example.com/workflows/wf_01HQ/run");
 });
 
-Deno.test("workflows.run: input reaches the request body, distinct from variables", async () => {
+test("workflows.run: input reaches the request body, distinct from variables", async () => {
   // `input` is delivered to the entry trigger node's own recorded output
   // (`steps.<triggerId>.output.<key>`), not the run's variable scope
   // (`vars.*`, which is what `variables` seeds) — they are separate body
@@ -210,9 +211,9 @@ Deno.test("workflows.run: input reaches the request body, distinct from variable
   assertEquals(sentBody(off.calls[0]), { variables: { count: 1 } });
 });
 
-Deno.test("workflows.run: a 404 unknown_workflow reaches the caller as an ApiError", async () => {
+test("workflows.run: a 404 unknown_workflow reaches the caller as an ApiError", async () => {
   const c = client(() =>
-    json({ error: { code: "unknown_workflow", message: "Not registered." } }, 404, "Not Found")
+    json({ error: { code: "unknown_workflow", message: "Not registered." } }, 404, "Not Found"),
   );
 
   const err = await assertRejects(() => c.client.workflows.run("wf_missing"), ApiError);
@@ -224,7 +225,7 @@ Deno.test("workflows.run: a 404 unknown_workflow reaches the caller as an ApiErr
   assertEquals(err.raw, { error: { code: "unknown_workflow", message: "Not registered." } });
 });
 
-Deno.test("workflows.run: the workflow id is percent-encoded into the path", async () => {
+test("workflows.run: the workflow id is percent-encoded into the path", async () => {
   // Encoding at interpolation, via the `path` tag — the same pin the document
   // key routes are held to. A caller-supplied id never becomes extra segments.
   const c = client(() => json({ runId: "run_1", status: "queued" }, 202));
@@ -234,7 +235,7 @@ Deno.test("workflows.run: the workflow id is percent-encoded into the path", asy
   assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf%20a%2Fb%3Fx/run");
 });
 
-Deno.test("workflows.run: a success body that is not a run object is bad_response", async () => {
+test("workflows.run: a success body that is not a run object is bad_response", async () => {
   // A proxy answering 200 "ok" must fail loudly here rather than return an
   // object whose only populated fields are the two this client derived.
   const c = client(() => json("ok"));
@@ -246,7 +247,7 @@ Deno.test("workflows.run: a success body that is not a run object is bad_respons
   assertStringIncludes(err.message, "not a run object");
 });
 
-Deno.test("workflows.run: an object-shaped body with no run in it is bad_response", async () => {
+test("workflows.run: an object-shaped body with no run in it is bad_response", async () => {
   // The guard used to check only `typeof body === "object"`, which every one of
   // these passes — `typeof [] === "object"` included. Measured against that
   // version, each returned a WorkflowRunResult whose `runId: string` and
@@ -284,7 +285,7 @@ Deno.test("workflows.run: an object-shaped body with no run in it is bad_respons
   }
 });
 
-Deno.test("workflows.run: a minimal well-formed 202 body is still accepted", async () => {
+test("workflows.run: a minimal well-formed 202 body is still accepted", async () => {
   // The control for the case above: the guard must reject malformed bodies
   // without becoming a schema validator. `runId` + `status` is everything a
   // queued run carries, and it goes straight through.
@@ -299,7 +300,7 @@ Deno.test("workflows.run: a minimal well-formed 202 body is still accepted", asy
   assertEquals(run.httpStatus, 202);
 });
 
-Deno.test("workflows.run: an unknown trigger value is sent, never validated", async () => {
+test("workflows.run: an unknown trigger value is sent, never validated", async () => {
   // `endpoints.json` declares `trigger` as an open string with `closedEnum:
   // false` — the five known values are documentation. A wrapper that validated
   // against them would reject a request the server accepts, so the value is
@@ -311,7 +312,7 @@ Deno.test("workflows.run: an unknown trigger value is sent, never validated", as
   assertEquals(JSON.parse(c.calls[0].body ?? "null"), { trigger: "a_future_server_value" });
 });
 
-Deno.test("workflows.run: allowUnpublished is in the body only when true", async () => {
+test("workflows.run: allowUnpublished is in the body only when true", async () => {
   const c = client(() => json({ runId: "run_1", status: "queued" }, 202));
 
   await c.client.workflows.run("wf_01HQ", { allowUnpublished: true });
@@ -324,16 +325,16 @@ Deno.test("workflows.run: allowUnpublished is in the body only when true", async
   assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_01HQ/run", "body, not query");
 });
 
-Deno.test("workflows.run: an old steps-only response still parses", async () => {
+test("workflows.run: an old steps-only response still parses", async () => {
   const c = client(() =>
-    json({ runId: "run_01HQ", status: "succeeded", steps: { a: { status: "succeeded" } } })
+    json({ runId: "run_01HQ", status: "succeeded", steps: { a: { status: "succeeded" } } }),
   );
   const run = await c.client.workflows.run("wf_01HQ", { wait: true });
   assertEquals(run.steps, { a: { status: "succeeded" } });
   assertEquals(run.nodes, { a: { status: "succeeded" } });
 });
 
-Deno.test("workflows.run: selected trigger and its input are sent together", async () => {
+test("workflows.run: selected trigger and its input are sent together", async () => {
   const c = client(() => json({ runId: "run_child", status: "succeeded" }));
   await c.client.workflows.run("wf_child", {
     entry: "manual_2",

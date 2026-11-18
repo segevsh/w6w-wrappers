@@ -75,7 +75,6 @@ jobs:
           found = {
               "VERSION": shared,
               "node/package.json": from_json("node/package.json", "version"),
-              "node/deno.json": from_json("node/deno.json", "version"),
               "node/src/version.ts": from_regex(
                   "node/src/version.ts", r'VERSION:\s*string\s*=\s*"([^"]+)"'),
               "cli/package.json": from_json("cli/package.json", "version"),
@@ -128,25 +127,25 @@ jobs:
         working-directory: python
         run: PYTHONPATH=src python3 -m unittest discover -s tests -t .
 
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-      # Check publication before npm installs can update sibling lockfiles:
-      # Deno's clean-tree check covers the entire Git repository.
-      - name: JSR — validate the SDK package
-        working-directory: node
-        run: deno publish --dry-run
-      - name: node — deno test
-        working-directory: node
-        run: deno task test
-      - name: cli — deno test
-        working-directory: cli
-        run: deno task test
-
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
       - run: npm install --global "npm@$NPM_VERSION"
+      - name: node — npm build + test
+        working-directory: node
+        run: |
+          npm ci
+          npm run build
+          npm test
+
+      # Deno for the cli lane only, until it moves to Node the way node/ did.
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: cli — deno test
+        working-directory: cli
+        run: deno task test
+
       # The react lane imports `@w6w/sdk/console`, a subpath no PUBLISHED @w6w/sdk carries yet.
       # Build the sibling out of this checkout and install it over the registry copy, so the suite
       # measures the source of truth in this commit rather than the last release. Keep this step even
@@ -319,34 +318,3 @@ jobs:
       - name: Publish @w6w/react
         working-directory: react
         run: npm publish --access public
-
-  # ── JSR ────────────────────────────────────────────────────────────────────
-  # No build step: JSR publishes the authored .ts source verbatim (D7), the
-  # same files `deno task check`/`test` already run against. `npx jsr publish`
-  # picks up the OIDC token from `id-token: write` with no login step.
-  jsr-sdk:
-    needs: [verify, test]
-    if: github.event_name == 'release'
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-      - name: Publish @w6w/sdk to JSR
-        working-directory: node
-        run: npx --yes jsr publish
-
-  # `@w6w/cli` is NOT published to JSR. That is a decision, not an omission:
-  # README.md's own table lists the CLI as `@w6w/cli` (npm), binary `w6w` — a
-  # binary is installed with `npm i -g` or `deno install` from npm, and nothing
-  # imports it as a module, which is what JSR is for. The SDK above is on JSR
-  # precisely because it IS imported.
-  #
-  # A job existed here and failed every release with "package doesn't exist",
-  # because publishing would first require creating `@w6w/cli` under the scope
-  # on jsr.io by hand. Rather than create a package nobody consumes, the job is
-  # gone. Restore it beside `jsr-sdk` if the CLI ever grows an importable
-  # surface — and create the package first, since CI cannot bootstrap a name.

@@ -28,7 +28,7 @@ wrap yet.
 
 | You're writing | Use | Package |
 | --- | --- | --- |
-| A Node.js, Deno or Bun service, script or backend | [Node SDK](/clients/node/) | `@w6w/sdk` (npm and JSR) |
+| A Node.js, Deno or Bun service, script or backend | [Node SDK](/clients/node/) | `@w6w/sdk` (npm) |
 | A React app, in the browser | [React](/clients/react/) | `@w6w/react` (npm) |
 | Shell scripts, CI jobs, or quick checks from a terminal | [CLI](/clients/cli/) | `@w6w/cli` (npm), command `w6w` |
 | A Python 3.9+ service or script | [Python](/clients/python/) | `w6w` (PyPI) |
@@ -40,7 +40,6 @@ SDK client for everything else. The CLI is built on the Node SDK too.
 
 ```bash
 npm install @w6w/sdk           # Node.js / TypeScript
-deno add jsr:@w6w/sdk          # Deno, from JSR
 npm install @w6w/react react   # React (pulls in @w6w/sdk)
 npm install -g @w6w/cli        # the w6w command
 pip install w6w                # Python

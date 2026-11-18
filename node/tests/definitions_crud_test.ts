@@ -23,7 +23,8 @@
  *    cannot read, so an empty or `"null"` string is worse than no header.
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects } from "./assert.ts";
 import { W6WClient } from "../src/client.ts";
 import type { FetchLike } from "../src/config.ts";
 import { ApiError } from "../src/errors.ts";
@@ -101,7 +102,7 @@ const FUNCTION_SUMMARY: FunctionSummary = {
   tags: [],
 };
 
-Deno.test("workflows: all seven operations are functions on a constructed client", () => {
+test("workflows: all seven operations are functions on a constructed client", () => {
   // Runtime, not type-level: a namespace that silently lost a method would
   // still typecheck everywhere else in this suite.
   const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
@@ -110,16 +111,14 @@ Deno.test("workflows: all seven operations are functions on a constructed client
   }
 });
 
-Deno.test("functions: all seven operations are functions on a constructed client", () => {
+test("functions: all seven operations are functions on a constructed client", () => {
   const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
-  for (
-    const name of ["run", "list", "get", "create", "update", "archive", "delete"] as const
-  ) {
+  for (const name of ["run", "list", "get", "create", "update", "archive", "delete"] as const) {
     assertEquals(typeof c.functions[name], "function", `functions.${name} is missing`);
   }
 });
 
-Deno.test("workflows.get returns the whole body — there is no envelope to peel", async () => {
+test("workflows.get returns the whole body — there is no envelope to peel", async () => {
   const detail = {
     workflow: { id: "wf_1", name: "nightly-sync", status: "draft", tags: [] },
     sourceRef: null,
@@ -134,7 +133,7 @@ Deno.test("workflows.get returns the whole body — there is no envelope to peel
   assertEquals(c.calls[0].method, "GET");
 });
 
-Deno.test("workflows.get: updatedAt stays OUTSIDE the definition", async () => {
+test("workflows.get: updatedAt stays OUTSIDE the definition", async () => {
   // The definition is the portable document. A wrapper that spliced the
   // server's timestamp into it would put it in the object the caller sends
   // straight back to `update`.
@@ -143,7 +142,7 @@ Deno.test("workflows.get: updatedAt stays OUTSIDE the definition", async () => {
       workflow: { id: "wf_1", name: "nightly-sync" },
       sourceRef: null,
       updatedAt: "2026-08-22T09:00:00.000Z",
-    })
+    }),
   );
 
   const got = await c.client.workflows.get("wf_1");
@@ -152,7 +151,7 @@ Deno.test("workflows.get: updatedAt stays OUTSIDE the definition", async () => {
   assertEquals(got.updatedAt, "2026-08-22T09:00:00.000Z");
 });
 
-Deno.test("workflows.create mints a wf_ id when the definition carries none", async () => {
+test("workflows.create mints a wf_ id when the definition carries none", async () => {
   const c = client(() => json(WORKFLOW_SAVED, 201));
 
   await c.client.workflows.create(WORKFLOW_DEF);
@@ -167,7 +166,7 @@ Deno.test("workflows.create mints a wf_ id when the definition carries none", as
   assertEquals(c.calls[0].url, "https://api.example.com/workflows?project=prj_default");
 });
 
-Deno.test("workflows.create forwards an id the caller supplied, untouched", async () => {
+test("workflows.create forwards an id the caller supplied, untouched", async () => {
   // Minting is a fallback, not a policy: a seeded or imported definition keeps
   // the id it was written with, or re-importing one would fork it in two.
   const c = client(() => json(WORKFLOW_SAVED, 201));
@@ -177,13 +176,13 @@ Deno.test("workflows.create forwards an id the caller supplied, untouched", asyn
   assertEquals(JSON.parse(c.calls[0].body ?? "{}").id, "wf_seeded");
 });
 
-Deno.test("workflows.create returns the save result, flattened by nothing", async () => {
+test("workflows.create returns the save result, flattened by nothing", async () => {
   const c = client(() => json(WORKFLOW_SAVED, 201));
 
   assertEquals(await c.client.workflows.create(WORKFLOW_DEF), WORKFLOW_SAVED);
 });
 
-Deno.test("workflows.update pins the addressed id over the body's own", async () => {
+test("workflows.update pins the addressed id over the body's own", async () => {
   // The silent failure this prevents: writing to B while reading as a write
   // to A, and answering with B's id so it looks like it worked.
   const c = client(() => json(WORKFLOW_SAVED, 201));
@@ -193,7 +192,7 @@ Deno.test("workflows.update pins the addressed id over the body's own", async ()
   assertEquals(JSON.parse(c.calls[0].body ?? "{}").id, "wf_a");
 });
 
-Deno.test("workflows.update sends the precondition header only when given", async () => {
+test("workflows.update sends the precondition header only when given", async () => {
   const c = client(() => json(WORKFLOW_SAVED, 201));
 
   await c.client.workflows.update("wf_1", WORKFLOW_DEF);
@@ -202,13 +201,10 @@ Deno.test("workflows.update sends the precondition header only when given", asyn
   await c.client.workflows.update("wf_1", WORKFLOW_DEF, {
     ifUnmodifiedSince: "2026-08-22T09:00:00.000Z",
   });
-  assertEquals(
-    c.calls[1].headers.get("x-w6w-if-unmodified-since"),
-    "2026-08-22T09:00:00.000Z",
-  );
+  assertEquals(c.calls[1].headers.get("x-w6w-if-unmodified-since"), "2026-08-22T09:00:00.000Z");
 });
 
-Deno.test("workflows.update sends no precondition header for a null token", async () => {
+test("workflows.update sends no precondition header for a null token", async () => {
   // `get` on a row the server has never stamped can hand back `null`, and the
   // header must then be absent rather than the string "null" — which the
   // server answers `400 invalid_precondition`, an error naming something the
@@ -220,7 +216,7 @@ Deno.test("workflows.update sends no precondition header for a null token", asyn
   assertEquals(c.calls[0].headers.get("x-w6w-if-unmodified-since"), null);
 });
 
-Deno.test("workflows: a per-call project overrides the client default", async () => {
+test("workflows: a per-call project overrides the client default", async () => {
   const c = client(() => json(WORKFLOW_SAVED, 201));
 
   await c.client.workflows.create(WORKFLOW_DEF, { project: "prj_other" });
@@ -228,7 +224,7 @@ Deno.test("workflows: a per-call project overrides the client default", async ()
   assertEquals(c.calls[0].url, "https://api.example.com/workflows?project=prj_other");
 });
 
-Deno.test("workflows.archive unwraps the workflow envelope", async () => {
+test("workflows.archive unwraps the workflow envelope", async () => {
   const archived = { id: "wf_1", name: "nightly-sync", status: "archived", tags: [] };
   const c = client(() => json({ workflow: archived }));
 
@@ -237,7 +233,7 @@ Deno.test("workflows.archive unwraps the workflow envelope", async () => {
   assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_1/archive");
 });
 
-Deno.test("functions.archive unwraps the function envelope", async () => {
+test("functions.archive unwraps the function envelope", async () => {
   const archived = { id: "fn_1", key: "send-email", status: "archived" };
   const c = client(() => json({ function: archived }));
 
@@ -246,9 +242,9 @@ Deno.test("functions.archive unwraps the function envelope", async () => {
   assertEquals(c.calls[0].url, "https://api.example.com/functions/fn_1/archive");
 });
 
-Deno.test("functions.delete does not archive on the caller's behalf", async () => {
+test("functions.delete does not archive on the caller's behalf", async () => {
   const c = client(() =>
-    json({ error: { code: "function_not_archived", message: "Archive it first." } }, 409)
+    json({ error: { code: "function_not_archived", message: "Archive it first." } }, 409),
   );
 
   const err = await assertRejects(() => c.client.functions.delete("fn_1"), ApiError);
@@ -257,30 +253,27 @@ Deno.test("functions.delete does not archive on the caller's behalf", async () =
   assertEquals(c.calls.length, 1, "no archive request was issued on the caller's behalf");
 });
 
-Deno.test("workflows.delete returns nothing rather than {ok:true}", async () => {
+test("workflows.delete returns nothing rather than {ok:true}", async () => {
   const c = client(() => json({ ok: true }));
 
   assertEquals(await c.client.workflows.delete("wf_1"), undefined);
   assertEquals(c.calls[0].method, "DELETE");
 });
 
-Deno.test("workflows.delete does not archive on the caller's behalf", async () => {
+test("workflows.delete does not archive on the caller's behalf", async () => {
   // A 409 is a real signal: the caller asked to delete something that is still
   // live. Completing the two-step destructive path for them is how a workflow
   // someone only meant to look at gets deleted.
   const c = client(() =>
-    json({ error: { code: "workflow_not_archived", message: "Archive it first." } }, 409)
+    json({ error: { code: "workflow_not_archived", message: "Archive it first." } }, 409),
   );
 
-  const err = await assertRejects(
-    () => c.client.workflows.delete("wf_1"),
-    ApiError,
-  );
+  const err = await assertRejects(() => c.client.workflows.delete("wf_1"), ApiError);
   assertEquals(err.code, "workflow_not_archived");
   assertEquals(c.calls.length, 1);
 });
 
-Deno.test("workflows: the id is percent-encoded into every id-addressed route", async () => {
+test("workflows: the id is percent-encoded into every id-addressed route", async () => {
   const c = client(() => json({ workflow: {}, sourceRef: null, updatedAt: "x" }));
 
   await c.client.workflows.get("wf_a/b");
@@ -288,20 +281,20 @@ Deno.test("workflows: the id is percent-encoded into every id-addressed route", 
   assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_a%2Fb");
 });
 
-Deno.test("functions.list unwraps the functions envelope", async () => {
+test("functions.list unwraps the functions envelope", async () => {
   const c = client(() => json({ functions: [FUNCTION_SUMMARY] }));
 
   assertEquals(await c.client.functions.list(), [FUNCTION_SUMMARY]);
 });
 
-Deno.test("functions: no request on this domain ever carries a project", async () => {
+test("functions: no request on this domain ever carries a project", async () => {
   // The route reads no `?project=` at all, so forwarding the client's default
   // would be sending an argument the server ignores — and inventing a
   // parameter is the one thing `endpoints.json` warns wrappers off.
   const c = client((call) =>
     call.method === "GET" && call.url.includes("/functions/fn_1")
       ? json({ function: { id: "fn_1" }, valid: true })
-      : json({ functions: [] })
+      : json({ functions: [] }),
   );
 
   await c.client.functions.list();
@@ -310,7 +303,7 @@ Deno.test("functions: no request on this domain ever carries a project", async (
   for (const call of c.calls) assertEquals(call.url.includes("project="), false);
 });
 
-Deno.test("functions.get keeps `valid` a sibling, never spliced into the definition", async () => {
+test("functions.get keeps `valid` a sibling, never spliced into the definition", async () => {
   // `valid` is computed per request and is not part of the stored document.
   // Splicing it in would put it inside the object a caller sends back to
   // `update` — which is the round trip this shape exists to keep clean.
@@ -322,7 +315,7 @@ Deno.test("functions.get keeps `valid` a sibling, never spliced into the definit
   assertEquals("valid" in got.function, false);
 });
 
-Deno.test("functions.create mints an fn_ id but never a key", async () => {
+test("functions.create mints an fn_ id but never a key", async () => {
   // The key is the name the Function is CALLED by. Minting one would name the
   // caller's Function for them, and the server validates the grammar on first
   // save anyway.
@@ -335,12 +328,12 @@ Deno.test("functions.create mints an fn_ id but never a key", async () => {
   assertEquals(sent.key, "send-email");
 });
 
-Deno.test("functions.create unwraps the function envelope to {id, key, updatedAt}", async () => {
+test("functions.create unwraps the function envelope to {id, key, updatedAt}", async () => {
   const c = client(() =>
     json(
       { function: { id: "fn_1", key: "send-email" }, updatedAt: "2026-10-17T01:00:00.000Z" },
       201,
-    )
+    ),
   );
 
   assertEquals(await c.client.functions.create({ key: "send-email", inputs: [] }), {
@@ -350,7 +343,7 @@ Deno.test("functions.create unwraps the function envelope to {id, key, updatedAt
   });
 });
 
-Deno.test("functions.update pins the addressed id over the body's own", async () => {
+test("functions.update pins the addressed id over the body's own", async () => {
   const c = client(() => json({ function: { id: "fn_a", key: "send-email" } }, 201));
 
   await c.client.functions.update("fn_a", { id: "fn_b", key: "send-email", inputs: [] });
@@ -358,24 +351,24 @@ Deno.test("functions.update pins the addressed id over the body's own", async ()
   assertEquals(JSON.parse(c.calls[0].body ?? "{}").id, "fn_a");
 });
 
-Deno.test("functions.delete returns nothing, and does not swallow a 404", async () => {
+test("functions.delete returns nothing, and does not swallow a 404", async () => {
   const ok = client(() => json({ ok: true }));
   assertEquals(await ok.client.functions.delete("fn_1"), undefined);
   assertEquals(ok.calls[0].method, "DELETE");
 
   const missing = client(() =>
-    json({ error: { code: "unknown_function", message: "Not registered." } }, 404)
+    json({ error: { code: "unknown_function", message: "Not registered." } }, 404),
   );
   const err = await assertRejects(() => missing.client.functions.delete("fn_x"), ApiError);
   assertEquals(err.code, "unknown_function");
 });
 
-Deno.test("functions: a 409 function_key_conflict surfaces its own code", async () => {
+test("functions: a 409 function_key_conflict surfaces its own code", async () => {
   // Two distinct 409s live on this route — an ownership clash on the id, and
   // the key already being taken. A wrapper that flattened them would leave a
   // caller unable to tell "rename it" from "you do not own this".
   const c = client(() =>
-    json({ error: { code: "function_key_conflict", message: "Key taken." } }, 409)
+    json({ error: { code: "function_key_conflict", message: "Key taken." } }, 409),
   );
 
   const err = await assertRejects(

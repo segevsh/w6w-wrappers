@@ -30,7 +30,7 @@
  * @module
  */
 
-import { type HttpResponse, type RequestOptions } from "../http.ts";
+import type { HttpResponse, RequestOptions } from "../http.ts";
 import { unwrap } from "../types.ts";
 import type { PasskeyAuthenticationVerifyResponse } from "./passkeys.ts";
 

@@ -1,10 +1,11 @@
 /**
  * The embed host example (`examples/embed-host/`): the trust rule that the
  * handler mints only from the host's VERIFIED session. Lives in `tests/` so
- * `deno task check` type-checks the example through these imports.
+ * `npm run typecheck` type-checks the example through these imports.
  */
 
-import { assert, assertEquals, assertNotMatch } from "@std/assert";
+import { test } from "node:test";
+import { assert, assertEquals, assertNotMatch } from "./assert.ts";
 import { ApiError } from "../src/errors.ts";
 import type { FetchLike } from "../src/config.ts";
 import {
@@ -58,7 +59,7 @@ async function errorCode(res: Response): Promise<string> {
   return (await res.json()).error.code;
 }
 
-Deno.test("anonymous caller -> 401, no create, no-store", async () => {
+test("anonymous caller -> 401, no create, no-store", async () => {
   const h = handlerFor(null);
   const res = await h.handle(post({ company: "A" }));
   assertEquals(res.status, 401);
@@ -67,7 +68,7 @@ Deno.test("anonymous caller -> 401, no create, no-store", async () => {
   assertEquals(h.calls.length, 0);
 });
 
-Deno.test("company the user does not belong to -> 403, no create", async () => {
+test("company the user does not belong to -> 403, no create", async () => {
   const h = handlerFor(U1);
   const res = await h.handle(post({ company: "C" }));
   assertEquals(res.status, 403);
@@ -76,7 +77,7 @@ Deno.test("company the user does not belong to -> 403, no create", async () => {
   assertEquals(h.calls.length, 0);
 });
 
-Deno.test("no company anywhere -> 400, no create", async () => {
+test("no company anywhere -> 400, no create", async () => {
   const h = handlerFor({ userId: "u1", companyIds: ["A"] });
   for (const req of [post(), post(undefined, "{not json"), post({ company: "  " })]) {
     const res = await h.handle(req);
@@ -87,7 +88,7 @@ Deno.test("no company anywhere -> 400, no create", async () => {
   assertEquals(h.calls.length, 0);
 });
 
-Deno.test("non-POST -> 405, no create, authenticate not consulted", async () => {
+test("non-POST -> 405, no create, authenticate not consulted", async () => {
   let authCalls = 0;
   const rec = recording();
   const handle = createEmbedSessionHandler({
@@ -106,7 +107,7 @@ Deno.test("non-POST -> 405, no create, authenticate not consulted", async () => 
   assertEquals(authCalls, 0);
 });
 
-Deno.test("forged body subject/accountRef/account are never read", async () => {
+test("forged body subject/accountRef/account are never read", async () => {
   const h = handlerFor(U1);
   const res = await h.handle(
     post({ company: "B", subject: "admin", accountRef: "X", account: "X" }),
@@ -120,21 +121,21 @@ Deno.test("forged body subject/accountRef/account are never read", async () => {
   assertEquals("secret" in body, false);
 });
 
-Deno.test("forged account without a company hint falls back to the active company", async () => {
+test("forged account without a company hint falls back to the active company", async () => {
   const h = handlerFor(U1);
   const res = await h.handle(post({ subject: "admin", account: "X", company: 7 }));
   assertEquals(res.status, 200);
   assertEquals(h.calls, [{ subject: "u1", accountRef: "A" }]);
 });
 
-Deno.test("a forged account does not rescue a non-member company", async () => {
+test("a forged account does not rescue a non-member company", async () => {
   const h = handlerFor(U1);
   const res = await h.handle(post({ company: "C", accountRef: "A", account: "A" }));
   assertEquals(res.status, 403);
   assertEquals(h.calls.length, 0);
 });
 
-Deno.test("create failure -> opaque 502 with no upstream detail", async () => {
+test("create failure -> opaque 502 with no upstream detail", async () => {
   const err = new ApiError(401, "invalid_client", `Unknown client ${SECRET}`);
   const h = handlerFor(U1, err);
   const res = await h.handle(post({ company: "A" }));
@@ -146,7 +147,7 @@ Deno.test("create failure -> opaque 502 with no upstream detail", async () => {
   assertEquals(h.calls.length, 1);
 });
 
-Deno.test("authenticate throwing -> opaque 502, no create", async () => {
+test("authenticate throwing -> opaque 502, no create", async () => {
   const rec = recording();
   const handle = createEmbedSessionHandler({
     sessions: rec.sessions,
@@ -159,16 +160,19 @@ Deno.test("authenticate throwing -> opaque 502, no create", async () => {
   assertEquals(rec.calls.length, 0);
 });
 
-Deno.test("switching companies mints one session per company, nothing cached", async () => {
+test("switching companies mints one session per company, nothing cached", async () => {
   const h = handlerFor(U1);
   await h.handle(post({ company: "A" }));
   await h.handle(post({ company: "B" }));
   await h.handle(post({ company: "A" }));
   await h.handle(post({ company: "A" }));
-  assertEquals(h.calls.map((c) => c.accountRef), ["A", "B", "A", "A"]);
+  assertEquals(
+    h.calls.map((c) => c.accountRef),
+    ["A", "B", "A", "A"],
+  );
 });
 
-Deno.test("real client at wire level: one exchange per POST, later expiresAt on renewal", async () => {
+test("real client at wire level: one exchange per POST, later expiresAt on renewal", async () => {
   const wire: { auth: string | null; body: string | null }[] = [];
   const fetch: FetchLike = (_url, init) => {
     wire.push({
@@ -215,20 +219,20 @@ const W6W_ENV = ["W6W_BASE_URL", "W6W_TENANT_CLIENT_ID", "W6W_TENANT_CLIENT_SECR
 
 /** Run `fn` with the W6W_* variables set to `values` (or all unset), then restore them. */
 async function withW6wEnv(values: Record<string, string> | null, fn: () => Promise<void>) {
-  const saved = W6W_ENV.map((k) => [k, Deno.env.get(k)] as const);
+  const saved = W6W_ENV.map((k) => [k, process.env[k]] as const);
   try {
-    for (const k of W6W_ENV) Deno.env.delete(k);
-    for (const [k, v] of Object.entries(values ?? {})) Deno.env.set(k, v);
+    for (const k of W6W_ENV) delete process.env[k];
+    for (const [k, v] of Object.entries(values ?? {})) process.env[k] = v;
     await fn();
   } finally {
     for (const [k, v] of saved) {
-      if (v === undefined) Deno.env.delete(k);
-      else Deno.env.set(k, v);
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
     }
   }
 }
 
-Deno.test("route.ts imports without throwing and exports POST", async () => {
+test("route.ts imports without throwing and exports POST", async () => {
   assertEquals(typeof route.POST, "function");
   // Without credentials in the environment the lazy build fails closed, opaquely.
   await withW6wEnv(null, async () => {
@@ -239,7 +243,7 @@ Deno.test("route.ts imports without throwing and exports POST", async () => {
   });
 });
 
-Deno.test("route.ts configured: the stub authenticate refuses with 401 and never calls w6w", async () => {
+test("route.ts configured: the stub authenticate refuses with 401 and never calls w6w", async () => {
   const realFetch = globalThis.fetch;
   let fetches = 0;
   globalThis.fetch = (() => {
@@ -266,7 +270,7 @@ Deno.test("route.ts configured: the stub authenticate refuses with 401 and never
   assertEquals(fetches, 0);
 });
 
-Deno.test("membership is exact: case and surrounding whitespace do not match", async () => {
+test("membership is exact: case and surrounding whitespace do not match", async () => {
   const h = handlerFor({ userId: "u1", companyIds: ["A"] });
   for (const company of ["a", " A", "A "]) {
     const res = await h.handle(post({ company }));
@@ -276,7 +280,7 @@ Deno.test("membership is exact: case and surrounding whitespace do not match", a
   assertEquals(h.calls.length, 0);
 });
 
-Deno.test("a blank hint falls back to the active company", async () => {
+test("a blank hint falls back to the active company", async () => {
   const h = handlerFor(U1);
   for (const body of [{ company: "" }, { company: "   " }, { company: 7 }, {}]) {
     const res = await h.handle(post(body));
@@ -285,7 +289,7 @@ Deno.test("a blank hint falls back to the active company", async () => {
   assertEquals(h.calls, Array(4).fill({ subject: "u1", accountRef: "A" }));
 });
 
-Deno.test("route.ts with W6W_BASE_URL unset: constructs (no 502) and exchanges against https://api.w6w.io", async () => {
+test("route.ts with W6W_BASE_URL unset: constructs (no 502) and exchanges against https://api.w6w.io", async () => {
   const realFetch = globalThis.fetch;
   globalThis.fetch = (() => Promise.reject(new Error("must not be called"))) as typeof fetch;
   // route.ts caches its handler; start from a fresh build so POST's own construction runs.

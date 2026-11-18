@@ -33,7 +33,9 @@
  * base URL and token, and nothing is invoked.
  */
 
-import { assert, assertEquals } from "@std/assert";
+import { readFile } from "node:fs/promises";
+import { test } from "node:test";
+import { assert, assertEquals } from "./assert.ts";
 import { DEFAULT_BASE_URL, W6WClient } from "../mod.ts";
 
 /** The shared contract, beside this lane — `packages/wrappers/endpoints.json`. */
@@ -66,9 +68,9 @@ interface Contract {
 async function loadContract(): Promise<Contract> {
   let text: string;
   try {
-    text = await Deno.readTextFile(CONTRACT_URL);
+    text = await readFile(CONTRACT_URL, "utf8");
   } catch (err) {
-    if (err instanceof Deno.errors.NotFound) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
       throw new Error(
         `conformance: the wrappers' shared contract was not found at ${CONTRACT_URL.pathname}. ` +
           "It is a sibling of this lane (`../endpoints.json` from the lane root, so " +
@@ -151,11 +153,13 @@ function unresolved(client: W6WClient, path: string[]): string | null {
  * @returns The one-line assertion message.
  */
 function failureMessage(operation: Operation, reason: string): string {
-  return `conformance: operation \`${operation.name}\` is not reachable — expected ` +
-    `\`${symbolOf(operation.naming.ts)}\` (from endpoints.json naming.ts) — ${reason}`;
+  return (
+    `conformance: operation \`${operation.name}\` is not reachable — expected ` +
+    `\`${symbolOf(operation.naming.ts)}\` (from endpoints.json naming.ts) — ${reason}`
+  );
 }
 
-Deno.test("the contract lists operations this runner can walk", async () => {
+test("the contract lists operations this runner can walk", async () => {
   // The two properties every case below depends on: the contract is readable,
   // and it names a `naming.ts` symbol for every operation it lists. Without
   // this, an empty or mis-keyed `operations[]` would make the walk below assert
@@ -168,7 +172,7 @@ Deno.test("the contract lists operations this runner can walk", async () => {
   );
   assertEquals(
     contract.operations.length,
-    123,
+    124,
     "conformance: the contract's operation count changed. Extend this lane (and its " +
       "version guard) in the same change, then update this pin — it exists so a " +
       "truncated or half-merged contract cannot silently shrink the walk.",
@@ -182,7 +186,7 @@ Deno.test("the contract lists operations this runner can walk", async () => {
   }
 });
 
-Deno.test("every contracted operation is reachable and callable on a client", async () => {
+test("every contracted operation is reachable and callable on a client", async () => {
   const contract = await loadContract();
   const client = new W6WClient({
     baseUrl: "https://api.example.com",
@@ -204,7 +208,7 @@ Deno.test("every contracted operation is reachable and callable on a client", as
   );
 });
 
-Deno.test("the runner resolves the pinned shapes, including a missing symbol", () => {
+test("the runner resolves the pinned shapes, including a missing symbol", () => {
   // The walk itself is pinned, so a change to the resolution algorithm cannot
   // make every path above resolve trivially. The negative case is the one that
   // matters: it is exactly the mutation a drift alarm has to catch — a
@@ -222,10 +226,7 @@ Deno.test("the runner resolves the pinned shapes, including a missing symbol", (
 
   assertEquals(unresolved(client, ["documents", "getByKey"]), null);
   assertEquals(unresolved(client, ["me"]), null);
-  assertEquals(
-    unresolved(client, ["workflows", "listX"]),
-    "`client.workflows.listX` is missing",
-  );
+  assertEquals(unresolved(client, ["workflows", "listX"]), "`client.workflows.listX` is missing");
   // `documents` is a namespace object, not something a caller invokes.
   assertEquals(unresolved(client, ["documents"]), "`client.documents` is not callable");
   assertEquals(unresolved(client, ["nope", "deeper"]), "`client.nope` is missing");
@@ -240,8 +241,8 @@ Deno.test("the runner resolves the pinned shapes, including a missing symbol", (
   );
 });
 
-Deno.test("conformance: DEFAULT_BASE_URL equals endpoints.json defaultBaseUrl", async () => {
-  const contract = await loadContract() as Contract & { defaultBaseUrl?: string };
+test("conformance: DEFAULT_BASE_URL equals endpoints.json defaultBaseUrl", async () => {
+  const contract = (await loadContract()) as Contract & { defaultBaseUrl?: string };
   assertEquals(contract.defaultBaseUrl, "https://api.w6w.io");
   assertEquals(DEFAULT_BASE_URL, contract.defaultBaseUrl);
 });

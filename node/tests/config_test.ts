@@ -8,7 +8,8 @@
  * possible precisely *because* there is only one seam to exercise.
  */
 
-import { assertEquals, assertRejects, assertStringIncludes, assertThrows } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects, assertStringIncludes, assertThrows } from "./assert.ts";
 import {
   BASE_PATH,
   DEFAULT_BASE_URL,
@@ -29,23 +30,23 @@ import { W6WClient } from "../src/client.ts";
 function withEnv(vars: Record<string, string | undefined>, fn: () => void): void {
   const saved = new Map<string, string | undefined>();
   for (const [name, value] of Object.entries(vars)) {
-    saved.set(name, Deno.env.get(name));
-    if (value === undefined) Deno.env.delete(name);
-    else Deno.env.set(name, value);
+    saved.set(name, process.env[name]);
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
   }
   try {
     fn();
   } finally {
     for (const [name, value] of saved) {
-      if (value === undefined) Deno.env.delete(name);
-      else Deno.env.set(name, value);
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
     }
   }
 }
 
 const NO_ENV = { W6W_BASE_URL: undefined, W6W_TOKEN: undefined };
 
-Deno.test("a bare origin is used as-is — no base path is appended", () => {
+test("a bare origin is used as-is — no base path is appended", () => {
   withEnv(NO_ENV, () => {
     assertEquals(
       resolveConfig({ baseUrl: "https://api.example.com" }).baseUrl,
@@ -57,7 +58,7 @@ Deno.test("a bare origin is used as-is — no base path is appended", () => {
   assertEquals(BASE_PATH, "");
 });
 
-Deno.test("joinBaseUrl and the client resolve to the same EXPECTED value", () => {
+test("joinBaseUrl and the client resolve to the same EXPECTED value", () => {
   // Both sides are asserted against a written-out expectation, never merely
   // against each other: once the helper and the resolver share one
   // implementation — which is the point of this pin — an equality-only
@@ -92,7 +93,7 @@ Deno.test("joinBaseUrl and the client resolve to the same EXPECTED value", () =>
   });
 });
 
-Deno.test("a relative or hostless base URL is a configuration error, not an outage", () => {
+test("a relative or hostless base URL is a configuration error, not an outage", () => {
   // The hole this closes: `resolveConfig({baseUrl: "/foo"})` used to SUCCEED,
   // yielding a relative base. The request then went nowhere useful and
   // surfaced as `network_error` — "It may be down or unreachable" — which sends
@@ -140,7 +141,7 @@ Deno.test("a relative or hostless base URL is a configuration error, not an outa
   });
 });
 
-Deno.test("a relative base URL from the environment is rejected too", () => {
+test("a relative base URL from the environment is rejected too", () => {
   // The empty-string env rule closes this hole from one side only: a blank
   // W6W_BASE_URL is absent, but a *present* relative one walked straight past it.
   withEnv({ W6W_BASE_URL: "/api", W6W_TOKEN: "tok_env" }, () => {
@@ -149,7 +150,7 @@ Deno.test("a relative base URL from the environment is rejected too", () => {
   });
 });
 
-Deno.test("a client with a relative base URL never issues a request", () => {
+test("a client with a relative base URL never issues a request", () => {
   // The behavioural half of the pin: the failure has to happen at construction,
   // before any transport is reached, or the diagnosis arrives as a network error.
   let calls = 0;
@@ -158,15 +159,12 @@ Deno.test("a client with a relative base URL never issues a request", () => {
     return Promise.resolve(new Response("{}", { status: 200 }));
   };
   withEnv(NO_ENV, () => {
-    assertThrows(
-      () => new W6WClient({ baseUrl: "/foo", token: "tok_1", fetch: spy }),
-      ConfigError,
-    );
+    assertThrows(() => new W6WClient({ baseUrl: "/foo", token: "tok_1", fetch: spy }), ConfigError);
   });
   assertEquals(calls, 0);
 });
 
-Deno.test("trailing slashes are stripped", () => {
+test("trailing slashes are stripped", () => {
   withEnv(NO_ENV, () => {
     assertEquals(
       resolveConfig({ baseUrl: "https://api.example.com/" }).baseUrl,
@@ -180,7 +178,7 @@ Deno.test("trailing slashes are stripped", () => {
   });
 });
 
-Deno.test("a configured path is preserved, not stripped", () => {
+test("a configured path is preserved, not stripped", () => {
   // Nothing is appended, so nothing can be doubled; the risk runs the other way
   // now. A path in the configured value may be a real gateway prefix, so it is
   // carried through verbatim — including a stale "/api" from 0.1.x, which is
@@ -201,7 +199,7 @@ Deno.test("a configured path is preserved, not stripped", () => {
   });
 });
 
-Deno.test("W6W_BASE_URL and W6W_TOKEN are read from the environment", () => {
+test("W6W_BASE_URL and W6W_TOKEN are read from the environment", () => {
   withEnv({ W6W_BASE_URL: "https://env.example.com/", W6W_TOKEN: "tok_env" }, () => {
     const config = resolveConfig();
     assertEquals(config.baseUrl, "https://env.example.com");
@@ -209,7 +207,7 @@ Deno.test("W6W_BASE_URL and W6W_TOKEN are read from the environment", () => {
   });
 });
 
-Deno.test("an explicit argument overrides the environment", () => {
+test("an explicit argument overrides the environment", () => {
   withEnv({ W6W_BASE_URL: "https://env.example.com", W6W_TOKEN: "tok_env" }, () => {
     const config = resolveConfig({ baseUrl: "https://arg.example.com", token: "tok_arg" });
     assertEquals(config.baseUrl, "https://arg.example.com");
@@ -217,14 +215,14 @@ Deno.test("an explicit argument overrides the environment", () => {
   });
 });
 
-Deno.test("an unset base URL resolves to the default https://api.w6w.io", () => {
+test("an unset base URL resolves to the default https://api.w6w.io", () => {
   withEnv(NO_ENV, () => {
     assertEquals(resolveConfig().baseUrl, "https://api.w6w.io");
     assertEquals(DEFAULT_BASE_URL, "https://api.w6w.io");
   });
 });
 
-Deno.test("an empty or blank W6W_BASE_URL behaves exactly like an unset one: the default", () => {
+test("an empty or blank W6W_BASE_URL behaves exactly like an unset one: the default", () => {
   // `??` treats "" as a value, so an empty variable would otherwise survive into
   // the join rule and resolve to the RELATIVE url "/api". An env var set to ""
   // is how a Dockerfile spells "never given a value": absent, hence the default.
@@ -239,7 +237,7 @@ Deno.test("an empty or blank W6W_BASE_URL behaves exactly like an unset one: the
   });
 });
 
-Deno.test("a client with no base URL sends its request to https://api.w6w.io", async () => {
+test("a client with no base URL sends its request to https://api.w6w.io", async () => {
   const urls: string[] = [];
   const spy: FetchLike = (input) => {
     urls.push(input);
@@ -253,13 +251,13 @@ Deno.test("a client with no base URL sends its request to https://api.w6w.io", a
   assertEquals(urls, ["https://api.w6w.io/vars"]);
 });
 
-Deno.test("a base URL of nothing but slashes is still empty", () => {
+test("a base URL of nothing but slashes is still empty", () => {
   withEnv(NO_ENV, () => {
     assertThrows(() => resolveConfig({ baseUrl: "///" }), ConfigError);
   });
 });
 
-Deno.test("an explicit empty base URL does not fall through to the environment", () => {
+test("an explicit empty base URL does not fall through to the environment", () => {
   // "An explicitly passed empty string is an explicit value, not 'unset'" — it
   // must not silently pick up the ambient W6W_BASE_URL instead.
   withEnv({ W6W_BASE_URL: "https://env.example.com", W6W_TOKEN: undefined }, () => {
@@ -270,7 +268,7 @@ Deno.test("an explicit empty base URL does not fall through to the environment",
   });
 });
 
-Deno.test("a client with no token is constructible and fails only when used", async () => {
+test("a client with no token is constructible and fails only when used", async () => {
   // `config` is a plain resolved value by the time `withEnv` restores the
   // environment, so the async assertion below can safely run after it — only
   // the resolution itself needs the environment set.
@@ -285,7 +283,7 @@ Deno.test("a client with no token is constructible and fails only when used", as
   assertStringIncludes(err.message, "W6W_TOKEN");
 });
 
-Deno.test("the default project is instance state and defaults to null", () => {
+test("the default project is instance state and defaults to null", () => {
   withEnv(NO_ENV, () => {
     assertEquals(resolveConfig({ baseUrl: "https://a.example.com" }).project, null);
     assertEquals(
@@ -295,7 +293,7 @@ Deno.test("the default project is instance state and defaults to null", () => {
   });
 });
 
-Deno.test("two clients in one process hold different credentials and base URLs", () => {
+test("two clients in one process hold different credentials and base URLs", () => {
   // The test that actually prevents the module-global regression: the browser
   // client this package transcribes keeps its token in a module variable, and
   // under that design the second construction would overwrite the first.

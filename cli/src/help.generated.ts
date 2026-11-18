@@ -99,7 +99,7 @@ export interface HelpExitCode {
 /** The command tree, generated from the shared wrapper surface contract. */
 export const HELP_TREE: HelpTree = {
   "binary": "w6w",
-  "contractVersion": "0.20.0",
+  "contractVersion": "0.21.0",
   "tagline": "command-line client for the w6w workflow platform",
   "usage": "w6w <command> [options]",
   "docsUrl": "https://w6w.dev/docs/cli",
@@ -2646,6 +2646,56 @@ export const HELP_TREE: HelpTree = {
           "notes": [],
         },
         {
+          "operation": "appManagement.discover",
+          "path": [
+            "apps",
+            "search",
+          ],
+          "name": "search",
+          "aliases": [],
+          "summary": "Search an npm or JSR registry for installable w6w apps.",
+          "short": "Search an npm or JSR registry for installable w6w apps",
+          "headline": "search an npm or JSR registry for installable w6w apps",
+          "usage": "w6w apps search <q> [options]",
+          "naming": "w6w apps search <q> [--registry npm|jsr] [--limit <n>]",
+          "status": "required",
+          "params": [
+            {
+              "name": "registry",
+              "kind": "flag",
+              "display": "--registry <value>",
+              "description": "Registry to search: npm (default) or jsr",
+              "required": false,
+            },
+            {
+              "name": "q",
+              "kind": "argument",
+              "display": "<q>",
+              "description": "Search text",
+              "required": true,
+            },
+            {
+              "name": "limit",
+              "kind": "flag",
+              "display": "--limit <n>",
+              "description": "Maximum results (a positive integer)",
+              "required": false,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w apps search hello",
+            "w6w apps search hello --registry jsr --limit 5",
+          ],
+          "notes": [],
+        },
+        {
           "operation": "appManagement.publishArtifact",
           "path": [
             "apps",
@@ -2660,7 +2710,7 @@ export const HELP_TREE: HelpTree = {
           "headline":
             "publish a built app artifact (manifest + bundle) to the caller's personal catalog",
           "usage": "w6w apps publish [dir] [options]",
-          "naming": "w6w apps publish [dir] [--version <semver>] [--builder <spec>]",
+          "naming": "w6w apps publish [dir] [--version <semver>]",
           "status": "required",
           "params": [
             {
@@ -2675,15 +2725,7 @@ export const HELP_TREE: HelpTree = {
               "kind": "flag",
               "display": "--version <semver>",
               "description":
-                "Semver to write into the app's package.json before building (rewritten in place; default: leave it as is)",
-              "required": false,
-            },
-            {
-              "name": "builder",
-              "kind": "flag",
-              "display": "--builder <spec>",
-              "description":
-                "The app builder spec to run (default: jsr:@w6w/app-build@0.2.0/cli); a path or file: URL for a local builder",
+                "Semver to write into the app's package.json before packaging (rewritten in place; default: leave it as is)",
               "required": false,
             },
             {
@@ -2709,13 +2751,13 @@ export const HELP_TREE: HelpTree = {
           "name": "init",
           "aliases": [],
           "summary":
-            "Scaffold a new app (deno or node template) in a new directory (local only, no API call).",
+            "Scaffold a new app (TypeScript, built and tested with Node and npm only) in a new directory (local only, no API call).",
           "short":
-            "Scaffold a new app (deno or node template) in a new directory (local only, no API call)",
+            "Scaffold a new app (TypeScript, built and tested with Node and npm only) in a new directory (local only, no API call)",
           "headline":
-            "scaffold a new app (deno or node template) in a new directory (local only, no API call)",
+            "scaffold a new app (TypeScript, built and tested with Node and npm only) in a new directory (local only, no API call)",
           "usage": "w6w apps init <id> [options]",
-          "naming": "w6w apps init <id> [--template deno|node] [--dir <path>]",
+          "naming": "w6w apps init <id> [--template node] [--dir <path>]",
           "status": "live",
           "params": [
             {
@@ -2730,7 +2772,8 @@ export const HELP_TREE: HelpTree = {
               "name": "template",
               "kind": "flag",
               "display": "--template <value>",
-              "description": "Template variant: deno (default) or node",
+              "description":
+                "Template variant: node (the default and only one; the deno template was removed)",
               "required": false,
             },
             {
@@ -2750,7 +2793,7 @@ export const HELP_TREE: HelpTree = {
           ],
           "examples": [
             "w6w apps init com.example.demo-app",
-            "w6w apps init com.example.demo-app --template node --dir ./demo",
+            "w6w apps init com.example.demo-app --dir ./demo",
           ],
           "notes": [],
         },
@@ -2763,35 +2806,21 @@ export const HELP_TREE: HelpTree = {
           "name": "validate",
           "aliases": [],
           "summary":
-            "Validate an app folder with the canonical app builder (local only, needs Deno).",
-          "short": "Validate an app folder with the canonical app builder (local only, needs Deno)",
+            "Check that an app folder's built JavaScript packages as a w6w app (local only, Node only).",
+          "short":
+            "Check that an app folder's built JavaScript packages as a w6w app (local only, Node only)",
           "headline":
-            "validate an app folder with the canonical app builder (local only, needs Deno)",
+            "check that an app folder's built JavaScript packages as a w6w app (local only, Node only)",
           "usage": "w6w apps validate [dir] [options]",
-          "naming": "w6w apps validate [dir] [--resolution sibling|registry] [--builder <spec>]",
+          "naming": "w6w apps validate [dir]",
           "status": "live",
           "params": [
             {
               "name": "dir",
               "kind": "argument",
               "display": "[dir]",
-              "description": "The app directory (default: the current directory)",
-              "required": false,
-            },
-            {
-              "name": "resolution",
-              "kind": "flag",
-              "display": "--resolution <value>",
               "description":
-                "How @w6w/* imports resolve: sibling or registry (default: registry when the app's deno.json maps @w6w/types to jsr:, else sibling)",
-              "required": false,
-            },
-            {
-              "name": "builder",
-              "kind": "flag",
-              "display": "--builder <spec>",
-              "description":
-                "The app builder spec to run (default: jsr:@w6w/app-build@0.2.0/cli); a path or file: URL for a local builder",
+                "The app directory (default: the current directory); its package.json names the built JS in w6w.entry (else main)",
               "required": false,
             },
             {
@@ -2804,7 +2833,7 @@ export const HELP_TREE: HelpTree = {
           ],
           "examples": [
             "w6w apps validate",
-            "w6w apps validate ./com.example.demo-app --resolution registry",
+            "w6w apps validate ./com.example.demo-app --json",
           ],
           "notes": [],
         },
@@ -2903,21 +2932,21 @@ export const HELP_TREE: HelpTree = {
           "name": "build",
           "aliases": [],
           "summary":
-            "Build an app folder into the canonical artifact layout with the app builder (local only, needs Deno).",
+            "Package an app folder's built JavaScript into the canonical artifact layout (local only, Node only).",
           "short":
-            "Build an app folder into the canonical artifact layout with the app builder (local only, needs Deno)",
+            "Package an app folder's built JavaScript into the canonical artifact layout (local only, Node only)",
           "headline":
-            "build an app folder into the canonical artifact layout with the app builder (local only, needs Deno)",
+            "package an app folder's built JavaScript into the canonical artifact layout (local only, Node only)",
           "usage": "w6w apps build [dir] [options]",
-          "naming":
-            "w6w apps build [dir] [-o|--out <dir>] [--pack <file>] [--resolution sibling|registry] [--builder <spec>]",
+          "naming": "w6w apps build [dir] [-o|--out <dir>] [--pack <file>]",
           "status": "live",
           "params": [
             {
               "name": "dir",
               "kind": "argument",
               "display": "[dir]",
-              "description": "The app directory (default: the current directory)",
+              "description":
+                "The app directory (default: the current directory); its package.json names the built JS in w6w.entry (else main)",
               "required": false,
             },
             {
@@ -2925,7 +2954,7 @@ export const HELP_TREE: HelpTree = {
               "kind": "flag",
               "display": "--out <value>",
               "description":
-                "Output root: writes <out>/<id>/<version>/{app.js,manifest.json} and <out>/index.json (`-o` is shorthand)",
+                "Output root: writes <out>/<id>/<version>/{app.js,manifest.json[,app.js.map]} and <out>/index.json (`-o` is shorthand)",
               "required": false,
             },
             {
@@ -2934,22 +2963,6 @@ export const HELP_TREE: HelpTree = {
               "display": "--pack <file>",
               "description":
                 "A pack or index JSON file (with an `apps` array) to update with the built entry; created if missing",
-              "required": false,
-            },
-            {
-              "name": "resolution",
-              "kind": "flag",
-              "display": "--resolution <value>",
-              "description":
-                "How @w6w/* imports resolve: sibling or registry (default: registry when the app's deno.json maps @w6w/types to jsr:, else sibling)",
-              "required": false,
-            },
-            {
-              "name": "builder",
-              "kind": "flag",
-              "display": "--builder <spec>",
-              "description":
-                "The app builder spec to run (default: jsr:@w6w/app-build@0.2.0/cli); a path or file: URL for a local builder",
               "required": false,
             },
             {
@@ -2963,6 +2976,79 @@ export const HELP_TREE: HelpTree = {
           "examples": [
             "w6w apps build ./com.example.demo-app",
             "w6w apps build ./com.example.demo-app --out ./out --pack ./w6w-pack.json",
+          ],
+          "notes": [],
+        },
+        {
+          "operation": "apps.package",
+          "path": [
+            "apps",
+            "package",
+          ],
+          "name": "package",
+          "aliases": [],
+          "summary":
+            "Package a pack's already-built apps into a w6w registry package tree (<out>/w6w/index.json + <id>/<version>/…); never publishes (local only, needs only Node).",
+          "short":
+            "Package a pack's already-built apps into a w6w registry package tree (<out>/w6w/index.json + <id>/<version>/…); never publishes (local only, needs only Node)",
+          "headline":
+            "package a pack's already-built apps into a w6w registry package tree (<out>/w6w/index.json + <id>/<version>/…); never publishes (local only, needs only Node)",
+          "usage": "w6w apps package <pack> [options]",
+          "naming":
+            "w6w apps package <pack> [-o|--out <dir>] [--name <pkg>] [--version <v>] [--license <spdx>]",
+          "status": "live",
+          "params": [
+            {
+              "name": "pack",
+              "kind": "argument",
+              "display": "<pack>",
+              "description":
+                "The pack source (w6w-pack.json) listing the apps to package (each already built)",
+              "required": true,
+            },
+            {
+              "name": "out",
+              "kind": "flag",
+              "display": "--out <value>",
+              "description":
+                "Output root (default: dist): writes <out>/w6w/index.json and <out>/w6w/<id>/<version>/…; nothing is written if any app fails (`-o` is shorthand)",
+              "required": false,
+            },
+            {
+              "name": "name",
+              "kind": "flag",
+              "display": "--name <pkg>",
+              "description":
+                "Package name written to package.json (jsr.json derives from it); used only when those files are created (default: w6w-apps-<pack dir>)",
+              "required": false,
+            },
+            {
+              "name": "version",
+              "kind": "flag",
+              "display": "--version <v>",
+              "description":
+                "Version written to package.json/jsr.json; used only when those files are created (default: 0.1.0)",
+              "required": false,
+            },
+            {
+              "name": "license",
+              "kind": "flag",
+              "display": "--license <spdx>",
+              "description":
+                "SPDX license written to jsr.json when it is created and neither the pack nor package.json declares one (default: UNLICENSED)",
+              "required": false,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w apps package ./w6w-pack.json",
+            "w6w apps package ./w6w-pack.json --out ./dist",
           ],
           "notes": [],
         },
@@ -6782,11 +6868,11 @@ export const HELP_TREE: HelpTree = {
           "name": "app",
           "aliases": [],
           "summary":
-            "Alias of apps build: build an app folder with the canonical app builder (local only).",
+            "Alias of apps build: package an app folder's built JavaScript into the canonical artifact (local only).",
           "short":
-            "Alias of apps build: build an app folder with the canonical app builder (local only)",
+            "Alias of apps build: package an app folder's built JavaScript into the canonical artifact (local only)",
           "headline":
-            "alias of apps build: build an app folder with the canonical app builder (local only)",
+            "alias of apps build: package an app folder's built JavaScript into the canonical artifact (local only)",
           "usage": "w6w build app <folder> [options]",
           "naming": "w6w build app <folder> [--out <dir>] [--pack <file>]",
           "status": "live",
@@ -6804,7 +6890,7 @@ export const HELP_TREE: HelpTree = {
               "kind": "flag",
               "display": "--out <dir>",
               "description":
-                "Output root: writes <out>/<id>/<version>/{app.js,manifest.json} and <out>/index.json",
+                "Output root: writes <out>/<id>/<version>/{app.js,manifest.json[,app.js.map]} and <out>/index.json",
               "required": false,
             },
             {
@@ -6836,7 +6922,7 @@ export const HELP_TREE: HelpTree = {
           "kind": "flag",
           "display": "--out <dir>",
           "description":
-            "Output root: writes <out>/<id>/<version>/{app.js,manifest.json} and <out>/index.json",
+            "Output root: writes <out>/<id>/<version>/{app.js,manifest.json[,app.js.map]} and <out>/index.json",
           "required": false,
         },
         {
@@ -7147,6 +7233,10 @@ export const COMMAND_PATHS: string[][] = [
   ],
   [
     "apps",
+    "search",
+  ],
+  [
+    "apps",
     "publish",
   ],
   [
@@ -7164,6 +7254,10 @@ export const COMMAND_PATHS: string[][] = [
   [
     "apps",
     "build",
+  ],
+  [
+    "apps",
+    "package",
   ],
   [
     "dashboard",

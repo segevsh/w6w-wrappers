@@ -199,14 +199,12 @@ export class CredentialsApi {
    * @throws {ApiError} `400 invalid_contract` (a `legacy:*` contract);
    *   `400 provider_unsupported`.
    */
-  async create(
-    body: {
-      name: string;
-      contract: string;
-      source: Record<string, unknown>;
-      accessScope?: AccessScope;
-    },
-  ): Promise<CredentialSummary> {
+  async create(body: {
+    name: string;
+    contract: string;
+    source: Record<string, unknown>;
+    accessScope?: AccessScope;
+  }): Promise<CredentialSummary> {
     // Built by omission: an undefined scope leaves the body byte-identical to the legacy one.
     const wire: Record<string, unknown> = {
       name: body.name,

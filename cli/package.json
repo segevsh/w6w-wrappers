@@ -1,6 +1,6 @@
 {
   "name": "@w6w/cli",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "The w6w command-line client. Thin transport over the w6w HTTP API, with help generated from the shared wrapper contract.",
   "license": "MIT",
   "repository": {
@@ -29,21 +29,15 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node scripts/fix-shebang.mjs"
+    "build": "tsc -p tsconfig.build.json && node scripts/fix-shebang.mjs && node scripts/copy-vendor.mjs",
+    "vendor:assemble": "node scripts/vendor-app-assemble.mjs"
   },
   "dependencies": {
-    "@w6w/sdk": "^0.12.0"
-  },
-  "optionalDependencies": {
-    "@deno/linux-x64-glibc": "2.8.2",
-    "@deno/linux-arm64-glibc": "2.8.2",
-    "@deno/darwin-x64": "2.8.2",
-    "@deno/darwin-arm64": "2.8.2",
-    "@deno/win32-x64": "2.8.2",
-    "@deno/win32-arm64": "2.8.2"
+    "@w6w/sdk": "^0.12.1"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
+    "esbuild": "0.28.2",
     "typescript": "^5.7.2"
   },
   "publishConfig": {

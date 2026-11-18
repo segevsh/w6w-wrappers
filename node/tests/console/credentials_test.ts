@@ -7,7 +7,8 @@
  * server body intact on `raw`.
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects } from "../assert.ts";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import { ApiError } from "../../src/errors.ts";
@@ -64,7 +65,7 @@ const CRED: CredentialSummary = {
 
 const BASE = "https://api.example.com";
 
-Deno.test("credentials types: closed unions and no source key", () => {
+test("credentials types: closed unions and no source key", () => {
   const s: CredentialStatus = "revoked";
   const code: CredentialErrorCode = "credential_invalid";
   const result: CredentialTestResult = { ok: false, code };
@@ -76,7 +77,7 @@ Deno.test("credentials types: closed unions and no source key", () => {
   assertEquals([s, result.ok, deps.connections.length, leaked, bad].length, 5);
 });
 
-Deno.test("credentials: every method is a function on a constructed client", () => {
+test("credentials: every method is a function on a constructed client", () => {
   const c = new W6WClient({ baseUrl: BASE, token: "t" });
   const names = [
     "list",
@@ -94,7 +95,7 @@ Deno.test("credentials: every method is a function on a constructed client", () 
   for (const n of names) assertEquals(typeof c.console.credentials[n], "function", n);
 });
 
-Deno.test("credentials.list with no filter sends no query string", async () => {
+test("credentials.list with no filter sends no query string", async () => {
   const c = client(() => json({ credentials: [CRED] }));
   const res = await c.client.console.credentials.list();
   assertEquals(res, [CRED]);
@@ -102,19 +103,19 @@ Deno.test("credentials.list with no filter sends no query string", async () => {
   assertEquals(c.calls[0].url, `${BASE}/credentials`);
 });
 
-Deno.test("credentials.list sends exactly the defined filter keys", async () => {
+test("credentials.list sends exactly the defined filter keys", async () => {
   const c = client(() => json({ credentials: [] }));
   await c.client.console.credentials.list({ appId: "gmail", authKey: "sa" });
   assertEquals(c.calls[0].url, `${BASE}/credentials?appId=gmail&authKey=sa`);
 });
 
-Deno.test("credentials.list with {contract} sends only contract", async () => {
+test("credentials.list with {contract} sends only contract", async () => {
   const c = client(() => json({ credentials: [] }));
   await c.client.console.credentials.list({ contract: "api_key", appId: undefined });
   assertEquals(c.calls[0].url, `${BASE}/credentials?contract=api_key`);
 });
 
-Deno.test("credentials.get unwraps the credential envelope and encodes the id", async () => {
+test("credentials.get unwraps the credential envelope and encodes the id", async () => {
   const c = client(() => json({ credential: CRED }));
   const res = await c.client.console.credentials.get("cred/x");
   assertEquals(res, CRED);
@@ -122,7 +123,7 @@ Deno.test("credentials.get unwraps the credential envelope and encodes the id", 
   assertEquals(c.calls[0].url, `${BASE}/credentials/cred%2Fx`);
 });
 
-Deno.test("credentials.create forwards the body byte-equal and unwraps the 201", async () => {
+test("credentials.create forwards the body byte-equal and unwraps the 201", async () => {
   const c = client(() => json({ credential: CRED }, 201));
   const input = {
     name: "Ops",
@@ -136,7 +137,7 @@ Deno.test("credentials.create forwards the body byte-equal and unwraps the 201",
   assertEquals(c.calls[0].body, JSON.stringify(input));
 });
 
-Deno.test("credentials.update PATCHes {name} and unwraps credential", async () => {
+test("credentials.update PATCHes {name} and unwraps credential", async () => {
   const c = client(() => json({ credential: { ...CRED, name: "New" } }));
   const res = await c.client.console.credentials.update("cred_1", { name: "New" });
   assertEquals(res.name, "New");
@@ -145,7 +146,7 @@ Deno.test("credentials.update PATCHes {name} and unwraps credential", async () =
   assertEquals(c.calls[0].body, '{"name":"New"}');
 });
 
-Deno.test("credentials.rotate forwards {source} verbatim", async () => {
+test("credentials.rotate forwards {source} verbatim", async () => {
   const c = client(() => json({ credential: { ...CRED, revision: 3 } }));
   const res = await c.client.console.credentials.rotate("cred_1", { source: { key: "new" } });
   assertEquals(res.revision, 3);
@@ -154,7 +155,7 @@ Deno.test("credentials.rotate forwards {source} verbatim", async () => {
   assertEquals(c.calls[0].body, '{"source":{"key":"new"}}');
 });
 
-Deno.test("credentials.disable POSTs /disable", async () => {
+test("credentials.disable POSTs /disable", async () => {
   const c = client(() => json({ credential: { ...CRED, status: "disabled" } }));
   const res = await c.client.console.credentials.disable("cred_1");
   assertEquals(res.status, "disabled");
@@ -162,7 +163,7 @@ Deno.test("credentials.disable POSTs /disable", async () => {
   assertEquals(c.calls[0].url, `${BASE}/credentials/cred_1/disable`);
 });
 
-Deno.test("credentials.enable POSTs /enable", async () => {
+test("credentials.enable POSTs /enable", async () => {
   const c = client(() => json({ credential: CRED }));
   const res = await c.client.console.credentials.enable("cred_1");
   assertEquals(res, CRED);
@@ -170,7 +171,7 @@ Deno.test("credentials.enable POSTs /enable", async () => {
   assertEquals(c.calls[0].url, `${BASE}/credentials/cred_1/enable`);
 });
 
-Deno.test("credentials.test returns the whole body; ok:false resolves", async () => {
+test("credentials.test returns the whole body; ok:false resolves", async () => {
   const body: CredentialTestResult = { ok: false, code: "credential_invalid", message: "nope" };
   const c = client(() => json(body));
   const res = await c.client.console.credentials.test("cred_1");
@@ -179,17 +180,14 @@ Deno.test("credentials.test returns the whole body; ok:false resolves", async ()
   assertEquals(c.calls[0].url, `${BASE}/credentials/cred_1/test`);
 });
 
-Deno.test("credentials.test still rejects on a 404 unknown_credential", async () => {
+test("credentials.test still rejects on a 404 unknown_credential", async () => {
   const c = client(() => json({ error: { code: "unknown_credential", message: "x" } }, 404));
-  const err = await assertRejects(
-    () => c.client.console.credentials.test("cred_9"),
-    ApiError,
-  );
+  const err = await assertRejects(() => c.client.console.credentials.test("cred_9"), ApiError);
   assertEquals(err.status, 404);
   assertEquals(err.code, "unknown_credential");
 });
 
-Deno.test("credentials.dependents unwraps the dependents envelope", async () => {
+test("credentials.dependents unwraps the dependents envelope", async () => {
   const deps = {
     connections: [{ id: "conn_1", appId: "gmail", authKey: "sa", displayName: "G" }],
   };
@@ -200,7 +198,7 @@ Deno.test("credentials.dependents unwraps the dependents envelope", async () => 
   assertEquals(c.calls[0].url, `${BASE}/credentials/cred_1/dependents`);
 });
 
-Deno.test("credentials.types sends GET /credential-types and unwraps the types array", async () => {
+test("credentials.types sends GET /credential-types and unwraps the types array", async () => {
   const c = client(() =>
     json({
       types: [
@@ -210,7 +208,7 @@ Deno.test("credentials.types sends GET /credential-types and unwraps the types a
           fields: [{ key: "token", label: "Token", secret: true }],
         },
       ],
-    })
+    }),
   );
   const res = await c.client.console.credentials.types();
   assertEquals(res, [
@@ -224,7 +222,7 @@ Deno.test("credentials.types sends GET /credential-types and unwraps the types a
   assertEquals(c.calls[0].url, `${BASE}/credential-types`);
 });
 
-Deno.test("credentials.delete sends a bare DELETE (no query) and resolves undefined on 204", async () => {
+test("credentials.delete sends a bare DELETE (no query) and resolves undefined on 204", async () => {
   const c = client(() => new Response(null, { status: 204 }));
   const res = await c.client.console.credentials.delete("cred_1");
   assertEquals(res, undefined);
@@ -232,7 +230,7 @@ Deno.test("credentials.delete sends a bare DELETE (no query) and resolves undefi
   assertEquals(c.calls[0].url, `${BASE}/credentials/cred_1`);
 });
 
-Deno.test("credentials.delete 409 surfaces ApiError with nested dependents on raw", async () => {
+test("credentials.delete 409 surfaces ApiError with nested dependents on raw", async () => {
   const body = {
     error: {
       code: "credential_in_use",
@@ -243,19 +241,13 @@ Deno.test("credentials.delete 409 surfaces ApiError with nested dependents on ra
     },
   };
   const c = client(() => json(body, 409));
-  const err = await assertRejects(
-    () => c.client.console.credentials.delete("cred_1"),
-    ApiError,
-  );
+  const err = await assertRejects(() => c.client.console.credentials.delete("cred_1"), ApiError);
   assertEquals(err.status, 409);
   assertEquals(err.code, "credential_in_use");
-  assertEquals(
-    (err.raw as typeof body).error.dependents.connections[0].id,
-    "conn_1",
-  );
+  assertEquals((err.raw as typeof body).error.dependents.connections[0].id, "conn_1");
 });
 
-Deno.test("credentials.create without accessScope sends exactly {name, contract, source}", async () => {
+test("credentials.create without accessScope sends exactly {name, contract, source}", async () => {
   const c = client(() => json({ credential: CRED }, 201));
   await c.client.console.credentials.create({
     name: "Ops",
@@ -269,7 +261,7 @@ Deno.test("credentials.create without accessScope sends exactly {name, contract,
   );
 });
 
-Deno.test("credentials.create with accessScope adds only accessScope", async () => {
+test("credentials.create with accessScope adds only accessScope", async () => {
   const c = client(() => json({ credential: { ...CRED, accessScope: "user" } }, 201));
   const res = await c.client.console.credentials.create({
     name: "Mine",
@@ -289,22 +281,20 @@ Deno.test("credentials.create with accessScope adds only accessScope", async () 
   );
 });
 
-Deno.test("credentials.list({accessScope}) sends accessScope and nothing undefined", async () => {
+test("credentials.list({accessScope}) sends accessScope and nothing undefined", async () => {
   const c = client(() => json({ credentials: [] }));
   await c.client.console.credentials.list({ accessScope: "user", appId: undefined });
   assertEquals(c.calls[0].url, `${BASE}/credentials?accessScope=user`);
 });
 
-Deno.test("credentials.create propagates each ownership error code unchanged", async () => {
-  for (
-    const [status, code] of [
-      [403, "user_context_required"],
-      [409, "credential_scope_mismatch"],
-      [400, "user_scope_unsupported"],
-      [403, "user_scope_not_enabled"],
-      [403, "ai_credential_policy_denied"],
-    ] as const
-  ) {
+test("credentials.create propagates each ownership error code unchanged", async () => {
+  for (const [status, code] of [
+    [403, "user_context_required"],
+    [409, "credential_scope_mismatch"],
+    [400, "user_scope_unsupported"],
+    [403, "user_scope_not_enabled"],
+    [403, "ai_credential_policy_denied"],
+  ] as const) {
     const c = client(() => json({ error: { code, message: "no" } }, status));
     const err = await assertRejects(
       () =>

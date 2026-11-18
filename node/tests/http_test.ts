@@ -7,13 +7,14 @@
  * it produced, including all three pinned failure modes.
  */
 
+import { test } from "node:test";
 import {
   assertEquals,
   assertInstanceOf,
   assertRejects,
   assertStringIncludes,
   assertThrows,
-} from "@std/assert";
+} from "./assert.ts";
 import { W6WClient } from "../src/client.ts";
 import { type FetchLike, resolveConfig } from "../src/config.ts";
 import { ApiError, ConfigError } from "../src/errors.ts";
@@ -33,9 +34,7 @@ interface Call {
  * A `fetch`-shaped fake. `respond` receives the recorded call and returns the
  * `Response` to hand back — or throws, to simulate a transport failure.
  */
-function fakeFetch(
-  respond: (call: Call) => Response,
-): { fetch: FetchLike; calls: Call[] } {
+function fakeFetch(respond: (call: Call) => Response): { fetch: FetchLike; calls: Call[] } {
   const calls: Call[] = [];
   const fetch: FetchLike = (input, init) => {
     const call: Call = {
@@ -61,7 +60,7 @@ function json(body: unknown, status = 200, statusText?: string): Response {
   });
 }
 
-Deno.test("a 200 returns the parsed body, the status, and sends the bearer", async () => {
+test("a 200 returns the parsed body, the status, and sends the bearer", async () => {
   const fake = fakeFetch(() => json({ vars: [{ id: "var_1" }] }));
 
   const res = await request<{ vars: { id: string }[] }>(CONFIG, fake.fetch, {
@@ -80,7 +79,7 @@ Deno.test("a 200 returns the parsed body, the status, and sends the bearer", asy
   assertEquals(fake.calls[0].body, null);
 });
 
-Deno.test("a 202 is success and its status reaches the caller", async () => {
+test("a 202 is success and its status reaches the caller", async () => {
   // 202 means the run is queued and still going — a normal outcome on this API,
   // not an error. The status is the only thing distinguishing it from a 200, so
   // a status-losing signature would make the run operations impossible.
@@ -100,7 +99,7 @@ Deno.test("a 202 is success and its status reaches the caller", async () => {
   assertEquals(fake.calls[0].body, '{"variables":{"a":1}}');
 });
 
-Deno.test("a 2xx with an empty body resolves rather than crashing", async () => {
+test("a 2xx with an empty body resolves rather than crashing", async () => {
   // The server answers deletes with {ok:true}, but a 204-style empty body must
   // not blow up JSON.parse on the way out.
   const fake = fakeFetch(() => new Response(null, { status: 204 }));
@@ -112,7 +111,7 @@ Deno.test("a 2xx with an empty body resolves rather than crashing", async () => 
   assertEquals(fake.calls[0].method, "DELETE");
 });
 
-Deno.test("an error envelope becomes an ApiError that keeps the raw body", async () => {
+test("an error envelope becomes an ApiError that keeps the raw body", async () => {
   const raw = {
     error: { code: "unknown_document", message: "No such document." },
     logs: ["looked"],
@@ -132,7 +131,7 @@ Deno.test("an error envelope becomes an ApiError that keeps the raw body", async
   assertEquals(err.name, "ApiError");
 });
 
-Deno.test("an error body with no envelope falls back to 'error' and the status text", async () => {
+test("an error body with no envelope falls back to 'error' and the status text", async () => {
   const fake = fakeFetch(() => json({}, 500, "Internal Server Error"));
 
   const err = await assertRejects(
@@ -146,7 +145,7 @@ Deno.test("an error body with no envelope falls back to 'error' and the status t
   assertEquals(err.raw, {});
 });
 
-Deno.test("a non-JSON body on a non-OK status is bad_response with a snippet", async () => {
+test("a non-JSON body on a non-OK status is bad_response with a snippet", async () => {
   // What a Cloudflare/proxy HTML error page looks like. Reporting it as an
   // opaque JSON SyntaxError would throw away the only diagnostic there is.
   const html = `<!DOCTYPE html><html><body>${"error ".repeat(100)}</body></html>`;
@@ -167,7 +166,7 @@ Deno.test("a non-JSON body on a non-OK status is bad_response with a snippet", a
   assertEquals(err.raw, null);
 });
 
-Deno.test("a non-JSON body on an OK status is not an error", async () => {
+test("a non-JSON body on an OK status is not an error", async () => {
   const fake = fakeFetch(() => new Response("plain text", { status: 200 }));
 
   const res = await request<null>(CONFIG, fake.fetch, { method: "GET", path: "/vars" });
@@ -176,7 +175,7 @@ Deno.test("a non-JSON body on an OK status is not an error", async () => {
   assertEquals(res.body, null);
 });
 
-Deno.test("a thrown fetch is network_error with status 0, naming the method and URL", async () => {
+test("a thrown fetch is network_error with status 0, naming the method and URL", async () => {
   const fake = fakeFetch(() => {
     throw new TypeError("Connection refused");
   });
@@ -195,7 +194,7 @@ Deno.test("a thrown fetch is network_error with status 0, naming the method and 
   assertEquals(err.raw, null);
 });
 
-Deno.test("options.signal reaches fetch's RequestInit.signal, and never the URL or body", async () => {
+test("options.signal reaches fetch's RequestInit.signal, and never the URL or body", async () => {
   const controller = new AbortController();
   let seenSignal: AbortSignal | null | undefined;
   const fetchImpl: FetchLike = (_url, init) => {
@@ -213,44 +212,37 @@ Deno.test("options.signal reaches fetch's RequestInit.signal, and never the URL 
   assertEquals(seenSignal, controller.signal);
 });
 
-Deno.test(
-  "an already-aborted signal raises ApiError code 'cancelled', status 0 — not network_error",
-  async () => {
-    const controller = new AbortController();
-    controller.abort();
-    const fetchImpl: FetchLike = () =>
-      Promise.reject(new DOMException("The operation was aborted.", "AbortError"));
+test("an already-aborted signal raises ApiError code 'cancelled', status 0 — not network_error", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const fetchImpl: FetchLike = () =>
+    Promise.reject(new DOMException("The operation was aborted.", "AbortError"));
 
-    const err = await assertRejects(
-      () => request(CONFIG, fetchImpl, { method: "GET", path: "/apps", signal: controller.signal }),
-      ApiError,
-    );
+  const err = await assertRejects(
+    () => request(CONFIG, fetchImpl, { method: "GET", path: "/apps", signal: controller.signal }),
+    ApiError,
+  );
 
-    assertEquals(err.status, 0);
-    assertEquals(err.code, "cancelled");
-    assertStringIncludes(err.message, "GET https://api.example.com/apps");
-  },
-);
+  assertEquals(err.status, 0);
+  assertEquals(err.code, "cancelled");
+  assertStringIncludes(err.message, "GET https://api.example.com/apps");
+});
 
-Deno.test(
-  "a transport failure with a signal that was never aborted stays network_error, unchanged",
-  async () => {
-    const controller = new AbortController();
-    const fake = fakeFetch(() => {
-      throw new TypeError("Connection refused");
-    });
+test("a transport failure with a signal that was never aborted stays network_error, unchanged", async () => {
+  const controller = new AbortController();
+  const fake = fakeFetch(() => {
+    throw new TypeError("Connection refused");
+  });
 
-    const err = await assertRejects(
-      () =>
-        request(CONFIG, fake.fetch, { method: "GET", path: "/apps", signal: controller.signal }),
-      ApiError,
-    );
+  const err = await assertRejects(
+    () => request(CONFIG, fake.fetch, { method: "GET", path: "/apps", signal: controller.signal }),
+    ApiError,
+  );
 
-    assertEquals(err.code, "network_error");
-  },
-);
+  assertEquals(err.code, "network_error");
+});
 
-Deno.test("a request with no signal at all keeps its normal network_error behavior, unchanged", async () => {
+test("a request with no signal at all keeps its normal network_error behavior, unchanged", async () => {
   const fake = fakeFetch(() => {
     throw new TypeError("Connection refused");
   });
@@ -263,7 +255,7 @@ Deno.test("a request with no signal at all keeps its normal network_error behavi
   assertEquals(err.code, "network_error");
 });
 
-Deno.test("a 424 is an ApiError, never a transport error and never a 5xx", async () => {
+test("a 424 is an ApiError, never a transport error and never a 5xx", async () => {
   // 424 = the target app or its upstream vendor failed during execute. It is a
   // 4xx on purpose: Cloudflare replaces an origin 5xx with a CORS-less HTML
   // page, which would strip the real message. Passing it through intact is the
@@ -283,7 +275,7 @@ Deno.test("a 424 is an ApiError, never a transport error and never a 5xx", async
   assertEquals(err.raw, raw);
 });
 
-Deno.test("a request with no token raises a ConfigError before reaching the transport", async () => {
+test("a request with no token raises a ConfigError before reaching the transport", async () => {
   const unauthenticated = resolveConfig({ baseUrl: "https://api.example.com", token: "" });
   const fake = fakeFetch(() => json({}));
 
@@ -296,7 +288,7 @@ Deno.test("a request with no token raises a ConfigError before reaching the tran
   assertEquals(fake.calls.length, 0);
 });
 
-Deno.test("the path tag percent-encodes every caller-supplied segment", () => {
+test("the path tag percent-encodes every caller-supplied segment", () => {
   // Not defensive ceremony: unencoded, each of these silently addresses a
   // DIFFERENT route than the caller asked for, with no error anywhere.
   assertEquals(path`/documents/by-key/${"a/b"}`, "/documents/by-key/a%2Fb");
@@ -309,7 +301,7 @@ Deno.test("the path tag percent-encodes every caller-supplied segment", () => {
   assertEquals(path`/vars`, "/vars");
 });
 
-Deno.test("an unsafe key is encoded and sent — this rule is encoding, never validation", async () => {
+test("an unsafe key is encoded and sent — this rule is encoding, never validation", async () => {
   // A wrapper must not reject a key the server accepts: `validateKey` trims,
   // rejects empty and caps at 128 characters, and restricts nothing else, so
   // "../.." is a document a user can legitimately create. Refusing it locally
@@ -329,7 +321,7 @@ Deno.test("an unsafe key is encoded and sent — this rule is encoding, never va
   );
 });
 
-Deno.test("query parameters are encoded, and undefined ones are dropped", () => {
+test("query parameters are encoded, and undefined ones are dropped", () => {
   assertEquals(
     buildUrl(CONFIG, { method: "GET", path: "/documents", query: { project: undefined } }),
     "https://api.example.com/documents",
@@ -340,70 +332,61 @@ Deno.test("query parameters are encoded, and undefined ones are dropped", () => 
   );
 });
 
-Deno.test(
-  "options.headers is the BASE the transport builds on — it can never override authorization or content-type",
-  async () => {
-    const fake = fakeFetch(() => json({ ok: true }));
+test("options.headers is the BASE the transport builds on — it can never override authorization or content-type", async () => {
+  const fake = fakeFetch(() => json({ ok: true }));
 
-    const res = await request<{ ok: boolean }>(CONFIG, fake.fetch, {
-      method: "POST",
-      path: "/vars",
-      body: { a: 1 },
-      headers: {
-        "x-w6w-if-unmodified-since": "abc",
-        authorization: "Bearer evil",
-        "content-type": "text/plain",
-      },
-    });
+  const res = await request<{ ok: boolean }>(CONFIG, fake.fetch, {
+    method: "POST",
+    path: "/vars",
+    body: { a: 1 },
+    headers: {
+      "x-w6w-if-unmodified-since": "abc",
+      authorization: "Bearer evil",
+      "content-type": "text/plain",
+    },
+  });
 
-    assertEquals(res.body, { ok: true });
-    // The caller-supplied header passes through untouched…
-    assertEquals(fake.calls[0].headers.get("x-w6w-if-unmodified-since"), "abc");
-    // …but never shadows what this transport itself sets. `CONFIG` is built
-    // with token "tok_1" (see above), so the real bearer must win.
-    assertEquals(fake.calls[0].headers.get("authorization"), "Bearer tok_1");
-    assertEquals(fake.calls[0].headers.get("content-type"), "application/json");
-  },
-);
+  assertEquals(res.body, { ok: true });
+  // The caller-supplied header passes through untouched…
+  assertEquals(fake.calls[0].headers.get("x-w6w-if-unmodified-since"), "abc");
+  // …but never shadows what this transport itself sets. `CONFIG` is built
+  // with token "tok_1" (see above), so the real bearer must win.
+  assertEquals(fake.calls[0].headers.get("authorization"), "Bearer tok_1");
+  assertEquals(fake.calls[0].headers.get("content-type"), "application/json");
+});
 
-Deno.test(
-  "options.headers passes an arbitrary header through untouched when the transport sets nothing to conflict with it",
-  async () => {
-    const fake = fakeFetch(() => json({ ok: true }));
+test("options.headers passes an arbitrary header through untouched when the transport sets nothing to conflict with it", async () => {
+  const fake = fakeFetch(() => json({ ok: true }));
 
-    // No body on this request, so the transport's own conditional
-    // `content-type` set never runs — a caller-supplied content-type here is
-    // not shadowing anything and passes through as ordinary base content.
-    await request(CONFIG, fake.fetch, {
-      method: "GET",
-      path: "/vars",
-      headers: { "content-type": "text/plain" },
-    });
+  // No body on this request, so the transport's own conditional
+  // `content-type` set never runs — a caller-supplied content-type here is
+  // not shadowing anything and passes through as ordinary base content.
+  await request(CONFIG, fake.fetch, {
+    method: "GET",
+    path: "/vars",
+    headers: { "content-type": "text/plain" },
+  });
 
-    assertEquals(fake.calls[0].headers.get("content-type"), "text/plain");
-  },
-);
+  assertEquals(fake.calls[0].headers.get("content-type"), "text/plain");
+});
 
-Deno.test(
-  "requireAuth: false sends NO authorization header, even on a config carrying a token",
-  async () => {
-    const fake = fakeFetch(() => json({ token: "tok_new" }));
+test("requireAuth: false sends NO authorization header, even on a config carrying a token", async () => {
+  const fake = fakeFetch(() => json({ token: "tok_new" }));
 
-    const res = await request<{ token: string }>(CONFIG, fake.fetch, {
-      method: "POST",
-      path: "/auth/login",
-      body: { username: "u", password: "p" },
-      requireAuth: false,
-    });
+  const res = await request<{ token: string }>(CONFIG, fake.fetch, {
+    method: "POST",
+    path: "/auth/login",
+    body: { username: "u", password: "p" },
+    requireAuth: false,
+  });
 
-    assertEquals(res.body, { token: "tok_new" });
-    // Not an empty header, not "Bearer null" — absent entirely.
-    assertEquals(fake.calls[0].headers.has("authorization"), false);
-    assertEquals(fake.calls[0].headers.get("authorization"), null);
-  },
-);
+  assertEquals(res.body, { token: "tok_new" });
+  // Not an empty header, not "Bearer null" — absent entirely.
+  assertEquals(fake.calls[0].headers.has("authorization"), false);
+  assertEquals(fake.calls[0].headers.get("authorization"), null);
+});
 
-Deno.test("requireAuth omitted behaves exactly as before — the bearer is sent", async () => {
+test("requireAuth omitted behaves exactly as before — the bearer is sent", async () => {
   const fake = fakeFetch(() => json({ ok: true }));
 
   await request(CONFIG, fake.fetch, { method: "GET", path: "/vars" });
@@ -411,43 +394,37 @@ Deno.test("requireAuth omitted behaves exactly as before — the bearer is sent"
   assertEquals(fake.calls[0].headers.get("authorization"), "Bearer tok_1");
 });
 
-Deno.test(
-  "requireAuth: false on a TOKENLESS config never even attempts requireToken — resolves, not ConfigError",
-  async () => {
-    const unauthenticated = resolveConfig({ baseUrl: "https://api.example.com", token: "" });
-    const fake = fakeFetch(() => json({ token: "tok_new" }));
+test("requireAuth: false on a TOKENLESS config never even attempts requireToken — resolves, not ConfigError", async () => {
+  const unauthenticated = resolveConfig({ baseUrl: "https://api.example.com", token: "" });
+  const fake = fakeFetch(() => json({ token: "tok_new" }));
 
-    const res = await request<{ token: string }>(unauthenticated, fake.fetch, {
-      method: "POST",
-      path: "/auth/login",
-      body: { username: "u", password: "p" },
-      requireAuth: false,
-    });
+  const res = await request<{ token: string }>(unauthenticated, fake.fetch, {
+    method: "POST",
+    path: "/auth/login",
+    body: { username: "u", password: "p" },
+    requireAuth: false,
+  });
 
-    assertEquals(res.body, { token: "tok_new" });
-    assertEquals(fake.calls[0].headers.get("authorization"), null);
-  },
-);
+  assertEquals(res.body, { token: "tok_new" });
+  assertEquals(fake.calls[0].headers.get("authorization"), null);
+});
 
-Deno.test(
-  "RequestOptions.headers ordering still holds when requireAuth is also set — no interaction bug",
-  async () => {
-    const fake = fakeFetch(() => json({ ok: true }));
+test("RequestOptions.headers ordering still holds when requireAuth is also set — no interaction bug", async () => {
+  const fake = fakeFetch(() => json({ ok: true }));
 
-    await request(CONFIG, fake.fetch, {
-      method: "POST",
-      path: "/auth/login",
-      body: { username: "u", password: "p" },
-      headers: { "x-custom": "1" },
-      requireAuth: false,
-    });
+  await request(CONFIG, fake.fetch, {
+    method: "POST",
+    path: "/auth/login",
+    body: { username: "u", password: "p" },
+    headers: { "x-custom": "1" },
+    requireAuth: false,
+  });
 
-    assertEquals(fake.calls[0].headers.get("x-custom"), "1");
-    assertEquals(fake.calls[0].headers.get("authorization"), null);
-  },
-);
+  assertEquals(fake.calls[0].headers.get("x-custom"), "1");
+  assertEquals(fake.calls[0].headers.get("authorization"), null);
+});
 
-Deno.test("the client defaults to globalThis.fetch, and says so when there is none", async () => {
+test("the client defaults to globalThis.fetch, and says so when there is none", async () => {
   const original = globalThis.fetch;
   try {
     // Prove the default is the global: replace it and watch the client use it.
@@ -461,7 +438,7 @@ Deno.test("the client defaults to globalThis.fetch, and says so when there is no
 
     // …and on a host with no fetch at all, fail at construction with a message
     // that names the fix, rather than with an opaque TypeError at first use.
-    // deno-lint-ignore no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: removing a global the types say is always there
     delete (globalThis as any).fetch;
     const err = assertThrows(
       () => new W6WClient({ baseUrl: "https://api.example.com", token: "tok_g" }),
@@ -486,7 +463,7 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
 /** Bytes that are not valid UTF-8, and that a JSON or text round-trip would corrupt. */
 const NON_UTF8 = new Uint8Array([0xff, 0xfe, 0x00, 0x7b, 0x22, 0x80, 0xc3, 0x28, 0x0a]);
 
-Deno.test("a Uint8Array body is sent as exact bytes with application/octet-stream", async () => {
+test("a Uint8Array body is sent as exact bytes with application/octet-stream", async () => {
   const { fetch, calls } = fakeFetch(() => new Response(null, { status: 204 }));
   const res = await request<null>(CONFIG, fetch, {
     method: "PUT",
@@ -503,7 +480,7 @@ Deno.test("a Uint8Array body is sent as exact bytes with application/octet-strea
   assertEquals([...calls[0].bytes!], [...NON_UTF8]);
 });
 
-Deno.test("a bytes body wins over a caller or client content-type header", async () => {
+test("a bytes body wins over a caller or client content-type header", async () => {
   const cfg = resolveConfig({
     baseUrl: "https://api.example.com",
     token: "tok_1",
@@ -519,14 +496,14 @@ Deno.test("a bytes body wins over a caller or client content-type header", async
   assertEquals(calls[0].headers.get("content-type"), "application/octet-stream");
 });
 
-Deno.test("an empty Uint8Array is still a body (octet-stream, zero bytes)", async () => {
+test("an empty Uint8Array is still a body (octet-stream, zero bytes)", async () => {
   const { fetch, calls } = fakeFetch(() => new Response(null, { status: 204 }));
   await request<null>(CONFIG, fetch, { method: "PUT", path: "/x", body: new Uint8Array(0) });
   assertEquals(calls[0].headers.get("content-type"), "application/octet-stream");
   assertEquals(calls[0].bytes?.byteLength, 0);
 });
 
-Deno.test("a non-bytes body is still JSON-encoded (byte mode is opt-in by type)", async () => {
+test("a non-bytes body is still JSON-encoded (byte mode is opt-in by type)", async () => {
   const { fetch, calls } = fakeFetch(() => json({ ok: true }));
   await request(CONFIG, fetch, { method: "POST", path: "/x", body: { a: [1, 2] } });
   assertEquals(calls[0].headers.get("content-type"), "application/json");
@@ -534,12 +511,13 @@ Deno.test("a non-bytes body is still JSON-encoded (byte mode is opt-in by type)"
   assertEquals(calls[0].bytes, null);
 });
 
-Deno.test("responseType bytes returns the exact bytes, non-UTF-8 included, with the status", async () => {
-  const { fetch, calls } = fakeFetch(() =>
-    new Response(NON_UTF8 as BodyInit, {
-      status: 200,
-      headers: { "content-type": "application/octet-stream" },
-    })
+test("responseType bytes returns the exact bytes, non-UTF-8 included, with the status", async () => {
+  const { fetch, calls } = fakeFetch(
+    () =>
+      new Response(NON_UTF8 as BodyInit, {
+        status: 200,
+        headers: { "content-type": "application/octet-stream" },
+      }),
   );
   const res = await request<Uint8Array>(CONFIG, fetch, {
     method: "GET",
@@ -553,7 +531,7 @@ Deno.test("responseType bytes returns the exact bytes, non-UTF-8 included, with 
   assertEquals(calls[0].headers.get("content-type"), null);
 });
 
-Deno.test("responseType bytes does not try to parse a JSON-looking payload", async () => {
+test("responseType bytes does not try to parse a JSON-looking payload", async () => {
   const payload = new TextEncoder().encode('{"error":{"code":"nope"}}');
   const { fetch } = fakeFetch(() => new Response(payload as BodyInit, { status: 200 }));
   const res = await request<Uint8Array>(CONFIG, fetch, {
@@ -565,7 +543,7 @@ Deno.test("responseType bytes does not try to parse a JSON-looking payload", asy
   assertEquals(new TextDecoder().decode(res.body), '{"error":{"code":"nope"}}');
 });
 
-Deno.test("responseType bytes on an empty 200 yields an empty Uint8Array, not null", async () => {
+test("responseType bytes on an empty 200 yields an empty Uint8Array, not null", async () => {
   const { fetch } = fakeFetch(() => new Response(null, { status: 200 }));
   const res = await request<Uint8Array>(CONFIG, fetch, {
     method: "GET",
@@ -576,9 +554,9 @@ Deno.test("responseType bytes on an empty 200 yields an empty Uint8Array, not nu
   assertEquals(res.body.byteLength, 0);
 });
 
-Deno.test("a non-2xx in byte-response mode still raises the typed error with the envelope code", async () => {
+test("a non-2xx in byte-response mode still raises the typed error with the envelope code", async () => {
   const { fetch } = fakeFetch(() =>
-    json({ error: { code: "not_found", message: "not found" } }, 404, "Not Found")
+    json({ error: { code: "not_found", message: "not found" } }, 404, "Not Found"),
   );
   const err = await assertRejects(
     () =>
@@ -595,9 +573,9 @@ Deno.test("a non-2xx in byte-response mode still raises the typed error with the
   assertEquals(err.raw, { error: { code: "not_found", message: "not found" } });
 });
 
-Deno.test("a non-JSON non-2xx in byte-response mode is bad_response, never bytes", async () => {
-  const { fetch } = fakeFetch(() =>
-    new Response("<html>bad gateway</html>", { status: 502, statusText: "Bad Gateway" })
+test("a non-JSON non-2xx in byte-response mode is bad_response, never bytes", async () => {
+  const { fetch } = fakeFetch(
+    () => new Response("<html>bad gateway</html>", { status: 502, statusText: "Bad Gateway" }),
   );
   const err = await assertRejects(
     () => request<Uint8Array>(CONFIG, fetch, { method: "GET", path: "/x", responseType: "bytes" }),
@@ -608,9 +586,9 @@ Deno.test("a non-JSON non-2xx in byte-response mode is bad_response, never bytes
   assertStringIncludes(err.message, "bad gateway");
 });
 
-Deno.test("a non-2xx for a bytes-body request still parses the envelope", async () => {
+test("a non-2xx for a bytes-body request still parses the envelope", async () => {
   const { fetch } = fakeFetch(() =>
-    json({ error: { code: "validation_failed", message: "digest mismatch" } }, 422)
+    json({ error: { code: "validation_failed", message: "digest mismatch" } }, 422),
   );
   const err = await assertRejects(
     () => request(CONFIG, fetch, { method: "PUT", path: "/x", body: NON_UTF8 }),
@@ -620,12 +598,12 @@ Deno.test("a non-2xx for a bytes-body request still parses the envelope", async 
   assertEquals(err.code, "validation_failed");
 });
 
-Deno.test("401 recovery re-sends the identical bytes body once", async () => {
+test("401 recovery re-sends the identical bytes body once", async () => {
   let n = 0;
   const { fetch, calls } = fakeFetch(() =>
     ++n === 1
       ? json({ error: { code: "unauthorized", message: "expired" } }, 401)
-      : new Response(null, { status: 204 })
+      : new Response(null, { status: 204 }),
   );
   const cfg = resolveConfig({
     baseUrl: "https://api.example.com",
@@ -643,14 +621,14 @@ Deno.test("401 recovery re-sends the identical bytes body once", async () => {
 // Text mode (contract 0.15.0: bodyEncoding "csv" / responseEncoding "text")
 // ---------------------------------------------------------------------------
 
-Deno.test("T1: a string body with no bodyEncoding stays JSON (mode is never inferred from the type)", async () => {
+test("T1: a string body with no bodyEncoding stays JSON (mode is never inferred from the type)", async () => {
   const { fetch, calls } = fakeFetch(() => json({ ok: true }));
   await request(CONFIG, fetch, { method: "POST", path: "/x", body: "a,b" });
   assertEquals(calls[0].headers.get("content-type"), "application/json");
   assertEquals(calls[0].body, '"a,b"');
 });
 
-Deno.test("T2: bodyEncoding csv sends the string verbatim as text/csv, beating caller headers", async () => {
+test("T2: bodyEncoding csv sends the string verbatim as text/csv, beating caller headers", async () => {
   const { fetch, calls } = fakeFetch(() => json({ imported: 1 }));
   await request(CONFIG, fetch, {
     method: "POST",
@@ -663,7 +641,7 @@ Deno.test("T2: bodyEncoding csv sends the string verbatim as text/csv, beating c
   assertEquals(calls[0].body, "a,b\n1,2\n");
 });
 
-Deno.test("T3: responseType text returns the body verbatim even when it parses as JSON", async () => {
+test("T3: responseType text returns the body verbatim even when it parses as JSON", async () => {
   const { fetch } = fakeFetch(() => new Response('"name"\r\n', { status: 200 }));
   const res = await request<string>(CONFIG, fetch, {
     method: "GET",
@@ -674,9 +652,9 @@ Deno.test("T3: responseType text returns the body verbatim even when it parses a
   assertEquals(res.body, '"name"\r\n');
 });
 
-Deno.test("T4: a non-2xx in text mode still raises the typed error with the envelope code", async () => {
+test("T4: a non-2xx in text mode still raises the typed error with the envelope code", async () => {
   const { fetch } = fakeFetch(() =>
-    json({ error: { code: "data_store_not_found", message: "data store not found" } }, 404)
+    json({ error: { code: "data_store_not_found", message: "data store not found" } }, 404),
   );
   const err = await assertRejects(
     () => request<string>(CONFIG, fetch, { method: "GET", path: "/x", responseType: "text" }),

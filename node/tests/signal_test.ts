@@ -16,7 +16,8 @@
  * No case here needs a live server (`docs/implementation.md` §9).
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects } from "./assert.ts";
 import { W6WClient } from "../src/client.ts";
 import type { FetchLike } from "../src/config.ts";
 import { ApiError } from "../src/errors.ts";
@@ -51,9 +52,7 @@ function fakeFetch(respond: (call: Call) => Response): { fetch: FetchLike; calls
  * moment `init.signal` is already aborted, otherwise defers to `respond` —
  * mirrors `tests/console/apps_test.ts`'s `abortableFetch` exactly.
  */
-function abortableFetch(
-  respond: (call: Call) => Response,
-): { fetch: FetchLike; calls: Call[] } {
+function abortableFetch(respond: (call: Call) => Response): { fetch: FetchLike; calls: Call[] } {
   const calls: Call[] = [];
   const fetch: FetchLike = (input, init) => {
     const call: Call = {
@@ -97,9 +96,7 @@ function client(
 }
 
 /** Same as {@linkcode client}, but the transport honours an aborted signal. */
-function abortableClient(
-  respond: (call: Call) => Response,
-): { client: W6WClient; calls: Call[] } {
+function abortableClient(respond: (call: Call) => Response): { client: W6WClient; calls: Call[] } {
   const fake = abortableFetch(respond);
   return {
     client: new W6WClient({
@@ -113,7 +110,7 @@ function abortableClient(
 
 // --- client.me() -------------------------------------------------------
 
-Deno.test("client.me()'s signal reaches fetch's RequestInit, and is not serialized", async () => {
+test("client.me()'s signal reaches fetch's RequestInit, and is not serialized", async () => {
   const controller = new AbortController();
   const c = client(() => json({ tenant: "default", subject: "user_1" }));
 
@@ -127,66 +124,57 @@ Deno.test("client.me()'s signal reaches fetch's RequestInit, and is not serializ
 
 // --- documents.list/get/getByKey ----------------------------------------
 
-Deno.test(
-  "documents.list's signal reaches fetch's RequestInit; URL matches the no-signal URL",
-  async () => {
-    const controller = new AbortController();
-    const c = client(() => json({ documents: [] }));
+test("documents.list's signal reaches fetch's RequestInit; URL matches the no-signal URL", async () => {
+  const controller = new AbortController();
+  const c = client(() => json({ documents: [] }));
 
-    await c.client.documents.list({ project: "prj_1", signal: controller.signal });
+  await c.client.documents.list({ project: "prj_1", signal: controller.signal });
 
-    assertEquals(c.calls[0].signal, controller.signal);
-    const withSignal = new URL(c.calls[0].url);
-    assertEquals(withSignal.searchParams.has("signal"), false);
-    assertEquals(c.calls[0].body, null);
+  assertEquals(c.calls[0].signal, controller.signal);
+  const withSignal = new URL(c.calls[0].url);
+  assertEquals(withSignal.searchParams.has("signal"), false);
+  assertEquals(c.calls[0].body, null);
 
-    const noSignal = client(() => json({ documents: [] }));
-    await noSignal.client.documents.list({ project: "prj_1" });
-    assertEquals(c.calls[0].url, noSignal.calls[0].url);
-  },
-);
+  const noSignal = client(() => json({ documents: [] }));
+  await noSignal.client.documents.list({ project: "prj_1" });
+  assertEquals(c.calls[0].url, noSignal.calls[0].url);
+});
 
-Deno.test(
-  "documents.get's signal reaches fetch's RequestInit; URL matches the no-signal URL",
-  async () => {
-    const controller = new AbortController();
-    const c = client(() => json({ document: { id: "doc_1" } }));
+test("documents.get's signal reaches fetch's RequestInit; URL matches the no-signal URL", async () => {
+  const controller = new AbortController();
+  const c = client(() => json({ document: { id: "doc_1" } }));
 
-    await c.client.documents.get("doc_1", { project: "prj_1", signal: controller.signal });
+  await c.client.documents.get("doc_1", { project: "prj_1", signal: controller.signal });
 
-    assertEquals(c.calls[0].signal, controller.signal);
-    const withSignal = new URL(c.calls[0].url);
-    assertEquals(withSignal.searchParams.has("signal"), false);
-    assertEquals(c.calls[0].body, null);
+  assertEquals(c.calls[0].signal, controller.signal);
+  const withSignal = new URL(c.calls[0].url);
+  assertEquals(withSignal.searchParams.has("signal"), false);
+  assertEquals(c.calls[0].body, null);
 
-    const noSignal = client(() => json({ document: { id: "doc_1" } }));
-    await noSignal.client.documents.get("doc_1", { project: "prj_1" });
-    assertEquals(c.calls[0].url, noSignal.calls[0].url);
-  },
-);
+  const noSignal = client(() => json({ document: { id: "doc_1" } }));
+  await noSignal.client.documents.get("doc_1", { project: "prj_1" });
+  assertEquals(c.calls[0].url, noSignal.calls[0].url);
+});
 
-Deno.test(
-  "documents.getByKey's signal reaches fetch's RequestInit; URL matches the no-signal URL",
-  async () => {
-    const controller = new AbortController();
-    const c = client(() => json({ document: { id: "doc_1", key: "welcome" } }));
+test("documents.getByKey's signal reaches fetch's RequestInit; URL matches the no-signal URL", async () => {
+  const controller = new AbortController();
+  const c = client(() => json({ document: { id: "doc_1", key: "welcome" } }));
 
-    await c.client.documents.getByKey("welcome", { project: "prj_1", signal: controller.signal });
+  await c.client.documents.getByKey("welcome", { project: "prj_1", signal: controller.signal });
 
-    assertEquals(c.calls[0].signal, controller.signal);
-    const withSignal = new URL(c.calls[0].url);
-    assertEquals(withSignal.searchParams.has("signal"), false);
-    assertEquals(c.calls[0].body, null);
+  assertEquals(c.calls[0].signal, controller.signal);
+  const withSignal = new URL(c.calls[0].url);
+  assertEquals(withSignal.searchParams.has("signal"), false);
+  assertEquals(c.calls[0].body, null);
 
-    const noSignal = client(() => json({ document: { id: "doc_1", key: "welcome" } }));
-    await noSignal.client.documents.getByKey("welcome", { project: "prj_1" });
-    assertEquals(c.calls[0].url, noSignal.calls[0].url);
-  },
-);
+  const noSignal = client(() => json({ document: { id: "doc_1", key: "welcome" } }));
+  await noSignal.client.documents.getByKey("welcome", { project: "prj_1" });
+  assertEquals(c.calls[0].url, noSignal.calls[0].url);
+});
 
 // --- vars.list/get ---------------------------------------------------------
 
-Deno.test("vars.list's signal reaches fetch's RequestInit, and is not serialized", async () => {
+test("vars.list's signal reaches fetch's RequestInit, and is not serialized", async () => {
   const controller = new AbortController();
   const c = client(() => json({ vars: [] }));
 
@@ -197,7 +185,7 @@ Deno.test("vars.list's signal reaches fetch's RequestInit, and is not serialized
   assertEquals(c.calls[0].body, null);
 });
 
-Deno.test("vars.get's signal reaches fetch's RequestInit, and is not serialized", async () => {
+test("vars.get's signal reaches fetch's RequestInit, and is not serialized", async () => {
   const controller = new AbortController();
   const c = client(() => json({ var: { id: "var_1" } }));
 
@@ -210,110 +198,92 @@ Deno.test("vars.get's signal reaches fetch's RequestInit, and is not serialized"
 
 // --- connections.list --------------------------------------------------
 
-Deno.test(
-  "connections.list's signal reaches fetch's RequestInit, and is not serialized",
-  async () => {
-    const controller = new AbortController();
-    const c = client(() => json({ connections: [] }));
+test("connections.list's signal reaches fetch's RequestInit, and is not serialized", async () => {
+  const controller = new AbortController();
+  const c = client(() => json({ connections: [] }));
 
-    await c.client.connections.list({ signal: controller.signal });
+  await c.client.connections.list({ signal: controller.signal });
 
-    assertEquals(c.calls[0].signal, controller.signal);
-    assertEquals(c.calls[0].url, "https://api.example.com/connections");
-    assertEquals(c.calls[0].body, null);
-  },
-);
+  assertEquals(c.calls[0].signal, controller.signal);
+  assertEquals(c.calls[0].url, "https://api.example.com/connections");
+  assertEquals(c.calls[0].body, null);
+});
 
 // --- workflows.list/get ------------------------------------------------
 
-Deno.test(
-  "workflows.list's signal reaches fetch's RequestInit; URL matches the no-signal URL",
-  async () => {
-    const controller = new AbortController();
-    const c = client(() => json({ workflows: [] }));
+test("workflows.list's signal reaches fetch's RequestInit; URL matches the no-signal URL", async () => {
+  const controller = new AbortController();
+  const c = client(() => json({ workflows: [] }));
 
-    await c.client.workflows.list({ project: "prj_1", signal: controller.signal });
+  await c.client.workflows.list({ project: "prj_1", signal: controller.signal });
 
-    assertEquals(c.calls[0].signal, controller.signal);
-    const withSignal = new URL(c.calls[0].url);
-    assertEquals(withSignal.searchParams.has("signal"), false);
-    assertEquals(c.calls[0].body, null);
+  assertEquals(c.calls[0].signal, controller.signal);
+  const withSignal = new URL(c.calls[0].url);
+  assertEquals(withSignal.searchParams.has("signal"), false);
+  assertEquals(c.calls[0].body, null);
 
-    const noSignal = client(() => json({ workflows: [] }));
-    await noSignal.client.workflows.list({ project: "prj_1" });
-    assertEquals(c.calls[0].url, noSignal.calls[0].url);
-  },
-);
+  const noSignal = client(() => json({ workflows: [] }));
+  await noSignal.client.workflows.list({ project: "prj_1" });
+  assertEquals(c.calls[0].url, noSignal.calls[0].url);
+});
 
-Deno.test(
-  "workflows.get's signal reaches fetch's RequestInit, and is not serialized",
-  async () => {
-    const controller = new AbortController();
-    const c = client(() =>
-      json({ workflow: { id: "wf_1" }, sourceRef: null, updatedAt: "2026-07-22T18:03:00.000Z" })
-    );
+test("workflows.get's signal reaches fetch's RequestInit, and is not serialized", async () => {
+  const controller = new AbortController();
+  const c = client(() =>
+    json({ workflow: { id: "wf_1" }, sourceRef: null, updatedAt: "2026-07-22T18:03:00.000Z" }),
+  );
 
-    await c.client.workflows.get("wf_1", { signal: controller.signal });
+  await c.client.workflows.get("wf_1", { signal: controller.signal });
 
-    assertEquals(c.calls[0].signal, controller.signal);
-    assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_1");
-    assertEquals(c.calls[0].body, null);
-  },
-);
+  assertEquals(c.calls[0].signal, controller.signal);
+  assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_1");
+  assertEquals(c.calls[0].body, null);
+});
 
 // --- functions.list/get ------------------------------------------------
 
-Deno.test(
-  "functions.list's signal reaches fetch's RequestInit, and is not serialized",
-  async () => {
-    const controller = new AbortController();
-    const c = client(() => json({ functions: [] }));
+test("functions.list's signal reaches fetch's RequestInit, and is not serialized", async () => {
+  const controller = new AbortController();
+  const c = client(() => json({ functions: [] }));
 
-    await c.client.functions.list({ signal: controller.signal });
+  await c.client.functions.list({ signal: controller.signal });
 
-    assertEquals(c.calls[0].signal, controller.signal);
-    assertEquals(c.calls[0].url, "https://api.example.com/functions");
-    assertEquals(c.calls[0].body, null);
-  },
-);
+  assertEquals(c.calls[0].signal, controller.signal);
+  assertEquals(c.calls[0].url, "https://api.example.com/functions");
+  assertEquals(c.calls[0].body, null);
+});
 
-Deno.test(
-  "functions.get's signal reaches fetch's RequestInit, and is not serialized",
-  async () => {
-    const controller = new AbortController();
-    const c = client(() => json({ function: { id: "fn_1" }, valid: true }));
+test("functions.get's signal reaches fetch's RequestInit, and is not serialized", async () => {
+  const controller = new AbortController();
+  const c = client(() => json({ function: { id: "fn_1" }, valid: true }));
 
-    await c.client.functions.get("fn_1", { signal: controller.signal });
+  await c.client.functions.get("fn_1", { signal: controller.signal });
 
-    assertEquals(c.calls[0].signal, controller.signal);
-    assertEquals(c.calls[0].url, "https://api.example.com/functions/fn_1");
-    assertEquals(c.calls[0].body, null);
-  },
-);
+  assertEquals(c.calls[0].signal, controller.signal);
+  assertEquals(c.calls[0].url, "https://api.example.com/functions/fn_1");
+  assertEquals(c.calls[0].body, null);
+});
 
 // --- shared transport branch: an already-aborted signal -------------------
 
-Deno.test(
-  "an already-aborted signal rejects with ApiError code 'cancelled', not network_error " +
-    "(shared transport branch — one case covers all eleven methods)",
-  async () => {
-    const controller = new AbortController();
-    controller.abort();
-    const c = abortableClient(() => json({ vars: [] }));
+test("an already-aborted signal rejects with ApiError code 'cancelled', not network_error " +
+  "(shared transport branch — one case covers all eleven methods)", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const c = abortableClient(() => json({ vars: [] }));
 
-    const err = await assertRejects(
-      () => c.client.vars.list({ signal: controller.signal }),
-      ApiError,
-    );
+  const err = await assertRejects(
+    () => c.client.vars.list({ signal: controller.signal }),
+    ApiError,
+  );
 
-    assertEquals(err.status, 0);
-    assertEquals(err.code, "cancelled");
-  },
-);
+  assertEquals(err.status, 0);
+  assertEquals(err.code, "cancelled");
+});
 
 // --- calls without options behave exactly as before ------------------------
 
-Deno.test("every one of the eleven methods still works with no options at all", async () => {
+test("every one of the eleven methods still works with no options at all", async () => {
   const c = client((call) => {
     if (call.url.endsWith("/auth/me")) return json({ tenant: "default", subject: "user_1" });
     if (call.url.endsWith("/documents")) return json({ documents: [] });

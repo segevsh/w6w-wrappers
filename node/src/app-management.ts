@@ -14,6 +14,8 @@
 import { type CallOptions, type HttpResponse, path, type RequestOptions } from "./http.ts";
 import type {
   AppManagementApi as AppManagementApiShape,
+  AppManagementDiscoverInput,
+  AppManagementDiscoverResult,
   AppManagementPreview,
   ListManagedAppsOptions,
   ManagedAppDetail,
@@ -78,6 +80,20 @@ export class AppManagementApi implements AppManagementApiShape {
       method: "POST",
       path: "/app-management/preview",
       body: { source: input.source, target: input.target },
+      signal: opts?.signal,
+    });
+    return res.body;
+  }
+
+  /** Search an npm/JSR registry for installable w6w apps. */
+  async discover(
+    input: AppManagementDiscoverInput,
+    opts?: CallOptions,
+  ): Promise<AppManagementDiscoverResult> {
+    const res = await this.#host.request<AppManagementDiscoverResult>({
+      method: "GET",
+      path: "/app-management/discover",
+      query: { registry: input.registry, q: input.q, limit: input.limit },
       signal: opts?.signal,
     });
     return res.body;

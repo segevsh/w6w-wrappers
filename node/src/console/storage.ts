@@ -153,7 +153,9 @@ export type AgentSettingsPatch = Partial<AgentSettingsValues>;
 function bindingBody(res: HttpResponse<unknown>): StorageBinding {
   const body = res.body;
   if (
-    typeof body === "object" && body !== null && !Array.isArray(body) &&
+    typeof body === "object" &&
+    body !== null &&
+    !Array.isArray(body) &&
     typeof (body as Record<string, unknown>).id === "string"
   ) {
     return body as StorageBinding;
@@ -170,7 +172,9 @@ function bindingBody(res: HttpResponse<unknown>): StorageBinding {
 function settingsBody(res: HttpResponse<unknown>): AgentSettings {
   const body = res.body;
   if (
-    typeof body === "object" && body !== null && !Array.isArray(body) &&
+    typeof body === "object" &&
+    body !== null &&
+    !Array.isArray(body) &&
     typeof (body as Record<string, unknown>).limits === "object"
   ) {
     return body as AgentSettings;

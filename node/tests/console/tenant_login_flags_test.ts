@@ -9,7 +9,8 @@
  * meant to change would silently flip the field the caller never touched.
  */
 
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals } from "../assert.ts";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import type {
@@ -68,7 +69,7 @@ function sentBody(call: Call): Record<string, unknown> {
 const FLAGS_OFF: TenantLoginFlags = { otpEnabled: false, passwordDisabled: false };
 const FLAGS_OTP_ON: TenantLoginFlags = { otpEnabled: true, passwordDisabled: false };
 
-Deno.test("console.tenantLoginFlags: get/put are functions on a constructed client", () => {
+test("console.tenantLoginFlags: get/put are functions on a constructed client", () => {
   // Runtime, not type-level: a namespace that silently lost a method would
   // still typecheck everywhere else in this suite.
   const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
@@ -76,70 +77,58 @@ Deno.test("console.tenantLoginFlags: get/put are functions on a constructed clie
   assertEquals(typeof c.console.tenantLoginFlags.put, "function");
 });
 
-Deno.test(
-  "console.tenantLoginFlags.get GETs /tenant/login-flags and returns res.body.flags",
-  async () => {
-    const c = client(() => json({ flags: FLAGS_OFF }));
+test("console.tenantLoginFlags.get GETs /tenant/login-flags and returns res.body.flags", async () => {
+  const c = client(() => json({ flags: FLAGS_OFF }));
 
-    const res = await c.client.console.tenantLoginFlags.get();
+  const res = await c.client.console.tenantLoginFlags.get();
 
-    assertEquals(res, FLAGS_OFF);
-    assertEquals(c.calls.length, 1);
-    assertEquals(c.calls[0].method, "GET");
-    assertEquals(c.calls[0].url, "https://api.example.com/tenant/login-flags");
-    // Authenticated: the tenant comes from the bearer, never from a parameter.
-    assertEquals(c.calls[0].headers.get("authorization"), "Bearer tok_1");
-  },
-);
+  assertEquals(res, FLAGS_OFF);
+  assertEquals(c.calls.length, 1);
+  assertEquals(c.calls[0].method, "GET");
+  assertEquals(c.calls[0].url, "https://api.example.com/tenant/login-flags");
+  // Authenticated: the tenant comes from the bearer, never from a parameter.
+  assertEquals(c.calls[0].headers.get("authorization"), "Bearer tok_1");
+});
 
-Deno.test(
-  "console.tenantLoginFlags.put sends ONLY otpEnabled — {passwordDisabled:true} must not ride along",
-  async () => {
-    const c = client(() => json({ flags: FLAGS_OTP_ON }, 200));
+test("console.tenantLoginFlags.put sends ONLY otpEnabled — {passwordDisabled:true} must not ride along", async () => {
+  const c = client(() => json({ flags: FLAGS_OTP_ON }, 200));
 
-    await c.client.console.tenantLoginFlags.put({ otpEnabled: true });
+  await c.client.console.tenantLoginFlags.put({ otpEnabled: true });
 
-    // THE case. A serializer emitting {"otpEnabled":true,"passwordDisabled":false}
-    // would silently ASSERT passwordDisabled:false to the server (a real,
-    // meaningful value on this route) even though the caller never touched
-    // it — the exact key set is what rejects that shape.
-    const body = sentBody(c.calls[0]);
-    assertEquals(Object.keys(body).sort(), ["otpEnabled"]);
-    assertEquals(body.otpEnabled, true);
-    assertEquals(c.calls[0].method, "PUT");
-    assertEquals(c.calls[0].url, "https://api.example.com/tenant/login-flags");
-  },
-);
+  // THE case. A serializer emitting {"otpEnabled":true,"passwordDisabled":false}
+  // would silently ASSERT passwordDisabled:false to the server (a real,
+  // meaningful value on this route) even though the caller never touched
+  // it — the exact key set is what rejects that shape.
+  const body = sentBody(c.calls[0]);
+  assertEquals(Object.keys(body).sort(), ["otpEnabled"]);
+  assertEquals(body.otpEnabled, true);
+  assertEquals(c.calls[0].method, "PUT");
+  assertEquals(c.calls[0].url, "https://api.example.com/tenant/login-flags");
+});
 
-Deno.test(
-  "console.tenantLoginFlags.put sends ONLY passwordDisabled",
-  async () => {
-    const c = client(() => json({ flags: FLAGS_OFF }, 200));
+test("console.tenantLoginFlags.put sends ONLY passwordDisabled", async () => {
+  const c = client(() => json({ flags: FLAGS_OFF }, 200));
 
-    await c.client.console.tenantLoginFlags.put({ passwordDisabled: true });
+  await c.client.console.tenantLoginFlags.put({ passwordDisabled: true });
 
-    const body = sentBody(c.calls[0]);
-    assertEquals(Object.keys(body).sort(), ["passwordDisabled"]);
-    assertEquals(body.passwordDisabled, true);
-  },
-);
+  const body = sentBody(c.calls[0]);
+  assertEquals(Object.keys(body).sort(), ["passwordDisabled"]);
+  assertEquals(body.passwordDisabled, true);
+});
 
-Deno.test(
-  "console.tenantLoginFlags.put drops an explicitly-undefined key rather than sending it",
-  async () => {
-    const c = client(() => json({ flags: FLAGS_OTP_ON }, 200));
+test("console.tenantLoginFlags.put drops an explicitly-undefined key rather than sending it", async () => {
+  const c = client(() => json({ flags: FLAGS_OTP_ON }, 200));
 
-    // The shape a form produces when a field was rendered but never touched.
-    const input: SetTenantLoginFlagsInput = { otpEnabled: true, passwordDisabled: undefined };
-    await c.client.console.tenantLoginFlags.put(input);
+  // The shape a form produces when a field was rendered but never touched.
+  const input: SetTenantLoginFlagsInput = { otpEnabled: true, passwordDisabled: undefined };
+  await c.client.console.tenantLoginFlags.put(input);
 
-    const body = sentBody(c.calls[0]);
-    assertEquals(Object.keys(body).sort(), ["otpEnabled"]);
-    assertEquals(body.otpEnabled, true);
-  },
-);
+  const body = sentBody(c.calls[0]);
+  assertEquals(Object.keys(body).sort(), ["otpEnabled"]);
+  assertEquals(body.otpEnabled, true);
+});
 
-Deno.test("console.tenantLoginFlags.put sends both keys the caller DID set", async () => {
+test("console.tenantLoginFlags.put sends both keys the caller DID set", async () => {
   const c = client(() => json({ flags: FLAGS_OFF }, 200));
 
   await c.client.console.tenantLoginFlags.put({ otpEnabled: false, passwordDisabled: false });
@@ -152,7 +141,7 @@ Deno.test("console.tenantLoginFlags.put sends both keys the caller DID set", asy
   assertEquals(body.passwordDisabled, false);
 });
 
-Deno.test("console.tenantLoginFlags.put returns res.body.flags, not res.body", async () => {
+test("console.tenantLoginFlags.put returns res.body.flags, not res.body", async () => {
   const c = client(() => json({ flags: FLAGS_OTP_ON }, 200));
 
   const res = await c.client.console.tenantLoginFlags.put({ otpEnabled: true });
@@ -163,7 +152,7 @@ Deno.test("console.tenantLoginFlags.put returns res.body.flags, not res.body", a
   assertEquals(res, FLAGS_OTP_ON);
 });
 
-Deno.test("console.tenantLoginFlags.put sends no body key when given {}", async () => {
+test("console.tenantLoginFlags.put sends no body key when given {}", async () => {
   const c = client(() => json({ flags: FLAGS_OFF }, 200));
 
   await c.client.console.tenantLoginFlags.put({});

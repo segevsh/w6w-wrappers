@@ -1,6 +1,6 @@
 {
   "name": "@w6w/cli",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "license": "MIT",
   "exports": "./mod.ts",
   "imports": {
@@ -28,5 +28,11 @@
       "tags": ["recommended"]
     }
   },
-  "exclude": ["dist", ".coverage", "node_modules", "tsconfig.build.json"]
+  "exclude": [
+    "dist",
+    ".coverage",
+    "node_modules",
+    "tsconfig.build.json",
+    "src/vendor/app-assemble.js"
+  ]
 }

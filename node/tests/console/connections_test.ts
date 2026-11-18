@@ -12,7 +12,8 @@
  * throws" on a real `404`.
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects } from "../assert.ts";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import { ApiError } from "../../src/errors.ts";
@@ -94,25 +95,22 @@ function client(respond: (call: Call) => Response): { client: W6WClient; calls: 
   };
 }
 
-Deno.test(
-  "console.connections: listForApp/get/create/update/test/delete are functions on a constructed client, base connections.list untouched",
-  () => {
-    // Runtime, not type-level: a namespace that silently lost a method would
-    // still typecheck everywhere else in this suite.
-    const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
-    assertEquals(typeof c.console.connections.listForApp, "function");
-    assertEquals(typeof c.console.connections.get, "function");
-    assertEquals(typeof c.console.connections.create, "function");
-    assertEquals(typeof c.console.connections.update, "function");
-    assertEquals(typeof c.console.connections.test, "function");
-    assertEquals(typeof c.console.connections.delete, "function");
-    // Regression-proofs this task didn't accidentally remove or shadow the
-    // base method it deliberately leaves alone.
-    assertEquals(typeof c.connections.list, "function");
-  },
-);
+test("console.connections: listForApp/get/create/update/test/delete are functions on a constructed client, base connections.list untouched", () => {
+  // Runtime, not type-level: a namespace that silently lost a method would
+  // still typecheck everywhere else in this suite.
+  const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
+  assertEquals(typeof c.console.connections.listForApp, "function");
+  assertEquals(typeof c.console.connections.get, "function");
+  assertEquals(typeof c.console.connections.create, "function");
+  assertEquals(typeof c.console.connections.update, "function");
+  assertEquals(typeof c.console.connections.test, "function");
+  assertEquals(typeof c.console.connections.delete, "function");
+  // Regression-proofs this task didn't accidentally remove or shadow the
+  // base method it deliberately leaves alone.
+  assertEquals(typeof c.connections.list, "function");
+});
 
-Deno.test("console.connections.listForApp unwraps the connections envelope", async () => {
+test("console.connections.listForApp unwraps the connections envelope", async () => {
   const c = client(() => json({ connections: [CONN_A, CONN_B] }));
 
   const res = await c.client.console.connections.listForApp("acme");
@@ -124,7 +122,7 @@ Deno.test("console.connections.listForApp unwraps the connections envelope", asy
   assertEquals(c.calls[0].url, "https://api.example.com/apps/acme/connections");
 });
 
-Deno.test("console.connections.get unwraps the connection envelope", async () => {
+test("console.connections.get unwraps the connection envelope", async () => {
   const c = client(() => json({ connection: CONN_A }));
 
   const res = await c.client.console.connections.get("conn_1");
@@ -134,21 +132,18 @@ Deno.test("console.connections.get unwraps the connection envelope", async () =>
   assertEquals(c.calls[0].url, "https://api.example.com/connections/conn_1");
 });
 
-Deno.test("console.connections.get propagates a 404 as ApiError — no special-casing, unlike console.schedules.get", async () => {
+test("console.connections.get propagates a 404 as ApiError — no special-casing, unlike console.schedules.get", async () => {
   const c = client(() =>
-    json({ error: { code: "unknown_connection", message: "Not found." } }, 404)
+    json({ error: { code: "unknown_connection", message: "Not found." } }, 404),
   );
 
-  const err = await assertRejects(
-    () => c.client.console.connections.get("conn_missing"),
-    ApiError,
-  );
+  const err = await assertRejects(() => c.client.console.connections.get("conn_missing"), ApiError);
 
   assertEquals(err.status, 404);
   assertEquals(err.code, "unknown_connection");
 });
 
-Deno.test("console.connections.create sends the body verbatim (credential included, untouched) and unwraps the envelope", async () => {
+test("console.connections.create sends the body verbatim (credential included, untouched) and unwraps the envelope", async () => {
   const c = client(() => json({ connection: CONN_A }, 201));
 
   const res = await c.client.console.connections.create("acme", {
@@ -167,7 +162,7 @@ Deno.test("console.connections.create sends the body verbatim (credential includ
   });
 });
 
-Deno.test("console.connections.update sends the body verbatim, no extra keys injected, and unwraps the envelope", async () => {
+test("console.connections.update sends the body verbatim, no extra keys injected, and unwraps the envelope", async () => {
   const c = client(() => json({ connection: CONN_A }));
 
   const res = await c.client.console.connections.update("conn_1", {
@@ -181,7 +176,7 @@ Deno.test("console.connections.update sends the body verbatim, no extra keys inj
   assertEquals(JSON.parse(c.calls[0].body ?? "null"), { credential: { key: "sk_new" } });
 });
 
-Deno.test("console.connections.test does NOT unwrap — the whole body IS the result", async () => {
+test("console.connections.test does NOT unwrap — the whole body IS the result", async () => {
   const c = client(() => json({ ok: true, actionKey: "get-greeting" }));
 
   const res = await c.client.console.connections.test("conn_1");
@@ -193,9 +188,9 @@ Deno.test("console.connections.test does NOT unwrap — the whole body IS the re
   assertEquals(c.calls[0].url, "https://api.example.com/connections/conn_1/test");
 });
 
-Deno.test("console.connections.test resolves (does not throw) on a 200 ok:false failed-test body — a failed test is data", async () => {
+test("console.connections.test resolves (does not throw) on a 200 ok:false failed-test body — a failed test is data", async () => {
   const c = client(() =>
-    json({ ok: false, actionKey: "send", error: { message: "Invalid credential." } }, 200)
+    json({ ok: false, actionKey: "send", error: { message: "Invalid credential." } }, 200),
   );
 
   const res: ConnectionTestResult = await c.client.console.connections.test("conn_1");
@@ -204,9 +199,9 @@ Deno.test("console.connections.test resolves (does not throw) on a 200 ok:false 
   assertEquals(res.error?.message, "Invalid credential.");
 });
 
-Deno.test("console.connections.test resolves (does not throw) on the untested:true shape", async () => {
+test("console.connections.test resolves (does not throw) on the untested:true shape", async () => {
   const c = client(() =>
-    json({ ok: true, untested: true, message: "No safe probe action exists." }, 200)
+    json({ ok: true, untested: true, message: "No safe probe action exists." }, 200),
   );
 
   const res: ConnectionTestResult = await c.client.console.connections.test("conn_1");
@@ -216,9 +211,9 @@ Deno.test("console.connections.test resolves (does not throw) on the untested:tr
   assertEquals(res.message, "No safe probe action exists.");
 });
 
-Deno.test("console.connections.test still throws on a genuine non-2xx — real errors are not swallowed into a resolved result", async () => {
+test("console.connections.test still throws on a genuine non-2xx — real errors are not swallowed into a resolved result", async () => {
   const c = client(() =>
-    json({ error: { code: "unknown_connection", message: "Not found." } }, 404)
+    json({ error: { code: "unknown_connection", message: "Not found." } }, 404),
   );
 
   const err = await assertRejects(
@@ -230,7 +225,7 @@ Deno.test("console.connections.test still throws on a genuine non-2xx — real e
   assertEquals(err.code, "unknown_connection");
 });
 
-Deno.test("console.connections.delete sends DELETE to the right path and resolves void, discarding {ok:true}", async () => {
+test("console.connections.delete sends DELETE to the right path and resolves void, discarding {ok:true}", async () => {
   const c = client(() => json({ ok: true }));
 
   const res = await c.client.console.connections.delete("conn_1");
@@ -241,9 +236,9 @@ Deno.test("console.connections.delete sends DELETE to the right path and resolve
   assertEquals(c.calls[0].body, null);
 });
 
-Deno.test("console.connections.delete does not swallow a 404", async () => {
+test("console.connections.delete does not swallow a 404", async () => {
   const c = client(() =>
-    json({ error: { code: "unknown_connection", message: "Not found." } }, 404)
+    json({ error: { code: "unknown_connection", message: "Not found." } }, 404),
   );
 
   const err = await assertRejects(
@@ -255,7 +250,7 @@ Deno.test("console.connections.delete does not swallow a 404", async () => {
   assertEquals(err.code, "unknown_connection");
 });
 
-Deno.test("console.connections.listForApp percent-encodes appId via the `path` tag", async () => {
+test("console.connections.listForApp percent-encodes appId via the `path` tag", async () => {
   const c = client(() => json({ connections: [] }));
 
   await c.client.console.connections.listForApp("app/x");
@@ -263,7 +258,7 @@ Deno.test("console.connections.listForApp percent-encodes appId via the `path` t
   assertEquals(c.calls[0].url, "https://api.example.com/apps/app%2Fx/connections");
 });
 
-Deno.test("console.connections.get percent-encodes id via the `path` tag", async () => {
+test("console.connections.get percent-encodes id via the `path` tag", async () => {
   const c = client(() => json({ connection: CONN_A }));
 
   await c.client.console.connections.get("conn 1");
@@ -271,7 +266,7 @@ Deno.test("console.connections.get percent-encodes id via the `path` tag", async
   assertEquals(c.calls[0].url, "https://api.example.com/connections/conn%201");
 });
 
-Deno.test("console.connections.delete percent-encodes id via the `path` tag", async () => {
+test("console.connections.delete percent-encodes id via the `path` tag", async () => {
   const c = client(() => json({ ok: true }));
 
   await c.client.console.connections.delete("conn 1");
@@ -279,7 +274,7 @@ Deno.test("console.connections.delete percent-encodes id via the `path` tag", as
   assertEquals(c.calls[0].url, "https://api.example.com/connections/conn%201");
 });
 
-Deno.test("console.connections.delete: force sends ?force=true only when true", async () => {
+test("console.connections.delete: force sends ?force=true only when true", async () => {
   const c = client(() => json({ ok: true, disabled: [] }));
   await c.client.console.connections.delete("conn_1", { force: true });
   await c.client.console.connections.delete("conn_1", { force: false });
@@ -289,7 +284,7 @@ Deno.test("console.connections.delete: force sends ?force=true only when true", 
   assertEquals(c.calls[2].url, "https://api.example.com/connections/conn_1");
 });
 
-Deno.test("console.connections.dependents: GET /connections/:id/dependents unwraps {dependents}", async () => {
+test("console.connections.dependents: GET /connections/:id/dependents unwraps {dependents}", async () => {
   const dependents = {
     callables: [],
     subscriptions: [{ id: "s", appId: "a", triggerKey: "t", workflowId: "w" }],
@@ -301,7 +296,7 @@ Deno.test("console.connections.dependents: GET /connections/:id/dependents unwra
   assertEquals(c.calls[0].url, "https://api.example.com/connections/conn%201/dependents");
 });
 
-Deno.test("console.connections.create forwards an attach-by-id body verbatim", async () => {
+test("console.connections.create forwards an attach-by-id body verbatim", async () => {
   const c = client(() => json({ connection: CONN_A }, 201));
   const input = {
     authKey: "serviceAccount",
@@ -318,7 +313,7 @@ Deno.test("console.connections.create forwards an attach-by-id body verbatim", a
   assertEquals(c.calls[0].body, JSON.stringify(input));
 });
 
-Deno.test("console.connections.create: the legacy inline form still compiles and is verbatim", async () => {
+test("console.connections.create: the legacy inline form still compiles and is verbatim", async () => {
   const c = client(() => json({ connection: CONN_A }, 201));
   const input = { authKey: "apiKey", credential: { key: "k" }, displayName: "D" };
 
@@ -327,9 +322,9 @@ Deno.test("console.connections.create: the legacy inline form still compiles and
   assertEquals(c.calls[0].body, JSON.stringify(input));
 });
 
-Deno.test("console.connections.create: a body carrying both forms is a compile error", () => {
+test("console.connections.create: a body carrying both forms is a compile error", () => {
   const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
-  // Never invoked: this pins the type, `deno check` is the assertion.
+  // Never invoked: this pins the type, `npm run typecheck` is the assertion.
   const _never = () =>
     // @ts-expect-error credential and credentialId are mutually exclusive
     c.console.connections.create("sendgrid", {
@@ -340,7 +335,7 @@ Deno.test("console.connections.create: a body carrying both forms is a compile e
   assertEquals(typeof _never, "function");
 });
 
-Deno.test("console.connections.update forwards binding + credentialId verbatim", async () => {
+test("console.connections.update forwards binding + credentialId verbatim", async () => {
   const c = client(() => json({ connection: CONN_A }));
   const patch = { binding: { delegatedUser: "u@example.com" }, credentialId: "cred_2" };
 
@@ -351,7 +346,7 @@ Deno.test("console.connections.update forwards binding + credentialId verbatim",
   assertEquals(c.calls[0].body, JSON.stringify(patch));
 });
 
-Deno.test("console.connections.create forwards accessScope only when defined", async () => {
+test("console.connections.create forwards accessScope only when defined", async () => {
   const c = client(() => json({ connection: CONN_A }, 201));
   await c.client.console.connections.create("openai", {
     authKey: "apiKey",
@@ -371,7 +366,7 @@ Deno.test("console.connections.create forwards accessScope only when defined", a
   assertEquals(c.calls[1].body, JSON.stringify({ authKey: "apiKey", credentialId: "cred_1" }));
 });
 
-Deno.test("console.connections.create sends autoRefresh on both arms only when given", async () => {
+test("console.connections.create sends autoRefresh on both arms only when given", async () => {
   const c = client(() => json({ connection: { ...CONN_A, autoRefresh: false } }, 201));
   const created = await c.client.console.connections.create("sendgrid", {
     authKey: "apiKey",
@@ -401,7 +396,7 @@ Deno.test("console.connections.create sends autoRefresh on both arms only when g
   assertEquals(c.calls[2].body, JSON.stringify({ authKey: "apiKey", credentialId: "cred_1" }));
 });
 
-Deno.test("console.connections.update sends autoRefresh alone and returns the keep-alive fields", async () => {
+test("console.connections.update sends autoRefresh alone and returns the keep-alive fields", async () => {
   const updated = {
     ...CONN_A,
     autoRefresh: false,
@@ -417,7 +412,7 @@ Deno.test("console.connections.update sends autoRefresh alone and returns the ke
   assertEquals(res.refreshFailingSince, null);
 });
 
-Deno.test("console.connections.create: a refused sign-in is a 422 with hookCode on raw", async () => {
+test("console.connections.create: a refused sign-in is a 422 with hookCode on raw", async () => {
   const body = {
     error: {
       code: "credential_invalid",

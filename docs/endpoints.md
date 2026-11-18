@@ -2558,6 +2558,20 @@ Errors: `400 invalid_body`, `400 invalid_target`, `403 user_import_disabled`, `4
 
 ---
 
+## 100b. `appManagement.discover` — search an npm or JSR registry for w6w apps
+
+```
+GET /app-management/discover
+```
+
+`status: required` · `serverImplemented: true` · added in `0.21.0`
+
+Query `registry` (`npm` or `jsr`, optional; the server defaults to `npm`), `q` (required, 1..100 characters) and `limit` (optional, 1..50, server default 20). `registry` and `limit` are sent only when given. Answers `{registry, q, items:[{name, version, description|null, link, ref, installed}]}`; `ref` is `<registry>:<name>@^<version>` and `installed` covers only scopes the caller manages. CLI: `w6w apps search <q> [--registry npm|jsr] [--limit <n>]`.
+
+Errors: `400 invalid_query` (unknown or duplicate param, bad registry/q/limit), `424 registry_unavailable`.
+
+---
+
 ## 101. `dataStores.list` — list the project's data stores
 
 ```
@@ -2878,8 +2892,8 @@ unstable `console.endpoints` namespace.
 > `appManagement.publishArtifact` (`POST /app-management/artifacts`), the upload behind
 > `w6w apps publish`. It went in as `planned` and was flipped to `required` once the server
 > route shipped on 2026-11-15. The operation count goes from 122 to 123. The CLI's
-> `apps init` / `validate` / `build` run the local `@w6w/app-build` toolchain and call no
-> operation.
+> `apps init` / `validate` / `build` package the developer's prebuilt JavaScript locally with
+> the vendored `@w6w/app-build` assembler (Node only) and call no operation.
 
 ---
 

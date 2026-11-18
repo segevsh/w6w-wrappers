@@ -12,9 +12,9 @@
  *    public API. This file imports the barrel and names each export.
  * 2. **What the exported types actually ARE.** The suite's typed fixtures pin
  *    which fields exist and how they are spelled — a dropped or renamed field
- *    fails `deno check`. They pin nothing about the field's *type*: eight
+ *    fails `npm run typecheck`. They pin nothing about the field's *type*: eight
  *    type-precision mutants (`ConnectionState` → `string`, `lastTestOk` losing
- *    `| null`, `versions` made required, …) survived both `deno check` and the
+ *    `| null`, `versions` made required, …) survived both `npm run typecheck` and the
  *    whole suite, and four more (`RunStatus` → `string`, `steps` made optional,
  *    `payload` → `unknown`, `kind` → `string`) survived on the run types. The
  *    pins below fail to compile under each of those mutations.
@@ -24,10 +24,11 @@
  *
  * `@ts-expect-error` is the load-bearing spelling: it is an error when the line
  * below it *stops* being an error, so widening a union to `string` fails
- * `deno task check` rather than passing unnoticed.
+ * `npm run typecheck` rather than passing unnoticed.
  */
 
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals } from "./assert.ts";
 import * as barrel from "../mod.ts";
 // `ConsoleMe` is deliberately NOT part of the root barrel (`console.*` is a
 // separate, unstable entry point — see `mod.ts`'s header and
@@ -116,7 +117,7 @@ const PUBLIC_SURFACE: Record<string, "function" | "string"> = {
   isTerminalRunStatus: "function",
 };
 
-Deno.test("the barrel exports the whole public surface, by name", () => {
+test("the barrel exports the whole public surface, by name", () => {
   for (const [name, kind] of Object.entries(PUBLIC_SURFACE)) {
     assertEquals(
       typeof (barrel as Record<string, unknown>)[name],
@@ -126,13 +127,10 @@ Deno.test("the barrel exports the whole public surface, by name", () => {
   }
   // Exact set equality, not merely "the expected ones are present": an export
   // added without a line here is as invisible to this suite as one deleted.
-  assertEquals(
-    Object.keys(barrel).sort(),
-    Object.keys(PUBLIC_SURFACE).sort(),
-  );
+  assertEquals(Object.keys(barrel).sort(), Object.keys(PUBLIC_SURFACE).sort());
 });
 
-Deno.test("the barrel's classes and guards are reachable and usable, not just present", () => {
+test("the barrel's classes and guards are reachable and usable, not just present", () => {
   // Named exports can survive as `undefined` shaped holes in a bad merge; these
   // lines fail if the binding is not the thing it claims to be.
   const client = new barrel.W6WClient({ baseUrl: "https://api.example.com", token: "t" });
@@ -171,18 +169,12 @@ Deno.test("the barrel's classes and guards are reachable and usable, not just pr
 
 // ── Union membership: every member, and nothing but the members ──────────────
 
-Deno.test("the wire unions carry exactly their pinned members", () => {
+test("the wire unions carry exactly their pinned members", () => {
   // The tables are the pin: dropping a member makes the array fail to compile,
   // and `@ts-expect-error` makes widening the union to `string` fail too.
   const formats: DocFormat[] = ["text", "markdown", "yaml", "html", "json"];
   const varTypes: VarType[] = ["string", "number", "boolean", "json"];
-  const states: ConnectionState[] = [
-    "pending",
-    "connected",
-    "needs_refresh",
-    "broken",
-    "revoked",
-  ];
+  const states: ConnectionState[] = ["pending", "connected", "needs_refresh", "broken", "revoked"];
   const workflowStatuses: WorkflowStatus[] = ["draft", "active"];
   const runStatuses: RunStatus[] = ["queued", "running", "succeeded", "failed", "canceled"];
 
@@ -337,12 +329,12 @@ const _meWithoutManageMembers: ConsoleMe = {
   tenantAdmin: true,
 };
 
-Deno.test("ConsoleMe requires canManageMembers — the type-level guard above is live", () => {
+test("ConsoleMe requires canManageMembers — the type-level guard above is live", () => {
   assertEquals(typeof _meWithoutManageMembers, "object");
 });
 
 // App management (contract 0.14.0): the sync outcome is CLOSED, the class and reason unions are OPEN.
-Deno.test("appManagement unions: SyncOutcome closed, ManagementClass and UnavailableReason open", () => {
+test("appManagement unions: SyncOutcome closed, ManagementClass and UnavailableReason open", () => {
   const outcomes: SyncOutcome[] = ["registry_updated", "definition_unchanged", "failed"];
   const classes: ManagementClass[] = ["global", "tenant", "account", "personal", "unclassified"];
   const open: ManagementClass = "some_future_class";
@@ -357,7 +349,7 @@ const _notASyncOutcome: SyncOutcome = "skipped";
 
 // ── Data stores (contract 0.15.0) ────────────────────────────────────────────
 
-Deno.test("data-store kinds are closed and pages never carry a null cursor", () => {
+test("data-store kinds are closed and pages never carry a null cursor", () => {
   const kinds: DataStoreKind[] = ["kv", "doc", "table"];
   assertEquals(kinds.length, 3);
   const page: DataStorePage = { items: [] };

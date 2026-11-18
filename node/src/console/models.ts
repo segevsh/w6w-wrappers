@@ -146,17 +146,15 @@ export type ModelFallback =
   | { model: string; credentialSelection: CredentialSelection; connection?: never };
 
 /** Body of `createRoute`: legacy `connection` OR `credentialSelection`, never both. */
-export type ModelRouteInput =
-  & {
-    name: string;
-    model: string;
-    fallbacks?: ModelFallback[];
-    defaults?: Record<string, unknown>;
-  }
-  & (
-    | { connection: string; credentialSelection?: never }
-    | { credentialSelection: CredentialSelection; connection?: never }
-  );
+export type ModelRouteInput = {
+  name: string;
+  model: string;
+  fallbacks?: ModelFallback[];
+  defaults?: Record<string, unknown>;
+} & (
+  | { connection: string; credentialSelection?: never }
+  | { credentialSelection: CredentialSelection; connection?: never }
+);
 
 /** One problem found by a route-readiness check. */
 export interface ModelRouteReadinessIssue {
@@ -176,9 +174,8 @@ export interface ModelRouteReadiness {
 }
 
 /** Body of `updateRoute`. */
-export type ModelRoutePatch =
-  & Partial<Pick<ModelRouteInput, "model" | "fallbacks" | "defaults">>
-  & (
+export type ModelRoutePatch = Partial<Pick<ModelRouteInput, "model" | "fallbacks" | "defaults">> &
+  (
     | { connection?: string; credentialSelection?: never }
     | { credentialSelection: CredentialSelection; connection?: never }
   );
@@ -190,7 +187,9 @@ export type ModelRoutePatch =
 function budgetBody(res: HttpResponse<unknown>): ModelBudget {
   const body = res.body;
   if (
-    typeof body === "object" && body !== null && !Array.isArray(body) &&
+    typeof body === "object" &&
+    body !== null &&
+    !Array.isArray(body) &&
     typeof (body as Record<string, unknown>).id === "string"
   ) {
     return body as ModelBudget;

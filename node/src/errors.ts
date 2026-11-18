@@ -14,10 +14,8 @@
  *   server is unreachable" with "you have not configured a server" is exactly
  *   the diagnosis a user needs kept apart.
  *
- * Every public member carries an explicit type annotation. That is a
- * publishing requirement, not a preference: JSR publishes this file as
- * TypeScript source and rejects inferred public types ("no slow types",
- * `docs/implementation.md` §1).
+ * Every public member carries an explicit type annotation, so the emitted
+ * `.d.ts` is the declared surface rather than whatever inference produced.
  *
  * @module
  */

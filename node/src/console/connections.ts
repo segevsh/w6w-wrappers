@@ -75,30 +75,30 @@ export interface ConnectionBinding {
  */
 export type ConnectionCreateInput =
   | {
-    authKey: string;
-    credential: Record<string, unknown>;
-    displayName?: string;
-    profile?: Record<string, unknown>;
-    credentialId?: never;
-    binding?: never;
-    accessScope?: "account" | "user";
-    /**
-     * Background keep-alive refresh for the new connection. The server
-     * defaults it to `true`; send `false` to opt out. Omitted = not sent.
-     */
-    autoRefresh?: boolean;
-  }
+      authKey: string;
+      credential: Record<string, unknown>;
+      displayName?: string;
+      profile?: Record<string, unknown>;
+      credentialId?: never;
+      binding?: never;
+      accessScope?: "account" | "user";
+      /**
+       * Background keep-alive refresh for the new connection. The server
+       * defaults it to `true`; send `false` to opt out. Omitted = not sent.
+       */
+      autoRefresh?: boolean;
+    }
   | {
-    authKey: string;
-    credentialId: string;
-    binding?: ConnectionBinding;
-    displayName?: string;
-    credential?: never;
-    profile?: never;
-    accessScope?: "account" | "user";
-    /** Background keep-alive refresh; see the inline-credential arm. */
-    autoRefresh?: boolean;
-  };
+      authKey: string;
+      credentialId: string;
+      binding?: ConnectionBinding;
+      displayName?: string;
+      credential?: never;
+      profile?: never;
+      accessScope?: "account" | "user";
+      /** Background keep-alive refresh; see the inline-credential arm. */
+      autoRefresh?: boolean;
+    };
 
 /** A callable (Function/Endpoint) bound to a connection. */
 export interface ConnectionDependentCallable {
@@ -231,10 +231,7 @@ export class ConnectionsApi {
    * hook) refused the credential — the app's own short code, when it gave one, is
    * `raw.error.hookCode`.
    */
-  async create(
-    appId: string,
-    body: ConnectionCreateInput,
-  ): Promise<ConnectionSummary> {
+  async create(appId: string, body: ConnectionCreateInput): Promise<ConnectionSummary> {
     const res = await this.#host.request<unknown>({
       method: "POST",
       path: path`/apps/${appId}/connections`,

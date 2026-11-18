@@ -8,7 +8,8 @@
  * which is always the unwrapped payload and never the server's envelope.
  */
 
-import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects, assertStringIncludes } from "./assert.ts";
 import { W6WClient } from "../src/client.ts";
 import type { FetchLike } from "../src/config.ts";
 import { ApiError } from "../src/errors.ts";
@@ -81,26 +82,24 @@ const INVITE_WITH_LINK: TeamInviteWithLink = {
   redemptionLink: "https://app.example.com/join?token=tok_plaintext",
 };
 
-Deno.test("team: all six operations are functions on a constructed client", () => {
+test("team: all six operations are functions on a constructed client", () => {
   // Deliberately a runtime assertion, not a type-level one: a namespace that
   // silently lost a method would still typecheck in every OTHER case in this
   // file, because they all call through the same object.
   const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
-  for (
-    const name of [
-      "members",
-      "invite",
-      "invites",
-      "revokeInvite",
-      "setRole",
-      "removeMember",
-    ] as const
-  ) {
+  for (const name of [
+    "members",
+    "invite",
+    "invites",
+    "revokeInvite",
+    "setRole",
+    "removeMember",
+  ] as const) {
     assertEquals(typeof c.team[name], "function", `team.${name} is missing`);
   }
 });
 
-Deno.test("team: carries no ?project= anywhere — team membership is account-wide", async () => {
+test("team: carries no ?project= anywhere — team membership is account-wide", async () => {
   // Seeded WITH a client-level default project, on purpose: if `team` ever
   // regressed to reading `config.project` the way `documents` does, this is
   // where it would show up as an unwanted query string.
@@ -122,7 +121,7 @@ Deno.test("team: carries no ?project= anywhere — team membership is account-wi
   }
 });
 
-Deno.test("team.members unwraps the envelope and returns the roster", async () => {
+test("team.members unwraps the envelope and returns the roster", async () => {
   const c = client(() => json({ members: [MEMBER] }));
 
   const members = await c.client.team.members();
@@ -134,7 +133,7 @@ Deno.test("team.members unwraps the envelope and returns the roster", async () =
   assertEquals(c.calls[0].headers.get("authorization"), "Bearer tok_1");
 });
 
-Deno.test("team.invite posts the two optional fields and accepts 201", async () => {
+test("team.invite posts the two optional fields and accepts 201", async () => {
   const c = client(() => json({ invite: INVITE_WITH_LINK }, 201));
 
   const invite = await c.client.team.invite({ email: "new@example.com", role: "admin" });
@@ -148,7 +147,7 @@ Deno.test("team.invite posts the two optional fields and accepts 201", async () 
   });
 });
 
-Deno.test("team.invite omits both fields when called with no arguments — an OPEN invite", async () => {
+test("team.invite omits both fields when called with no arguments — an OPEN invite", async () => {
   const c = client(() => json({ invite: INVITE_WITH_LINK }, 201));
 
   await c.client.team.invite();
@@ -158,7 +157,7 @@ Deno.test("team.invite omits both fields when called with no arguments — an OP
   assertEquals(JSON.parse(c.calls[0].body ?? "null"), {});
 });
 
-Deno.test("team.invites unwraps the envelope and returns only what the server sent", async () => {
+test("team.invites unwraps the envelope and returns only what the server sent", async () => {
   const c = client(() => json({ invites: [INVITE] }));
 
   const invites = await c.client.team.invites();
@@ -168,7 +167,7 @@ Deno.test("team.invites unwraps the envelope and returns only what the server se
   assertEquals(c.calls[0].url, "https://api.example.com/me/account/invites");
 });
 
-Deno.test("team.revokeInvite addresses the invite by id and returns nothing", async () => {
+test("team.revokeInvite addresses the invite by id and returns nothing", async () => {
   const c = client(() => json({ ok: true }));
 
   const result = await c.client.team.revokeInvite("inv_1");
@@ -179,9 +178,9 @@ Deno.test("team.revokeInvite addresses the invite by id and returns nothing", as
   assertEquals(c.calls[0].body, null);
 });
 
-Deno.test("team.revokeInvite does not swallow a 409 — revoking is not idempotent", async () => {
+test("team.revokeInvite does not swallow a 409 — revoking is not idempotent", async () => {
   const c = client(() =>
-    json({ error: { code: "invite_not_open", message: "Already used." } }, 409, "Conflict")
+    json({ error: { code: "invite_not_open", message: "Already used." } }, 409, "Conflict"),
   );
 
   const err = await assertRejects(() => c.client.team.revokeInvite("inv_1"), ApiError);
@@ -190,7 +189,7 @@ Deno.test("team.revokeInvite does not swallow a 409 — revoking is not idempote
   assertEquals(err.code, "invite_not_open");
 });
 
-Deno.test("team.setRole patches by userId and unwraps the member envelope", async () => {
+test("team.setRole patches by userId and unwraps the member envelope", async () => {
   const updated: TeamMember = { ...MEMBER, role: "admin" };
   const c = client(() => json({ member: updated }));
 
@@ -202,13 +201,13 @@ Deno.test("team.setRole patches by userId and unwraps the member envelope", asyn
   assertEquals(JSON.parse(c.calls[0].body ?? "null"), { role: "admin" });
 });
 
-Deno.test("team.setRole surfaces cannot_change_owner_role unswallowed", async () => {
+test("team.setRole surfaces cannot_change_owner_role unswallowed", async () => {
   const c = client(() =>
     json(
       { error: { code: "cannot_change_owner_role", message: "Cannot change the owner's role." } },
       403,
       "Forbidden",
-    )
+    ),
   );
 
   const err = await assertRejects(() => c.client.team.setRole("usr_1", "owner"), ApiError);
@@ -217,7 +216,7 @@ Deno.test("team.setRole surfaces cannot_change_owner_role unswallowed", async ()
   assertEquals(err.code, "cannot_change_owner_role");
 });
 
-Deno.test("team.removeMember addresses the member by userId and returns nothing", async () => {
+test("team.removeMember addresses the member by userId and returns nothing", async () => {
   const c = client(() => json({ ok: true }));
 
   const result = await c.client.team.removeMember("usr_2");
@@ -228,21 +227,21 @@ Deno.test("team.removeMember addresses the member by userId and returns nothing"
   assertEquals(c.calls[0].body, null);
 });
 
-Deno.test("team.removeMember does not swallow last_member or cannot_remove_owner", async () => {
+test("team.removeMember does not swallow last_member or cannot_remove_owner", async () => {
   const owner = client(() =>
-    json({ error: { code: "cannot_remove_owner", message: "Cannot remove the owner." } }, 403)
+    json({ error: { code: "cannot_remove_owner", message: "Cannot remove the owner." } }, 403),
   );
   const ownerErr = await assertRejects(() => owner.client.team.removeMember("usr_1"), ApiError);
   assertEquals(ownerErr.code, "cannot_remove_owner");
 
   const last = client(() =>
-    json({ error: { code: "last_member", message: "Cannot remove the last member." } }, 409)
+    json({ error: { code: "last_member", message: "Cannot remove the last member." } }, 409),
   );
   const lastErr = await assertRejects(() => last.client.team.removeMember("usr_2"), ApiError);
   assertEquals(lastErr.code, "last_member");
 });
 
-Deno.test("team: the userId/id is percent-encoded into every path-addressed route", async () => {
+test("team: the userId/id is percent-encoded into every path-addressed route", async () => {
   const c = client(() => json({ member: MEMBER, ok: true }));
 
   await c.client.team.setRole("usr/1", "admin");
@@ -254,7 +253,7 @@ Deno.test("team: the userId/id is percent-encoded into every path-addressed rout
   assertEquals(c.calls[2].url, "https://api.example.com/me/account/invites/inv%2F1");
 });
 
-Deno.test("team: an envelope key present but null is bad_response, not null", async () => {
+test("team: an envelope key present but null is bad_response, not null", async () => {
   const c = client(() => json({ members: null }));
 
   const err = await assertRejects(() => c.client.team.members(), ApiError);
@@ -264,7 +263,7 @@ Deno.test("team: an envelope key present but null is bad_response, not null", as
   assertStringIncludes(err.message, '"members"');
 });
 
-Deno.test("team: a 200 missing its envelope key is bad_response, not undefined", async () => {
+test("team: a 200 missing its envelope key is bad_response, not undefined", async () => {
   const c = client(() => json({ unexpected: true }));
 
   const err = await assertRejects(() => c.client.team.members(), ApiError);
@@ -274,7 +273,7 @@ Deno.test("team: a 200 missing its envelope key is bad_response, not undefined",
   assertStringIncludes(err.message, '"members"');
 });
 
-Deno.test("team: a 404 not-yet-served route reaches the caller as an ordinary ApiError", async () => {
+test("team: a 404 not-yet-served route reaches the caller as an ordinary ApiError", async () => {
   // A server that has not
   // shipped T1.2.1 answers 404, and this wrapper does not special-case that.
   const c = client(() => json({ error: { code: "not_found", message: "No such route." } }, 404));
