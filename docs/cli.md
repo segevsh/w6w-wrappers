@@ -178,10 +178,14 @@ token saved for host A is not sent to host B, so after switching hosts run
 
 ## `apps init | validate | build` — the app toolchain
 
-These three are CLI-only and local: they make no API call (so, like `config`, they are not
-contract operations and the node and python lanes do not implement them). **They need
-[Deno](https://deno.com) on `PATH`**; `validate` and `build` run the canonical `@w6w/app-build`
-builder through it, and a missing Deno is an error that names this prerequisite.
+These three are CLI-only and local: they make no API call (so, like `config`, they are not contract
+operations and the node and python lanes do not implement them). `validate` and `build` run the
+canonical `@w6w/app-build` builder under [Deno](https://deno.com). The npm package brings its own:
+the official `@deno/<platform>` binary (Deno 2.8.2) is an optional dependency, so nothing has to be
+installed or on `PATH`. The binary is picked in this order: `$W6W_DENO`; the running Deno, when the
+CLI itself runs under Deno; the bundled one; `$DENO_INSTALL/bin/deno`, then `~/.deno/bin/deno`; and
+last `deno` on `PATH`. Where no bundled build exists (musl/Alpine, 32-bit) one of the others must be
+present, and a missing Deno is an error that names this prerequisite.
 
 `w6w apps init <id> [--template deno|node] [--dir <path>]` scaffolds a new app (default
 template `deno`, default directory `./<id>`): `package.json`, `deno.json`, `index.ts`, one

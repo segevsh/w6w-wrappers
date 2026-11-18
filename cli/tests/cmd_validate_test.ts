@@ -384,6 +384,24 @@ Deno.test("no Deno on PATH names the Deno prerequisite", async () => {
   }
 });
 
+Deno.test("a missing app directory is named, not blamed on Deno", async () => {
+  const dir = `${await Deno.makeTempDir({ prefix: "w6w-validate-gone-" })}/nope`;
+  const restore = useToolchainRunner(() =>
+    Promise.reject(Object.assign(new Error("spawn deno ENOENT"), { code: "ENOENT" }))
+  );
+  const { context: ctx } = context({ positionals: [dir] });
+  try {
+    const error = await assertRejects(
+      () => Promise.resolve(VALIDATE_COMMANDS["apps validate"](ctx)),
+      Error,
+    );
+    assertStringIncludes(error.message, "is not a directory");
+    assertStringIncludes(error.message, "nope");
+  } finally {
+    restore();
+  }
+});
+
 Deno.test("a builder that answers with no JSON line is reported with its stderr", async () => {
   const dir = await appWith(undefined);
   const { context: ctx } = context({ positionals: [dir] });

@@ -5,6 +5,11 @@
  * The CLI never bundles an app itself: it spawns `deno run` on the builder and
  * reads the answer. That spawn is behind {@linkcode useToolchainRunner} (replace and restore), so the test suite never starts Deno.
  *
+ * Which `deno` it spawns is {@linkcode resolveDeno}'s answer. The npm package
+ * carries its own Deno — the official `@deno/<platform>` binary packages are
+ * optional dependencies, npm installs only the one matching the machine — so
+ * `w6w apps build` works with no Deno installed and no PATH set up.
+ *
  * Host access follows the package's rule: `node:` modules are imported through a
  * non-literal specifier with structural types.
  *
@@ -26,13 +31,13 @@ export interface ToolchainResult {
 
 /**
  * Runs `deno <argv>` in `cwd`. Rejects with an error whose `code` is `"ENOENT"`
- * when Deno is not on PATH.
+ * when no Deno binary could be found.
  */
 export type ToolchainRunner = (argv: string[], cwd: string) => Promise<ToolchainResult>;
 
 interface Fs {
   readFile(path: string, encoding: "utf8"): Promise<string>;
-  stat(path: string): Promise<{ isFile(): boolean }>;
+  stat(path: string): Promise<{ isFile(): boolean; isDirectory(): boolean }>;
 }
 interface Path {
   resolve(...parts: string[]): string;
@@ -56,7 +61,127 @@ interface SpawnedChild {
   on(event: "close", listener: (code: number | null) => void): unknown;
 }
 
+/** The env var that names a Deno binary explicitly; it wins over everything else. */
+export const DENO_OVERRIDE_ENV = "W6W_DENO";
+
+/**
+ * The official per-platform Deno binary packages on npm, all optional
+ * dependencies of `@w6w/cli`. Each declares `os`/`cpu`(/`libc`), so npm installs
+ * exactly the one this machine can run (none on e.g. musl or 32-bit hosts).
+ */
+export const BUNDLED_DENO_PACKAGES = [
+  "@deno/linux-x64-glibc",
+  "@deno/linux-arm64-glibc",
+  "@deno/darwin-x64",
+  "@deno/darwin-arm64",
+  "@deno/win32-x64",
+  "@deno/win32-arm64",
+] as const;
+
+/** What {@linkcode resolveDeno} may ask of the host. Injectable so tests probe every branch. */
+export interface DenoHost {
+  /** Reads an environment variable. */
+  env(name: string): string | undefined;
+  /** The running Deno's own binary, when the CLI itself runs under Deno. */
+  denoExecPath(): string | undefined;
+  /** Node-style platform name (`linux`, `darwin`, `win32`). */
+  platform: string;
+  /** Node-style architecture name (`x64`, `arm64`). */
+  arch: string;
+  /** Where an installed package's `package.json` lives, or `undefined` if it is not installed. */
+  resolvePackage(name: string): string | undefined;
+  /** True when `path` is an existing file. */
+  isFile(path: string): Promise<boolean>;
+}
+
+/**
+ * The Deno binary to run the builder under, first hit wins:
+ *
+ *   1. `$W6W_DENO`, verbatim — the explicit override.
+ *   2. The running Deno's own `execPath()`, when the CLI runs under Deno.
+ *   3. The bundled `@deno/<platform>` package's binary.
+ *   4. `$DENO_INSTALL/bin/deno`, then `~/.deno/bin/deno` — the official install
+ *      script's location, which non-login shells, IDE tasks and CI often lack on PATH.
+ *   5. Bare `deno`, resolved through PATH by the spawn.
+ */
+export async function resolveDeno(h: DenoHost): Promise<string> {
+  const override = h.env(DENO_OVERRIDE_ENV);
+  if (override) return override;
+
+  const self = h.denoExecPath();
+  if (self) return self;
+
+  const exe = h.platform === "win32" ? "deno.exe" : "deno";
+  const sep = h.platform === "win32" ? "\\" : "/";
+  const dirOf = (file: string) =>
+    file.slice(0, Math.max(file.lastIndexOf("/"), file.lastIndexOf("\\")));
+
+  for (const name of BUNDLED_DENO_PACKAGES) {
+    if (!name.startsWith(`@deno/${h.platform}-${h.arch}`)) continue;
+    const manifest = h.resolvePackage(name);
+    if (!manifest) continue;
+    const bin = `${dirOf(manifest)}${sep}${exe}`;
+    if (await h.isFile(bin)) return bin;
+  }
+
+  const installDirs = [h.env("DENO_INSTALL"), h.env("HOME") ?? h.env("USERPROFILE")]
+    .map((root, i) => root ? (i === 0 ? root : `${root}${sep}.deno`) : undefined);
+  for (const root of installDirs) {
+    if (!root) continue;
+    const bin = `${root}${sep}bin${sep}${exe}`;
+    if (await h.isFile(bin)) return bin;
+  }
+
+  return "deno";
+}
+
+interface HostGlobals {
+  Deno?: { execPath(): string; env: { get(name: string): string | undefined } };
+  process?: { env: Record<string, string | undefined>; platform: string; arch: string };
+}
+
+/** The real host, probed by capability so the module compiles and runs under Deno and Node. */
+async function systemDenoHost(): Promise<DenoHost> {
+  const g = globalThis as unknown as HostGlobals;
+  const { fs } = await host();
+  const moduleName = "node:module";
+  const { createRequire } = (await import(moduleName)) as {
+    createRequire(url: string): { resolve(id: string): string };
+  };
+  const require = createRequire(import.meta.url);
+  return {
+    env: (name) => {
+      try {
+        return g.Deno ? g.Deno.env.get(name) : g.process?.env[name];
+      } catch {
+        return undefined; // Deno without --allow-env
+      }
+    },
+    denoExecPath: () => g.Deno?.execPath(),
+    platform: g.process?.platform ?? "linux",
+    arch: g.process?.arch ?? "x64",
+    resolvePackage: (name) => {
+      try {
+        return require.resolve(`${name}/package.json`);
+      } catch {
+        return undefined;
+      }
+    },
+    isFile: async (path) => {
+      try {
+        return (await fs.stat(path)).isFile();
+      } catch {
+        return false;
+      }
+    },
+  };
+}
+
+let resolvedDeno: Promise<string> | undefined;
+
 const hostRunner: ToolchainRunner = async (argv, cwd) => {
+  resolvedDeno ??= systemDenoHost().then(resolveDeno);
+  const deno = await resolvedDeno;
   const name = "node:child_process";
   const { spawn } = (await import(name)) as {
     spawn(
@@ -66,7 +191,7 @@ const hostRunner: ToolchainRunner = async (argv, cwd) => {
     ): SpawnedChild;
   };
   return await new Promise<ToolchainResult>((resolve, reject) => {
-    const child = spawn("deno", argv, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(deno, argv, { cwd, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (c) => stdout += String(c));
@@ -87,10 +212,11 @@ export function useToolchainRunner(replacement: ToolchainRunner): () => void {
   };
 }
 
-/** The error shown when Deno is not installed (R7). */
+/** The error shown when no Deno binary could be found (R7). */
 export const DENO_MISSING =
-  "Deno is required to validate and build apps, and `deno` was not found on PATH. " +
-  "Install it from https://deno.com and re-run.";
+  "Deno is required to validate and build apps. The Deno bundled with @w6w/cli is not " +
+  "installed for this platform, and `deno` was not found on PATH or in ~/.deno/bin. " +
+  "Install it from https://deno.com, or set W6W_DENO to its path, and re-run.";
 
 /**
  * Run the builder through the current runner.
@@ -101,8 +227,11 @@ export async function runBuilder(argv: string[], cwd: string): Promise<Toolchain
   try {
     return await runner(argv, cwd);
   } catch (error) {
-    if ((error as { code?: unknown })?.code === "ENOENT") throw new Error(DENO_MISSING);
-    throw error;
+    if ((error as { code?: unknown })?.code !== "ENOENT") throw error;
+    // A spawn into a missing cwd is ENOENT too — name the directory, not Deno.
+    const { fs } = await host();
+    const isDir = await fs.stat(cwd).then((s) => s.isDirectory(), () => false);
+    throw new Error(isDir ? DENO_MISSING : `\`${cwd}\` is not a directory.`);
   }
 }
 

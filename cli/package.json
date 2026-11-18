@@ -34,6 +34,14 @@
   "dependencies": {
     "@w6w/sdk": "^0.12.0"
   },
+  "optionalDependencies": {
+    "@deno/linux-x64-glibc": "2.8.2",
+    "@deno/linux-arm64-glibc": "2.8.2",
+    "@deno/darwin-x64": "2.8.2",
+    "@deno/darwin-arm64": "2.8.2",
+    "@deno/win32-x64": "2.8.2",
+    "@deno/win32-arm64": "2.8.2"
+  },
   "devDependencies": {
     "@types/node": "^22.20.5",
     "typescript": "^5.7.2"
