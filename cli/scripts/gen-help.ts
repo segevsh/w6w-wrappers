@@ -740,6 +740,10 @@ const PARAM_HELP: Record<string, string> = {
     "How @w6w/* imports resolve: sibling or registry (default: registry when the app's deno.json maps @w6w/types to jsr:, else sibling)",
   "apps.package.builder":
     "The app builder spec to run (default: jsr:@w6w/app-build@0.2.0/cli); a path or file: URL for a local builder",
+  "apps.package.name":
+    "Package name written to package.json (jsr.json derives from it); used only when those files are created (default: w6w-apps-<pack dir>)",
+  "apps.package.version":
+    "Version written to package.json/jsr.json; used only when those files are created (default: 0.1.0)",
   "appManagement.publishArtifact.dir": "The app directory (default: the current directory)",
   "appManagement.publishArtifact.version":
     "Semver to write into the app's package.json before building (rewritten in place; default: leave it as is)",

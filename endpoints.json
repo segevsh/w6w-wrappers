@@ -4452,7 +4452,7 @@
         "name": "apps.package",
         "summary": "Build a pack into a w6w registry package tree (<out>/w6w/index.json + <id>/<version>/…); never publishes (local only, needs Deno).",
         "status": "live",
-        "naming": "w6w apps package <pack> [-o|--out <dir>] [--resolution sibling|registry] [--builder <spec>]",
+        "naming": "w6w apps package <pack> [-o|--out <dir>] [--resolution sibling|registry] [--builder <spec>] [--name <pkg>] [--version <v>]",
         "params": [
           {
             "name": "pack",
@@ -4474,6 +4474,18 @@
           },
           {
             "name": "builder",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "version",
             "in": "query",
             "type": "string",
             "required": false

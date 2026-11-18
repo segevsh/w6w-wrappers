@@ -682,3 +682,37 @@ Deno.test("apps package: a valid existing package.json is left byte-identical", 
   assertEquals(await Deno.readTextFile(`${out}/package.json`), body);
   assert(await exists(`${out}/jsr.json`));
 });
+
+async function runPackageWith(out: string, options: Record<string, string>) {
+  const calls: Call[] = [];
+  const restore = packageBuilder(calls);
+  const { context: ctx } = context({
+    positionals: [`${PACKAGE_FIXTURE}w6w-pack.json`],
+    options: { out, resolution: "registry", ...options },
+  });
+  try {
+    await COMMANDS["apps package"](ctx);
+  } finally {
+    restore();
+  }
+}
+
+Deno.test("apps package: --name/--version apply when package.json/jsr.json are created", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  await runPackageWith(out, { name: "my-apps", version: "2.3.4" });
+  const pkg = JSON.parse(await Deno.readTextFile(`${out}/package.json`));
+  assertEquals([pkg.name, pkg.version], ["my-apps", "2.3.4"]);
+  const jsr = JSON.parse(await Deno.readTextFile(`${out}/jsr.json`));
+  assertEquals(jsr.version, "2.3.4");
+});
+
+Deno.test("apps package: --name/--version are ignored when the files exist", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  const pkgBody = '{"name":"mine","version":"1.0.0","keywords":["w6w-app"],"files":["w6w/"]}\n';
+  const jsrBody = '{"name":"@x/mine","version":"1.0.0","exports":"./w6w/index.json"}\n';
+  await Deno.writeTextFile(`${out}/package.json`, pkgBody);
+  await Deno.writeTextFile(`${out}/jsr.json`, jsrBody);
+  await runPackageWith(out, { name: "other", version: "9.9.9" });
+  assertEquals(await Deno.readTextFile(`${out}/package.json`), pkgBody);
+  assertEquals(await Deno.readTextFile(`${out}/jsr.json`), jsrBody);
+});

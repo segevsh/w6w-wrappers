@@ -109,6 +109,8 @@ const appsPackage: CommandHandler = async (context) => {
     const apps = await packageApps(pack, out, {
       builder: textFlag(context, "builder") ?? DEFAULT_BUILDER,
       resolution,
+      name: textFlag(context, "name"),
+      version: textFlag(context, "version"),
     });
     context.out.emit(
       { out, apps },

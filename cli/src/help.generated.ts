@@ -3032,7 +3032,7 @@ export const HELP_TREE: HelpTree = {
             "build a pack into a w6w registry package tree (<out>/w6w/index.json + <id>/<version>/…); never publishes (local only, needs Deno)",
           "usage": "w6w apps package <pack> [options]",
           "naming":
-            "w6w apps package <pack> [-o|--out <dir>] [--resolution sibling|registry] [--builder <spec>]",
+            "w6w apps package <pack> [-o|--out <dir>] [--resolution sibling|registry] [--builder <spec>] [--name <pkg>] [--version <v>]",
           "status": "live",
           "params": [
             {
@@ -3064,6 +3064,22 @@ export const HELP_TREE: HelpTree = {
               "display": "--builder <spec>",
               "description":
                 "The app builder spec to run (default: jsr:@w6w/app-build@0.2.0/cli); a path or file: URL for a local builder",
+              "required": false,
+            },
+            {
+              "name": "name",
+              "kind": "flag",
+              "display": "--name <pkg>",
+              "description":
+                "Package name written to package.json (jsr.json derives from it); used only when those files are created (default: w6w-apps-<pack dir>)",
+              "required": false,
+            },
+            {
+              "name": "version",
+              "kind": "flag",
+              "display": "--version <v>",
+              "description":
+                "Version written to package.json/jsr.json; used only when those files are created (default: 0.1.0)",
               "required": false,
             },
             {
