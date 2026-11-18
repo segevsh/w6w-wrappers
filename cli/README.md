@@ -34,7 +34,7 @@ w6w auth logout
 w6w config get-base-url                        # effective base URL and its source
 w6w config set-base-url https://w6w.example.com  # save it (tokens are per host: auth login again)
 w6w apps init com.example.my-app              # scaffold a new app (local only)
-w6w apps validate ./com.example.my-app        # validate it with the canonical builder (needs Deno)
+w6w apps validate ./com.example.my-app        # validate it with the canonical builder (runs on the bundled Deno)
 w6w apps build ./com.example.my-app --pack ./w6w-pack.json  # build it (`w6w build app` is an alias)
 ```
 
@@ -133,14 +133,21 @@ work in the new directory.
 ### apps validate
 
 `w6w apps validate [dir] [--resolution sibling|registry] [--builder <spec>]` checks the app with the
-canonical `@w6w/app-build` builder. It needs [Deno](https://deno.com) on `PATH`.
+canonical `@w6w/app-build` builder.
+
+`validate`, `build` and `publish` run on Deno, and the npm package brings its own: the official
+`@deno/<platform>` binary (Deno 2.8.2) is an optional dependency, so nothing has to be installed or
+on `PATH`. The binary is picked in this order: `$W6W_DENO`; the running Deno, when the CLI itself
+runs under Deno; the bundled one; `$DENO_INSTALL/bin/deno`, then `~/.deno/bin/deno`; and last `deno`
+on `PATH`. Where no bundled build exists (musl/Alpine, 32-bit) one of the others must be present,
+and a missing Deno is an error that names this prerequisite.
 
 ### apps build
 
 `w6w apps build [dir] [-o|--out <dir>] [--pack <file>] [--resolution sibling|registry]
 [--builder <spec>]`
 builds the app to `<out>/<id>/<version>/{app.js,manifest.json}` plus `<out>/index.json` and prints
-the index entry. `w6w build app` is an alias. Needs Deno.
+the index entry. `w6w build app` is an alias. Runs on Deno (bundled; see `apps validate`).
 
 ### apps publish
 
@@ -155,7 +162,8 @@ must be a semantic version (`1.2.3`), otherwise nothing is built or sent. It is 
 this command only: plain `w6w --version` still prints the version banner. There is no
 command-specific credential flag; authentication is the CLI's normal client resolution
 (config/login, and the global `--token` / `W6W_TOKEN`), and the upload goes only to the configured
-base URL. Needs Deno. The server route is `planned` until it is deployed.
+base URL. Runs on Deno (bundled; see `apps validate`). The server route is `planned` until it is
+deployed.
 
 ### apps list
 
