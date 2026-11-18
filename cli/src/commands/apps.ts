@@ -111,6 +111,7 @@ const appsPackage: CommandHandler = async (context) => {
       resolution,
       name: textFlag(context, "name"),
       version: textFlag(context, "version"),
+      license: textFlag(context, "license"),
     });
     context.out.emit(
       { out, apps },

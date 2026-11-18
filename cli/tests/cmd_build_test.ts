@@ -736,3 +736,26 @@ Deno.test("apps package: --name/--version are ignored when the files exist", asy
   assertEquals(await Deno.readTextFile(`${out}/package.json`), pkgBody);
   assertEquals(await Deno.readTextFile(`${out}/jsr.json`), jsrBody);
 });
+
+Deno.test("apps package: a created jsr.json carries a license (UNLICENSED by default)", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  await runPackageWith(out, {});
+  const jsr = JSON.parse(await Deno.readTextFile(`${out}/jsr.json`));
+  assertEquals(jsr.license, "UNLICENSED");
+});
+
+Deno.test("apps package: a created jsr.json takes the license of an existing package.json", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  await Deno.writeTextFile(
+    `${out}/package.json`,
+    '{"name":"mine","version":"1.0.0","license":"MIT","keywords":["w6w-app"],"files":["w6w/"]}\n',
+  );
+  await runPackageWith(out, {});
+  assertEquals(JSON.parse(await Deno.readTextFile(`${out}/jsr.json`)).license, "MIT");
+});
+
+Deno.test("apps package: --license is honoured when nothing else declares one", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  await runPackageWith(out, { license: "Apache-2.0" });
+  assertEquals(JSON.parse(await Deno.readTextFile(`${out}/jsr.json`)).license, "Apache-2.0");
+});

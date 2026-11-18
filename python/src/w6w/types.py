@@ -731,7 +731,7 @@ WorkflowStatus = Literal["draft", "active"]
 ManagementTarget = Literal["account", "tenant", "personal"]
 
 #: How a sync or source edit ended. Closed: `failed` is still a 200, with `error`.
-SyncOutcome = Literal["registry_updated", "definition_unchanged", "failed"]
+SyncOutcome = Literal["registry_updated", "definition_unchanged", "package_missing", "failed"]
 
 #: How a published artifact landed: first time, a new version, an upgrade of the
 #: same version's bytes, or byte-identical to what was already there.

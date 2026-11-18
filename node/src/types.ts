@@ -1233,7 +1233,11 @@ export interface SourceView {
 }
 
 /** The closed set of sync outcomes. */
-export type SyncOutcome = "registry_updated" | "definition_unchanged" | "failed";
+export type SyncOutcome =
+  | "registry_updated"
+  | "definition_unchanged"
+  | "package_missing"
+  | "failed";
 
 /** The last recorded sync attempt. */
 export interface LastSync {
