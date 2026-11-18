@@ -10,4 +10,4 @@
  * emitted type `string` rather than the literal, and `scripts/check-lockstep.py`
  * matches this exact declaration shape.
  */
-export const VERSION: string = "0.12.0";
+export const VERSION: string = "0.12.1";

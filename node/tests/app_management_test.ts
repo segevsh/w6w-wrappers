@@ -8,7 +8,7 @@ import { assertEquals, assertRejects } from "./assert.ts";
 import { W6WClient } from "../src/client.ts";
 import type { FetchLike } from "../src/config.ts";
 import { ApiError } from "../src/errors.ts";
-import type { SourceInput } from "../mod.ts";
+import type { SourceInput, SourceOptions, SourceView } from "../mod.ts";
 
 interface Call {
   method: string;
@@ -193,4 +193,31 @@ test("publishArtifact: a 409 id_taken rejects as ApiError carrying the code", as
   )) as ApiError;
   assertEquals(err.status, 409);
   assertEquals(err.code, "id_taken");
+});
+
+test("discover: GET with registry/q/limit; unset keys omitted", async () => {
+  const reply = { registry: "jsr", q: "hello", items: [] };
+  const { client, calls } = setup(reply);
+  assertEquals(
+    await client.appManagement.discover({ registry: "jsr", q: "hello", limit: 5 }),
+    reply as unknown,
+  );
+  assertEquals(calls[0].method, "GET");
+  assertEquals(calls[0].url.pathname, "/app-management/discover");
+  assertEquals(calls[0].url.search, "?registry=jsr&q=hello&limit=5");
+  await client.appManagement.discover({ q: "x y" });
+  assertEquals([...calls[1].url.searchParams.keys()], ["q"]);
+  assertEquals(calls[1].raw, null);
+});
+
+test("types: npm/jsr accepted as source kind and private-repo host", () => {
+  const kinds: SourceView["kind"][] = ["npm", "jsr"];
+  const hosts: SourceOptions["privateRepos"][number]["host"][] = ["npm", "jsr"];
+  assertEquals(
+    [kinds, hosts],
+    [
+      ["npm", "jsr"],
+      ["npm", "jsr"],
+    ],
+  );
 });

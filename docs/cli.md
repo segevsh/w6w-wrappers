@@ -231,6 +231,23 @@ matches, takes the built entry; otherwise it is appended. Other fields and keys
 are kept. The update is a re-read, modify and rename done under an exclusive
 `<pack>.lock`, so many builds can share one pack in parallel.
 
+`w6w apps search <q> [--registry npm|jsr] [--limit <n>]` searches an npm or JSR registry for
+installable w6w apps (`GET /app-management/discover`). `--registry` defaults to `npm`
+(the CLI always sends `registry`, `npm` when the flag is absent); `--limit` is 1..50. It lists each
+result's name, version, `ref` and whether it is already installed in a scope you manage;
+`--json` prints the response body.
+
+`w6w apps package <pack> [-o|--out <dir>] [--name <pkg>] [--version <v>] [--license <spdx>]`
+(`--out` defaults to `dist`) packages the apps of a pack file, each already built, with the same
+assembler as `apps build` into a registry package tree: `<out>/w6w/index.json` and
+`<out>/w6w/<id>/<version>/{app.js,manifest.json[,app.js.map]}`, where each `execSha256` in the
+index is the sha-256 of the written `app.js`. It needs only Node. If any app fails the command exits non-zero and
+writes nothing under `<out>/w6w`. When absent it also writes `<out>/package.json` (keyword
+`w6w-app`, no dependency fields, `files: ["w6w/"]`) and `<out>/jsr.json`; `--name` and
+`--version` apply only then. An existing `package.json` is validated and left byte-identical;
+it is refused if it has any dependency field, lacks the `w6w-app` keyword, or imports `npm:`
+or `jsr:`. The command never publishes; run `npm publish` or `jsr publish` yourself.
+
 ## `ls` — list a kind
 
 `w6w ls <integrations|workflows|functions|endpoints> [--project <id>] [--json]`
@@ -390,7 +407,7 @@ hand-declared rather than contract-driven.
 
 `w6w agents create` and `w6w agents update` take the sampling options of an
 agent's model call as flags, assembled into the `modelOptions` body object
-(contract 0.12.0):
+(contract 0.12.1):
 
 ```text
 --temperature <n>         0 to 2
@@ -416,7 +433,7 @@ collection. `--visibility` with `--purpose skill` is a usage error.
 ## `context-entries` — context entries outside any collection
 
 `w6w context-entries` manages text entries that do not belong to one collection
-(contract 0.12.0; the SDK's `client.contextEntries.*`). The nested
+(contract 0.12.1; the SDK's `client.contextEntries.*`). The nested
 `w6w context entries-*` commands keep working for collection-scoped entries.
 
 ```

@@ -1,5 +1,5 @@
 // generated — do not edit. Run `npm run vendor:assemble` in cli/ to refresh.
-// Vendored from w6w-core 638205ba1e830a83f13d9f7f3d293db1e92e55af: packages/app-build/assemble.ts,
+// Vendored from w6w-core ddfe38f316947d6442683a459880af12e47d5f6b: packages/app-build/assemble.ts,
 // bundled by cli/scripts/vendor-app-assemble.mjs with esbuild 0.28.2.
 // ../../core/packages/runtime/src/errors.ts
 var W6WError = class extends Error {

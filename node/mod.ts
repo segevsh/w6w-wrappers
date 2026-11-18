@@ -225,9 +225,13 @@ export type { AgentsHost } from "./src/agents.ts";
 export { AppManagementApi } from "./src/app-management.ts";
 export type { AppManagementHost } from "./src/app-management.ts";
 export type {
+  AppManagementDiscoverInput,
+  AppManagementDiscoverItem,
+  AppManagementDiscoverResult,
   AppManagementPackEntry,
   AppManagementPackInfo,
   AppManagementPreview,
+  DiscoverRegistry,
   LastSync,
   ListManagedAppsOptions,
   ManagedAppDetail,

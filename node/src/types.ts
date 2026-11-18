@@ -1204,7 +1204,16 @@ export interface Management {
 
 /** An app's active source, as the caller may see it. */
 export interface SourceView {
-  kind: "github" | "gitlab" | "bitbucket" | "folder" | "file" | "artifact" | "other";
+  kind:
+    | "github"
+    | "gitlab"
+    | "bitbucket"
+    | "npm"
+    | "jsr"
+    | "folder"
+    | "file"
+    | "artifact"
+    | "other";
   /** Canonical ref; `null` when the caller may not see it. */
   ref: string | null;
   folder?: { grant: string; label: string; path: string };
@@ -1217,7 +1226,11 @@ export interface SourceView {
 }
 
 /** The closed set of sync outcomes. */
-export type SyncOutcome = "registry_updated" | "definition_unchanged" | "failed";
+export type SyncOutcome =
+  | "registry_updated"
+  | "definition_unchanged"
+  | "package_missing"
+  | "failed";
 
 /** The last recorded sync attempt. */
 export interface LastSync {
@@ -1245,7 +1258,11 @@ export interface TargetOption {
 /** What the caller may name as a source; drives the add-source form. */
 export interface SourceOptions {
   publicRepos: true;
-  privateRepos: { grant: string; host: "github" | "gitlab" | "bitbucket"; repo: string }[];
+  privateRepos: {
+    grant: string;
+    host: "github" | "gitlab" | "bitbucket" | "npm" | "jsr";
+    repo: string;
+  }[];
   folders: { grant: string; label: string }[];
   localPaths: boolean;
 }
@@ -1432,11 +1449,47 @@ export interface SyncResult {
   error?: { code: string; message: string };
 }
 
+/** Registries `appManagement.discover` can search. */
+export type DiscoverRegistry = "npm" | "jsr";
+
+/** Query of `appManagement.discover`. */
+export interface AppManagementDiscoverInput {
+  /** Defaults to `npm` on the server when omitted. */
+  registry?: DiscoverRegistry;
+  /** 1..100 characters. */
+  q: string;
+  /** 1..50; the server defaults to 20 when omitted. */
+  limit?: number;
+}
+
+/** One search hit. */
+export interface AppManagementDiscoverItem {
+  name: string;
+  version: string;
+  description: string | null;
+  link: string;
+  /** `<registry>:<name>@^<version>`. */
+  ref: string;
+  /** At least one app of this package is installed in a scope the caller manages. */
+  installed: boolean;
+}
+
+/** The `GET /app-management/discover` body. */
+export interface AppManagementDiscoverResult {
+  registry: DiscoverRegistry;
+  q: string;
+  items: AppManagementDiscoverItem[];
+}
+
 /** The `appManagement` namespace (implemented in `src/app-management.ts`). */
 export interface AppManagementApi {
   list(opts?: ListManagedAppsOptions): Promise<ManagedAppsPage>;
   get(id: string, opts?: CallOptions): Promise<ManagedAppDetail>;
   preview(input: PreviewAppInput, opts?: CallOptions): Promise<AppManagementPreview>;
+  discover(
+    input: AppManagementDiscoverInput,
+    opts?: CallOptions,
+  ): Promise<AppManagementDiscoverResult>;
   register(input: RegisterAppInput, opts?: CallOptions): Promise<RegisterAppResult>;
   publishArtifact(input: PublishArtifactInput, opts?: CallOptions): Promise<PublishArtifactResult>;
   updateSource(id: string, input: UpdateSourceInput, opts?: CallOptions): Promise<SyncResult>;

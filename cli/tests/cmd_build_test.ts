@@ -487,3 +487,242 @@ Deno.test("-o is the short form of --out on `apps build` and `build app`, throug
     assertEquals(calls, [{ dir, out }]);
   }
 });
+
+// ---------------------------------------------------------------------------
+// `apps package`
+// ---------------------------------------------------------------------------
+
+const PACKAGE_FIXTURE = new URL("./fixtures/registry-package/", import.meta.url).pathname;
+
+async function sha256Hex(text: string): Promise<string> {
+  const bytes = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)),
+  );
+  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** The fake assembler for the fixture: the app id is the folder's name, `app.js` is unique per app. */
+function packageBuilder(calls: Call[], failOn?: string) {
+  return assembler(calls, async (dir, out) => {
+    const id = dir.split("/").filter((p) => p !== "").pop() as string;
+    if (id === failOn) {
+      throw Object.assign(new Error("[load_failed] boom"), { code: "load_failed" });
+    }
+    const at = `${out}/${id}/0.1.0`;
+    const js = `// ${id}\n`;
+    await Deno.mkdir(at, { recursive: true });
+    await Deno.writeTextFile(`${at}/app.js`, js);
+    await Deno.writeTextFile(`${at}/manifest.json`, JSON.stringify({ id }));
+    return { ...ENTRY, id, execSha256: await sha256Hex(js), digestVersion: 2, outDir: at };
+  });
+}
+
+async function runPackage(out: string, failOn?: string) {
+  const calls: Call[] = [];
+  const restore = packageBuilder(calls, failOn);
+  const { context: ctx, stderr } = context({
+    positionals: [`${PACKAGE_FIXTURE}w6w-pack.json`],
+    options: { out },
+  });
+  try {
+    const code = await COMMANDS["apps package"](ctx);
+    return { code, calls, stderr, error: undefined as Error | undefined };
+  } catch (error) {
+    return { code: undefined, calls, stderr, error: error as Error };
+  } finally {
+    restore();
+  }
+}
+
+Deno.test("apps package: writes w6w/index.json with execSha256 = sha-256 of each app.js", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  const run = await runPackage(out);
+  assertEquals(run.error, undefined);
+  assertEquals(run.calls.length, 2);
+  const index = JSON.parse(await Deno.readTextFile(`${out}/w6w/index.json`));
+  assertEquals(index.apps.map((a: BuildEntry) => a.id), ["io.w6w.alpha", "io.w6w.beta"]);
+  for (const app of index.apps as BuildEntry[]) {
+    const js = await Deno.readTextFile(`${out}/w6w/${app.id}/${app.version}/app.js`);
+    assertEquals(app.execSha256, await sha256Hex(js));
+    assert(await exists(`${out}/w6w/${app.id}/${app.version}/manifest.json`));
+  }
+  // staging is gone (only the tree and the two publish manifests remain)
+  assertEquals([...Deno.readDirSync(out)].map((e) => e.name).sort(), [
+    "jsr.json",
+    "package.json",
+    "w6w",
+  ]);
+});
+
+Deno.test("apps package: one app failing writes nothing to <out>/w6w", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  const run = await runPackage(out, "io.w6w.beta");
+  assert(run.error !== undefined);
+  assertStringIncludes(run.error.message, "io.w6w.beta");
+  assertEquals(await exists(`${out}/w6w`), false);
+  assertEquals([...Deno.readDirSync(out)].length, 0);
+});
+
+Deno.test("apps package: an unreadable pack is refused", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  const { context: ctx } = context({ positionals: [`${out}/missing.json`], options: { out } });
+  await assertRejects(
+    () => Promise.resolve(COMMANDS["apps package"](ctx)),
+    Error,
+    "nothing was written",
+  );
+  assertEquals(await exists(`${out}/w6w`), false);
+});
+
+Deno.test("apps package: routes through main(); a failing app exits nonzero with no index.json", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  const restore = packageBuilder([], "io.w6w.beta");
+  const err: string[] = [];
+  let code: number;
+  try {
+    code = await main(
+      [
+        "apps",
+        "package",
+        `${PACKAGE_FIXTURE}w6w-pack.json`,
+        "--out",
+        out,
+      ],
+      { stdout: () => {}, stderr: (t) => err.push(t) },
+      { commands: COMMANDS },
+    );
+  } finally {
+    restore();
+  }
+  assert(code !== 0, `expected nonzero exit, got ${code}; ${err.join("\n")}`);
+  assertEquals(await exists(`${out}/w6w/index.json`), false);
+});
+
+Deno.test("apps package: -o and --version work through main()", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  const restore = packageBuilder([]);
+  const err: string[] = [];
+  let code: number;
+  try {
+    code = await main(
+      ["apps", "package", `${PACKAGE_FIXTURE}w6w-pack.json`, "-o", out, "--version", "2.0.0"],
+      { stdout: () => {}, stderr: (t) => err.push(t) },
+      { commands: COMMANDS },
+    );
+  } finally {
+    restore();
+  }
+  assertEquals(code, 0, err.join("\n"));
+  assertEquals(await exists(`${out}/w6w/index.json`), true);
+  assertEquals(JSON.parse(await Deno.readTextFile(`${out}/package.json`)).version, "2.0.0");
+  assertEquals(JSON.parse(await Deno.readTextFile(`${out}/jsr.json`)).version, "2.0.0");
+});
+
+Deno.test("apps package: creates package.json and jsr.json per P2 when absent", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  const run = await runPackage(out);
+  assertEquals(run.error, undefined);
+  const pkg = JSON.parse(await Deno.readTextFile(`${out}/package.json`));
+  assertEquals(pkg.keywords, ["w6w-app"]);
+  assertEquals(pkg.files, ["w6w/"]);
+  for (const key of ["dependencies", "devDependencies", "optionalDependencies"]) {
+    assertEquals(key in pkg, false);
+  }
+  const jsr = JSON.parse(await Deno.readTextFile(`${out}/jsr.json`));
+  assertEquals(jsr.exports, "./w6w/index.json");
+  assertEquals(jsr.publish.include, ["jsr.json", "w6w/"]);
+  assertEquals("imports" in jsr, false);
+});
+
+const REFUSED: [string, string, string, string][] = [
+  ["package.json", '{"name":"x","keywords":["w6w-app"],"dependencies":{}}\n', "dependencies", ""],
+  ["package.json", '{"name":"x","version":"1.0.0"}\n', "keywords", ""],
+  [
+    "package.json",
+    '{"name":"x","keywords":["w6w-app"],"imports":{"a":"npm:left-pad"}}\n',
+    "npm:/jsr:",
+    "",
+  ],
+  ["deno.json", '{"imports":{"a":"jsr:@std/path"}}\n', "npm:/jsr:", ""],
+];
+
+for (const [file, body, needle] of REFUSED) {
+  Deno.test(`apps package: existing ${file} (${needle}) is refused, nothing written`, async () => {
+    const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+    await Deno.writeTextFile(`${out}/${file}`, body);
+    const run = await runPackage(out);
+    assert(run.error !== undefined);
+    assertStringIncludes(run.error.message, needle);
+    assertEquals(await Deno.readTextFile(`${out}/${file}`), body);
+    assertEquals(await exists(`${out}/w6w`), false);
+    assertEquals(run.calls.length, 0);
+    assertEquals([...Deno.readDirSync(out)].map((e) => e.name), [file]);
+  });
+}
+
+Deno.test("apps package: a valid existing package.json is left byte-identical", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  const body = '{"name":"mine","keywords":["w6w-app"],"files":["w6w/"]}\n';
+  await Deno.writeTextFile(`${out}/package.json`, body);
+  const run = await runPackage(out);
+  assertEquals(run.error, undefined);
+  assertEquals(await Deno.readTextFile(`${out}/package.json`), body);
+  assert(await exists(`${out}/jsr.json`));
+});
+
+async function runPackageWith(out: string, options: Record<string, string>) {
+  const calls: Call[] = [];
+  const restore = packageBuilder(calls);
+  const { context: ctx } = context({
+    positionals: [`${PACKAGE_FIXTURE}w6w-pack.json`],
+    options: { out, ...options },
+  });
+  try {
+    await COMMANDS["apps package"](ctx);
+  } finally {
+    restore();
+  }
+}
+
+Deno.test("apps package: --name/--version apply when package.json/jsr.json are created", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  await runPackageWith(out, { name: "my-apps", version: "2.3.4" });
+  const pkg = JSON.parse(await Deno.readTextFile(`${out}/package.json`));
+  assertEquals([pkg.name, pkg.version], ["my-apps", "2.3.4"]);
+  const jsr = JSON.parse(await Deno.readTextFile(`${out}/jsr.json`));
+  assertEquals(jsr.version, "2.3.4");
+});
+
+Deno.test("apps package: --name/--version are ignored when the files exist", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  const pkgBody = '{"name":"mine","version":"1.0.0","keywords":["w6w-app"],"files":["w6w/"]}\n';
+  const jsrBody = '{"name":"@x/mine","version":"1.0.0","exports":"./w6w/index.json"}\n';
+  await Deno.writeTextFile(`${out}/package.json`, pkgBody);
+  await Deno.writeTextFile(`${out}/jsr.json`, jsrBody);
+  await runPackageWith(out, { name: "other", version: "9.9.9" });
+  assertEquals(await Deno.readTextFile(`${out}/package.json`), pkgBody);
+  assertEquals(await Deno.readTextFile(`${out}/jsr.json`), jsrBody);
+});
+
+Deno.test("apps package: a created jsr.json carries a license (UNLICENSED by default)", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  await runPackageWith(out, {});
+  const jsr = JSON.parse(await Deno.readTextFile(`${out}/jsr.json`));
+  assertEquals(jsr.license, "UNLICENSED");
+});
+
+Deno.test("apps package: a created jsr.json takes the license of an existing package.json", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  await Deno.writeTextFile(
+    `${out}/package.json`,
+    '{"name":"mine","version":"1.0.0","license":"MIT","keywords":["w6w-app"],"files":["w6w/"]}\n',
+  );
+  await runPackageWith(out, {});
+  assertEquals(JSON.parse(await Deno.readTextFile(`${out}/jsr.json`)).license, "MIT");
+});
+
+Deno.test("apps package: --license is honoured when nothing else declares one", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  await runPackageWith(out, { license: "Apache-2.0" });
+  assertEquals(JSON.parse(await Deno.readTextFile(`${out}/jsr.json`)).license, "Apache-2.0");
+});
