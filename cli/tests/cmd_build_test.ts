@@ -631,6 +631,26 @@ Deno.test("apps package: routes through main(); a failing app exits nonzero with
   assertEquals(await exists(`${out}/w6w/index.json`), false);
 });
 
+Deno.test("apps package: -o and --version work through main()", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  const restore = packageBuilder([]);
+  const err: string[] = [];
+  let code: number;
+  try {
+    code = await main(
+      ["apps", "package", `${PACKAGE_FIXTURE}w6w-pack.json`, "-o", out, "--version", "2.0.0"],
+      { stdout: () => {}, stderr: (t) => err.push(t) },
+      { commands: COMMANDS },
+    );
+  } finally {
+    restore();
+  }
+  assertEquals(code, 0, err.join("\n"));
+  assertEquals(await exists(`${out}/w6w/index.json`), true);
+  assertEquals(JSON.parse(await Deno.readTextFile(`${out}/package.json`)).version, "2.0.0");
+  assertEquals(JSON.parse(await Deno.readTextFile(`${out}/jsr.json`)).version, "2.0.0");
+});
+
 Deno.test("apps package: creates package.json and jsr.json per P2 when absent", async () => {
   const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
   const run = await runPackage(out);

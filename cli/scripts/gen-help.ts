@@ -735,7 +735,7 @@ const PARAM_HELP: Record<string, string> = {
     "The app builder spec to run (default: jsr:@w6w/app-build@0.2.0/cli); a path or file: URL for a local builder",
   "apps.package.pack": "The pack source (w6w-pack.json) listing the apps to build",
   "apps.package.out":
-    "Output root (default: the current directory): writes <out>/w6w/index.json and <out>/w6w/<id>/<version>/…; nothing is written if any app fails (`-o` is shorthand)",
+    "Output root (default: dist): writes <out>/w6w/index.json and <out>/w6w/<id>/<version>/…; nothing is written if any app fails (`-o` is shorthand)",
   "apps.package.resolution":
     "How @w6w/* imports resolve: sibling or registry (default: registry when the app's deno.json maps @w6w/types to jsr:, else sibling)",
   "apps.package.builder":

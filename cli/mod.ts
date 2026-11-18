@@ -215,10 +215,10 @@ type Routed =
  */
 const RUN_APP_FLAG: FlagSpec = { name: "--app", alias: null, type: "string" };
 
-/** `apps build` and its alias `build app` — the only commands whose `--out` has the `-o` short form. */
+/** `apps build`, its alias `build app`, and `apps package` — the commands whose `--out` has the `-o` short form. */
 function isBuildCommand(command: HelpCommand): boolean {
   const path = command.path.join(" ");
-  return path === "apps build" || path === "build app";
+  return path === "apps build" || path === "build app" || path === "apps package";
 }
 
 /**
@@ -228,6 +228,7 @@ function isBuildCommand(command: HelpCommand): boolean {
  */
 const GLOBAL_NAME_OVERRIDES: Record<string, readonly string[]> = {
   "apps publish": ["--version"],
+  "apps package": ["--version"],
 };
 
 /**

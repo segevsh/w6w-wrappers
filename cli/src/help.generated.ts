@@ -3047,7 +3047,7 @@ export const HELP_TREE: HelpTree = {
               "kind": "flag",
               "display": "--out <value>",
               "description":
-                "Output root (default: the current directory): writes <out>/w6w/index.json and <out>/w6w/<id>/<version>/…; nothing is written if any app fails (`-o` is shorthand)",
+                "Output root (default: dist): writes <out>/w6w/index.json and <out>/w6w/<id>/<version>/…; nothing is written if any app fails (`-o` is shorthand)",
               "required": false,
             },
             {
