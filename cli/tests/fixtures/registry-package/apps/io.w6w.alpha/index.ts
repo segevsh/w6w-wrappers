@@ -1,1 +1,1 @@
-export default { id: 'io.w6w.alpha' };
+export default { id: "io.w6w.alpha" };
