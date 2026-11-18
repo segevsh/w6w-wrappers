@@ -290,6 +290,82 @@ Deno.test("every `w6w app-management` command in the help tree is registered, an
   assertEquals(documented.length, 7);
 });
 
+const DISCOVER = {
+  registry: "npm",
+  q: "hello",
+  items: [
+    {
+      name: "hello-app",
+      version: "1.2.0",
+      description: null,
+      link: "https://www.npmjs.com/package/hello-app",
+      ref: "npm:hello-app@^1.2.0",
+      installed: false,
+    },
+    {
+      name: "@acme/hello",
+      version: "0.3.0",
+      description: "Says hello.",
+      link: "https://www.npmjs.com/package/@acme/hello",
+      ref: "npm:@acme/hello@^0.3.0",
+      installed: true,
+    },
+  ],
+};
+
+Deno.test("apps search: npm is the default registry on the wire; --json prints the body", async () => {
+  const ran = await w6w(["apps", "search", "hello", "--json"], () => json(200, DISCOVER));
+  assertEquals(ran.code, 0, ran.stderr);
+  assertEquals(ran.calls.length, 1);
+  assertEquals(ran.calls[0].method, "GET");
+  assertEquals(ran.calls[0].url, `${BASE}/app-management/discover?registry=npm&q=hello`);
+  assertEquals(JSON.parse(ran.stdout), DISCOVER);
+});
+
+Deno.test("apps search: --registry jsr --limit 5 are forwarded; the query is encoded", async () => {
+  const ran = await w6w(
+    ["apps", "search", "hello world", "--registry", "jsr", "--limit", "5", "--json"],
+    () => json(200, { ...DISCOVER, registry: "jsr" }),
+  );
+  assertEquals(ran.code, 0, ran.stderr);
+  assertEquals(
+    ran.calls[0].url,
+    `${BASE}/app-management/discover?registry=jsr&q=hello+world&limit=5`,
+  );
+});
+
+Deno.test("apps search: the human table lists name, version, ref and installed", async () => {
+  const ran = await w6w(["apps", "search", "hello"], () => json(200, DISCOVER));
+  assertEquals(ran.code, 0, ran.stderr);
+  for (const cell of ["hello-app", "1.2.0", "npm:hello-app@^1.2.0", "@acme/hello", "yes"]) {
+    assertStringIncludes(ran.stdout, cell);
+  }
+  assertStringIncludes(ran.stdout, "INSTALLED");
+});
+
+Deno.test("apps search: no hits still exits 0 and says so", async () => {
+  const empty = { registry: "npm", q: "zzz", items: [] };
+  const ran = await w6w(["apps", "search", "zzz"], () => json(200, empty));
+  assertEquals(ran.code, 0, ran.stderr);
+  assertStringIncludes(ran.stdout, "No matching apps.");
+});
+
+Deno.test("apps search: bad flags are usage errors, exit 1, zero requests", async () => {
+  const cases: [string[], string][] = [
+    [["apps", "search"], "search query"],
+    [["apps", "search", "hello", "--registry", "npmjs"], "--registry"],
+    [["apps", "search", "hello", "--limit", "0"], "--limit"],
+    [["apps", "search", "hello", "--limit", "abc"], "--limit"],
+    [["apps", "search", "hello", "stray"], "extra one"],
+  ];
+  for (const [argv, expected] of cases) {
+    const ran = await w6w(argv);
+    assertEquals(ran.code, 1, `\`${argv.join(" ")}\` exited ${ran.code}: ${ran.stderr}`);
+    assertStringIncludes(ran.stderr, expected);
+    assertEquals(ran.calls.length, 0, "a usage error must not reach the server");
+  }
+});
+
 Deno.test("apps list is the very handler app-management list is registered as", () => {
   assert(COMMANDS["apps list"] === COMMANDS["app-management list"]);
   assert(COMMANDS["apps list"] === APP_MANAGEMENT_COMMANDS["app-management list"]);
