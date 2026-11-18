@@ -577,8 +577,12 @@ Deno.test("apps package: writes w6w/index.json with execSha256 = sha-256 of each
     assertEquals(app.execSha256, await sha256Hex(js));
     assert(await exists(`${out}/w6w/${app.id}/${app.version}/manifest.json`));
   }
-  // staging is gone
-  assertEquals([...Deno.readDirSync(out)].map((e) => e.name), ["w6w"]);
+  // staging is gone (only the tree and the two publish manifests remain)
+  assertEquals([...Deno.readDirSync(out)].map((e) => e.name).sort(), [
+    "jsr.json",
+    "package.json",
+    "w6w",
+  ]);
 });
 
 Deno.test("apps package: one app failing writes nothing to <out>/w6w", async () => {
@@ -625,4 +629,56 @@ Deno.test("apps package: routes through main(); a failing app exits nonzero with
   }
   assert(code !== 0, `expected nonzero exit, got ${code}; ${err.join("\n")}`);
   assertEquals(await exists(`${out}/w6w/index.json`), false);
+});
+
+Deno.test("apps package: creates package.json and jsr.json per P2 when absent", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  const run = await runPackage(out);
+  assertEquals(run.error, undefined);
+  const pkg = JSON.parse(await Deno.readTextFile(`${out}/package.json`));
+  assertEquals(pkg.keywords, ["w6w-app"]);
+  assertEquals(pkg.files, ["w6w/"]);
+  for (const key of ["dependencies", "devDependencies", "optionalDependencies"]) {
+    assertEquals(key in pkg, false);
+  }
+  const jsr = JSON.parse(await Deno.readTextFile(`${out}/jsr.json`));
+  assertEquals(jsr.exports, "./w6w/index.json");
+  assertEquals(jsr.publish.include, ["jsr.json", "w6w/"]);
+  assertEquals("imports" in jsr, false);
+});
+
+const REFUSED: [string, string, string, string][] = [
+  ["package.json", '{"name":"x","keywords":["w6w-app"],"dependencies":{}}\n', "dependencies", ""],
+  ["package.json", '{"name":"x","version":"1.0.0"}\n', "keywords", ""],
+  [
+    "package.json",
+    '{"name":"x","keywords":["w6w-app"],"imports":{"a":"npm:left-pad"}}\n',
+    "npm:/jsr:",
+    "",
+  ],
+  ["deno.json", '{"imports":{"a":"jsr:@std/path"}}\n', "npm:/jsr:", ""],
+];
+
+for (const [file, body, needle] of REFUSED) {
+  Deno.test(`apps package: existing ${file} (${needle}) is refused, nothing written`, async () => {
+    const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+    await Deno.writeTextFile(`${out}/${file}`, body);
+    const run = await runPackage(out);
+    assert(run.error !== undefined);
+    assertStringIncludes(run.error.message, needle);
+    assertEquals(await Deno.readTextFile(`${out}/${file}`), body);
+    assertEquals(await exists(`${out}/w6w`), false);
+    assertEquals(run.calls.length, 0);
+    assertEquals([...Deno.readDirSync(out)].map((e) => e.name), [file]);
+  });
+}
+
+Deno.test("apps package: a valid existing package.json is left byte-identical", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  const body = '{"name":"mine","keywords":["w6w-app"],"files":["w6w/"]}\n';
+  await Deno.writeTextFile(`${out}/package.json`, body);
+  const run = await runPackage(out);
+  assertEquals(run.error, undefined);
+  assertEquals(await Deno.readTextFile(`${out}/package.json`), body);
+  assert(await exists(`${out}/jsr.json`));
 });

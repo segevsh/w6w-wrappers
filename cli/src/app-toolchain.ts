@@ -333,7 +333,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export async function packageApps(
   packPath: string,
   out: string,
-  options: { builder: string; resolution?: Resolution },
+  options: { builder: string; resolution?: Resolution; name?: string; version?: string },
 ): Promise<PackagedApp[]> {
   const { fs, path, sha256 } = await packHost();
   const pack = path.resolve(packPath);
@@ -354,6 +354,12 @@ export async function packageApps(
   }
 
   const absOut = path.resolve(out);
+  // Validate existing publish manifests BEFORE anything is built or written.
+  const manifests = await planManifests(
+    absOut,
+    path.dirname(pack).split(/[\\/]/).pop() ?? "",
+    options,
+  );
   await fs.mkdir(absOut, { recursive: true });
   const stage = await fs.mkdtemp(path.join(absOut, ".w6w-stage-"));
   try {
@@ -403,9 +409,114 @@ export async function packageApps(
     );
     await fs.rm(path.join(absOut, "w6w"), { force: true, recursive: true });
     await fs.rename(path.join(stage, "w6w"), path.join(absOut, "w6w"));
-    // TODO(S5): write/validate package.json and jsr.json here (hook point).
+    for (const [file, body] of manifests) {
+      await fs.writeFile(path.join(absOut, file), JSON.stringify(body, null, 2) + "\n");
+    }
     return built;
   } finally {
     await fs.rm(stage, { force: true, recursive: true });
   }
+}
+
+const DEPENDENCY_KEYS = [
+  "dependencies",
+  "devDependencies",
+  "optionalDependencies",
+  "peerDependencies",
+  "bundledDependencies",
+  "bundleDependencies",
+];
+const KEYWORD = "w6w-app";
+const JSR_CONFIGS = ["jsr.json", "deno.json", "deno.jsonc"];
+
+/** Parses JSON, tolerating `//` and `/* *\/` comments outside strings (for `deno.jsonc`). */
+function parseJsonc(text: string): unknown {
+  const stripped = text.replace(
+    /"(?:[^"\\]|\\.)*"|\/\/[^\n]*|\/\*[\s\S]*?\*\//g,
+    (m) => m.startsWith('"') ? m : "",
+  );
+  return JSON.parse(stripped);
+}
+
+function remoteImports(imports: unknown): string[] {
+  if (!isRecord(imports)) return [];
+  return Object.entries(imports)
+    .filter(([, v]) => typeof v === "string" && /^(npm|jsr):/.test(v))
+    .map(([k]) => k);
+}
+
+/**
+ * Decides which publish manifests to write into `<out>` and validates the ones already there.
+ * Returns `[fileName, body]` for the absent ones; throws {@linkcode PackageFailure} (before
+ * anything is written) for an existing one that would make the package carry dependencies.
+ */
+async function planManifests(
+  absOut: string,
+  fallbackName: string,
+  options: { name?: string; version?: string },
+): Promise<[string, Record<string, unknown>][]> {
+  const { fs, path } = await packHost();
+  const read = async (file: string): Promise<string | undefined> => {
+    try {
+      return await fs.readFile(path.join(absOut, file), "utf8");
+    } catch (error) {
+      if ((error as { code?: string }).code === "ENOENT") return undefined;
+      throw error;
+    }
+  };
+  const failures: string[] = [];
+  const plan: [string, Record<string, unknown>][] = [];
+  const name = options.name ??
+    `w6w-apps-${
+      fallbackName.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^[-.]+/, "") || "pack"
+    }`;
+  const version = options.version ?? "0.1.0";
+
+  const pkgText = await read("package.json");
+  if (pkgText === undefined) {
+    plan.push(["package.json", { name, version, keywords: [KEYWORD], files: ["w6w/"] }]);
+  } else {
+    try {
+      const pkg: unknown = JSON.parse(pkgText);
+      if (!isRecord(pkg)) throw new Error("not a JSON object");
+      for (const key of DEPENDENCY_KEYS) {
+        if (key in pkg) failures.push(`package.json: \`${key}\` is not allowed (even empty)`);
+      }
+      if (!Array.isArray(pkg.keywords) || !pkg.keywords.includes(KEYWORD)) {
+        failures.push(`package.json: \`keywords\` must include \`${KEYWORD}\``);
+      }
+      for (const k of remoteImports(pkg.imports)) {
+        failures.push(`package.json: import \`${k}\` points at an npm:/jsr: specifier`);
+      }
+    } catch (error) {
+      failures.push(`package.json: ${(error as Error).message}`);
+    }
+  }
+
+  let existing: string | undefined;
+  for (const file of JSR_CONFIGS) {
+    const text = await read(file);
+    if (text === undefined) continue;
+    existing = file;
+    try {
+      const cfg = parseJsonc(text);
+      if (!isRecord(cfg)) throw new Error("not a JSON object");
+      for (const k of remoteImports(cfg.imports)) {
+        failures.push(`${file}: import \`${k}\` points at an npm:/jsr: specifier`);
+      }
+    } catch (error) {
+      failures.push(`${file}: ${(error as Error).message}`);
+    }
+    break;
+  }
+  if (existing === undefined) {
+    plan.push(["jsr.json", {
+      name: name.startsWith("@") ? name : `@w6w-apps/${name.replace(/^w6w-apps-/, "")}`,
+      version,
+      exports: "./w6w/index.json",
+      publish: { include: ["jsr.json", "w6w/"] },
+    }]);
+  }
+  if (failures.length > 0) throw new PackageFailure(failures);
+  return plan;
 }
