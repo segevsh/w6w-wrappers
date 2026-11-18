@@ -135,6 +135,49 @@ class AppManagementOpsTest(unittest.TestCase):
         api.app_management.preview("github:acme/app", "personal")
         self.assertEqual(sent(calls[0]), {"source": "github:acme/app", "target": "personal"})
 
+    def test_discover_sends_registry_q_limit_and_no_body(self) -> None:
+        out = {"registry": "jsr", "q": "hello", "items": []}
+        api, calls = client(responding(out))
+        self.assertEqual(
+            api.app_management.discover("hello", registry="jsr", limit=5), out
+        )
+        self.assertEqual(calls[0].get_method(), "GET")
+        self.assertEqual(
+            calls[0].full_url,
+            BASE + "/app-management/discover?registry=jsr&q=hello&limit=5",
+        )
+        self.assertIsNone(calls[0].data)
+
+    def test_discover_omits_registry_and_limit_when_unset(self) -> None:
+        api, calls = client(responding({"registry": "npm", "q": "x y", "items": []}))
+        api.app_management.discover("x y")
+        self.assertEqual(calls[0].full_url, BASE + "/app-management/discover?q=x+y")
+
+    def test_discover_returns_the_body_as_sent(self) -> None:
+        out = {
+            "registry": "npm",
+            "q": "hello",
+            "items": [
+                {
+                    "name": "@acme/hello",
+                    "version": "1.2.3",
+                    "description": None,
+                    "link": "https://www.npmjs.com/package/@acme/hello",
+                    "ref": "npm:@acme/hello@^1.2.3",
+                    "installed": True,
+                }
+            ],
+        }
+        api, _calls = client(responding(out))
+        self.assertEqual(api.app_management.discover("hello", registry="npm"), out)
+
+    def test_discover_424_registry_unavailable_surfaces_its_code(self) -> None:
+        api, _calls = client(raising_http(424, "registry_unavailable"))
+        with self.assertRaises(ApiError) as ctx:
+            api.app_management.discover("hello", registry="jsr")
+        self.assertEqual(ctx.exception.status, 424)
+        self.assertEqual(ctx.exception.code, "registry_unavailable")
+
     def test_register_without_paths_omits_the_key(self) -> None:
         out = {"target": "account", "app": {"id": "x"}}
         api, calls = client(responding(out, 201))

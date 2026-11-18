@@ -1,10 +1,11 @@
 """`client.app_management.*` — the stable app-definition management surface.
 
-Seven operations (`endpoints.json` contract 0.14.0), for the apps the caller
+Eight operations (`endpoints.json` contract 0.21.0), for the apps the caller
 manages::
 
     page = client.app_management.list(scope="account", limit=20)
     prev = client.app_management.preview("github:acme/app", "account")
+    hits = client.app_management.discover("hello", registry="npm", limit=5)
     done = client.app_management.register("account", {"folder": {"grant": "g", "path": "./x"}})
     out = client.app_management.sync("my-app", expected_revision=3)
 
@@ -28,7 +29,7 @@ import base64
 from typing import Any, Dict, List, Mapping, Optional, Protocol, Union
 
 from ._http import HttpResponse, path
-from .types import PublishArtifactResult
+from .types import AppManagementDiscoverResult, DiscoverRegistry, PublishArtifactResult
 
 #: A source: a canonical remote ref string, or ``{"folder": {"grant", "path"}}``.
 SourceInput = Union[str, Mapping[str, Any]]
@@ -115,6 +116,28 @@ class AppManagementApi:
             "POST",
             "/app-management/preview",
             body={"source": source, "target": target},
+        )
+        return res.body
+
+    def discover(
+        self,
+        q: str,
+        registry: Optional[DiscoverRegistry] = None,
+        limit: Optional[int] = None,
+    ) -> AppManagementDiscoverResult:
+        """Search an npm or JSR registry for installable apps.
+
+        :param q: Search text, 1..100 characters.
+        :param registry: `npm` or `jsr`; the server defaults to `npm` when absent.
+        :param limit: 1..50; the server defaults to 20 when absent.
+        :returns: `{registry, q, items}`; each item carries `name`, `version`,
+            `description`, `link`, `ref` and `installed`. `installed` covers only
+            the scopes the caller manages, and `items` is empty on no match.
+        """
+        res = self._host.request(
+            "GET",
+            "/app-management/discover",
+            query={"registry": registry, "q": q, "limit": limit},
         )
         return res.body
 

@@ -163,7 +163,7 @@ export class ContextApi implements ContextApiShape {
 
 /**
  * `client.contextEntries.*` — top-level, collection-independent context entries
- * (contract 0.12.0). `update` is a precondition write like `context.entries.update`.
+ * (contract 0.12.1). `update` is a precondition write like `context.entries.update`.
  */
 export class ContextEntriesApi {
   readonly #host: ContextHost;
