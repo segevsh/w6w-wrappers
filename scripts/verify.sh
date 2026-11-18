@@ -20,8 +20,9 @@ step "node: npm ci";          (cd node && npm ci)
 step "node: typecheck";       (cd node && npm run typecheck)
 step "node: lint";            (cd node && npm run lint)
 step "node: format:check";    (cd node && npm run format:check)
-step "node: test";            (cd node && npm test)
+# build before test: examples/embed-host imports "@w6w/sdk/server", which resolves to dist/.
 step "node: build";           (cd node && npm run build)
+step "node: test";            (cd node && npm test)
 step "node: npm pack --dry-run"; (cd node && npm pack --dry-run)
 
 step "python: unittest (includes the conformance suite)"

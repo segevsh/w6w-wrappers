@@ -131,10 +131,11 @@ jobs:
         with:
           node-version: "24"
       - run: npm install --global "npm@$NPM_VERSION"
-      - name: node — npm test
+      - name: node — npm build + test
         working-directory: node
         run: |
           npm ci
+          npm run build
           npm test
 
       # Deno for the cli lane only, until it moves to Node the way node/ did.
