@@ -69,6 +69,11 @@ export interface ApiToken {
   account: string;
   /** Caller-chosen label. */
   name: string;
+  /**
+   * The secret's first 12 characters (`tsec_` + 7), so a holder can tell which token they have.
+   * `null` for a token minted before the server kept it; absent on a server build that predates it.
+   */
+  prefix?: string | null;
   /** Lifecycle status. */
   status: ApiTokenStatus;
   /** ISO-8601 timestamp. */
