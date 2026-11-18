@@ -3032,7 +3032,7 @@ export const HELP_TREE: HelpTree = {
             "build a pack into a w6w registry package tree (<out>/w6w/index.json + <id>/<version>/…); never publishes (local only, needs Deno)",
           "usage": "w6w apps package <pack> [options]",
           "naming":
-            "w6w apps package <pack> [-o|--out <dir>] [--resolution sibling|registry] [--builder <spec>] [--name <pkg>] [--version <v>]",
+            "w6w apps package <pack> [-o|--out <dir>] [--resolution sibling|registry] [--builder <spec>] [--name <pkg>] [--version <v>] [--license <spdx>]",
           "status": "live",
           "params": [
             {
@@ -3080,6 +3080,14 @@ export const HELP_TREE: HelpTree = {
               "display": "--version <v>",
               "description":
                 "Version written to package.json/jsr.json; used only when those files are created (default: 0.1.0)",
+              "required": false,
+            },
+            {
+              "name": "license",
+              "kind": "flag",
+              "display": "--license <spdx>",
+              "description":
+                "SPDX license written to jsr.json when it is created and neither the pack nor package.json declares one (default: UNLICENSED)",
               "required": false,
             },
             {

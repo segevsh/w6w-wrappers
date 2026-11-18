@@ -753,3 +753,9 @@ Deno.test("apps package: a created jsr.json takes the license of an existing pac
   await runPackageWith(out, {});
   assertEquals(JSON.parse(await Deno.readTextFile(`${out}/jsr.json`)).license, "MIT");
 });
+
+Deno.test("apps package: --license is honoured when nothing else declares one", async () => {
+  const out = await Deno.makeTempDir({ prefix: "w6w-package-out-" });
+  await runPackageWith(out, { license: "Apache-2.0" });
+  assertEquals(JSON.parse(await Deno.readTextFile(`${out}/jsr.json`)).license, "Apache-2.0");
+});
