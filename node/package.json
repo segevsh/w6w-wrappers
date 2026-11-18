@@ -10,7 +10,13 @@
   },
   "homepage": "https://github.com/w6w-io/w6w-wrappers/tree/main/node#readme",
   "bugs": "https://github.com/w6w-io/w6w-wrappers/issues",
-  "keywords": ["w6w", "workflow", "sdk", "client", "api"],
+  "keywords": [
+    "w6w",
+    "workflow",
+    "sdk",
+    "client",
+    "api"
+  ],
   "type": "module",
   "types": "./dist/mod.d.ts",
   "main": "./dist/mod.js",
@@ -28,15 +34,25 @@
       "import": "./dist/src/server/mod.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "sideEffects": false,
   "engines": {
     "node": ">=18"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json"
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test \"tests/**/*_test.ts\"",
+    "cov": "node --test --experimental-test-coverage \"tests/**/*_test.ts\"",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "format:check": "biome format ."
   },
   "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^24.19.2",
     "typescript": "^5.7.2"
   },
   "publishConfig": {

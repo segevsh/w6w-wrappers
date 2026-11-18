@@ -4,7 +4,7 @@ Open-source client libraries that wrap the w6w HTTP API.
 
 | Wrapper | Directory | Published as | Language |
 |---------|-----------|--------------|----------|
-| SDK  | [`node/`](./node)     | `@w6w/sdk` (npm + JSR) | TypeScript |
+| SDK  | [`node/`](./node)     | `@w6w/sdk` (npm) | TypeScript |
 | CLI  | [`cli/`](./cli)       | `@w6w/cli` (npm), binary `w6w` | TypeScript |
 | SDK  | [`python/`](./python) | `w6w` (PyPI) | Python |
 | SDK bindings | [`react/`](./react) | `@w6w/react` (npm) | TypeScript (React) |
@@ -12,7 +12,7 @@ Open-source client libraries that wrap the w6w HTTP API.
 ## Install
 
 ```bash
-npm install @w6w/sdk        # or: deno add jsr:@w6w/sdk
+npm install @w6w/sdk
 npm install -g @w6w/cli
 pip install w6w
 npm install @w6w/react      # composes @w6w/sdk — a derived lane, see docs/parity.md
@@ -80,7 +80,7 @@ w6w-wrappers/                  # ← submodule of the w6w monorepo at packages/w
 │   ├── cli.md            # the CLI help surface (--help), exit codes
 │   ├── parity.md         # lockstep rules, conformance test, CI gate
 │   └── release.md        # how a release actually runs
-├── node/              # @w6w/sdk   (npm + JSR)
+├── node/              # @w6w/sdk   (npm)
 ├── cli/               # @w6w/cli   (npm, binary `w6w`)
 ├── python/            # w6w        (PyPI)
 └── react/             # @w6w/react (npm, derived lane — composes node/)

@@ -1,14 +1,12 @@
 {
-  // npm build only. `src/*.ts` is the single authored source (D7): JSR publishes
-  // it verbatim, npm publishes what this config emits into `dist/`.
+  // npm build. `src/*.ts` is the single authored source (D7); npm publishes what this config emits
+  // into `dist/`. `npm run typecheck` uses tsconfig.json, which extends this one.
   //
-  // `rewriteRelativeImportExtensions` is what makes one source tree serve both:
-  // the Deno-style `./x.ts` specifiers in `src/` are emitted as `./x.js`, so the
-  // compiled ESM resolves under plain Node. It needs `allowImportingTsExtensions`,
-  // and TypeScript 5.7 is the first release where that pair emits rather than
-  // erroring out — hence the `>= 5.7` devDependency in package.json.
-  //
-  // This build runs in CI only; the local gates are the Deno tasks in deno.json.
+  // `rewriteRelativeImportExtensions` is what lets the source keep `./x.ts` specifiers (which Node
+  // runs directly in `npm test`, and which cli/'s Deno import map reaches through ../node/mod.ts):
+  // they are emitted as `./x.js`, so the compiled ESM resolves under plain Node. It needs
+  // `allowImportingTsExtensions`, and TypeScript 5.7 is the first release where that pair emits
+  // rather than erroring out — hence the `>= 5.7` devDependency in package.json.
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",

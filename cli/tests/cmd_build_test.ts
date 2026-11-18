@@ -2,12 +2,11 @@
  * `w6w apps build [dir] [-o|--out <dir>] [--pack <file>]` and its alias
  * `w6w build app <folder>`.
  *
- * The app builder is never started: every test replaces the Deno spawn
- * ({@linkcode useToolchainRunner}) and, where the flow continues past it, has the
- * fake write the canonical artifact — `<out>/<id>/<version>/…` plus
- * `<out>/index.json` — exactly as `@w6w/app-build` does. The real file system is
- * used (temp directories) so the pack lock, the reread and the rename are the ones
- * that ship. No network, no npm, no imported bundle.
+ * The vendored assembler is never loaded: every test replaces it
+ * ({@linkcode useAssembler}) with a fake that writes the artifact tree
+ * `<out>/<id>/<version>/…` and returns the result, exactly as core's `assembleApp`
+ * does. The real file system is used (temp directories) so `index.json`, the pack
+ * lock, the reread and the rename are the ones that ship. No network, no build.
  */
 
 import { assert, assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
@@ -15,7 +14,7 @@ import type { CliIo, CommandContext, Invocation } from "../mod.ts";
 import { createOutput, main, NO_CONFIG, NO_ENV, NO_STDIN, NO_STORE } from "../mod.ts";
 import { COMMANDS } from "../src/commands/index.ts";
 import { APP_COMMANDS } from "../src/commands/apps.ts";
-import { type ToolchainResult, useToolchainRunner } from "../src/app-toolchain.ts";
+import { type BuildResult, useAssembler } from "../src/app-toolchain.ts";
 import { BUILD_COMMANDS, type BuildEntry } from "../src/commands/build.ts";
 
 const NAMING = "w6w apps build [dir] [-o|--out <dir>] [--pack <file>]";
@@ -26,66 +25,53 @@ const ENTRY: BuildEntry = {
   version: "0.1.0",
   execSha256: "a".repeat(64),
   digest: "b".repeat(64),
+  digestVersion: 2,
   sourceDigest: "c".repeat(64),
 };
 
-/** An app directory: an import map, an entry module, and deliberately no `package.json`. */
-async function appDirWith(mapped: string | undefined): Promise<string> {
+/** An app directory: a package.json naming a prebuilt entry, and the entry itself. */
+async function appDirWith(): Promise<string> {
   const dir = await Deno.makeTempDir({ prefix: "w6w-build-app-" });
-  if (mapped !== undefined) {
-    await Deno.writeTextFile(
-      `${dir}/deno.json`,
-      JSON.stringify({ imports: { "@w6w/types": mapped } }, null, 2),
-    );
-  }
-  await Deno.writeTextFile(`${dir}/index.ts`, "export default { id: 'io.w6w.demo' };\n");
+  await Deno.writeTextFile(
+    `${dir}/package.json`,
+    JSON.stringify({ name: "demo", version: "0.1.0", w6w: { entry: "./dist/app.js" } }),
+  );
+  await Deno.mkdir(`${dir}/dist`);
+  await Deno.writeTextFile(`${dir}/dist/app.js`, "export default { actions: [] };\n");
   return dir;
 }
 
-/** The `-o` value in an argv. */
-function outOf(argv: string[]): string {
-  const at = argv.indexOf("-o");
-  if (at === -1) throw new Error(`no -o in ${argv.join(" ")}`);
-  return argv[at + 1];
-}
-
-/** Writes what a successful builder writes: the artifact tree and `index.json`. */
-async function fabricate(argv: string[], entry: BuildEntry = ENTRY): Promise<void> {
-  const out = outOf(argv);
+/** Writes what a successful assembly writes, and returns its result. */
+async function fabricate(out: string, entry: BuildEntry = ENTRY): Promise<BuildResult> {
   const at = `${out}/${entry.id}/${entry.version}`;
   await Deno.mkdir(at, { recursive: true });
-  await Deno.writeTextFile(`${at}/app.js`, "// built by @w6w/app-build\n");
+  await Deno.writeTextFile(`${at}/app.js`, "// packaged\n");
   await Deno.writeTextFile(`${at}/manifest.json`, JSON.stringify({ id: entry.id }));
-  await Deno.writeTextFile(
-    `${out}/index.json`,
-    JSON.stringify({ apps: [entry], failures: [] }, null, 2) + "\n",
-  );
+  return { ...entry, digestVersion: 2, outDir: at };
 }
 
-/** One builder call, as the substituted runner saw it. */
+/** One assembler call, as the fake saw it. */
 interface Call {
-  argv: string[];
-  cwd: string;
+  dir: string;
+  out: string;
 }
 
-/**
- * A runner that pretends to be the builder: it records the call, then either
- * fabricates the canonical output or answers with the given failure.
- */
-function builder(
-  calls: Call[],
-  answer: ToolchainResult | ((argv: string[]) => Promise<ToolchainResult> | ToolchainResult) = {
-    code: 0,
-    stdout: "",
-    stderr: "",
-  },
-) {
-  return useToolchainRunner(async (argv, cwd) => {
-    calls.push({ argv, cwd });
-    if (typeof answer === "function") return await answer(argv);
-    if (answer.code === 0 && argv.includes("-o")) await fabricate(argv);
-    return answer;
+type Answer = (dir: string, out: string) => Promise<BuildResult>;
+
+/** Replace the assembler with one that records the call, then fabricates or answers. */
+function assembler(calls: Call[], answer: Answer = (_dir, out) => fabricate(out)) {
+  return useAssembler({
+    assembleApp: (dir, out) => {
+      calls.push({ dir, out });
+      return answer(dir, out);
+    },
+    validateAssembled: () => Promise.reject(new Error("`apps build` never only validates")),
   });
+}
+
+/** A refusal thrown the way core's `BuildError` is: an Error carrying a `code`. */
+function refuse(code: string, message: string): Answer {
+  return () => Promise.reject(Object.assign(new Error(message), { code }));
 }
 
 /** A command context for `apps build`, the renderer included, writing into arrays. */
@@ -109,9 +95,9 @@ function context(
     path: ["apps", "build"],
     name: "apps build",
     aliases: [],
-    summary: "Build an app directory with the canonical builder.",
+    summary: "Package an app directory.",
     short: "Build an app directory.",
-    headline: "Build an app directory with the canonical builder.",
+    headline: "Package an app directory.",
     usage: "w6w apps build [dir]",
     naming: NAMING,
     status: "live",
@@ -137,13 +123,13 @@ function context(
   };
 }
 
-/** Drives the handler itself — `apps build` is not in the help tree until the surface lands. */
+/** Drives the handler itself. */
 async function appsBuild(
   invoked: { positionals: string[]; options?: Record<string, string>; json?: boolean },
-  answer?: ToolchainResult | ((argv: string[]) => Promise<ToolchainResult> | ToolchainResult),
+  answer?: Answer,
 ): Promise<{ code: number | void; stdout: string; stderr: string; calls: Call[] }> {
   const calls: Call[] = [];
-  const restore = builder(calls, answer);
+  const restore = assembler(calls, answer);
   const { context: ctx, stdout, stderr } = context(invoked);
   try {
     const code = await COMMANDS["apps build"](ctx);
@@ -156,10 +142,10 @@ async function appsBuild(
 /** Drives `main()` — the route `w6w build app` takes, help tree and flag parsing included. */
 async function buildApp(
   argv: string[],
-  answer?: ToolchainResult | ((argv: string[]) => Promise<ToolchainResult> | ToolchainResult),
+  answer?: Answer,
 ): Promise<{ code: number; stdout: string; stderr: string; calls: Call[] }> {
   const calls: Call[] = [];
-  const restore = builder(calls, answer);
+  const restore = assembler(calls, answer);
   const out: string[] = [];
   const err: string[] = [];
   try {
@@ -188,170 +174,159 @@ Deno.test("`apps build` and `build app` are one handler", () => {
   assertEquals(COMMANDS["apps build"], COMMANDS["build app"]);
 });
 
-Deno.test("apps build: the canonical builder runs, and stdout is its index entry", async () => {
-  const dir = await appDirWith("jsr:@w6w/types@0.2.0");
+Deno.test("apps build: the assembler packages the folder, and stdout is its index entry", async () => {
+  const dir = await appDirWith();
   const out = await Deno.makeTempDir({ prefix: "w6w-build-out-" });
   const { code, stdout, calls } = await appsBuild({
     positionals: [dir],
     options: { out },
     json: true,
-  }, {
-    code: 0,
-    stdout: "built 1/1 → index.json\n",
-    stderr: "",
   });
   assertEquals(code, 0);
-  // Nothing about the app folder is read here: no `package.json`, no `scripts.test`,
-  // no `npm run build`, no import of a built bundle.
-  assertEquals(calls, [{
-    argv: [
-      "run",
-      "-A",
-      "--unstable-worker-options",
-      "--no-config",
-      "jsr:@w6w/app-build@0.2.0/cli",
-      dir,
-      "-o",
-      out,
-      "--resolution",
-      "registry",
-    ],
-    cwd: dir,
-  }]);
+  assertEquals(calls, [{ dir, out }]);
   assertEquals(JSON.parse(stdout), ENTRY);
-  // One document: the entry, never the builder's progress line.
-  assert(!stdout.includes("built 1/1"));
+  // `outDir` is local-only: it never reaches the printed entry or the index.
+  assert(!stdout.includes("outDir"));
+  assertEquals(JSON.parse(await Deno.readTextFile(`${out}/index.json`)), {
+    apps: [ENTRY],
+    failures: [],
+  });
 });
 
 Deno.test("build app: the alias builds through main() and prints the same entry", async () => {
-  const dir = await appDirWith("./core/packages/types/mod.ts");
+  const dir = await appDirWith();
   const out = await Deno.makeTempDir({ prefix: "w6w-build-out-" });
-  const { code, stdout, stderr, calls } = await buildApp(
-    ["build", "app", dir, "--out", out, "--json"],
-    { code: 0, stdout: "", stderr: "" },
-  );
+  const { code, stdout, stderr, calls } = await buildApp([
+    "build",
+    "app",
+    dir,
+    "--out",
+    out,
+    "--json",
+  ]);
   assertEquals(code, 0, stderr);
   assertEquals(JSON.parse(stdout), ENTRY);
-  assertEquals(calls.length, 1);
-  assertEquals(calls[0].argv.slice(0, 5), [
-    "run",
-    "-A",
-    "--unstable-worker-options",
-    "--no-config",
-    "jsr:@w6w/app-build@0.2.0/cli",
-  ]);
-  assertEquals(calls[0].argv.slice(5), [dir, "-o", out, "--resolution", "sibling"]);
-  assertEquals(calls[0].cwd, dir);
-  assert(!stdout.includes("manifestVersion"));
+  assertEquals(calls, [{ dir, out }]);
 });
 
-Deno.test("the human line names the artifact the builder wrote", async () => {
-  const dir = await appDirWith(undefined);
+Deno.test("the human line names the artifact directory", async () => {
+  const dir = await appDirWith();
   const out = await Deno.makeTempDir({ prefix: "w6w-build-out-" });
-  const { code, stdout } = await appsBuild({ positionals: [dir], options: { out } }, {
-    code: 0,
-    stdout: "",
-    stderr: "",
-  });
+  const { code, stdout } = await appsBuild({ positionals: [dir], options: { out } });
   assertEquals(code, 0);
   assertEquals(stdout, `built io.w6w.demo@0.1.0 → ${out}/io.w6w.demo/0.1.0`);
 });
 
-Deno.test("--builder overrides the spec and runs with its own config", async () => {
-  const root = await Deno.makeTempDir({ prefix: "w6w-build-builder-" });
-  await Deno.writeTextFile(`${root}/deno.json`, JSON.stringify({ imports: {} }));
-  await Deno.mkdir(`${root}/builder`);
-  const spec = `${root}/builder/cli.ts`;
-  const dir = await appDirWith(undefined);
+Deno.test("assembler warnings are notes for a human, never part of --json", async () => {
+  const dir = await appDirWith();
   const out = await Deno.makeTempDir({ prefix: "w6w-build-out-" });
-  const { code, calls } = await appsBuild(
-    { positionals: [dir], options: { out, builder: spec } },
-    { code: 0, stdout: "", stderr: "" },
-  );
-  assertEquals(code, 0);
-  assertEquals(calls[0].argv, [
-    "run",
-    "-A",
-    "--unstable-worker-options",
-    "--config",
-    `${root}/deno.json`,
-    spec,
-    dir,
-    "-o",
-    out,
-    "--resolution",
-    "sibling",
-  ]);
+  const warned: Answer = async (_dir, o) => ({
+    ...(await fabricate(o)),
+    warnings: ["action[ping] declares no output"],
+  });
+  const human = await appsBuild({ positionals: [dir], options: { out } }, warned);
+  assertStringIncludes(human.stdout, "warning: action[ping] declares no output");
+  const json = await appsBuild({ positionals: [dir], options: { out }, json: true }, warned);
+  assertEquals(JSON.parse(json.stdout), ENTRY);
 });
 
-Deno.test("a refused build reports the builder's own lines and leaves the pack alone", async () => {
+Deno.test("without -o the output root is ./out, relative to the invocation", async () => {
+  const root = await Deno.makeTempDir({ prefix: "w6w-build-cwd-" });
+  const dir = await appDirWith();
+  const prev = Deno.cwd();
+  Deno.chdir(root);
+  try {
+    const { code, calls } = await appsBuild({ positionals: [dir] });
+    assertEquals(code, 0);
+    assertEquals(calls[0].out, `${await Deno.realPath(root)}/out`);
+  } finally {
+    Deno.chdir(prev);
+  }
+});
+
+Deno.test("a refused build reports `code: message` and leaves the pack alone", async () => {
   const root = await Deno.makeTempDir({ prefix: "w6w-build-refused-" });
-  const dir = await appDirWith(undefined);
+  const dir = await appDirWith();
   const pack = `${root}/w6w-pack.json`;
   const error = await assertRejects(
     () =>
-      appsBuild({ positionals: [dir], options: { out: `${root}/out`, pack } }, {
-        code: 1,
-        stdout: "",
-        stderr: "io.w6w.demo: graph_npm: `left-pad` is an npm import; apps are dependency-free.\n",
-      }),
+      appsBuild(
+        { positionals: [dir], options: { out: `${root}/out`, pack } },
+        refuse("bundle_not_self_contained", "`dist/app.js` imports `left-pad`; bundle it."),
+      ),
     Error,
   );
   assertStringIncludes(error.message, `could not build \`${dir}\``);
-  assertStringIncludes(error.message, "graph_npm");
+  assertStringIncludes(
+    error.message,
+    "bundle_not_self_contained: `dist/app.js` imports `left-pad`; bundle it.",
+  );
   assert(!(await exists(pack)), "a refused build must not record an entry");
+  assert(!(await exists(`${root}/out/index.json`)), "a refused build writes no index");
 });
 
-Deno.test("build app: a refused build exits 1 with the builder's line on stderr", async () => {
+Deno.test("build app: a refused build exits 1 with the refusal on stderr", async () => {
   const root = await Deno.makeTempDir({ prefix: "w6w-build-refused-" });
-  const dir = await appDirWith(undefined);
+  const dir = await appDirWith();
   const { code, stdout, stderr } = await buildApp(
     ["build", "app", dir, "--out", `${root}/out`],
-    {
-      code: 1,
-      stdout: "built 0/1 → index.json\n",
-      stderr: "io.w6w.demo: invalid_id: `io.w6w.demo` is not a reverse-DNS id.\n",
-    },
+    refuse("invalid_id", "[invalid_id] `io.w6w.demo` is not a reverse-DNS id."),
   );
   assertEquals(code, 1);
   assertStringIncludes(stderr, "could not build");
-  assertStringIncludes(stderr, "invalid_id");
+  assertStringIncludes(stderr, "invalid_id: `io.w6w.demo` is not a reverse-DNS id.");
   assertEquals(stdout, "");
 });
 
-Deno.test("a builder that wrote no index.json is reported, not read", async () => {
-  const root = await Deno.makeTempDir({ prefix: "w6w-build-empty-" });
-  const dir = await appDirWith(undefined);
-  const error = await assertRejects(
+Deno.test("an assembler crash (no code) propagates as itself", async () => {
+  const root = await Deno.makeTempDir({ prefix: "w6w-build-crash-" });
+  const dir = await appDirWith();
+  await assertRejects(
     () =>
-      appsBuild({ positionals: [dir], options: { out: `${root}/out` } }, () => ({
-        code: 0,
-        stdout: "built 1/1 → index.json\n",
-        stderr: "",
-      })),
-    Error,
+      appsBuild(
+        { positionals: [dir], options: { out: `${root}/out` } },
+        () => Promise.reject(new TypeError("boom")),
+      ),
+    TypeError,
+    "boom",
   );
-  assertStringIncludes(error.message, `${root}/out/index.json`);
-  assertStringIncludes(error.message, "not built");
 });
 
-Deno.test("a bad --resolution is a usage error, and the builder is never started", async () => {
-  const dir = await appDirWith(undefined);
-  const error = await assertRejects(
-    () => appsBuild({ positionals: [dir], options: { resolution: "floating" } }),
-    Error,
-  );
-  assertStringIncludes(error.message, "--resolution must be `sibling` or `registry`");
-  assertStringIncludes(error.message, `Usage: ${NAMING}`);
+Deno.test("a missing app directory is named, and nothing is packaged", async () => {
+  const root = await Deno.makeTempDir({ prefix: "w6w-build-gone-" });
+  const calls: Call[] = [];
+  const restore = assembler(calls);
+  const { context: ctx } = context({
+    positionals: [`${root}/nope`],
+    options: { out: `${root}/out` },
+  });
+  try {
+    const error = await assertRejects(() => Promise.resolve(COMMANDS["apps build"](ctx)), Error);
+    assertStringIncludes(error.message, "is not a directory");
+    assertEquals(calls, []);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("main(): --builder and --resolution are gone — unknown flags, nothing packaged", async () => {
+  const dir = await appDirWith();
+  for (
+    const flag of [["--builder", "jsr:@w6w/app-build@0.2.0/cli"], ["--resolution", "registry"]]
+  ) {
+    const { code, stderr, calls } = await buildApp(["apps", "build", dir, ...flag]);
+    assertEquals(code, 1, flag[0]);
+    assertStringIncludes(stderr, flag[0]);
+    assertEquals(calls, [], flag[0]);
+  }
 });
 
 Deno.test("--pack: a new pack gets the canonical entry", async () => {
   const root = await Deno.makeTempDir({ prefix: "w6w-build-pack-" });
-  const dir = await appDirWith(undefined);
+  const dir = await appDirWith();
   const pack = `${root}/w6w-pack.json`;
   const { code, stdout } = await appsBuild(
     { positionals: [dir], options: { out: `${root}/out`, pack }, json: true },
-    { code: 0, stdout: "", stderr: "" },
   );
   assertEquals(code, 0);
   assertEquals(JSON.parse(stdout), ENTRY);
@@ -387,7 +362,7 @@ Deno.test("--pack: updates by path, keeping the line's other fields", async () =
 
 Deno.test("--pack: updates by id when no path matches", async () => {
   const root = await Deno.makeTempDir({ prefix: "w6w-build-pack-" });
-  const dir = await appDirWith(undefined);
+  const dir = await appDirWith();
   const pack = `${root}/index.json`;
   await Deno.writeTextFile(
     pack,
@@ -405,7 +380,7 @@ Deno.test("--pack: updates by id when no path matches", async () => {
 
 Deno.test("--pack: appends when nothing matches", async () => {
   const root = await Deno.makeTempDir({ prefix: "w6w-build-pack-" });
-  const dir = await appDirWith(undefined);
+  const dir = await appDirWith();
   const pack = `${root}/packs/w6w-pack.json`;
   await Deno.mkdir(`${root}/packs`);
   await Deno.writeTextFile(pack, JSON.stringify({ apps: [{ path: "./other", id: "o" }] }));
@@ -420,14 +395,14 @@ Deno.test("--pack: appends when nothing matches", async () => {
   ]);
 });
 
-Deno.test("--pack: a malformed pack is a usage error before the builder runs", async () => {
+Deno.test("--pack: a malformed pack is a usage error before anything is packaged", async () => {
   const root = await Deno.makeTempDir({ prefix: "w6w-build-pack-" });
-  const dir = await appDirWith(undefined);
+  const dir = await appDirWith();
   const pack = `${root}/w6w-pack.json`;
   await Deno.writeTextFile(pack, "{ nope");
 
   const calls: Call[] = [];
-  const restore = builder(calls);
+  const restore = assembler(calls);
   const { context: ctx } = context({
     positionals: [dir],
     options: { out: `${root}/out`, pack },
@@ -452,10 +427,10 @@ Deno.test("--pack: concurrent builds against one pack all land", async () => {
 
   // One runner for all of them — a build is identified by the folder it was handed,
   // which is what makes eight of them distinguishable in the pack.
-  const restore = useToolchainRunner(async (argv, cwd) => {
-    await fabricate(argv, { ...ENTRY, id: `io.w6w.${cwd.slice(cwd.lastIndexOf("/") + 1)}` });
-    return { code: 0, stdout: "", stderr: "" };
-  });
+  const restore = assembler(
+    [],
+    (dir, out) => fabricate(out, { ...ENTRY, id: `io.w6w.${dir.slice(dir.lastIndexOf("/") + 1)}` }),
+  );
   try {
     const results = await Promise.all(
       dirs.map((dir, i) => {
@@ -489,7 +464,7 @@ Deno.test("--pack: concurrent builds against one pack all land", async () => {
 
 Deno.test("--pack: a stale lock is removed", async () => {
   const root = await Deno.makeTempDir({ prefix: "w6w-build-pack-" });
-  const dir = await appDirWith(undefined);
+  const dir = await appDirWith();
   const pack = `${root}/w6w-pack.json`;
   await Deno.writeTextFile(`${pack}.lock`, "");
   const old = new Date(Date.now() - 120_000);
@@ -505,14 +480,10 @@ Deno.test("--pack: a stale lock is removed", async () => {
 
 Deno.test("-o is the short form of --out on `apps build` and `build app`, through main()", async () => {
   for (const head of [["apps", "build"], ["build", "app"]]) {
-    const dir = await appDirWith("jsr:@w6w/types@0.2.0");
+    const dir = await appDirWith();
     const out = await Deno.makeTempDir({ prefix: "w6w-build-out-" });
-    const { code, stderr, calls } = await buildApp(
-      [...head, dir, "-o", out, "--json"],
-      { code: 0, stdout: "", stderr: "" },
-    );
+    const { code, stderr, calls } = await buildApp([...head, dir, "-o", out, "--json"]);
     assertEquals(code, 0, stderr);
-    assertEquals(calls.length, 1);
-    assertEquals(calls[0].argv.slice(-4), ["-o", out, "--resolution", "registry"]);
+    assertEquals(calls, [{ dir, out }]);
   }
 });

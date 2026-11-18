@@ -1,8 +1,9 @@
 /**
- * Type-level pins for the list-row summaries: `deno check` is the assertion.
+ * Type-level pins for the list-row summaries: `npm run typecheck` is the assertion.
  * The runtime test only keeps the file in the suite.
  */
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals } from "./assert.ts";
 import type {
   ConnectionSummary,
   FunctionSummary as PublicFunctionSummary,
@@ -16,7 +17,8 @@ import type {
   ReliabilityServiceMembers,
 } from "../src/console/mod.ts";
 
-type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true
+type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+  ? true
   : false;
 const pin = <_T extends true>() => 0;
 // Exact, required types: an optional, widened or dropped field makes Equal false (TS2344).
@@ -44,7 +46,7 @@ pin<
   >
 >();
 
-Deno.test("summary types carry the list fields the server sends", () => {
+test("summary types carry the list fields the server sends", () => {
   const publicArchived: PublicFunctionSummary["archivedAt"] = null as string | null;
   const consoleArchived: FunctionSummary["archivedAt"] = null as string | null;
   const endpointArchived: EndpointSummary["archivedAt"] = null as string | null;
@@ -68,8 +70,7 @@ Deno.test("summary types carry the list fields the server sends", () => {
       members,
       read,
       opts,
-    ]
-      .length,
+    ].length,
     10,
   );
 });

@@ -22,14 +22,8 @@ npm (compiled ESM + type declarations):
 npm install @w6w/sdk
 ```
 
-JSR (the TypeScript source, published verbatim):
-
-```bash
-deno add jsr:@w6w/sdk
-```
-
-Both registries publish the **same version at the same time** — `@w6w/sdk`, `@w6w/cli`, `@w6w/react`
-and the Python `w6w` package share one version number and are released together. A given version
+`@w6w/sdk`, `@w6w/cli`, `@w6w/react` and the Python `w6w` package share one version number and are
+released together. A given version
 means the same set of operations in every language.
 
 ## Quick start
@@ -376,16 +370,17 @@ plan around it.
 
 ## Development
 
-The gates are Deno tasks. They need no network and no server:
+The gates are npm scripts on Node 24. After `npm ci` they need no network and no server:
 
 ```bash
-deno task check      # typecheck mod.ts, src/ and tests/
-deno task lint
-deno task fmt:check
-deno task test       # every test runs against a mocked transport
-deno task cov        # test with coverage, then report it
+npm run typecheck     # tsc --noEmit over mod.ts, src/ and tests/
+npm run lint          # biome lint
+npm run format:check  # biome format (npm run format writes)
+npm test              # node --test; every test runs against a mocked transport
+npm run cov           # test with coverage, then report it
+npm run build         # tsc -p tsconfig.build.json into dist/
 ```
 
-Tests **never** require a live server. The npm `dist/` build (`npm run build`, i.e.
-`tsc -p tsconfig.build.json`) runs in CI only; `src/*.ts` is the single authored source for both
-registries.
+Tests **never** require a live server. They run straight from the `.ts` source on Node's built-in
+type stripping, so there is no test build step. `src/*.ts` is the single authored source; the
+published package is the `dist/` that `npm run build` emits.

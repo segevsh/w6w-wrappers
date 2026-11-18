@@ -31,8 +31,7 @@ then covers errors and how to reach any route the SDK doesn't wrap yet.
 ## 1. Install the package
 
 ```bash
-npm install @w6w/sdk       # npm, compiled ESM with type declarations
-deno add jsr:@w6w/sdk      # Deno, from JSR
+npm install @w6w/sdk       # compiled ESM with type declarations
 ```
 
 ## 2. Set your credentials

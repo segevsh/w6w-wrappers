@@ -327,9 +327,10 @@ export class FunctionsApi {
    * (`create` sends no precondition, so it cannot be `function_stale`.)
    */
   async create(definition: FunctionDefinition): Promise<FunctionSaveResult> {
-    const body = typeof definition.id === "string" && definition.id.length > 0
-      ? definition
-      : { ...definition, id: mintId("fn") };
+    const body =
+      typeof definition.id === "string" && definition.id.length > 0
+        ? definition
+        : { ...definition, id: mintId("fn") };
     return await this.#save(body);
   }
 
@@ -475,11 +476,7 @@ export class FunctionsApi {
    * @returns The Function's output.
    * @throws {ApiError} `404 unknown_version` / `404 unknown_function`; `422 function_incomplete` / `function_disabled` / `function_not_published`; `400 invalid_version`.
    */
-  async runVersion(
-    id: string,
-    n: number,
-    options?: FunctionRunVersionOptions,
-  ): Promise<unknown> {
+  async runVersion(id: string, n: number, options?: FunctionRunVersionOptions): Promise<unknown> {
     return await this.#invoke(versionRunPath("functions", id, n), { payload: options?.payload });
   }
 

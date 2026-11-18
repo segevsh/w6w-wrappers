@@ -56,9 +56,11 @@ export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
  * exactly like a nullish/blank static token — a {@linkcode ConfigError}, never
  * a request sent with no credential.
  */
-export type TokenProvider = (
-  ctx?: { forceRefresh?: boolean },
-) => string | null | undefined | Promise<string | null | undefined>;
+export type TokenProvider = (ctx?: { forceRefresh?: boolean }) =>
+  | string
+  | null
+  | undefined
+  | Promise<string | null | undefined>;
 
 /** Constructor options for a client. Every field is optional. */
 export interface W6WClientOptions {

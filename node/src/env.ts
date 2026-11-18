@@ -33,7 +33,7 @@ export const ENV_TOKEN = "W6W_TOKEN";
 
 /**
  * The shape this module probes for. Declared structurally rather than with
- * `any` (which `deno lint`'s recommended rules reject) so the probe stays
+ * `any` (which the linter's recommended rules reject) so the probe stays
  * typed: every hop is optional, because the whole point is that none of it may
  * exist.
  */

@@ -19,7 +19,8 @@
  * No case needs a live server (`docs/implementation.md` §9).
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects } from "./assert.ts";
 import { W6WClient } from "../src/client.ts";
 import type { FetchLike } from "../src/config.ts";
 import { ApiError } from "../src/errors.ts";
@@ -68,7 +69,7 @@ const sentBody = (call: Call): Record<string, unknown> => JSON.parse(call.body ?
 
 // ── functions.run ───────────────────────────────────────────────────────────
 
-Deno.test("functions.run — the KEY is the first argument and lands in the path", async () => {
+test("functions.run — the KEY is the first argument and lands in the path", async () => {
   const { client: c, calls } = client(() => json({ output: { id: "msg_1" } }));
 
   const output = await c.functions.run("send-email", {
@@ -84,7 +85,7 @@ Deno.test("functions.run — the KEY is the first argument and lands in the path
   assertEquals(output, { id: "msg_1" });
 });
 
-Deno.test("functions.run — an id works in the same slot, with no prefix or flag", async () => {
+test("functions.run — an id works in the same slot, with no prefix or flag", async () => {
   const { client: c, calls } = client(() => json({ output: null }));
 
   await c.functions.run("fn_a9b39917-cd4e-4eea-ab89-c3d079684193", {});
@@ -95,7 +96,7 @@ Deno.test("functions.run — an id works in the same slot, with no prefix or fla
   );
 });
 
-Deno.test("functions.run — no options at all still sends `inputs: {}`, never an absent key", async () => {
+test("functions.run — no options at all still sends `inputs: {}`, never an absent key", async () => {
   const { client: c, calls } = client(() => json({ output: 1 }));
 
   await c.functions.run("send-email");
@@ -105,7 +106,7 @@ Deno.test("functions.run — no options at all still sends `inputs: {}`, never a
   assertEquals(sentBody(calls[0]), { inputs: {} });
 });
 
-Deno.test("functions.run — a name is percent-encoded into the path, never interpolated raw", async () => {
+test("functions.run — a name is percent-encoded into the path, never interpolated raw", async () => {
   const { client: c, calls } = client(() => json({ output: null }));
 
   await c.functions.run("a b/c");
@@ -113,7 +114,7 @@ Deno.test("functions.run — a name is percent-encoded into the path, never inte
   assertEquals(calls[0].url, "https://api.example.com/functions/a%20b%2Fc/invoke");
 });
 
-Deno.test("functions.run — a success body with no `output` is a bad_response, not `undefined`", async () => {
+test("functions.run — a success body with no `output` is a bad_response, not `undefined`", async () => {
   const { client: c } = client(() => json({ notOutput: 1 }));
 
   const err = await assertRejects(() => c.functions.run("send-email"), ApiError);
@@ -124,15 +125,15 @@ Deno.test("functions.run — a success body with no `output` is a bad_response, 
 // yields `{"output": null}`, which is a SUCCESSFUL run. The shared `unwrap`
 // helper treats null as a malformed body — correct for a `documents` envelope,
 // wrong here — so this operation guards on PRESENCE of the key instead.
-Deno.test("functions.run — a null output is a result, not a bad_response", async () => {
+test("functions.run — a null output is a result, not a bad_response", async () => {
   const { client: c } = client(() => json({ output: null }));
 
   assertEquals(await c.functions.run("send-email"), null);
 });
 
-Deno.test("functions.run — a 404 raises ApiError carrying the server's code", async () => {
+test("functions.run — a 404 raises ApiError carrying the server's code", async () => {
   const { client: c } = client(() =>
-    json({ error: { code: "unknown_function", message: "Not registered." } }, 404)
+    json({ error: { code: "unknown_function", message: "Not registered." } }, 404),
   );
 
   const err = await assertRejects(() => c.functions.run("nope"), ApiError);
@@ -141,7 +142,7 @@ Deno.test("functions.run — a 404 raises ApiError carrying the server's code", 
 
 // ── endpoints.run ───────────────────────────────────────────────────────────
 
-Deno.test("endpoints.run — key first, `payload` becomes `input`, envelope returned whole", async () => {
+test("endpoints.run — key first, `payload` becomes `input`, envelope returned whole", async () => {
   const { client: c, calls } = client(() => json({ kind: "action", value: { ok: true } }));
 
   const envelope = await c.endpoints.run("send-email", { payload: { to: "ada" } });
@@ -153,9 +154,9 @@ Deno.test("endpoints.run — key first, `payload` becomes `input`, envelope retu
   assertEquals(envelope, { kind: "action", value: { ok: true } });
 });
 
-Deno.test("endpoints.run — the async arm (202, a workflow) is returned, not raised", async () => {
+test("endpoints.run — the async arm (202, a workflow) is returned, not raised", async () => {
   const { client: c } = client(() =>
-    json({ kind: "workflow", runId: "run_1", status: "queued" }, 202)
+    json({ kind: "workflow", runId: "run_1", status: "queued" }, 202),
   );
 
   const envelope = await c.endpoints.run("nightly");
@@ -163,16 +164,16 @@ Deno.test("endpoints.run — the async arm (202, a workflow) is returned, not ra
   assertEquals(envelope, { kind: "workflow", runId: "run_1", status: "queued" });
 });
 
-Deno.test("endpoints.run — an unknown `kind` is handed back verbatim, every field intact", async () => {
+test("endpoints.run — an unknown `kind` is handed back verbatim, every field intact", async () => {
   const { client: c } = client(() => json({ kind: "something-new", extra: 42 }));
 
-  const envelope = await c.endpoints.run("x") as Record<string, unknown>;
+  const envelope = (await c.endpoints.run("x")) as Record<string, unknown>;
 
   assertEquals(envelope.kind, "something-new");
   assertEquals(envelope.extra, 42);
 });
 
-Deno.test("endpoints.run — a success body with no string `kind` is a bad_response", async () => {
+test("endpoints.run — a success body with no string `kind` is a bad_response", async () => {
   const { client: c } = client(() => json({}));
 
   const err = await assertRejects(() => c.endpoints.run("x"), ApiError);

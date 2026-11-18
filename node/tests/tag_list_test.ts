@@ -7,7 +7,8 @@
  * envelope. Measured against plan P1 — the server's `?tag=` filter itself is not exercised here.
  */
 
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals } from "./assert.ts";
 import { W6WClient } from "../src/client.ts";
 import type { FetchLike } from "../src/config.ts";
 
@@ -28,7 +29,7 @@ function setup(envelope: string): { client: W6WClient; urls: string[] } {
   };
 }
 
-Deno.test("functions.list sends ?tag= only when a tag is given", async () => {
+test("functions.list sends ?tag= only when a tag is given", async () => {
   const c = setup("functions");
 
   await c.client.functions.list({ tag: "action.order" });
@@ -42,7 +43,7 @@ Deno.test("functions.list sends ?tag= only when a tag is given", async () => {
   ]);
 });
 
-Deno.test("endpoints.list sends ?tag= only when a tag is given, and unwraps the envelope", async () => {
+test("endpoints.list sends ?tag= only when a tag is given, and unwraps the envelope", async () => {
   const c = setup("endpoints");
 
   const rows = await c.client.endpoints.list({ tag: "action.order" });
@@ -52,11 +53,14 @@ Deno.test("endpoints.list sends ?tag= only when a tag is given, and unwraps the 
     "https://api.example.com/endpoints?tag=action.order",
     "https://api.example.com/endpoints",
   ]);
-  assertEquals(rows.map((r) => r.id), ["x"]);
+  assertEquals(
+    rows.map((r) => r.id),
+    ["x"],
+  );
   assertEquals(rows[0].tags, ["action.order"]);
 });
 
-Deno.test("workflows.list sends ?tag= beside ?project=, and nothing when unset", async () => {
+test("workflows.list sends ?tag= beside ?project=, and nothing when unset", async () => {
   const c = setup("workflows");
 
   await c.client.workflows.list({ tag: "action.order" });

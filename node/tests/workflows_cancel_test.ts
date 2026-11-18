@@ -17,7 +17,8 @@
  * against the pinned wire contract alone.
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects } from "./assert.ts";
 import { W6WClient } from "../src/client.ts";
 import type { FetchLike } from "../src/config.ts";
 import { ApiError } from "../src/errors.ts";
@@ -66,14 +67,14 @@ function client(respond: (call: Call) => Response): { client: W6WClient; calls: 
   };
 }
 
-Deno.test("workflows.cancel: posts to /runs/<id>/cancel, not /workflows/…", async () => {
+test("workflows.cancel: posts to /runs/<id>/cancel, not /workflows/…", async () => {
   // The plausible near-miss: every other method on this class is
   // /workflows/-rooted. Asserted on the request the fake transport actually
   // received, never on a value `cancel()` returned.
   const c = client(() =>
     json({
       run: { id: "run_01HQ", status: "running", cancelRequestedAt: "2026-09-16T00:00:00.000Z" },
-    })
+    }),
   );
 
   await c.client.workflows.cancel("run_01HQ");
@@ -84,18 +85,18 @@ Deno.test("workflows.cancel: posts to /runs/<id>/cancel, not /workflows/…", as
   assertEquals(c.calls[0].body, null, "no request body");
 });
 
-Deno.test("workflows.cancel: unwraps the run envelope, not the workflow one", async () => {
+test("workflows.cancel: unwraps the run envelope, not the workflow one", async () => {
   const run = { id: "run_01HQ", status: "queued", cancelRequestedAt: "2026-09-16T00:00:00.000Z" };
   const c = client(() => json({ run }));
 
   assertEquals(await c.client.workflows.cancel("run_01HQ"), run);
 });
 
-Deno.test("workflows.cancel: run id is percent-encoded into the path", async () => {
+test("workflows.cancel: run id is percent-encoded into the path", async () => {
   // Encoding at interpolation, via the `path` tag — the same pin
   // `workflows.run`'s own id-encoding case is held to.
   const c = client(() =>
-    json({ run: { id: "run_1", status: "queued", cancelRequestedAt: "2026-09-16T00:00:00.000Z" } })
+    json({ run: { id: "run_1", status: "queued", cancelRequestedAt: "2026-09-16T00:00:00.000Z" } }),
   );
 
   await c.client.workflows.cancel("run a/b?x");
@@ -103,25 +104,29 @@ Deno.test("workflows.cancel: run id is percent-encoded into the path", async () 
   assertEquals(c.calls[0].url, "https://api.example.com/runs/run%20a%2Fb%3Fx/cancel");
 });
 
-Deno.test("workflows.cancel: a 202 with status still 'running' or 'queued' is NOT reported canceled", async () => {
+test("workflows.cancel: a 202 with status still 'running' or 'queued' is NOT reported canceled", async () => {
   // The server does not wait for the transition. The status field must be
   // carried through verbatim, never normalised to "canceled" by the wrapper.
   const running = client(() =>
-    json({ run: { id: "run_1", status: "running", cancelRequestedAt: "2026-09-16T00:00:00.000Z" } })
+    json({
+      run: { id: "run_1", status: "running", cancelRequestedAt: "2026-09-16T00:00:00.000Z" },
+    }),
   );
   const runningResult = await running.client.workflows.cancel("run_1");
   assertEquals(runningResult.status, "running");
 
   const queued = client(() =>
-    json({ run: { id: "run_1", status: "queued", cancelRequestedAt: "2026-09-16T00:00:00.000Z" } })
+    json({ run: { id: "run_1", status: "queued", cancelRequestedAt: "2026-09-16T00:00:00.000Z" } }),
   );
   const queuedResult = await queued.client.workflows.cancel("run_1");
   assertEquals(queuedResult.status, "queued");
 });
 
-Deno.test("workflows.cancel: repeating the call on a non-terminal run is still 202, idempotent", async () => {
+test("workflows.cancel: repeating the call on a non-terminal run is still 202, idempotent", async () => {
   const c = client(() =>
-    json({ run: { id: "run_1", status: "running", cancelRequestedAt: "2026-09-16T00:00:00.000Z" } })
+    json({
+      run: { id: "run_1", status: "running", cancelRequestedAt: "2026-09-16T00:00:00.000Z" },
+    }),
   );
 
   const first = await c.client.workflows.cancel("run_1");
@@ -131,9 +136,9 @@ Deno.test("workflows.cancel: repeating the call on a non-terminal run is still 2
   assertEquals(c.calls.length, 2);
 });
 
-Deno.test("workflows.cancel: a 404 unknown_run reaches the caller as an ApiError", async () => {
+test("workflows.cancel: a 404 unknown_run reaches the caller as an ApiError", async () => {
   const c = client(() =>
-    json({ error: { code: "unknown_run", message: "No such run." } }, 404, "Not Found")
+    json({ error: { code: "unknown_run", message: "No such run." } }, 404, "Not Found"),
   );
 
   const err = await assertRejects(() => c.client.workflows.cancel("run_missing"), ApiError);
@@ -143,13 +148,13 @@ Deno.test("workflows.cancel: a 404 unknown_run reaches the caller as an ApiError
   assertEquals(err.message, "No such run.");
 });
 
-Deno.test("workflows.cancel: a 409 run_not_cancelable reaches the caller as an ApiError", async () => {
+test("workflows.cancel: a 409 run_not_cancelable reaches the caller as an ApiError", async () => {
   const c = client(() =>
     json(
       { error: { code: "run_not_cancelable", message: "Run has already finished." } },
       409,
       "Conflict",
-    )
+    ),
   );
 
   const err = await assertRejects(() => c.client.workflows.cancel("run_1"), ApiError);

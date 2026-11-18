@@ -8,7 +8,8 @@
  * type-only assignability check rather than a re-declared duplicate.
  */
 
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals } from "../assert.ts";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import type { ApiCallRecord as AppsApiCallRecord } from "../../src/console/apps.ts";
@@ -69,14 +70,14 @@ function client(respond: (call: Call) => Response): { client: W6WClient; calls: 
   };
 }
 
-Deno.test("console.apiCalls: list is a function on a constructed client", () => {
+test("console.apiCalls: list is a function on a constructed client", () => {
   // Runtime, not type-level: a namespace that silently lost the method would
   // still typecheck everywhere else in this suite.
   const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
   assertEquals(typeof c.console.apiCalls.list, "function");
 });
 
-Deno.test("console.apiCalls.list unwraps the `apiCalls` envelope", async () => {
+test("console.apiCalls.list unwraps the `apiCalls` envelope", async () => {
   const c = client(() => json({ apiCalls: [CALL_A] }));
 
   const res = await c.client.console.apiCalls.list();
@@ -87,24 +88,21 @@ Deno.test("console.apiCalls.list unwraps the `apiCalls` envelope", async () => {
   assertEquals(c.calls[0].method, "GET");
 });
 
-Deno.test(
-  "console.apiCalls.list forwards only DEFINED filter fields as query params",
-  async () => {
-    const c = client(() => json({ apiCalls: [] }));
+test("console.apiCalls.list forwards only DEFINED filter fields as query params", async () => {
+  const c = client(() => json({ apiCalls: [] }));
 
-    await c.client.console.apiCalls.list({ project: "prj_1", appId: "app_x", limit: 50 });
+  await c.client.console.apiCalls.list({ project: "prj_1", appId: "app_x", limit: 50 });
 
-    const url = new URL(c.calls[0].url);
-    assertEquals(url.searchParams.get("appId"), "app_x");
-    assertEquals(url.searchParams.get("project"), "prj_1");
-    assertEquals(url.searchParams.get("limit"), "50");
-    assertEquals(url.searchParams.has("actionKey"), false);
-    assertEquals(url.searchParams.has("connectionId"), false);
-    assertEquals(url.searchParams.has("sessionId"), false);
-  },
-);
+  const url = new URL(c.calls[0].url);
+  assertEquals(url.searchParams.get("appId"), "app_x");
+  assertEquals(url.searchParams.get("project"), "prj_1");
+  assertEquals(url.searchParams.get("limit"), "50");
+  assertEquals(url.searchParams.has("actionKey"), false);
+  assertEquals(url.searchParams.has("connectionId"), false);
+  assertEquals(url.searchParams.has("sessionId"), false);
+});
 
-Deno.test("console.apiCalls.list sends no query params when filter is omitted entirely", async () => {
+test("console.apiCalls.list sends no query params when filter is omitted entirely", async () => {
   const c = client(() => json({ apiCalls: [] }));
 
   await c.client.console.apiCalls.list();
@@ -112,7 +110,7 @@ Deno.test("console.apiCalls.list sends no query params when filter is omitted en
   assertEquals(new URL(c.calls[0].url).search, "");
 });
 
-Deno.test("console.apiCalls.list forwards every defined filter field", async () => {
+test("console.apiCalls.list forwards every defined filter field", async () => {
   const c = client(() => json({ apiCalls: [] }));
 
   await c.client.console.apiCalls.list({
@@ -133,16 +131,13 @@ Deno.test("console.apiCalls.list forwards every defined filter field", async () 
   assertEquals(url.searchParams.get("limit"), "25");
 });
 
-Deno.test(
-  "console.apiCalls.list's resolved elements are typed as the SAME ApiCallRecord the apps namespace exports",
-  () => {
-    // A type-only assignability check — this line only compiles if the two
-    // names refer to the same underlying type (re-export), which `deno task
-    // check` already enforces at build time; asserting it here means a future
-    // split that re-declares a second, divergent interface fails typecheck
-    // instead of silently passing tsc.
-    const _same: AppsApiCallRecord = {} as OwnApiCallRecord;
-    void _same;
-    assertEquals(true, true);
-  },
-);
+test("console.apiCalls.list's resolved elements are typed as the SAME ApiCallRecord the apps namespace exports", () => {
+  // A type-only assignability check — this line only compiles if the two
+  // names refer to the same underlying type (re-export), which `npm run
+  // typecheck` already enforces at build time; asserting it here means a future
+  // split that re-declares a second, divergent interface fails typecheck
+  // instead of silently passing tsc.
+  const _same: AppsApiCallRecord = {} as OwnApiCallRecord;
+  void _same;
+  assertEquals(true, true);
+});

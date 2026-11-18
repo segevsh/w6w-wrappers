@@ -123,7 +123,8 @@ export async function runUrn(host: RunHost, input: RunInput): Promise<RunEnvelop
 
   const body = res.body;
   if (
-    typeof body !== "object" || body === null ||
+    typeof body !== "object" ||
+    body === null ||
     typeof (body as { kind?: unknown }).kind !== "string"
   ) {
     throw new ApiError(

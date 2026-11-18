@@ -222,9 +222,11 @@ export class FunctionsApi {
    * @throws {ApiError} `404 unknown_function` when there is no such id.
    */
   async get(id: string): Promise<FunctionRead> {
-    const res = await this.#host.request<
-      { function: FunctionDef; valid: boolean; updatedAt: string }
-    >({
+    const res = await this.#host.request<{
+      function: FunctionDef;
+      valid: boolean;
+      updatedAt: string;
+    }>({
       method: "GET",
       path: path`/functions/${id}`,
     });
@@ -252,9 +254,11 @@ export class FunctionsApi {
     definition: FunctionDef | FunctionRead,
     options?: FunctionUpsertOptions,
   ): Promise<{ id: string; key: string; updatedAt: string }> {
-    const { updatedAt: _updatedAt, valid: _valid, ...body } = definition as
-      & Partial<FunctionRead>
-      & Record<string, unknown>;
+    const {
+      updatedAt: _updatedAt,
+      valid: _valid,
+      ...body
+    } = definition as Partial<FunctionRead> & Record<string, unknown>;
     const res = await this.#host.request<unknown>({
       method: "POST",
       path: "/functions",

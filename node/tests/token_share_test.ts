@@ -5,7 +5,8 @@
  * {@linkcode request} transport over a fake `fetch`, like `auth_options_test.ts`.
  */
 
-import { assert, assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import { assert, assertEquals, assertRejects } from "./assert.ts";
 import { type FetchLike, requireToken, resolveConfig, type TokenProvider } from "../src/config.ts";
 import { ConfigError } from "../src/errors.ts";
 import { request } from "../src/http.ts";
@@ -50,7 +51,7 @@ function gatedSupplier(value: string) {
 const get = (config: ReturnType<typeof resolveConfig>, f: FetchLike, path = "/vars") =>
   request(config, f, { method: "GET", path });
 
-Deno.test("token-share: K1 five concurrent requests call the supplier once; a 6th after settle calls again", async () => {
+test("token-share: K1 five concurrent requests call the supplier once; a 6th after settle calls again", async () => {
   const s = gatedSupplier("tok_shared");
   const config = resolveConfig({ baseUrl: "https://api.example.com", token: s.token });
   const fake = fakeFetch();
@@ -66,7 +67,7 @@ Deno.test("token-share: K1 five concurrent requests call the supplier once; a 6t
   assertEquals(fake.calls.length, 6);
 });
 
-Deno.test("token-share: K2 two configs with different suppliers each send their own bearer", async () => {
+test("token-share: K2 two configs with different suppliers each send their own bearer", async () => {
   const a = gatedSupplier("tok_a");
   const b = gatedSupplier("tok_b");
   const ca = resolveConfig({ baseUrl: "https://a.example.com", token: a.token });
@@ -80,14 +81,17 @@ Deno.test("token-share: K2 two configs with different suppliers each send their 
   await all;
   assertEquals(a.count(), 1);
   assertEquals(b.count(), 1);
-  assertEquals(fa.calls.map((c) => c.headers.get("authorization")), [
-    "Bearer tok_a",
-    "Bearer tok_a",
-  ]);
-  assertEquals(fb.calls.map((c) => c.headers.get("authorization")), ["Bearer tok_b"]);
+  assertEquals(
+    fa.calls.map((c) => c.headers.get("authorization")),
+    ["Bearer tok_a", "Bearer tok_a"],
+  );
+  assertEquals(
+    fb.calls.map((c) => c.headers.get("authorization")),
+    ["Bearer tok_b"],
+  );
 });
 
-Deno.test("token-share: K3 a rejecting supplier rejects all joiners with no transport call, then is re-invoked", async () => {
+test("token-share: K3 a rejecting supplier rejects all joiners with no transport call, then is re-invoked", async () => {
   let calls = 0;
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));
@@ -100,7 +104,7 @@ Deno.test("token-share: K3 a rejecting supplier rejects all joiners with no tran
   const config = resolveConfig({ baseUrl: "https://api.example.com", token });
   const fake = fakeFetch();
   const three = [1, 2, 3].map(() =>
-    assertRejects(() => get(config, fake.fetch), Error, "mint failed")
+    assertRejects(() => get(config, fake.fetch), Error, "mint failed"),
   );
   await macrotask();
   release();
@@ -112,7 +116,7 @@ Deno.test("token-share: K3 a rejecting supplier rejects all joiners with no tran
   assertEquals(fake.calls.length, 1);
 });
 
-Deno.test("token-share: K4 a nullish result gives every joiner a ConfigError from one supplier call", async () => {
+test("token-share: K4 a nullish result gives every joiner a ConfigError from one supplier call", async () => {
   let calls = 0;
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));
@@ -131,7 +135,7 @@ Deno.test("token-share: K4 a nullish result gives every joiner a ConfigError fro
   assertEquals(fake.calls.length, 0);
 });
 
-Deno.test("token-share: K5 a forced refresh neither joins a pending ordinary flight nor is joined", async () => {
+test("token-share: K5 a forced refresh neither joins a pending ordinary flight nor is joined", async () => {
   const seen: Array<{ forceRefresh?: boolean } | undefined> = [];
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));
@@ -177,7 +181,7 @@ Deno.test("token-share: K5 a forced refresh neither joins a pending ordinary fli
   assertEquals(seen2.filter((c) => c?.forceRefresh !== true).length, 1);
 });
 
-Deno.test("token-share: K6 a 401 on the first of 5 concurrent requests forces exactly one refresh", async () => {
+test("token-share: K6 a 401 on the first of 5 concurrent requests forces exactly one refresh", async () => {
   const ctxSeen: Array<{ forceRefresh?: boolean } | undefined> = [];
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));
@@ -193,7 +197,9 @@ Deno.test("token-share: K6 a 401 on the first of 5 concurrent requests forces ex
   });
   let n = 0;
   const fake = fakeFetch(() =>
-    n++ === 0 ? json({ error: { code: "unauthorized", message: "expired" } }, 401) : json({ ok: 1 })
+    n++ === 0
+      ? json({ error: { code: "unauthorized", message: "expired" } }, 401)
+      : json({ ok: 1 }),
   );
   const all = Promise.all([1, 2, 3, 4, 5].map(() => get(config, fake.fetch)));
   await macrotask();

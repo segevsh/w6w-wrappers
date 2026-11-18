@@ -3,7 +3,7 @@
  *
  * The shapes below are **transcribed** from `docs/implementation.md` §5 (which
  * reads them off the studio's API types), not imported or vendored from it: this
- * package publishes to npm and JSR and cannot depend on a private workspace
+ * package publishes to npm and cannot depend on a private workspace
  * source. Field names are the wire's, verbatim — no camel/snake drift, no
  * renaming, no "nicer" aliases. A client that quietly renames a wire field makes
  * every error message and every documentation example wrong.
@@ -12,9 +12,8 @@
  * field the server adds tomorrow simply arrives and is ignored by an older
  * client. Nothing here validates a response against a closed schema.
  *
- * Every exported member carries an explicit type — JSR publishes this file as
- * TypeScript source and rejects inferred public types ("no slow types",
- * `docs/implementation.md` §1).
+ * Every exported member carries an explicit type, so the emitted `.d.ts` is the
+ * declared surface rather than whatever inference produced.
  *
  * @module
  */
@@ -808,12 +807,7 @@ export interface AssetsApi {
   get(id: string, opts?: CallOptions): Promise<Asset>;
   versions(id: string, opts?: CallOptions): Promise<AssetVersion[]>;
   files(id: string, versionId: string, opts?: CallOptions): Promise<AssetVersionFiles>;
-  content(
-    id: string,
-    versionId: string,
-    fileId: string,
-    opts?: CallOptions,
-  ): Promise<Uint8Array>;
+  content(id: string, versionId: string, fileId: string, opts?: CallOptions): Promise<Uint8Array>;
   archiveDownload(id: string, versionId: string, opts?: CallOptions): Promise<Uint8Array>;
   archive(id: string, opts?: CallOptions): Promise<Asset>;
   purge(id: string, opts?: CallOptions): Promise<AssetPurgeResult>;
@@ -1006,29 +1000,27 @@ export interface ModelOptions {
 export type AgentModelOptions = ModelOptions;
 
 /** A capability the agent may call. Max 50 per agent; the server stores only these keys. */
-export type AgentTool =
-  & {
-    /** 1–64 chars, stored trimmed; what the model calls the tool. Unique per agent (case-insensitive). */
-    name?: string;
-    /** ≤ 1024 chars; author override of what the model is told the tool does. */
-    description?: string;
-    /**
-     * The target's field keys the MODEL fills — the only ones in the tool's schema and the only
-     * ones of its arguments passed on. Absent ⇒ every field not in `with`.
-     */
-    ai?: string[];
-    /**
-     * Fixed field values: a literal, or an expression over vars/constants/secrets, resolved by
-     * the host at call time. Never seen or overridden by the model. A key is in `ai` or `with`,
-     * not both. ≤ 64 KiB.
-     */
-    with?: Record<string, unknown>;
-  }
-  & (
-    | { kind: "action"; uses: { app: string; action: string; connection?: string | null } }
-    | { kind: "function"; function: string }
-    | { kind: "workflow"; workflow: string }
-  );
+export type AgentTool = {
+  /** 1–64 chars, stored trimmed; what the model calls the tool. Unique per agent (case-insensitive). */
+  name?: string;
+  /** ≤ 1024 chars; author override of what the model is told the tool does. */
+  description?: string;
+  /**
+   * The target's field keys the MODEL fills — the only ones in the tool's schema and the only
+   * ones of its arguments passed on. Absent ⇒ every field not in `with`.
+   */
+  ai?: string[];
+  /**
+   * Fixed field values: a literal, or an expression over vars/constants/secrets, resolved by
+   * the host at call time. Never seen or overridden by the model. A key is in `ai` or `with`,
+   * not both. ≤ 64 KiB.
+   */
+  with?: Record<string, unknown>;
+} & (
+  | { kind: "action"; uses: { app: string; action: string; connection?: string | null } }
+  | { kind: "function"; function: string }
+  | { kind: "workflow"; workflow: string }
+);
 
 /** One finding of an agent draft's validation. */
 export interface AgentValidationIssue {
@@ -1163,9 +1155,10 @@ export interface AgentsApi {
  * @returns A new id of the form `wf_…` / `fn_…`.
  */
 export function mintId(prefix: string): string {
-  const uuid = typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : Math.floor(Math.random() * 1e16).toString(36);
+  const uuid =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : Math.floor(Math.random() * 1e16).toString(36);
   return `${prefix}_${uuid}`;
 }
 
@@ -1175,7 +1168,7 @@ export function mintId(prefix: string): string {
 
 /**
  * Open-ended string: the known literals autocomplete, any other string still
- * type-checks. (`string & {}` fails `deno lint` `ban-types`.)
+ * type-checks. (`string & {}` is a banned type under the linters' recommended rules.)
  */
 type OpenString = string & Record<never, never>;
 
@@ -1246,12 +1239,7 @@ export interface TargetOption {
   target: Target;
   permitted: boolean;
   /** Present iff not permitted. Open: a newer server may add a reason. */
-  reason?:
-    | "user_import_disabled"
-    | "not_tenant_admin"
-    | "no_account"
-    | "no_subject"
-    | OpenString;
+  reason?: "user_import_disabled" | "not_tenant_admin" | "no_account" | "no_subject" | OpenString;
 }
 
 /** What the caller may name as a source; drives the add-source form. */
@@ -1378,42 +1366,42 @@ export interface AppManagementPackInfo {
 export type AppManagementPreview =
   | { kind: "app"; sourceRef: string; app: { id?: string; version?: string; displayName?: string } }
   | {
-    kind: "pack";
-    sourceRef: string;
-    pack: AppManagementPackInfo;
-    entries: AppManagementPackEntry[];
-  };
+      kind: "pack";
+      sourceRef: string;
+      pack: AppManagementPackInfo;
+      entries: AppManagementPackEntry[];
+    };
 
 /** The `POST /app-management/apps` body: the legacy import shapes plus `target`. */
 export type RegisterAppResult =
   | {
-    kind: "app";
-    sourceRef: string;
-    app: Record<string, unknown>;
-    actions: Record<string, unknown>[];
-    registered: boolean;
-    latestAdvanced: boolean;
-    target: Target;
-  }
+      kind: "app";
+      sourceRef: string;
+      app: Record<string, unknown>;
+      actions: Record<string, unknown>[];
+      registered: boolean;
+      latestAdvanced: boolean;
+      target: Target;
+    }
   | {
-    kind: "pack";
-    sourceRef: string;
-    pack: AppManagementPackInfo;
-    registered: number;
-    failed: number;
-    results: Array<
-      | {
-        path: string;
-        ok: true;
-        id: string;
-        version: string;
-        registered: boolean;
-        latestAdvanced: boolean;
-      }
-      | { path: string; ok: false; optional: boolean; error: { code: string; message: string } }
-    >;
-    target: Target;
-  };
+      kind: "pack";
+      sourceRef: string;
+      pack: AppManagementPackInfo;
+      registered: number;
+      failed: number;
+      results: Array<
+        | {
+            path: string;
+            ok: true;
+            id: string;
+            version: string;
+            registered: boolean;
+            latestAdvanced: boolean;
+          }
+        | { path: string; ok: false; optional: boolean; error: { code: string; message: string } }
+      >;
+      target: Target;
+    };
 
 /** The `publishArtifact` input: the built manifest plus the bundle bytes (the SDK base64-encodes). */
 export interface PublishArtifactInput {

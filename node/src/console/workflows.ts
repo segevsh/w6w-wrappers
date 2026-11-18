@@ -180,9 +180,11 @@ export class WorkflowsApi {
   async get(
     id: string,
   ): Promise<{ workflow: Record<string, unknown>; sourceRef: string | null; updatedAt: string }> {
-    const res = await this.#host.request<
-      { workflow: Record<string, unknown>; sourceRef: string | null; updatedAt: string }
-    >({
+    const res = await this.#host.request<{
+      workflow: Record<string, unknown>;
+      sourceRef: string | null;
+      updatedAt: string;
+    }>({
       method: "GET",
       path: path`/workflows/${id}`,
     });
@@ -212,20 +214,16 @@ export class WorkflowsApi {
   async upsert(
     definition: unknown,
     options?: { project?: string; ifUnmodifiedSince?: string | null },
-  ): Promise<
-    {
+  ): Promise<{
+    workflow: { id: string; name: string; key: string | null };
+    scheduled: boolean;
+    updatedAt: string;
+  }> {
+    const res = await this.#host.request<{
       workflow: { id: string; name: string; key: string | null };
       scheduled: boolean;
       updatedAt: string;
-    }
-  > {
-    const res = await this.#host.request<
-      {
-        workflow: { id: string; name: string; key: string | null };
-        scheduled: boolean;
-        updatedAt: string;
-      }
-    >({
+    }>({
       method: "POST",
       path: "/workflows",
       query: { project: options?.project },

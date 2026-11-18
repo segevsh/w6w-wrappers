@@ -88,7 +88,7 @@ export class AppsApi {
           path: "/apps",
           query: { ids: chunk.join(",") },
           signal: options?.signal,
-        })
+        }),
       ),
     );
     return pages.flatMap((res) => res.body.apps);

@@ -91,9 +91,10 @@ export async function fetchMe(host: MeHost, options?: CallOptions): Promise<Me> 
   // this operation reports identity, and inventing keys out of a malformed block
   // would be worse than reporting only what this client actually knows.
   const versions = body.versions;
-  const merged = typeof versions === "object" && versions !== null && !Array.isArray(versions)
-    ? versions
-    : undefined;
+  const merged =
+    typeof versions === "object" && versions !== null && !Array.isArray(versions)
+      ? versions
+      : undefined;
   return {
     ...body,
     // Spread order is the policy: the wrapper's own version is the DEFAULT and

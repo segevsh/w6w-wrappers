@@ -8,7 +8,8 @@
  * test infrastructure.
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects } from "./assert.ts";
 import * as barrel from "../mod.ts";
 import * as consoleBarrel from "../src/console/mod.ts";
 import { ConfigError } from "../src/errors.ts";
@@ -56,59 +57,53 @@ const SUCCESS_BODY = {
 // acc.1 — the wire shape: Basic header, exact body, no query string
 // ---------------------------------------------------------------------------
 
-Deno.test(
-  "exchangeToken: POST /auth/exchange, Authorization: Basic, body exactly {subject}, no query string",
-  async () => {
-    const fake = fakeFetch(() => json(SUCCESS_BODY));
+test("exchangeToken: POST /auth/exchange, Authorization: Basic, body exactly {subject}, no query string", async () => {
+  const fake = fakeFetch(() => json(SUCCESS_BODY));
 
-    const result = await exchangeToken({
-      baseUrl: "https://api.example.com",
+  const result = await exchangeToken({
+    baseUrl: "https://api.example.com",
+    clientId: "client_1",
+    clientSecret: "secret_1",
+    subject: "user_1",
+    fetch: fake.fetch,
+  });
+
+  assertEquals(fake.calls.length, 1);
+  assertEquals(fake.calls[0].method, "POST");
+  // No query string anywhere — a bare path, nothing appended.
+  assertEquals(fake.calls[0].url, "https://api.example.com/auth/exchange");
+  // base64("client_1:secret_1"), computed independently (python3 base64.b64encode).
+  assertEquals(fake.calls[0].headers.get("authorization"), "Basic Y2xpZW50XzE6c2VjcmV0XzE=");
+  assertEquals(fake.calls[0].body, '{"subject":"user_1"}');
+
+  assertEquals(result.token, "tok_short_lived");
+  assertEquals(result.user.subject, "user_1");
+  assertEquals(result.user.tenant, "tn_1");
+  assertEquals(result.user.role, "user");
+  assertEquals(result.user.account, "acct_a1B2c3D4e5F6g7H8");
+  assertEquals(result.expiresIn, 900);
+});
+
+test("exchangeToken: an omitted baseUrl defaults to https://api.w6w.io and ignores W6W_BASE_URL", async () => {
+  const saved = process.env.W6W_BASE_URL;
+  process.env.W6W_BASE_URL = "https://env.example.com";
+  try {
+    const fake = fakeFetch(() => json(SUCCESS_BODY));
+    await exchangeToken({
       clientId: "client_1",
       clientSecret: "secret_1",
       subject: "user_1",
       fetch: fake.fetch,
     });
-
     assertEquals(fake.calls.length, 1);
-    assertEquals(fake.calls[0].method, "POST");
-    // No query string anywhere — a bare path, nothing appended.
-    assertEquals(fake.calls[0].url, "https://api.example.com/auth/exchange");
-    // base64("client_1:secret_1"), computed independently (python3 base64.b64encode).
-    assertEquals(fake.calls[0].headers.get("authorization"), "Basic Y2xpZW50XzE6c2VjcmV0XzE=");
-    assertEquals(fake.calls[0].body, '{"subject":"user_1"}');
+    assertEquals(fake.calls[0].url, "https://api.w6w.io/auth/exchange");
+  } finally {
+    if (saved === undefined) delete process.env.W6W_BASE_URL;
+    else process.env.W6W_BASE_URL = saved;
+  }
+});
 
-    assertEquals(result.token, "tok_short_lived");
-    assertEquals(result.user.subject, "user_1");
-    assertEquals(result.user.tenant, "tn_1");
-    assertEquals(result.user.role, "user");
-    assertEquals(result.user.account, "acct_a1B2c3D4e5F6g7H8");
-    assertEquals(result.expiresIn, 900);
-  },
-);
-
-Deno.test(
-  "exchangeToken: an omitted baseUrl defaults to https://api.w6w.io and ignores W6W_BASE_URL",
-  async () => {
-    const saved = Deno.env.get("W6W_BASE_URL");
-    Deno.env.set("W6W_BASE_URL", "https://env.example.com");
-    try {
-      const fake = fakeFetch(() => json(SUCCESS_BODY));
-      await exchangeToken({
-        clientId: "client_1",
-        clientSecret: "secret_1",
-        subject: "user_1",
-        fetch: fake.fetch,
-      });
-      assertEquals(fake.calls.length, 1);
-      assertEquals(fake.calls[0].url, "https://api.w6w.io/auth/exchange");
-    } finally {
-      if (saved === undefined) Deno.env.delete("W6W_BASE_URL");
-      else Deno.env.set("W6W_BASE_URL", saved);
-    }
-  },
-);
-
-Deno.test("exchangeToken: a blank baseUrl is still a ConfigError, not the default", async () => {
+test("exchangeToken: a blank baseUrl is still a ConfigError, not the default", async () => {
   const fake = fakeFetch(() => json(SUCCESS_BODY));
   for (const baseUrl of ["", "   "]) {
     await assertRejects(
@@ -126,119 +121,104 @@ Deno.test("exchangeToken: a blank baseUrl is still a ConfigError, not the defaul
   assertEquals(fake.calls.length, 0);
 });
 
-Deno.test(
-  "exchangeToken: `account`, when given, is the ONLY extra body key — never null/undefined when omitted",
-  async () => {
-    const fake = fakeFetch(() => json(SUCCESS_BODY));
+test("exchangeToken: `account`, when given, is the ONLY extra body key — never null/undefined when omitted", async () => {
+  const fake = fakeFetch(() => json(SUCCESS_BODY));
 
-    await exchangeToken({
-      baseUrl: "https://api.example.com",
-      clientId: "client_1",
-      clientSecret: "secret_1",
-      subject: "user_1",
-      account: "acct_9",
-      fetch: fake.fetch,
-    });
+  await exchangeToken({
+    baseUrl: "https://api.example.com",
+    clientId: "client_1",
+    clientSecret: "secret_1",
+    subject: "user_1",
+    account: "acct_9",
+    fetch: fake.fetch,
+  });
 
-    assertEquals(fake.calls[0].body, '{"subject":"user_1","account":"acct_9"}');
-  },
-);
+  assertEquals(fake.calls[0].body, '{"subject":"user_1","account":"acct_9"}');
+});
 
-Deno.test(
-  "exchangeToken: a blank `account` is sent verbatim — the raw path never trims or drops it",
-  async () => {
-    const fake = fakeFetch(() => json(SUCCESS_BODY));
+test("exchangeToken: a blank `account` is sent verbatim — the raw path never trims or drops it", async () => {
+  const fake = fakeFetch(() => json(SUCCESS_BODY));
 
-    await exchangeToken({
-      baseUrl: "https://api.example.com",
-      clientId: "client_1",
-      clientSecret: "secret_1",
-      subject: "user_1",
-      account: "",
-      fetch: fake.fetch,
-    });
+  await exchangeToken({
+    baseUrl: "https://api.example.com",
+    clientId: "client_1",
+    clientSecret: "secret_1",
+    subject: "user_1",
+    account: "",
+    fetch: fake.fetch,
+  });
 
-    assertEquals(fake.calls[0].body, '{"subject":"user_1","account":""}');
-  },
-);
+  assertEquals(fake.calls[0].body, '{"subject":"user_1","account":""}');
+});
 
 // ---------------------------------------------------------------------------
 // acc.2, acc.4 — latin-1-only Basic encoding; never UTF-8
 // ---------------------------------------------------------------------------
 
-Deno.test(
-  "exchangeToken: a latin-1 non-ASCII secret is Basic-encoded as latin-1, never UTF-8",
-  async () => {
-    const fake = fakeFetch(() => json(SUCCESS_BODY));
+test("exchangeToken: a latin-1 non-ASCII secret is Basic-encoded as latin-1, never UTF-8", async () => {
+  const fake = fakeFetch(() => json(SUCCESS_BODY));
 
-    await exchangeToken({
-      baseUrl: "https://api.example.com",
-      clientId: "client_1",
-      clientSecret: "pass_é", // "pass_é" — U+00E9, inside latin-1 (0x00-0xFF)
-      subject: "user_1",
-      fetch: fake.fetch,
-    });
+  await exchangeToken({
+    baseUrl: "https://api.example.com",
+    clientId: "client_1",
+    clientSecret: "pass_é", // "pass_é" — U+00E9, inside latin-1 (0x00-0xFF)
+    subject: "user_1",
+    fetch: fake.fetch,
+  });
 
-    // base64(latin1("client_1:pass_é")), computed independently (python3
-    // base64.b64encode("client_1:pass_é".encode("latin-1"))). The UTF-8
-    // encoding of the same string base64s to a DIFFERENT value
-    // ("Y2xpZW50XzE6cGFzc1/DqQ=="), so this line is what a UTF-8 regression
-    // turns red.
-    assertEquals(fake.calls[0].headers.get("authorization"), "Basic Y2xpZW50XzE6cGFzc1/p");
-  },
-);
+  // base64(latin1("client_1:pass_é")), computed independently (python3
+  // base64.b64encode("client_1:pass_é".encode("latin-1"))). The UTF-8
+  // encoding of the same string base64s to a DIFFERENT value
+  // ("Y2xpZW50XzE6cGFzc1/DqQ=="), so this line is what a UTF-8 regression
+  // turns red.
+  assertEquals(fake.calls[0].headers.get("authorization"), "Basic Y2xpZW50XzE6cGFzc1/p");
+});
 
-Deno.test(
-  "exchangeToken: a clientSecret outside latin-1 raises a local ConfigError, never reaching the network",
-  async () => {
-    const fake = fakeFetch(() => json(SUCCESS_BODY));
+test("exchangeToken: a clientSecret outside latin-1 raises a local ConfigError, never reaching the network", async () => {
+  const fake = fakeFetch(() => json(SUCCESS_BODY));
 
-    const err = await assertRejects(
-      () =>
-        exchangeToken({
-          baseUrl: "https://api.example.com",
-          clientId: "client_1",
-          clientSecret: "s3cr3t_DO_NOT_LEAK_中", // U+4E2D is outside latin-1
-          subject: "user_1",
-          fetch: fake.fetch,
-        }),
-      ConfigError,
-    );
-    assertEquals(fake.calls.length, 0);
-    assertEquals(err.message.includes("DO_NOT_LEAK"), false);
-  },
-);
+  const err = await assertRejects(
+    () =>
+      exchangeToken({
+        baseUrl: "https://api.example.com",
+        clientId: "client_1",
+        clientSecret: "s3cr3t_DO_NOT_LEAK_中", // U+4E2D is outside latin-1
+        subject: "user_1",
+        fetch: fake.fetch,
+      }),
+    ConfigError,
+  );
+  assertEquals(fake.calls.length, 0);
+  assertEquals(err.message.includes("DO_NOT_LEAK"), false);
+});
 
 // ---------------------------------------------------------------------------
 // acc.2 — clientId/":" rejection, never echoing clientSecret
 // ---------------------------------------------------------------------------
 
-Deno.test(
-  "exchangeToken: a clientId containing ':' raises a local ConfigError before any network call",
-  async () => {
-    const fake = fakeFetch(() => json(SUCCESS_BODY));
+test("exchangeToken: a clientId containing ':' raises a local ConfigError before any network call", async () => {
+  const fake = fakeFetch(() => json(SUCCESS_BODY));
 
-    const err = await assertRejects(
-      () =>
-        exchangeToken({
-          baseUrl: "https://api.example.com",
-          clientId: "tenant:with:colons",
-          clientSecret: "s3cr3t_DO_NOT_LEAK",
-          subject: "user_1",
-          fetch: fake.fetch,
-        }),
-      ConfigError,
-    );
-    assertEquals(fake.calls.length, 0);
-    assertEquals(err.message.includes("DO_NOT_LEAK"), false);
-  },
-);
+  const err = await assertRejects(
+    () =>
+      exchangeToken({
+        baseUrl: "https://api.example.com",
+        clientId: "tenant:with:colons",
+        clientSecret: "s3cr3t_DO_NOT_LEAK",
+        subject: "user_1",
+        fetch: fake.fetch,
+      }),
+    ConfigError,
+  );
+  assertEquals(fake.calls.length, 0);
+  assertEquals(err.message.includes("DO_NOT_LEAK"), false);
+});
 
 // ---------------------------------------------------------------------------
 // acc.2 — blank clientId/clientSecret/subject
 // ---------------------------------------------------------------------------
 
-Deno.test("exchangeToken: blank clientId/clientSecret/subject each raise a local ConfigError", async () => {
+test("exchangeToken: blank clientId/clientSecret/subject each raise a local ConfigError", async () => {
   const fake = fakeFetch(() => json(SUCCESS_BODY));
   const base = {
     baseUrl: "https://api.example.com",
@@ -259,15 +239,13 @@ Deno.test("exchangeToken: blank clientId/clientSecret/subject each raise a local
 // exactly ONE transport call (no recovery on a requireAuth:false request)
 // ---------------------------------------------------------------------------
 
-for (
-  const [status, code] of [
-    [401, "invalid_client"],
-    [400, "invalid_body"],
-    [400, "invalid_subject"],
-    [400, "invalid_account"],
-  ] as const
-) {
-  Deno.test(`exchangeToken: server ${code} (${status}) surfaces as ApiError with that code`, async () => {
+for (const [status, code] of [
+  [401, "invalid_client"],
+  [400, "invalid_body"],
+  [400, "invalid_subject"],
+  [400, "invalid_account"],
+] as const) {
+  test(`exchangeToken: server ${code} (${status}) surfaces as ApiError with that code`, async () => {
     const fake = fakeFetch(() => json({ error: { code, message: "nope" } }, status));
 
     const err = await assertRejects(
@@ -293,47 +271,44 @@ for (
 // required or sent, even with zero ambient configuration
 // ---------------------------------------------------------------------------
 
-Deno.test(
-  "exchangeToken never requires (or sends) a bearer, even with no W6W_TOKEN configured anywhere",
-  async () => {
-    const saved = Deno.env.get("W6W_TOKEN");
-    Deno.env.delete("W6W_TOKEN");
-    try {
-      const fake = fakeFetch(() => json(SUCCESS_BODY));
-      // If `requireAuth` were accidentally left at its default (`true`), this
-      // would throw ConfigError ("No w6w API token is configured…") before
-      // ever reaching the transport, since no token is configured anywhere.
-      const result = await exchangeToken({
-        baseUrl: "https://api.example.com",
-        clientId: "client_1",
-        clientSecret: "secret_1",
-        subject: "user_1",
-        fetch: fake.fetch,
-      });
-      assertEquals(result.token, "tok_short_lived");
-      assertEquals(fake.calls.length, 1);
-      assertEquals(fake.calls[0].headers.has("authorization"), true);
-      // Never a bearer — only ever the Basic credential this module built.
-      assertEquals(fake.calls[0].headers.get("authorization")?.startsWith("Basic "), true);
-    } finally {
-      if (saved === undefined) Deno.env.delete("W6W_TOKEN");
-      else Deno.env.set("W6W_TOKEN", saved);
-    }
-  },
-);
+test("exchangeToken never requires (or sends) a bearer, even with no W6W_TOKEN configured anywhere", async () => {
+  const saved = process.env.W6W_TOKEN;
+  delete process.env.W6W_TOKEN;
+  try {
+    const fake = fakeFetch(() => json(SUCCESS_BODY));
+    // If `requireAuth` were accidentally left at its default (`true`), this
+    // would throw ConfigError ("No w6w API token is configured…") before
+    // ever reaching the transport, since no token is configured anywhere.
+    const result = await exchangeToken({
+      baseUrl: "https://api.example.com",
+      clientId: "client_1",
+      clientSecret: "secret_1",
+      subject: "user_1",
+      fetch: fake.fetch,
+    });
+    assertEquals(result.token, "tok_short_lived");
+    assertEquals(fake.calls.length, 1);
+    assertEquals(fake.calls[0].headers.has("authorization"), true);
+    // Never a bearer — only ever the Basic credential this module built.
+    assertEquals(fake.calls[0].headers.get("authorization")?.startsWith("Basic "), true);
+  } finally {
+    if (saved === undefined) delete process.env.W6W_TOKEN;
+    else process.env.W6W_TOKEN = saved;
+  }
+});
 
 // ---------------------------------------------------------------------------
 // acc.5 — subpath-only: not on the root barrel, not on the console barrel
 // ---------------------------------------------------------------------------
 
-Deno.test("exchangeToken is not a key of ../mod.ts", () => {
+test("exchangeToken is not a key of ../mod.ts", () => {
   assertEquals("exchangeToken" in barrel, false);
 });
 
-Deno.test("exchangeToken is not a key of ../src/console/mod.ts", () => {
+test("exchangeToken is not a key of ../src/console/mod.ts", () => {
   assertEquals("exchangeToken" in consoleBarrel, false);
 });
 
-Deno.test("exchangeToken is reachable from its own subpath module and is a function", () => {
+test("exchangeToken is reachable from its own subpath module and is a function", () => {
   assertEquals(typeof exchangeToken, "function");
 });

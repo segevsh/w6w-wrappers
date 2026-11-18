@@ -14,7 +14,8 @@
  * for code with zero call sites anywhere in studio or `@w6w/ui`.
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects } from "../assert.ts";
 import type { AppsApi } from "../../src/console/apps.ts";
 import type { OAuth2ClientSetup } from "../../src/console/mod.ts";
 import { W6WClient } from "../../src/client.ts";
@@ -63,9 +64,7 @@ function fakeFetch(respond: (call: Call) => Response): { fetch: FetchLike; calls
 }
 
 /** A `fetch`-shaped fake that honours abort: rejects with an AbortError the moment `init.signal` is already (or becomes) aborted, otherwise defers to `respond`. */
-function abortableFetch(
-  respond: (call: Call) => Response,
-): { fetch: FetchLike; calls: Call[] } {
+function abortableFetch(respond: (call: Call) => Response): { fetch: FetchLike; calls: Call[] } {
   const calls: Call[] = [];
   const fetch: FetchLike = (input, init) => {
     const call: Call = {
@@ -105,9 +104,7 @@ function client(respond: (call: Call) => Response): { client: W6WClient; calls: 
 }
 
 /** A client wired to {@link abortableFetch}, for cancellation cases. */
-function abortableClient(
-  respond: (call: Call) => Response,
-): { client: W6WClient; calls: Call[] } {
+function abortableClient(respond: (call: Call) => Response): { client: W6WClient; calls: Call[] } {
   const fake = abortableFetch(respond);
   return {
     client: new W6WClient({
@@ -168,7 +165,7 @@ const CONFIG_A: OAuthConfigSummary = {
   updatedAt: "2026-07-01T00:00:00.000Z",
 };
 
-Deno.test("console.apps: all 16 methods are functions on a freshly constructed client", () => {
+test("console.apps: all 16 methods are functions on a freshly constructed client", () => {
   // Runtime, not type-level: a namespace that silently lost a method would
   // still typecheck everywhere else in this suite.
   const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
@@ -198,7 +195,7 @@ Deno.test("console.apps: all 16 methods are functions on a freshly constructed c
 
 // --- list(): pagination loop ------------------------------------------------
 
-Deno.test("console.apps.list follows nextCursor across pages and merges the results", async () => {
+test("console.apps.list follows nextCursor across pages and merges the results", async () => {
   const c = client((call) => {
     const cursor = new URL(call.url).searchParams.get("cursor");
     if (cursor === "c2") return json({ apps: [APP_B] });
@@ -216,7 +213,7 @@ Deno.test("console.apps.list follows nextCursor across pages and merges the resu
   assertEquals(c.calls[1].url.includes("cursor=c2"), true);
 });
 
-Deno.test("console.apps.list stops when the server sends no nextCursor", async () => {
+test("console.apps.list stops when the server sends no nextCursor", async () => {
   const c = client(() => json({ apps: [APP_A] }));
 
   const res = await c.client.console.apps.list();
@@ -225,45 +222,42 @@ Deno.test("console.apps.list stops when the server sends no nextCursor", async (
   assertEquals(c.calls.length, 1);
 });
 
-Deno.test(
-  "console.apps.list carries supportsOAuth and owner through untouched",
-  async () => {
-    // The server always sends both (`api/wire-summary.ts:81` computes
-    // `supportsOAuth`; `owner` at `:57` has shipped since T2.2). `list` must
-    // pass the summaries through, not project a field list of its own — a
-    // mutant that re-mapped each page would drop exactly these two.
-    const GLOBAL: AppSummary = {
-      ...APP_A,
-      supportsOAuth: true,
-      owner: { tenant: "", subject: "" },
-    };
-    const TENANT_OWNED: AppSummary = {
-      ...APP_B,
-      supportsOAuth: false,
-      owner: { tenant: "ten_1", subject: "" },
-    };
-    const USER_OWNED: AppSummary = {
-      ...APP_B,
-      id: "app_3",
-      supportsOAuth: true,
-      owner: { tenant: "ten_1", subject: "usr_1" },
-    };
-    const c = client(() => json({ apps: [GLOBAL, TENANT_OWNED, USER_OWNED] }));
+test("console.apps.list carries supportsOAuth and owner through untouched", async () => {
+  // The server always sends both (`api/wire-summary.ts:81` computes
+  // `supportsOAuth`; `owner` at `:57` has shipped since T2.2). `list` must
+  // pass the summaries through, not project a field list of its own — a
+  // mutant that re-mapped each page would drop exactly these two.
+  const GLOBAL: AppSummary = {
+    ...APP_A,
+    supportsOAuth: true,
+    owner: { tenant: "", subject: "" },
+  };
+  const TENANT_OWNED: AppSummary = {
+    ...APP_B,
+    supportsOAuth: false,
+    owner: { tenant: "ten_1", subject: "" },
+  };
+  const USER_OWNED: AppSummary = {
+    ...APP_B,
+    id: "app_3",
+    supportsOAuth: true,
+    owner: { tenant: "ten_1", subject: "usr_1" },
+  };
+  const c = client(() => json({ apps: [GLOBAL, TENANT_OWNED, USER_OWNED] }));
 
-    const res = await c.client.console.apps.list();
+  const res = await c.client.console.apps.list();
 
-    assertEquals(res, [GLOBAL, TENANT_OWNED, USER_OWNED]);
-    // The sentinel semantics the doc comment states, exercised over real
-    // values: only an app with an EMPTY `owner.tenant` is global, and the
-    // tenant OAuth route accepts nothing else.
-    assertEquals(
-      res.filter((a) => a.owner?.tenant === "" && a.supportsOAuth).map((a) => a.id),
-      ["app_1"],
-    );
-  },
-);
+  assertEquals(res, [GLOBAL, TENANT_OWNED, USER_OWNED]);
+  // The sentinel semantics the doc comment states, exercised over real
+  // values: only an app with an EMPTY `owner.tenant` is global, and the
+  // tenant OAuth route accepts nothing else.
+  assertEquals(
+    res.filter((a) => a.owner?.tenant === "" && a.supportsOAuth).map((a) => a.id),
+    ["app_1"],
+  );
+});
 
-Deno.test("AppSummary's two new fields are OPTIONAL — an older host still satisfies it", () => {
+test("AppSummary's two new fields are OPTIONAL — an older host still satisfies it", () => {
   // APP_A/APP_B above already carry neither field; this states the rule the
   // rest of the suite depends on out loud, and would fail to COMPILE (not to
   // run) the moment either field were declared required.
@@ -282,7 +276,7 @@ Deno.test("AppSummary's two new fields are OPTIONAL — an older host still sati
 
 // --- listPage(): one bounded request, wire-field forwarding ----------------
 
-Deno.test("console.apps.listPage sends exactly ONE request and resolves the page verbatim", async () => {
+test("console.apps.listPage sends exactly ONE request and resolves the page verbatim", async () => {
   const c = client(() => json({ apps: [APP_A], nextCursor: "c2" }));
 
   const res = await c.client.console.apps.listPage();
@@ -292,7 +286,7 @@ Deno.test("console.apps.listPage sends exactly ONE request and resolves the page
   assertEquals(c.calls[0].method, "GET");
 });
 
-Deno.test("console.apps.listPage forwards every supplied option under its own wire name", async () => {
+test("console.apps.listPage forwards every supplied option under its own wire name", async () => {
   const c = client(() => json({ apps: [] }));
 
   await c.client.console.apps.listPage({
@@ -328,7 +322,7 @@ Deno.test("console.apps.listPage forwards every supplied option under its own wi
   assertEquals(url.searchParams.get("compact"), "true");
 });
 
-Deno.test("console.apps.listPage sends hasTriggers=false and omits it when undefined", async () => {
+test("console.apps.listPage sends hasTriggers=false and omits it when undefined", async () => {
   const c = client(() => json({ apps: [] }));
   await c.client.console.apps.listPage({ hasTriggers: false });
   await c.client.console.apps.listPage({});
@@ -338,7 +332,7 @@ Deno.test("console.apps.listPage sends hasTriggers=false and omits it when undef
   assertEquals(omitted.searchParams.has("hasTriggers"), false);
 });
 
-Deno.test("console.apps.listPage drops OMITTED options from the query string entirely", async () => {
+test("console.apps.listPage drops OMITTED options from the query string entirely", async () => {
   const c = client(() => json({ apps: [] }));
 
   await c.client.console.apps.listPage({ q: "x" });
@@ -352,22 +346,19 @@ Deno.test("console.apps.listPage drops OMITTED options from the query string ent
   assertEquals(url.searchParams.get("q"), "x");
 });
 
-Deno.test(
-  "console.apps.listPage sends an EXPLICIT false for managed/compact, never dropping it like undefined",
-  async () => {
-    const c = client(() => json({ apps: [] }));
+test("console.apps.listPage sends an EXPLICIT false for managed/compact, never dropping it like undefined", async () => {
+  const c = client(() => json({ apps: [] }));
 
-    await c.client.console.apps.listPage({ managed: false, compact: false });
+  await c.client.console.apps.listPage({ managed: false, compact: false });
 
-    const url = new URL(c.calls[0].url);
-    assertEquals(url.searchParams.get("managed"), "false");
-    assertEquals(url.searchParams.get("compact"), "false");
-  },
-);
+  const url = new URL(c.calls[0].url);
+  assertEquals(url.searchParams.get("managed"), "false");
+  assertEquals(url.searchParams.get("compact"), "false");
+});
 
 // --- listPage({ ids }): CSV forwarding, no chunking -------------------------
 
-Deno.test("console.apps.listPage sends a supplied ids array as CSV", async () => {
+test("console.apps.listPage sends a supplied ids array as CSV", async () => {
   const c = client(() => json({ apps: [] }));
 
   await c.client.console.apps.listPage({ ids: ["app_1", "app_2"] });
@@ -376,7 +367,7 @@ Deno.test("console.apps.listPage sends a supplied ids array as CSV", async () =>
   assertEquals(url.searchParams.get("ids"), "app_1,app_2");
 });
 
-Deno.test("console.apps.listPage with ids: [] still sends ids= (empty), never an unfiltered page", async () => {
+test("console.apps.listPage with ids: [] still sends ids= (empty), never an unfiltered page", async () => {
   const c = client(() => json({ apps: [] }));
 
   await c.client.console.apps.listPage({ ids: [] });
@@ -386,7 +377,7 @@ Deno.test("console.apps.listPage with ids: [] still sends ids= (empty), never an
   assertEquals(url.searchParams.get("ids"), "");
 });
 
-Deno.test("console.apps.listPage with ids OMITTED sends no ids key at all", async () => {
+test("console.apps.listPage with ids OMITTED sends no ids key at all", async () => {
   const c = client(() => json({ apps: [] }));
 
   await c.client.console.apps.listPage();
@@ -395,7 +386,7 @@ Deno.test("console.apps.listPage with ids OMITTED sends no ids key at all", asyn
   assertEquals(url.searchParams.has("ids"), false);
 });
 
-Deno.test("console.apps.listPage with 150 ids is still exactly ONE request — no chunking here", async () => {
+test("console.apps.listPage with 150 ids is still exactly ONE request — no chunking here", async () => {
   const ids = Array.from({ length: 150 }, (_, i) => `app_${i}`);
   const c = client(() => json({ apps: [] }));
 
@@ -406,7 +397,7 @@ Deno.test("console.apps.listPage with 150 ids is still exactly ONE request — n
   assertEquals(url.searchParams.get("ids"), ids.join(","));
 });
 
-Deno.test("console.apps.listPage with no options sends zero query params", async () => {
+test("console.apps.listPage with no options sends zero query params", async () => {
   const c = client(() => json({ apps: [] }));
 
   await c.client.console.apps.listPage();
@@ -414,7 +405,7 @@ Deno.test("console.apps.listPage with no options sends zero query params", async
   assertEquals(c.calls[0].url, "https://api.example.com/apps");
 });
 
-Deno.test("console.apps.listPage encodes a reserved character in q the same way path/query encoding always has", async () => {
+test("console.apps.listPage encodes a reserved character in q the same way path/query encoding always has", async () => {
   const c = client(() => json({ apps: [] }));
 
   await c.client.console.apps.listPage({ q: "a b&c" });
@@ -423,7 +414,7 @@ Deno.test("console.apps.listPage encodes a reserved character in q the same way 
   assertEquals(url.searchParams.get("q"), "a b&c");
 });
 
-Deno.test("console.apps.list still traverses cursors exactly as before, now implemented on listPage", async () => {
+test("console.apps.list still traverses cursors exactly as before, now implemented on listPage", async () => {
   const c = client((call) => {
     const cursor = new URL(call.url).searchParams.get("cursor");
     if (cursor === "c2") return json({ apps: [APP_B] });
@@ -439,64 +430,55 @@ Deno.test("console.apps.list still traverses cursors exactly as before, now impl
   assertEquals(c.calls[1].url.includes("cursor=c2"), true);
 });
 
-Deno.test(
-  "console.apps.listPage's signal reaches fetch's RequestInit but NEVER appears in the URL or body",
-  async () => {
-    const controller = new AbortController();
-    const c = client(() => json({ apps: [] }));
+test("console.apps.listPage's signal reaches fetch's RequestInit but NEVER appears in the URL or body", async () => {
+  const controller = new AbortController();
+  const c = client(() => json({ apps: [] }));
 
-    await c.client.console.apps.listPage({ q: "x", signal: controller.signal });
+  await c.client.console.apps.listPage({ q: "x", signal: controller.signal });
 
-    assertEquals(c.calls[0].signal, controller.signal);
-    const url = new URL(c.calls[0].url);
-    assertEquals(url.searchParams.has("signal"), false);
-    assertEquals(c.calls[0].body, null);
-  },
-);
+  assertEquals(c.calls[0].signal, controller.signal);
+  const url = new URL(c.calls[0].url);
+  assertEquals(url.searchParams.has("signal"), false);
+  assertEquals(c.calls[0].body, null);
+});
 
-Deno.test(
-  "console.apps.listPage: an aborted signal rejects with ApiError code 'cancelled', not network_error",
-  async () => {
-    const controller = new AbortController();
-    controller.abort();
-    const c = abortableClient(() => json({ apps: [] }));
+test("console.apps.listPage: an aborted signal rejects with ApiError code 'cancelled', not network_error", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const c = abortableClient(() => json({ apps: [] }));
 
-    const err = await assertRejects(
-      () => c.client.console.apps.listPage({ signal: controller.signal }),
-      ApiError,
-    );
+  const err = await assertRejects(
+    () => c.client.console.apps.listPage({ signal: controller.signal }),
+    ApiError,
+  );
 
-    assertEquals(err.status, 0);
-    assertEquals(err.code, "cancelled");
-  },
-);
+  assertEquals(err.status, 0);
+  assertEquals(err.code, "cancelled");
+});
 
-Deno.test(
-  "console.apps.listPage: a normal transport failure with an UNaborted signal is still network_error",
-  async () => {
-    const controller = new AbortController();
-    const fake: { fetch: FetchLike; calls: Call[] } = {
-      fetch: () => Promise.reject(new TypeError("Connection refused")),
-      calls: [],
-    };
-    const c = new W6WClient({
-      baseUrl: "https://api.example.com",
-      token: "tok_1",
-      fetch: fake.fetch,
-    });
+test("console.apps.listPage: a normal transport failure with an UNaborted signal is still network_error", async () => {
+  const controller = new AbortController();
+  const fake: { fetch: FetchLike; calls: Call[] } = {
+    fetch: () => Promise.reject(new TypeError("Connection refused")),
+    calls: [],
+  };
+  const c = new W6WClient({
+    baseUrl: "https://api.example.com",
+    token: "tok_1",
+    fetch: fake.fetch,
+  });
 
-    const err = await assertRejects(
-      () => c.console.apps.listPage({ signal: controller.signal }),
-      ApiError,
-    );
+  const err = await assertRejects(
+    () => c.console.apps.listPage({ signal: controller.signal }),
+    ApiError,
+  );
 
-    assertEquals(err.code, "network_error");
-  },
-);
+  assertEquals(err.code, "network_error");
+});
 
 // --- get / getActions / getHealth: three reads of one GET /apps/:id --------
 
-Deno.test("console.apps.get resolves the WHOLE AppDetail body", async () => {
+test("console.apps.get resolves the WHOLE AppDetail body", async () => {
   const c = client(() => json(APP_DETAIL));
 
   const res = await c.client.console.apps.get("app_1");
@@ -506,7 +488,7 @@ Deno.test("console.apps.get resolves the WHOLE AppDetail body", async () => {
   assertEquals(c.calls[0].url, "https://api.example.com/apps/app_1");
 });
 
-Deno.test("console.apps.getActions resolves ONLY the actions array, not the whole body", async () => {
+test("console.apps.getActions resolves ONLY the actions array, not the whole body", async () => {
   const c = client(() => json(APP_DETAIL));
 
   const res = await c.client.console.apps.getActions("app_1");
@@ -514,7 +496,7 @@ Deno.test("console.apps.getActions resolves ONLY the actions array, not the whol
   assertEquals(res, [ACTION_A]);
 });
 
-Deno.test("console.apps.getHealth resolves ONLY the health array, not the whole body", async () => {
+test("console.apps.getHealth resolves ONLY the health array, not the whole body", async () => {
   const c = client(() => json(APP_DETAIL));
 
   const res = await c.client.console.apps.getHealth("app_1");
@@ -541,7 +523,7 @@ const AUTH: AuthDef = {
   callbackUrl: "https://app.example.com/oauth/callback/app_1/oauth2",
 };
 
-Deno.test("console.apps.getAuth round-trips an entry-level callbackUrl and typed oauth2.setup", async () => {
+test("console.apps.getAuth round-trips an entry-level callbackUrl and typed oauth2.setup", async () => {
   const c = client(() => json({ auths: [AUTH] }));
 
   const [def] = await c.client.console.apps.getAuth("app_1");
@@ -576,7 +558,7 @@ const _upsertWithRedirect: UpsertOAuthConfigInput = {
   redirectUri: "https://x/cb",
 };
 
-Deno.test("console.apps: type-level witnesses are referenced", () => {
+test("console.apps: type-level witnesses are referenced", () => {
   assertEquals(
     [
       _badConsoleUrl,
@@ -593,7 +575,7 @@ Deno.test("console.apps: type-level witnesses are referenced", () => {
   );
 });
 
-Deno.test("console.apps.getAuth unwraps the auths envelope", async () => {
+test("console.apps.getAuth unwraps the auths envelope", async () => {
   const c = client(() => json({ auths: [AUTH_A] }));
 
   const res = await c.client.console.apps.getAuth("app_1");
@@ -603,7 +585,7 @@ Deno.test("console.apps.getAuth unwraps the auths envelope", async () => {
   assertEquals(c.calls[0].url, "https://api.example.com/apps/app_1/auths");
 });
 
-Deno.test("console.apps.getTriggers unwraps the triggers envelope", async () => {
+test("console.apps.getTriggers unwraps the triggers envelope", async () => {
   const c = client(() => json({ triggers: [TRIGGER_A] }));
 
   const res = await c.client.console.apps.getTriggers("app_1");
@@ -614,7 +596,7 @@ Deno.test("console.apps.getTriggers unwraps the triggers envelope", async () => 
 
 // --- no-envelope passthrough -------------------------------------------------
 
-Deno.test("console.apps.getHealthStatus resolves the body verbatim — no unwrap()", async () => {
+test("console.apps.getHealthStatus resolves the body verbatim — no unwrap()", async () => {
   const body: AppHealthStatus = { state: "ok", attributedTo: [], results: [] };
   const c = client(() => json(body));
 
@@ -624,7 +606,7 @@ Deno.test("console.apps.getHealthStatus resolves the body verbatim — no unwrap
   assertEquals(c.calls[0].url, "https://api.example.com/apps/app_1/health");
 });
 
-Deno.test("console.apps.startOAuthFlow resolves the body verbatim — no unwrap()", async () => {
+test("console.apps.startOAuthFlow resolves the body verbatim — no unwrap()", async () => {
   const body = {
     authorizationUrl: "https://provider.example.com/authorize",
     state: "s1",
@@ -641,7 +623,7 @@ Deno.test("console.apps.startOAuthFlow resolves the body verbatim — no unwrap(
   );
 });
 
-Deno.test("console.apps.preview resolves the body verbatim — kind: app", async () => {
+test("console.apps.preview resolves the body verbatim — kind: app", async () => {
   const body: PreviewSourceResponse = {
     kind: "app",
     sourceRef: "github:org/app",
@@ -654,7 +636,7 @@ Deno.test("console.apps.preview resolves the body verbatim — kind: app", async
   assertEquals(res, body);
 });
 
-Deno.test("console.apps.preview resolves the body verbatim — kind: pack", async () => {
+test("console.apps.preview resolves the body verbatim — kind: pack", async () => {
   const body: PreviewSourceResponse = {
     kind: "pack",
     sourceRef: "github:org/pack",
@@ -668,7 +650,7 @@ Deno.test("console.apps.preview resolves the body verbatim — kind: pack", asyn
   assertEquals(res, body);
 });
 
-Deno.test("console.apps.import resolves the body verbatim — kind: app", async () => {
+test("console.apps.import resolves the body verbatim — kind: app", async () => {
   const body: ImportResponse = {
     kind: "app",
     sourceRef: "github:org/app",
@@ -684,7 +666,7 @@ Deno.test("console.apps.import resolves the body verbatim — kind: app", async 
   assertEquals(res, body);
 });
 
-Deno.test("console.apps.import resolves the body verbatim — kind: pack", async () => {
+test("console.apps.import resolves the body verbatim — kind: pack", async () => {
   const body: ImportResponse = {
     kind: "pack",
     sourceRef: "github:org/pack",
@@ -709,7 +691,7 @@ Deno.test("console.apps.import resolves the body verbatim — kind: pack", async
   assertEquals(res, body);
 });
 
-Deno.test("console.apps.refresh resolves the body verbatim — no unwrap()", async () => {
+test("console.apps.refresh resolves the body verbatim — no unwrap()", async () => {
   const body: RefreshAppResponse = {
     app: { id: "app_1" },
     actions: [ACTION_A],
@@ -728,7 +710,7 @@ Deno.test("console.apps.refresh resolves the body verbatim — no unwrap()", asy
   assertEquals(res, body);
 });
 
-Deno.test("console.apps.invoke resolves the body verbatim — no unwrap()", async () => {
+test("console.apps.invoke resolves the body verbatim — no unwrap()", async () => {
   const body = {
     value: { ok: true },
     logs: ["step 1"],
@@ -743,7 +725,7 @@ Deno.test("console.apps.invoke resolves the body verbatim — no unwrap()", asyn
 
 // --- delete: returns the REAL value, not void -------------------------------
 
-Deno.test("console.apps.delete resolves {removed}, NOT undefined — the one delete asymmetry", async () => {
+test("console.apps.delete resolves {removed}, NOT undefined — the one delete asymmetry", async () => {
   const c = client(() => json({ removed: 3 }));
 
   const res = await c.client.console.apps.delete("app_1");
@@ -754,7 +736,7 @@ Deno.test("console.apps.delete resolves {removed}, NOT undefined — the one del
 
 // --- HITL-4 dead-code methods: one wire-shape assertion each ----------------
 
-Deno.test("console.apps.listOAuthConfig unwraps the configs envelope", async () => {
+test("console.apps.listOAuthConfig unwraps the configs envelope", async () => {
   const c = client(() => json({ configs: [CONFIG_A] }));
 
   const res = await c.client.console.apps.listOAuthConfig("app_1");
@@ -763,7 +745,7 @@ Deno.test("console.apps.listOAuthConfig unwraps the configs envelope", async () 
   assertEquals(c.calls[0].url, "https://api.example.com/apps/app_1/oauth-config");
 });
 
-Deno.test("console.apps.upsertOAuthConfig unwraps the config envelope", async () => {
+test("console.apps.upsertOAuthConfig unwraps the config envelope", async () => {
   const c = client(() => json({ config: CONFIG_A }, 201));
 
   const res = await c.client.console.apps.upsertOAuthConfig("app_1", "oauth2", {
@@ -774,7 +756,7 @@ Deno.test("console.apps.upsertOAuthConfig unwraps the config envelope", async ()
   assertEquals(res, CONFIG_A);
 });
 
-Deno.test("console.apps.deleteOAuthConfig discards {ok:true} and resolves undefined", async () => {
+test("console.apps.deleteOAuthConfig discards {ok:true} and resolves undefined", async () => {
   const c = client(() => json({ ok: true }));
 
   const res = await c.client.console.apps.deleteOAuthConfig("app_1", "oauth2");
@@ -786,7 +768,7 @@ Deno.test("console.apps.deleteOAuthConfig discards {ok:true} and resolves undefi
 
 // --- Body forwarding ---------------------------------------------------------
 
-Deno.test("console.apps.upsertOAuthConfig sends the body verbatim", async () => {
+test("console.apps.upsertOAuthConfig sends the body verbatim", async () => {
   const c = client(() => json({ config: CONFIG_A }, 201));
 
   await c.client.console.apps.upsertOAuthConfig("app_1", "oauth2", {
@@ -800,7 +782,7 @@ Deno.test("console.apps.upsertOAuthConfig sends the body verbatim", async () => 
   });
 });
 
-Deno.test("console.apps.invoke sends { params, ...opts } verbatim", async () => {
+test("console.apps.invoke sends { params, ...opts } verbatim", async () => {
   const c = client(() => json({ value: null }));
 
   await c.client.console.apps.invoke("app_1", "send", { a: 1 }, { connectionId: "conn_1" });
@@ -815,15 +797,20 @@ Deno.test("console.apps.invoke sends { params, ...opts } verbatim", async () => 
 // `{{ steps.<id>.output.<field> }}` in a step test resolves to "" while the
 // editor's local preview still shows the right value. Assert the WHOLE body, so
 // a dropped key is a failure rather than an absence nobody looks for.
-Deno.test("console.apps.invoke forwards project and state, not just connectionId", async () => {
+test("console.apps.invoke forwards project and state, not just connectionId", async () => {
   const c = client(() => json({ value: null }));
   const state = { steps: { gate_1: { output: { email: "a@b.com" } } } };
 
-  await c.client.console.apps.invoke("app_1", "send", { a: 1 }, {
-    connectionId: "conn_1",
-    project: "prj_9",
-    state,
-  });
+  await c.client.console.apps.invoke(
+    "app_1",
+    "send",
+    { a: 1 },
+    {
+      connectionId: "conn_1",
+      project: "prj_9",
+      state,
+    },
+  );
 
   assertEquals(JSON.parse(c.calls[0].body ?? "null"), {
     params: { a: 1 },
@@ -833,7 +820,7 @@ Deno.test("console.apps.invoke forwards project and state, not just connectionId
   });
 });
 
-Deno.test("console.apps.invoke carries state alone, with no connection", async () => {
+test("console.apps.invoke carries state alone, with no connection", async () => {
   const c = client(() => json({ value: null }));
   const state = { trigger: { event: { id: 7 } } };
 
@@ -842,7 +829,7 @@ Deno.test("console.apps.invoke carries state alone, with no connection", async (
   assertEquals(JSON.parse(c.calls[0].body ?? "null"), { params: {}, state });
 });
 
-Deno.test("console.apps.preview sends { source } with no refresh key when opts.refresh is omitted", async () => {
+test("console.apps.preview sends { source } with no refresh key when opts.refresh is omitted", async () => {
   const c = client(() => json({ kind: "app", sourceRef: "s", app: {} }));
 
   await c.client.console.apps.preview("github:org/app");
@@ -850,7 +837,7 @@ Deno.test("console.apps.preview sends { source } with no refresh key when opts.r
   assertEquals(JSON.parse(c.calls[0].body ?? "null"), { source: "github:org/app" });
 });
 
-Deno.test("console.apps.preview sends { source, refresh: true } when opts.refresh is set", async () => {
+test("console.apps.preview sends { source, refresh: true } when opts.refresh is set", async () => {
   const c = client(() => json({ kind: "app", sourceRef: "s", app: {} }));
 
   await c.client.console.apps.preview("github:org/app", { refresh: true });
@@ -858,7 +845,7 @@ Deno.test("console.apps.preview sends { source, refresh: true } when opts.refres
   assertEquals(JSON.parse(c.calls[0].body ?? "null"), { source: "github:org/app", refresh: true });
 });
 
-Deno.test("console.apps.import sends { source, paths, refresh } only when given", async () => {
+test("console.apps.import sends { source, paths, refresh } only when given", async () => {
   const c = client(() =>
     json({
       kind: "app",
@@ -867,7 +854,7 @@ Deno.test("console.apps.import sends { source, paths, refresh } only when given"
       actions: [],
       registered: true,
       latestAdvanced: true,
-    })
+    }),
   );
 
   await c.client.console.apps.import("github:org/pack", { paths: ["a", "b"], refresh: true });
@@ -879,7 +866,7 @@ Deno.test("console.apps.import sends { source, paths, refresh } only when given"
   });
 });
 
-Deno.test("console.apps.import sends { source } only when opts is omitted", async () => {
+test("console.apps.import sends { source } only when opts is omitted", async () => {
   const c = client(() =>
     json({
       kind: "app",
@@ -888,7 +875,7 @@ Deno.test("console.apps.import sends { source } only when opts is omitted", asyn
       actions: [],
       registered: true,
       latestAdvanced: true,
-    })
+    }),
   );
 
   await c.client.console.apps.import("github:org/app");
@@ -896,7 +883,7 @@ Deno.test("console.apps.import sends { source } only when opts is omitted", asyn
   assertEquals(JSON.parse(c.calls[0].body ?? "null"), { source: "github:org/app" });
 });
 
-Deno.test("console.apps.refresh sends { force: true } only when opts.force is set", async () => {
+test("console.apps.refresh sends { force: true } only when opts.force is set", async () => {
   const c = client(() =>
     json({
       app: {},
@@ -908,7 +895,7 @@ Deno.test("console.apps.refresh sends { force: true } only when opts.force is se
       latestAdvanced: false,
       bumped: false,
       sourceVersion: "1.0.0",
-    })
+    }),
   );
 
   await c.client.console.apps.refresh("app_1", { force: true });
@@ -916,7 +903,7 @@ Deno.test("console.apps.refresh sends { force: true } only when opts.force is se
   assertEquals(JSON.parse(c.calls[0].body ?? "null"), { force: true });
 });
 
-Deno.test("console.apps.refresh sends {} when opts is omitted", async () => {
+test("console.apps.refresh sends {} when opts is omitted", async () => {
   const c = client(() =>
     json({
       app: {},
@@ -928,7 +915,7 @@ Deno.test("console.apps.refresh sends {} when opts is omitted", async () => {
       latestAdvanced: false,
       bumped: false,
       sourceVersion: "1.0.0",
-    })
+    }),
   );
 
   await c.client.console.apps.refresh("app_1");
@@ -938,7 +925,7 @@ Deno.test("console.apps.refresh sends {} when opts is omitted", async () => {
 
 // --- Path-segment encoding ----------------------------------------------------
 
-Deno.test("console.apps.get percent-encodes the id via the `path` tag, not string concatenation", async () => {
+test("console.apps.get percent-encodes the id via the `path` tag, not string concatenation", async () => {
   const c = client(() => json(APP_DETAIL));
 
   await c.client.console.apps.get("app a");
@@ -946,7 +933,7 @@ Deno.test("console.apps.get percent-encodes the id via the `path` tag, not strin
   assertEquals(c.calls[0].url, "https://api.example.com/apps/app%20a");
 });
 
-Deno.test("console.apps.getAuth percent-encodes the id via the `path` tag", async () => {
+test("console.apps.getAuth percent-encodes the id via the `path` tag", async () => {
   const c = client(() => json({ auths: [] }));
 
   await c.client.console.apps.getAuth("app a");
@@ -954,7 +941,7 @@ Deno.test("console.apps.getAuth percent-encodes the id via the `path` tag", asyn
   assertEquals(c.calls[0].url, "https://api.example.com/apps/app%20a/auths");
 });
 
-Deno.test("console.apps.delete percent-encodes the id via the `path` tag", async () => {
+test("console.apps.delete percent-encodes the id via the `path` tag", async () => {
   const c = client(() => json({ removed: 0 }));
 
   await c.client.console.apps.delete("app a");
@@ -964,7 +951,8 @@ Deno.test("console.apps.delete percent-encodes the id via the `path` tag", async
 
 // --- step meta ---------------------------------------------------------------
 
-type Equals<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true
+type Equals<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+  ? true
   : false;
 type InvokeResult = Awaited<ReturnType<AppsApi["invoke"]>>;
 
@@ -979,7 +967,7 @@ const _stateMeta: Equals<
   StepMeta | undefined
 > = true;
 
-Deno.test("console.apps.invoke returns a top-level meta verbatim (meta with null connectionId)", async () => {
+test("console.apps.invoke returns a top-level meta verbatim (meta with null connectionId)", async () => {
   const meta: StepMeta = {
     app: "@w6w/http",
     version: "1.0.0",
@@ -995,7 +983,7 @@ Deno.test("console.apps.invoke returns a top-level meta verbatim (meta with null
   assertEquals(res.meta?.connectionId, null);
 });
 
-Deno.test("console.apps.invoke leaves meta absent when the host sent none — no filler", async () => {
+test("console.apps.invoke leaves meta absent when the host sent none — no filler", async () => {
   const c = client(() => json({ value: 1 }));
 
   const res = await c.client.console.apps.invoke("app_1", "act", {});
@@ -1004,7 +992,7 @@ Deno.test("console.apps.invoke leaves meta absent when the host sent none — no
   assertEquals(res, { value: 1 });
 });
 
-Deno.test("console.apps.invoke posts a start-state step meta verbatim", async () => {
+test("console.apps.invoke posts a start-state step meta verbatim", async () => {
   const meta: StepMeta = { app: "a", version: "1", action: "x", connectionId: "conn_1" };
   const c = client(() => json({ value: 1 }));
   const state: InvokeStartState = { steps: { s1: { output: { n: 1 }, meta } } };
@@ -1016,7 +1004,7 @@ Deno.test("console.apps.invoke posts a start-state step meta verbatim", async ()
 
 // --- listPage(): snapshot fields; list(): one-snapshot walk + restart-once ---
 
-Deno.test("console.apps.listPage forwards snapshot/offset in wire order (offset 0 sent) and resolves the snapshot fields", async () => {
+test("console.apps.listPage forwards snapshot/offset in wire order (offset 0 sent) and resolves the snapshot fields", async () => {
   const body = { apps: [], snapshot: "lsn_s", total: 7, offset: 0, limit: 50, expiresAt: "E" };
   const c = client(() => json(body));
 
@@ -1062,13 +1050,11 @@ const RESTART_PATHS = [
   "/apps?limit=200&cursor=d2",
 ];
 
-for (
-  const gone of [
-    { status: 410, code: "snapshot_expired" },
-    { status: 404, code: "unknown_snapshot" },
-  ]
-) {
-  Deno.test(`console.apps.list restarts once on ${gone.code} mid-walk, discarding the abandoned walk`, async () => {
+for (const gone of [
+  { status: 410, code: "snapshot_expired" },
+  { status: 404, code: "unknown_snapshot" },
+]) {
+  test(`console.apps.list restarts once on ${gone.code} mid-walk, discarding the abandoned walk`, async () => {
     restartCalls.n = 0;
     const c = restartingFake(gone);
 
@@ -1082,7 +1068,7 @@ for (
   });
 }
 
-Deno.test("console.apps.list rejects with the ApiError after exactly both attempts when the restart also expires", async () => {
+test("console.apps.list rejects with the ApiError after exactly both attempts when the restart also expires", async () => {
   let n = 0;
   const c = client(() => {
     n++;
@@ -1099,14 +1085,12 @@ Deno.test("console.apps.list rejects with the ApiError after exactly both attemp
   assertEquals(c.calls.length, 4);
 });
 
-for (
-  const other of [
-    { status: 500, code: "internal" },
-    { status: 404, code: "not_found" },
-    { status: 400, code: "invalid_cursor" },
-  ]
-) {
-  Deno.test(`console.apps.list does not restart on ${other.code}/${other.status}`, async () => {
+for (const other of [
+  { status: 500, code: "internal" },
+  { status: 404, code: "not_found" },
+  { status: 400, code: "invalid_cursor" },
+]) {
+  test(`console.apps.list does not restart on ${other.code}/${other.status}`, async () => {
     let n = 0;
     const c = client(() => {
       n++;
@@ -1123,7 +1107,7 @@ for (
 
 // --- keep-alive (contract 0.19.0) --------------------------------------------
 
-Deno.test("console.apps.getAuth carries refreshable and the declared TTLs; an older server omits them", async () => {
+test("console.apps.getAuth carries refreshable and the declared TTLs; an older server omits them", async () => {
   const current: AuthDef = {
     ...AUTH_A,
     refreshable: true,
@@ -1143,7 +1127,7 @@ Deno.test("console.apps.getAuth carries refreshable and the declared TTLs; an ol
   assertEquals(legacy.refreshTokenTtlSeconds, undefined);
 });
 
-Deno.test("console.apps.startOAuthFlow sends autoRefresh only when given", async () => {
+test("console.apps.startOAuthFlow sends autoRefresh only when given", async () => {
   const body = {
     authorizationUrl: "https://provider.example.com/authorize",
     state: "s",

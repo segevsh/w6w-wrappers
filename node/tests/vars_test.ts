@@ -8,7 +8,8 @@
  * client's default scope would be sending an argument the server ignores.
  */
 
-import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects, assertStringIncludes } from "./assert.ts";
 import { W6WClient } from "../src/client.ts";
 import type { FetchLike } from "../src/config.ts";
 import { ApiError } from "../src/errors.ts";
@@ -73,7 +74,7 @@ function client(respond: (call: Call) => Response): { client: W6WClient; calls: 
   };
 }
 
-Deno.test("vars: all six operations are functions on a constructed client", () => {
+test("vars: all six operations are functions on a constructed client", () => {
   // Runtime, not type-level: a namespace that silently lost a method would
   // still typecheck everywhere else in this suite.
   const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
@@ -82,7 +83,7 @@ Deno.test("vars: all six operations are functions on a constructed client", () =
   }
 });
 
-Deno.test("vars.list unwraps the envelope and returns the array", async () => {
+test("vars.list unwraps the envelope and returns the array", async () => {
   const c = client(() => json({ vars: [VAR] }));
 
   const vars = await c.client.vars.list();
@@ -94,7 +95,7 @@ Deno.test("vars.list unwraps the envelope and returns the array", async () => {
   assertEquals(c.calls[0].headers.get("authorization"), "Bearer tok_1");
 });
 
-Deno.test("no var operation ever sends a query string, even with one configured", async () => {
+test("no var operation ever sends a query string, even with one configured", async () => {
   // The client below carries a default scope, and documents would forward it.
   // Variables are not scoped that way server-side — the `vars` table has no
   // such column and no `vars` route reads the parameter — so forwarding it
@@ -115,17 +116,20 @@ Deno.test("no var operation ever sends a query string, even with one configured"
   for (const call of ok.calls) {
     assertEquals(call.url.includes("?"), false, `unexpected query string: ${call.url}`);
   }
-  assertEquals(ok.calls.map((call) => call.url), [
-    "https://api.example.com/vars",
-    "https://api.example.com/vars/var_1",
-    "https://api.example.com/vars/by-name/sender_email",
-    "https://api.example.com/vars",
-    "https://api.example.com/vars/var_1",
-    "https://api.example.com/vars/var_1",
-  ]);
+  assertEquals(
+    ok.calls.map((call) => call.url),
+    [
+      "https://api.example.com/vars",
+      "https://api.example.com/vars/var_1",
+      "https://api.example.com/vars/by-name/sender_email",
+      "https://api.example.com/vars",
+      "https://api.example.com/vars/var_1",
+      "https://api.example.com/vars/var_1",
+    ],
+  );
 });
 
-Deno.test("vars.get reads the singular `var` envelope key", async () => {
+test("vars.get reads the singular `var` envelope key", async () => {
   // `var` is a reserved word in TypeScript, so the key is read as a property
   // and never destructured into a binding of that name.
   const c = client(() => json({ var: VAR }));
@@ -136,7 +140,7 @@ Deno.test("vars.get reads the singular `var` envelope key", async () => {
   assertEquals(c.calls[0].url, "https://api.example.com/vars/var_1");
 });
 
-Deno.test("vars.getByName addresses the by-name route with the name encoded", async () => {
+test("vars.getByName addresses the by-name route with the name encoded", async () => {
   const c = client(() => json({ var: VAR }));
 
   await c.client.vars.getByName("sender_email");
@@ -149,7 +153,7 @@ Deno.test("vars.getByName addresses the by-name route with the name encoded", as
   assertEquals(c.calls[1].url, "https://api.example.com/vars/by-name/a%2Fb%20c");
 });
 
-Deno.test("vars.create posts name+type+value+description and accepts 201", async () => {
+test("vars.create posts name+type+value+description and accepts 201", async () => {
   const c = client(() => json({ var: VAR }, 201));
 
   const created = await c.client.vars.create({
@@ -171,7 +175,7 @@ Deno.test("vars.create posts name+type+value+description and accepts 201", async
   });
 });
 
-Deno.test("vars.create passes a json value through opaquely", async () => {
+test("vars.create passes a json value through opaquely", async () => {
   // `value` is `unknown` on purpose: it is whatever the declared type allows,
   // including an arbitrary document, and the wrapper models none of it.
   const c = client(() => json({ var: VAR }, 201));
@@ -185,7 +189,7 @@ Deno.test("vars.create passes a json value through opaquely", async () => {
   });
 });
 
-Deno.test("vars.update patches by id and cannot carry a name", async () => {
+test("vars.update patches by id and cannot carry a name", async () => {
   const c = client(() => json({ var: VAR }));
 
   const updated = await c.client.vars.update("var_1", { value: "new@example.com" });
@@ -203,7 +207,7 @@ Deno.test("vars.update patches by id and cannot carry a name", async () => {
   assertEquals(JSON.parse(c.calls[1].body ?? "null"), { value: 1 });
 });
 
-Deno.test("vars.delete returns nothing rather than {ok:true}", async () => {
+test("vars.delete returns nothing rather than {ok:true}", async () => {
   const c = client(() => json({ ok: true }));
 
   const result = await c.client.vars.delete("var_1");
@@ -214,7 +218,7 @@ Deno.test("vars.delete returns nothing rather than {ok:true}", async () => {
   assertEquals(c.calls[0].body, null);
 });
 
-Deno.test("vars: a 404 unknown_var reaches the caller as an ApiError", async () => {
+test("vars: a 404 unknown_var reaches the caller as an ApiError", async () => {
   const c = client(() => json({ error: { code: "unknown_var", message: "No such." } }, 404));
 
   const err = await assertRejects(() => c.client.vars.get("var_missing"), ApiError);
@@ -224,9 +228,9 @@ Deno.test("vars: a 404 unknown_var reaches the caller as an ApiError", async () 
   assertEquals(err.message, "No such.");
 });
 
-Deno.test("vars: a 409 var_exists surfaces its code, unswallowed", async () => {
+test("vars: a 409 var_exists surfaces its code, unswallowed", async () => {
   const c = client(() =>
-    json({ error: { code: "var_exists", message: "Name taken." } }, 409, "Conflict")
+    json({ error: { code: "var_exists", message: "Name taken." } }, 409, "Conflict"),
   );
 
   const err = await assertRejects(
@@ -238,7 +242,7 @@ Deno.test("vars: a 409 var_exists surfaces its code, unswallowed", async () => {
   assertEquals(err.code, "var_exists");
 });
 
-Deno.test("vars: the id is percent-encoded into every id-addressed route", async () => {
+test("vars: the id is percent-encoded into every id-addressed route", async () => {
   // Same gap as the documents suite: every id fixture here is `var_1`, which
   // encodes to itself, so dropping the `path` tag from `vars.get` left all gates
   // green. An id carrying a `/` makes the tag load-bearing.
@@ -253,7 +257,7 @@ Deno.test("vars: the id is percent-encoded into every id-addressed route", async
   assertEquals(c.calls[2].url, "https://api.example.com/vars/var%2F1");
 });
 
-Deno.test("vars.delete does not swallow a 404 — it is not a silent success", async () => {
+test("vars.delete does not swallow a 404 — it is not a silent success", async () => {
   const c = client(() => json({ error: { code: "unknown_var", message: "No such." } }, 404));
 
   const err = await assertRejects(() => c.client.vars.delete("var_missing"), ApiError);
@@ -262,7 +266,7 @@ Deno.test("vars.delete does not swallow a 404 — it is not a silent success", a
   assertEquals(err.code, "unknown_var");
 });
 
-Deno.test("vars: an envelope key present but null is bad_response, not null", async () => {
+test("vars: an envelope key present but null is bad_response, not null", async () => {
   // A JSON null used to resolve `vars.get()` to `null` typed `Var`.
   const single = client(() => json({ var: null }));
   const errSingle = await assertRejects(() => single.client.vars.get("var_1"), ApiError);
@@ -275,7 +279,7 @@ Deno.test("vars: an envelope key present but null is bad_response, not null", as
   assertStringIncludes(errMany.message, '"vars"');
 });
 
-Deno.test("vars: a 200 missing its envelope key is bad_response, not undefined", async () => {
+test("vars: a 200 missing its envelope key is bad_response, not undefined", async () => {
   const c = client(() => json({ unexpected: true }));
 
   const err = await assertRejects(() => c.client.vars.list(), ApiError);

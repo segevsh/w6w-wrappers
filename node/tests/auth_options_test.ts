@@ -7,7 +7,8 @@
  * so no new test infrastructure is needed (`docs/implementation.md` §9).
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects } from "./assert.ts";
 import { W6WClient } from "../src/client.ts";
 import { type FetchLike, resolveConfig, type TokenProvider } from "../src/config.ts";
 import { ApiError, ConfigError } from "../src/errors.ts";
@@ -52,7 +53,7 @@ function unauthorized(message = "Token expired."): Response {
 // acc.1 — the supplier is called fresh on every request, awaited, validated
 // ---------------------------------------------------------------------------
 
-Deno.test("a function token is called fresh on every request — two calls, two different bearers", async () => {
+test("a function token is called fresh on every request — two calls, two different bearers", async () => {
   let n = 0;
   const token: TokenProvider = () => `tok_${++n}`;
   const config = resolveConfig({ baseUrl: "https://api.example.com", token });
@@ -66,7 +67,7 @@ Deno.test("a function token is called fresh on every request — two calls, two 
   assertEquals(fake.calls[1].headers.get("authorization"), "Bearer tok_2");
 });
 
-Deno.test("a Promise-returning provider is awaited — never the literal '[object Promise]'", async () => {
+test("a Promise-returning provider is awaited — never the literal '[object Promise]'", async () => {
   const token: TokenProvider = () => Promise.resolve("tok_async");
   const config = resolveConfig({ baseUrl: "https://api.example.com", token });
   const fake = fakeFetch(() => json({ ok: true }));
@@ -76,7 +77,7 @@ Deno.test("a Promise-returning provider is awaited — never the literal '[objec
   assertEquals(fake.calls[0].headers.get("authorization"), "Bearer tok_async");
 });
 
-Deno.test("a nullish provider result raises the same ConfigError, with ZERO transport calls", async () => {
+test("a nullish provider result raises the same ConfigError, with ZERO transport calls", async () => {
   const token: TokenProvider = () => null;
   const config = resolveConfig({ baseUrl: "https://api.example.com", token });
   const fake = fakeFetch(() => json({ ok: true }));
@@ -96,7 +97,7 @@ Deno.test("a nullish provider result raises the same ConfigError, with ZERO tran
   assertEquals(fake.calls.length, 0);
 });
 
-Deno.test("a blank (whitespace-only) provider result is treated exactly like a nullish one", async () => {
+test("a blank (whitespace-only) provider result is treated exactly like a nullish one", async () => {
   const token: TokenProvider = () => "   ";
   const config = resolveConfig({ baseUrl: "https://api.example.com", token });
   const fake = fakeFetch(() => json({ ok: true }));
@@ -108,7 +109,7 @@ Deno.test("a blank (whitespace-only) provider result is treated exactly like a n
   assertEquals(fake.calls.length, 0);
 });
 
-Deno.test("a plain string token behaves exactly as before — same bearer, every call", async () => {
+test("a plain string token behaves exactly as before — same bearer, every call", async () => {
   const config = resolveConfig({ baseUrl: "https://api.example.com", token: "tok_static" });
   const fake = fakeFetch(() => json({ ok: true }));
 
@@ -123,37 +124,34 @@ Deno.test("a plain string token behaves exactly as before — same bearer, every
 // acc.2 — never echo a token value, including on the recovery-failure path
 // ---------------------------------------------------------------------------
 
-Deno.test(
-  "a failed recovery attempt (blank refreshed token) never echoes the ORIGINAL token into the thrown error",
-  async () => {
-    const config = resolveConfig({
-      baseUrl: "https://api.example.com",
-      // A secret-looking value on the normal call — so an accidental
-      // interpolation anywhere in the error path would be obvious — that goes
-      // blank (not nullish) only on the forced-refresh call.
-      token: (ctx) => (ctx?.forceRefresh ? "   " : "tok_SECRET_do_not_leak"),
-      refreshOnUnauthorized: true,
-    });
-    const fake = fakeFetch(() => unauthorized());
+test("a failed recovery attempt (blank refreshed token) never echoes the ORIGINAL token into the thrown error", async () => {
+  const config = resolveConfig({
+    baseUrl: "https://api.example.com",
+    // A secret-looking value on the normal call — so an accidental
+    // interpolation anywhere in the error path would be obvious — that goes
+    // blank (not nullish) only on the forced-refresh call.
+    token: (ctx) => (ctx?.forceRefresh ? "   " : "tok_SECRET_do_not_leak"),
+    refreshOnUnauthorized: true,
+  });
+  const fake = fakeFetch(() => unauthorized());
 
-    const err = await assertRejects(
-      () => request(config, fake.fetch, { method: "GET", path: "/vars" }),
-      ApiError,
-    );
+  const err = await assertRejects(
+    () => request(config, fake.fetch, { method: "GET", path: "/vars" }),
+    ApiError,
+  );
 
-    assertEquals(err.status, 401);
-    // The refresh was attempted (that's covered below); it yielded nothing
-    // usable, so there is no retry — exactly the original call.
-    assertEquals(fake.calls.length, 1);
-    assertEquals(err.message.includes("tok_SECRET_do_not_leak"), false);
-  },
-);
+  assertEquals(err.status, 401);
+  // The refresh was attempted (that's covered below); it yielded nothing
+  // usable, so there is no retry — exactly the original call.
+  assertEquals(fake.calls.length, 1);
+  assertEquals(err.message.includes("tok_SECRET_do_not_leak"), false);
+});
 
 // ---------------------------------------------------------------------------
 // acc.3 — opt-in one-shot 401 recovery
 // ---------------------------------------------------------------------------
 
-Deno.test("refreshOnUnauthorized defaults to false — one call, the 401 is thrown, unchanged", async () => {
+test("refreshOnUnauthorized defaults to false — one call, the 401 is thrown, unchanged", async () => {
   let providerCalls = 0;
   const token: TokenProvider = () => {
     providerCalls++;
@@ -172,43 +170,40 @@ Deno.test("refreshOnUnauthorized defaults to false — one call, the 401 is thro
   assertEquals(providerCalls, 1);
 });
 
-Deno.test(
-  "refreshOnUnauthorized: true — exactly one forced refresh and one retry, the SAME method/path/query",
-  async () => {
-    const ctxSeen: Array<{ forceRefresh?: boolean } | undefined> = [];
-    let n = 0;
-    const token: TokenProvider = (ctx) => {
-      ctxSeen.push(ctx);
-      n += 1;
-      return n === 1 ? "tok_old" : "tok_new";
-    };
-    const config = resolveConfig({
-      baseUrl: "https://api.example.com",
-      token,
-      refreshOnUnauthorized: true,
-    });
-    let attempt = 0;
-    const fake = fakeFetch(() => (attempt++ === 0 ? unauthorized() : json({ ok: true })));
+test("refreshOnUnauthorized: true — exactly one forced refresh and one retry, the SAME method/path/query", async () => {
+  const ctxSeen: Array<{ forceRefresh?: boolean } | undefined> = [];
+  let n = 0;
+  const token: TokenProvider = (ctx) => {
+    ctxSeen.push(ctx);
+    n += 1;
+    return n === 1 ? "tok_old" : "tok_new";
+  };
+  const config = resolveConfig({
+    baseUrl: "https://api.example.com",
+    token,
+    refreshOnUnauthorized: true,
+  });
+  let attempt = 0;
+  const fake = fakeFetch(() => (attempt++ === 0 ? unauthorized() : json({ ok: true })));
 
-    const res = await request(config, fake.fetch, {
-      method: "GET",
-      path: "/vars",
-      query: { project: "prj_1" },
-    });
+  const res = await request(config, fake.fetch, {
+    method: "GET",
+    path: "/vars",
+    query: { project: "prj_1" },
+  });
 
-    assertEquals(res.body, { ok: true });
-    assertEquals(fake.calls.length, 2);
-    assertEquals(fake.calls[0].url, "https://api.example.com/vars?project=prj_1");
-    assertEquals(fake.calls[1].url, "https://api.example.com/vars?project=prj_1");
-    assertEquals(fake.calls[0].headers.get("authorization"), "Bearer tok_old");
-    assertEquals(fake.calls[1].headers.get("authorization"), "Bearer tok_new");
-    // Normal per-request resolution never passes forceRefresh; the retry's
-    // forced refresh passes it exactly once — not zero, not twice.
-    assertEquals(ctxSeen, [undefined, { forceRefresh: true }]);
-  },
-);
+  assertEquals(res.body, { ok: true });
+  assertEquals(fake.calls.length, 2);
+  assertEquals(fake.calls[0].url, "https://api.example.com/vars?project=prj_1");
+  assertEquals(fake.calls[1].url, "https://api.example.com/vars?project=prj_1");
+  assertEquals(fake.calls[0].headers.get("authorization"), "Bearer tok_old");
+  assertEquals(fake.calls[1].headers.get("authorization"), "Bearer tok_new");
+  // Normal per-request resolution never passes forceRefresh; the retry's
+  // forced refresh passes it exactly once — not zero, not twice.
+  assertEquals(ctxSeen, [undefined, { forceRefresh: true }]);
+});
 
-Deno.test("the retry re-sends the identical method/path/body — POST case", async () => {
+test("the retry re-sends the identical method/path/body — POST case", async () => {
   let n = 0;
   const token: TokenProvider = () => (++n === 1 ? "tok_old" : "tok_new");
   const config = resolveConfig({
@@ -235,7 +230,7 @@ Deno.test("the retry re-sends the identical method/path/body — POST case", asy
   assertEquals(fake.calls[1].headers.get("authorization"), "Bearer tok_new");
 });
 
-Deno.test("a 401 with any code other than 'unauthorized' never triggers recovery", async () => {
+test("a 401 with any code other than 'unauthorized' never triggers recovery", async () => {
   let providerCalls = 0;
   const token: TokenProvider = () => {
     providerCalls++;
@@ -258,40 +253,37 @@ Deno.test("a 401 with any code other than 'unauthorized' never triggers recovery
   assertEquals(providerCalls, 1);
 });
 
-Deno.test(
-  "two consecutive 401/unauthorized responses: exactly 2 calls, onUnauthorized fires ONCE, then throws",
-  async () => {
-    let n = 0;
-    const token: TokenProvider = () => `tok_${++n}`;
-    let onUnauthorizedCalls = 0;
-    let lastSeen: ApiError | undefined;
-    const config = resolveConfig({
-      baseUrl: "https://api.example.com",
-      token,
-      refreshOnUnauthorized: true,
-      onUnauthorized: (err) => {
-        onUnauthorizedCalls += 1;
-        lastSeen = err;
-      },
-    });
-    const fake = fakeFetch(() => unauthorized());
+test("two consecutive 401/unauthorized responses: exactly 2 calls, onUnauthorized fires ONCE, then throws", async () => {
+  let n = 0;
+  const token: TokenProvider = () => `tok_${++n}`;
+  let onUnauthorizedCalls = 0;
+  let lastSeen: ApiError | undefined;
+  const config = resolveConfig({
+    baseUrl: "https://api.example.com",
+    token,
+    refreshOnUnauthorized: true,
+    onUnauthorized: (err) => {
+      onUnauthorizedCalls += 1;
+      lastSeen = err;
+    },
+  });
+  const fake = fakeFetch(() => unauthorized());
 
-    const err = await assertRejects(
-      () => request(config, fake.fetch, { method: "GET", path: "/vars" }),
-      ApiError,
-    );
+  const err = await assertRejects(
+    () => request(config, fake.fetch, { method: "GET", path: "/vars" }),
+    ApiError,
+  );
 
-    assertEquals(fake.calls.length, 2);
-    assertEquals(onUnauthorizedCalls, 1);
-    assertEquals(lastSeen, err);
-    assertEquals(err.status, 401);
-    assertEquals(err.code, "unauthorized");
-    // The refreshed token is never leaked into the terminal error either.
-    assertEquals(err.message.includes("tok_2"), false);
-  },
-);
+  assertEquals(fake.calls.length, 2);
+  assertEquals(onUnauthorizedCalls, 1);
+  assertEquals(lastSeen, err);
+  assertEquals(err.status, 401);
+  assertEquals(err.code, "unauthorized");
+  // The refreshed token is never leaked into the terminal error either.
+  assertEquals(err.message.includes("tok_2"), false);
+});
 
-Deno.test("a static string token cannot be retried through, even with recovery on — exactly 1 call", async () => {
+test("a static string token cannot be retried through, even with recovery on — exactly 1 call", async () => {
   const config = resolveConfig({
     baseUrl: "https://api.example.com",
     token: "tok_static",
@@ -307,7 +299,7 @@ Deno.test("a static string token cannot be retried through, even with recovery o
   assertEquals(fake.calls.length, 1);
 });
 
-Deno.test("requireAuth: false never retries and never calls onUnauthorized, even on a 401", async () => {
+test("requireAuth: false never retries and never calls onUnauthorized, even on a 401", async () => {
   let n = 0;
   const token: TokenProvider = () => `tok_${++n}`;
   let onUnauthorizedCalls = 0;
@@ -336,7 +328,7 @@ Deno.test("requireAuth: false never retries and never calls onUnauthorized, even
   assertEquals(onUnauthorizedCalls, 0);
 });
 
-Deno.test("a successful retry never calls onUnauthorized", async () => {
+test("a successful retry never calls onUnauthorized", async () => {
   let n = 0;
   const token: TokenProvider = () => (++n === 1 ? "tok_old" : "tok_new");
   let onUnauthorizedCalls = 0;
@@ -360,7 +352,7 @@ Deno.test("a successful retry never calls onUnauthorized", async () => {
 // acc.4 — client-wide default headers
 // ---------------------------------------------------------------------------
 
-Deno.test("client-wide default headers reach a typed call (workflows.list)", async () => {
+test("client-wide default headers reach a typed call (workflows.list)", async () => {
   const fake = fakeFetch(() => json({ workflows: [] }));
   const client = new W6WClient({
     baseUrl: "https://api.example.com",
@@ -374,7 +366,7 @@ Deno.test("client-wide default headers reach a typed call (workflows.list)", asy
   assertEquals(fake.calls[0].headers.get("x-tenant"), "t_42");
 });
 
-Deno.test("a per-request header overrides a same-named client default", async () => {
+test("a per-request header overrides a same-named client default", async () => {
   const fake = fakeFetch(() => json({ ok: true }));
   const config = resolveConfig({
     baseUrl: "https://api.example.com",
@@ -391,19 +383,16 @@ Deno.test("a per-request header overrides a same-named client default", async ()
   assertEquals(fake.calls[0].headers.get("x-tenant"), "override");
 });
 
-Deno.test(
-  "a client default authorization/content-type can never displace the bearer or the JSON content-type",
-  async () => {
-    const fake = fakeFetch(() => json({ ok: true }));
-    const config = resolveConfig({
-      baseUrl: "https://api.example.com",
-      token: "tok_real",
-      headers: { authorization: "Bearer evil-default", "content-type": "text/plain" },
-    });
+test("a client default authorization/content-type can never displace the bearer or the JSON content-type", async () => {
+  const fake = fakeFetch(() => json({ ok: true }));
+  const config = resolveConfig({
+    baseUrl: "https://api.example.com",
+    token: "tok_real",
+    headers: { authorization: "Bearer evil-default", "content-type": "text/plain" },
+  });
 
-    await request(config, fake.fetch, { method: "POST", path: "/vars", body: { a: 1 } });
+  await request(config, fake.fetch, { method: "POST", path: "/vars", body: { a: 1 } });
 
-    assertEquals(fake.calls[0].headers.get("authorization"), "Bearer tok_real");
-    assertEquals(fake.calls[0].headers.get("content-type"), "application/json");
-  },
-);
+  assertEquals(fake.calls[0].headers.get("authorization"), "Bearer tok_real");
+  assertEquals(fake.calls[0].headers.get("content-type"), "application/json");
+});

@@ -16,7 +16,8 @@
  *    a raising implementation fails, so it is not what is asserted.
  */
 
-import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects, assertStringIncludes } from "./assert.ts";
 import { W6WClient } from "../src/client.ts";
 import type { FetchLike } from "../src/config.ts";
 import { ApiError } from "../src/errors.ts";
@@ -78,7 +79,7 @@ function sentBody(call: Call): Record<string, unknown> {
   return JSON.parse(call.body ?? "null");
 }
 
-Deno.test("run: the action arm keeps `kind` and `value`, at 200", async () => {
+test("run: the action arm keeps `kind` and `value`, at 200", async () => {
   const c = client(() => json({ kind: "action", value: { messageId: "msg_1" } }));
 
   const env = await c.client.run({
@@ -105,7 +106,7 @@ Deno.test("run: the action arm keeps `kind` and `value`, at 200", async () => {
   });
 });
 
-Deno.test("run: the function arm carries `output`, and is NOT normalised to `value`", async () => {
+test("run: the function arm carries `output`, and is NOT normalised to `value`", async () => {
   const c = client(() => json({ kind: "function", output: { total: 7 } }));
 
   const env = await c.client.run({ urn: "fn_01HQ", payload: { items: [1, 2] } });
@@ -119,7 +120,7 @@ Deno.test("run: the function arm carries `output`, and is NOT normalised to `val
   assertEquals(Object.hasOwn(env, "value"), false);
 });
 
-Deno.test("run: the workflow arm is a 202 with runId + status — success, and needs no action", async () => {
+test("run: the workflow arm is a 202 with runId + status — success, and needs no action", async () => {
   const c = client(() => json({ kind: "workflow", runId: "run_01HQ", status: "queued" }, 202));
 
   // A workflow URN has no action, so none is passed; `payload` is omitted too.
@@ -129,7 +130,7 @@ Deno.test("run: the workflow arm is a 202 with runId + status — success, and n
   if (!isWorkflowRun(env)) throw new Error("unreachable");
   assertEquals(env.runId, "run_01HQ");
   // Typed access, not `unknown`: this assignment is the compile-time half of the
-  // assertion and fails `deno check` if the guard stops narrowing.
+  // assertion and fails `npm run typecheck` if the guard stops narrowing.
   const status: RunStatus = env.status;
   assertEquals(status, "queued");
 
@@ -138,7 +139,7 @@ Deno.test("run: the workflow arm is a 202 with runId + status — success, and n
   assertEquals(sentBody(c.calls[0]), { urn: "wf_01HQ", payload: {} });
 });
 
-Deno.test("run: an unknown kind RETURNS the raw envelope and does not raise", async () => {
+test("run: an unknown kind RETURNS the raw envelope and does not raise", async () => {
   // The server may grow a fourth kind before this SDK does — an additive change
   // that must not become a hard breakage for an installed client. The envelope
   // is handed back with its unknown sibling field reachable.
@@ -158,7 +159,7 @@ Deno.test("run: an unknown kind RETURNS the raw envelope and does not raise", as
   assertEquals(isWorkflowRun(env), false);
 });
 
-Deno.test("run: the guards are what a caller dispatches on", async () => {
+test("run: the guards are what a caller dispatches on", async () => {
   // The documented consumer shape, exercised end to end: one `describe` over an
   // envelope of any kind, with the unknown one falling through to the default
   // arm instead of throwing.
@@ -181,17 +182,12 @@ Deno.test("run: the guards are what a caller dispatches on", async () => {
   const seen: string[] = [];
   for (const _ of bodies) seen.push(describe(await c.client.run({ urn: "urn_x" })));
 
-  assertEquals(seen, [
-    "action:1",
-    "function:2",
-    "workflow:run_1:queued",
-    "unknown:batch",
-  ]);
+  assertEquals(seen, ["action:1", "function:2", "workflow:run_1:queued", "unknown:batch"]);
 });
 
-Deno.test("run: a 404 for an unresolvable URN reaches the caller as an ApiError", async () => {
+test("run: a 404 for an unresolvable URN reaches the caller as an ApiError", async () => {
   const c = client(() =>
-    json({ error: { code: "unknown_urn", message: "No such target." } }, 404, "Not Found")
+    json({ error: { code: "unknown_urn", message: "No such target." } }, 404, "Not Found"),
   );
 
   const err = await assertRejects(() => c.client.run({ urn: "conn_missing" }), ApiError);
@@ -201,7 +197,7 @@ Deno.test("run: a 404 for an unresolvable URN reaches the caller as an ApiError"
   assertEquals(err.message, "No such target.");
 });
 
-Deno.test("run: a 424 execute-phase failure keeps its code — not network_error", async () => {
+test("run: a 424 execute-phase failure keeps its code — not network_error", async () => {
   // 424 means the target app or its upstream vendor failed during execute. It
   // is a 4xx on purpose (Cloudflare replaces an origin 5xx with a CORS-less
   // HTML page), and it must not be normalised into a transport failure or a
@@ -214,7 +210,7 @@ Deno.test("run: a 424 execute-phase failure keeps its code — not network_error
       },
       424,
       "Failed Dependency",
-    )
+    ),
   );
 
   const err = await assertRejects(
@@ -227,7 +223,7 @@ Deno.test("run: a 424 execute-phase failure keeps its code — not network_error
   assertEquals((err.raw as { logs: string[] }).logs.length, 1);
 });
 
-Deno.test("run: a success body with no `kind` is bad_response", async () => {
+test("run: a success body with no `kind` is bad_response", async () => {
   // Not a new arm — a dispatch response with no discriminator at all, which is
   // the one shape a caller can do nothing with. It fails loudly here rather
   // than surfacing as an undefined `kind` somewhere in the caller's switch.

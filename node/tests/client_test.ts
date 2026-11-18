@@ -21,7 +21,8 @@
  *    credential.
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals, assertRejects } from "./assert.ts";
 import { W6WClient } from "../src/client.ts";
 import type { FetchLike } from "../src/config.ts";
 import { ConfigError } from "../src/errors.ts";
@@ -50,7 +51,7 @@ function spyFetch(body: unknown = { ok: true }): { fetch: FetchLike; calls: Call
   return { fetch, calls };
 }
 
-Deno.test("the client uses the transport it was injected with, and only that one", async () => {
+test("the client uses the transport it was injected with, and only that one", async () => {
   const spy = spyFetch({ documents: [], vars: [] });
   const client = new W6WClient({
     baseUrl: "https://api.example.com",
@@ -66,14 +67,17 @@ Deno.test("the client uses the transport it was injected with, and only that one
   // would still satisfy every assertion about the returned value — and would
   // have put three real requests on the network from a unit test.
   assertEquals(spy.calls.length, 3);
-  assertEquals(spy.calls.map((c) => c.url), [
-    "https://api.example.com/documents",
-    "https://api.example.com/vars",
-    "https://api.example.com/anything",
-  ]);
+  assertEquals(
+    spy.calls.map((c) => c.url),
+    [
+      "https://api.example.com/documents",
+      "https://api.example.com/vars",
+      "https://api.example.com/anything",
+    ],
+  );
 });
 
-Deno.test("every namespace and method routes through the injected transport", async () => {
+test("every namespace and method routes through the injected transport", async () => {
   // Not a repetition of the case above: each namespace is constructed with the
   // client rather than with the transport, so one of them wiring itself to the
   // global would be invisible everywhere else.
@@ -109,7 +113,7 @@ Deno.test("every namespace and method routes through the injected transport", as
   );
 });
 
-Deno.test("two clients in one process never share a credential", async () => {
+test("two clients in one process never share a credential", async () => {
   // Interleaved on purpose: a module-global token is written by the LAST
   // construction, so a sequential A-then-B script would still look right.
   const spyA = spyFetch({ documents: [] });
@@ -129,21 +133,24 @@ Deno.test("two clients in one process never share a credential", async () => {
   await b.documents.list();
   await a.documents.list();
 
-  assertEquals(spyA.calls.map((c) => c.authorization), [
-    "Bearer tok_TENANT_A",
-    "Bearer tok_TENANT_A",
-  ]);
-  assertEquals(spyB.calls.map((c) => c.authorization), ["Bearer tok_TENANT_B"]);
+  assertEquals(
+    spyA.calls.map((c) => c.authorization),
+    ["Bearer tok_TENANT_A", "Bearer tok_TENANT_A"],
+  );
+  assertEquals(
+    spyB.calls.map((c) => c.authorization),
+    ["Bearer tok_TENANT_B"],
+  );
   // The base URL is instance state for the same reason: B's requests must never
   // arrive at A's server.
-  assertEquals(spyA.calls.map((c) => c.url), [
-    "https://tenant-a.example.com/documents",
-    "https://tenant-a.example.com/documents",
-  ]);
+  assertEquals(
+    spyA.calls.map((c) => c.url),
+    ["https://tenant-a.example.com/documents", "https://tenant-a.example.com/documents"],
+  );
   assertEquals(spyB.calls[0].url, "https://tenant-b.example.com/documents");
 });
 
-Deno.test("a client with no token borrows nobody else's", async () => {
+test("a client with no token borrows nobody else's", async () => {
   // The failure this pins is the dangerous one: under a module-global
   // credential, the tokenless client below would send `Bearer tok_TENANT_A` —
   // one tenant's credential, to another tenant's server, with no error anywhere.
@@ -154,8 +161,8 @@ Deno.test("a client with no token borrows nobody else's", async () => {
     token: "tok_TENANT_A",
     fetch: spyA.fetch,
   });
-  const saved = Deno.env.get("W6W_TOKEN");
-  Deno.env.delete("W6W_TOKEN");
+  const saved = process.env.W6W_TOKEN;
+  delete process.env.W6W_TOKEN;
   try {
     const tokenless = new W6WClient({
       baseUrl: "https://tenant-b.example.com",
@@ -168,8 +175,8 @@ Deno.test("a client with no token borrows nobody else's", async () => {
     // It failed before the transport, so nothing at all was sent.
     assertEquals(spyNone.calls.length, 0);
   } finally {
-    if (saved === undefined) Deno.env.delete("W6W_TOKEN");
-    else Deno.env.set("W6W_TOKEN", saved);
+    if (saved === undefined) delete process.env.W6W_TOKEN;
+    else process.env.W6W_TOKEN = saved;
   }
   assertEquals(spyA.calls[0].authorization, "Bearer tok_TENANT_A");
 });

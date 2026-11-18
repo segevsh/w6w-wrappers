@@ -1,6 +1,7 @@
 /** `client.models.*`, `client.modelRoutes.*`, `client.modelUsage.*` against a fake `fetch`. */
 
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals } from "./assert.ts";
 import { W6WClient } from "../src/client.ts";
 import type { FetchLike } from "../src/config.ts";
 import type { ModelCompletion } from "../src/models.ts";
@@ -24,7 +25,7 @@ function setup(body: unknown) {
   return { client, calls };
 }
 
-Deno.test("models.list returns the page as-is and passes filters", async () => {
+test("models.list returns the page as-is and passes filters", async () => {
   const page = { models: [{ id: "m1" }], nextCursor: "c2" };
   const { client, calls } = setup(page);
   const out = await client.models.list({ provider: "openai", limit: 5, cursor: "c1" });
@@ -36,13 +37,13 @@ Deno.test("models.list returns the page as-is and passes filters", async () => {
   assertEquals(u.searchParams.get("cursor"), "c1");
 });
 
-Deno.test("models.get encodes the id", async () => {
+test("models.get encodes the id", async () => {
   const { client, calls } = setup({ id: "a/b" });
   assertEquals((await client.models.get("a/b")).id, "a/b");
   assertEquals(new URL(calls[0].url).pathname.endsWith("/models/a%2Fb"), true);
 });
 
-Deno.test("modelRoutes.list/get carry project", async () => {
+test("modelRoutes.list/get carry project", async () => {
   const { client, calls } = setup([{ name: "r" }]);
   assertEquals((await client.modelRoutes.list({ project: "p1" })).length, 1);
   await client.modelRoutes.get("r", { project: "p1" });
@@ -50,7 +51,7 @@ Deno.test("modelRoutes.list/get carry project", async () => {
   assertEquals(new URL(calls[1].url).pathname.endsWith("/model-routes/r"), true);
 });
 
-Deno.test("modelRoutes.complete POSTs the input and returns the flat envelope", async () => {
+test("modelRoutes.complete POSTs the input and returns the flat envelope", async () => {
   const env = { invocationId: "inv_1", status: "ok", key: "k1", output: "hi" };
   const { client, calls } = setup(env);
   const out: ModelCompletion = await client.modelRoutes.complete(
@@ -68,7 +69,7 @@ Deno.test("modelRoutes.complete POSTs the input and returns the flat envelope", 
   assertEquals(JSON.parse(calls[0].body!), { messages: [{ role: "user", content: "yo" }] });
 });
 
-Deno.test("modelRoutes.complete rejects bad unions at type level", async () => {
+test("modelRoutes.complete rejects bad unions at type level", async () => {
   const { client } = setup({ invocationId: "i", status: "ok" });
   // @ts-expect-error response must be "both" | "output" | "raw"
   await client.modelRoutes.complete("r", {}, { response: "bogus" });
@@ -76,7 +77,7 @@ Deno.test("modelRoutes.complete rejects bad unions at type level", async () => {
   await client.modelRoutes.complete("r", {}, { dialect: "bogus" });
 });
 
-Deno.test("modelUsage.query passes every filter", async () => {
+test("modelUsage.query passes every filter", async () => {
   const rep = { totals: {}, totalsTruncated: false, items: [], nextCursor: null };
   const { client, calls } = setup(rep);
   assertEquals(
@@ -92,20 +93,19 @@ Deno.test("modelUsage.query passes every filter", async () => {
     rep,
   );
   const q = new URL(calls[0].url).searchParams;
-  for (
-    const [k, v] of Object.entries({
-      groupBy: "route",
-      from: "2026-01-01",
-      to: "2026-02-01",
-      route: "chat",
-      model: "m1",
-      limit: "10",
-      cursor: "c",
-    })
-  ) assertEquals(q.get(k), v);
+  for (const [k, v] of Object.entries({
+    groupBy: "route",
+    from: "2026-01-01",
+    to: "2026-02-01",
+    route: "chat",
+    model: "m1",
+    limit: "10",
+    cursor: "c",
+  }))
+    assertEquals(q.get(k), v);
 });
 
-Deno.test("modelRoutes.complete sends dialect=bridge and types usageSummary", async () => {
+test("modelRoutes.complete sends dialect=bridge and types usageSummary", async () => {
   const env = {
     contractVersion: 1,
     route: null,
@@ -124,9 +124,13 @@ Deno.test("modelRoutes.complete sends dialect=bridge and types usageSummary", as
     meta: { usageRecorded: true },
   };
   const { client, calls } = setup(env);
-  const out: ModelCompletion = await client.modelRoutes.complete("chat", {}, {
-    dialect: "bridge",
-  });
+  const out: ModelCompletion = await client.modelRoutes.complete(
+    "chat",
+    {},
+    {
+      dialect: "bridge",
+    },
+  );
   assertEquals(new URL(calls[0].url).searchParams.get("dialect"), "bridge");
   assertEquals(out.usageSummary?.source, "partial");
   const nul: ModelCompletion = {

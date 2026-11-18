@@ -16,7 +16,7 @@ unstable, not part of the published partner contract —
 - it can change shape or disappear between any two versions without a deprecation cycle, because it
   was never a promise to a partner in the first place.
 
-It exists as a **separate subpath export** (`deno.json`'s `"./console"`, `package.json`'s
+It exists as a **separate subpath export** (`package.json`'s
 `"./console"`) rather than a namespace hidden on `W6WClient` directly, so a host that only wants the
 partner surface never pulls this code in, and a host that wants both — the operator console itself —
 imports one client and gets `client.console.*` alongside everything else. It is built on the same

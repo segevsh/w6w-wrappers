@@ -184,9 +184,8 @@ export class TokensApi {
    * @throws {ApiError} `400 invalid_name`/`invalid_scopes`/`invalid_allowed_ips`.
    */
   async create(nameOrOptions: string | CreateTokenOptions): Promise<CreateTokenResponse> {
-    const body: Record<string, unknown> = typeof nameOrOptions === "string"
-      ? { name: nameOrOptions }
-      : { name: nameOrOptions.name };
+    const body: Record<string, unknown> =
+      typeof nameOrOptions === "string" ? { name: nameOrOptions } : { name: nameOrOptions.name };
     if (typeof nameOrOptions !== "string") {
       if (nameOrOptions.scopes !== undefined) body.scopes = nameOrOptions.scopes;
       if (nameOrOptions.allowedIps !== undefined) body.allowedIps = nameOrOptions.allowedIps;

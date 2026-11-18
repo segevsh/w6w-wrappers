@@ -152,9 +152,11 @@ export class VaultApi {
    * server answers `201`). Never carries `value`.
    * @throws {ApiError} `400 invalid_name`/`invalid_value`/`invalid_description`; `409 secret_exists`.
    */
-  async create(
-    body: { name: string; value: string; description?: string },
-  ): Promise<VaultSecretSummary> {
+  async create(body: {
+    name: string;
+    value: string;
+    description?: string;
+  }): Promise<VaultSecretSummary> {
     const res = await this.#host.request<unknown>({ method: "POST", path: "/vault", body });
     return unwrap<VaultSecretSummary>(res, "secret");
   }

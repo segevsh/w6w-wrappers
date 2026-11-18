@@ -2878,8 +2878,8 @@ unstable `console.endpoints` namespace.
 > `appManagement.publishArtifact` (`POST /app-management/artifacts`), the upload behind
 > `w6w apps publish`. It went in as `planned` and was flipped to `required` once the server
 > route shipped on 2026-11-15. The operation count goes from 122 to 123. The CLI's
-> `apps init` / `validate` / `build` run the local `@w6w/app-build` toolchain and call no
-> operation.
+> `apps init` / `validate` / `build` package the developer's prebuilt JavaScript locally with
+> the vendored `@w6w/app-build` assembler (Node only) and call no operation.
 
 ---
 

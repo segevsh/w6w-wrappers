@@ -127,7 +127,8 @@ export class EndpointsApi {
     // check lets `{}` and `[]` through and hands back an envelope whose `kind`
     // is `undefined` at runtime — a lie the compiler cannot catch.
     if (
-      typeof body !== "object" || body === null ||
+      typeof body !== "object" ||
+      body === null ||
       typeof (body as { kind?: unknown }).kind !== "string"
     ) {
       throw new ApiError(

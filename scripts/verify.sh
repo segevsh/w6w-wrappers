@@ -4,7 +4,8 @@
 # (w6w-io/w6w .githooks/pre-push). Add a check HERE, never only to ci.yml. Publishing is not a
 # check: it lives in release.yml alone.
 #
-# Needs deno 2.x, node 24 + npm, and python 3 with the `build` module (`pip install build`).
+# Needs node 24 + npm, python 3 with the `build` module (`pip install build`), and — for the cli
+# lane only, until it moves off Deno like node/ did — deno 2.x.
 # Self-contained: no sibling checkout — the lanes link each other inside this repo (../node).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -13,13 +14,15 @@ step() { printf '\n== %s\n' "$*"; }
 step "lockstep: VERSION and every manifest agree"
 python3 scripts/check-lockstep.py
 
-# Deno lane first, and `deno publish --dry-run` before ANY npm or python step: Deno's clean-tree
-# check covers the whole repository, and npm installs can touch sibling lockfiles.
-step "node: deno check";      (cd node && deno task check)
-step "node: deno lint";       (cd node && deno task lint)
-step "node: deno fmt --check"; (cd node && deno task fmt:check)
-step "node: deno test";       (cd node && deno task test)
-step "node: JSR dry run";     (cd node && deno publish --dry-run)
+# The SDK goes first: cli and react both link it (cli via deno.json, react via npm), so it is
+# installed, checked and built before either.
+step "node: npm ci";          (cd node && npm ci)
+step "node: typecheck";       (cd node && npm run typecheck)
+step "node: lint";            (cd node && npm run lint)
+step "node: format:check";    (cd node && npm run format:check)
+step "node: test";            (cd node && npm test)
+step "node: build";           (cd node && npm run build)
+step "node: npm pack --dry-run"; (cd node && npm pack --dry-run)
 
 step "python: unittest (includes the conformance suite)"
 (cd python && PYTHONPATH=src python3 -m unittest discover -s tests -t .)
@@ -29,10 +32,6 @@ if ! python3 -c 'import build' 2>/dev/null; then
   exit 1
 fi
 (cd python && python3 -m build --outdir dist)
-
-# The SDK build comes before cli and react: both link it (cli via deno.json, react via npm).
-step "node: npm ci + build"; (cd node && npm ci && npm run build)
-step "node: npm pack --dry-run"; (cd node && npm pack --dry-run)
 
 # Install before `deno check`: its types come from cli/node_modules (@types/node).
 step "cli: npm install + build"; (cd cli && npm install && npm run build)

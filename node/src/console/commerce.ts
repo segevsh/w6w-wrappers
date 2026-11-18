@@ -58,11 +58,11 @@ export type Quota =
   | { readonly kind: "custom" }
   | { readonly kind: "capped"; readonly included: number }
   | {
-    readonly kind: "metered";
-    readonly included: number;
-    readonly per: number;
-    readonly unitAmount: number;
-  };
+      readonly kind: "metered";
+      readonly included: number;
+      readonly per: number;
+      readonly unitAmount: number;
+    };
 
 /** The monitor-cadence limit: how often a health check may run. */
 export interface MonitorLimit {
@@ -148,12 +148,12 @@ export type PlanPrice =
   | { readonly kind: "none" }
   | { readonly kind: "contact-sales" }
   | {
-    readonly kind: "billable";
-    readonly currency: "usd";
-    readonly monthly: PlanPricePoint;
-    /** `null` when the plan is offered monthly only. */
-    readonly annual: PlanPricePoint | null;
-  };
+      readonly kind: "billable";
+      readonly currency: "usd";
+      readonly monthly: PlanPricePoint;
+      /** `null` when the plan is offered monthly only. */
+      readonly annual: PlanPricePoint | null;
+    };
 
 /** One entry in the checked-in plan catalog, as `GET /commerce/plans` returns it. */
 export interface Plan {

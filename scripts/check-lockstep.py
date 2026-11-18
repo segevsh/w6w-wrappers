@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One version, eleven places it is written down: VERSION and every manifest must agree.
+"""One version, ten places it is written down: VERSION and every manifest must agree.
 
 The same check release.yml runs inline, minus the release-tag comparison. Run from the
 repository root (scripts/verify.sh does). Exits 1, naming every manifest that disagrees.
@@ -31,7 +31,6 @@ def from_regex(path, pattern):
 found = {
     "VERSION": shared,
     "node/package.json": from_json("node/package.json", "version"),
-    "node/deno.json": from_json("node/deno.json", "version"),
     "node/src/version.ts": from_regex(
         "node/src/version.ts", r'VERSION:\s*string\s*=\s*"([^"]+)"'),
     "cli/package.json": from_json("cli/package.json", "version"),

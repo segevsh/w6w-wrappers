@@ -1,12 +1,17 @@
 /**
- * `w6w apps init <id> [--template deno|node] [--dir <path>]` — scaffold a new w6w app
- * from a bundled template. Offline; refuses a non-empty target directory.
+ * `w6w apps init <id> [--template node] [--dir <path>]` — scaffold a new w6w app from
+ * the bundled template. Offline; refuses a non-empty target directory.
+ *
+ * The scaffold needs Node and npm only: TypeScript sources, the developer's own
+ * esbuild build to `dist/app.js` (+ source map), `node:test` tests, and npm scripts
+ * that call `w6w apps validate|build`. The `deno` template is gone; naming it is a
+ * usage error that says so.
  *
  * @module
  */
 
 import type { CommandHandler, CommandRegistry } from "../../mod.ts";
-import { APP_ID, templateFiles, type TemplateName } from "../app-templates.ts";
+import { APP_ID, DEFAULT_TEMPLATE, templateFiles } from "../app-templates.ts";
 import { argument, noExtraArguments, textFlag, usageError } from "./shared.ts";
 
 /** The slice of `node:fs/promises` + `node:path` init uses (imported by variable: no host types). */
@@ -55,9 +60,16 @@ const appsInit: CommandHandler = async (context) => {
         `(e.g. \`com.example.my-app\`). Try \`${suggestId(id)}\`.`,
     );
   }
-  const template = textFlag(context, "template") ?? "deno";
-  if (template !== "deno" && template !== "node") {
-    throw usageError(context, `\`--template\` must be \`deno\` or \`node\`, not \`${template}\`.`);
+  const template = textFlag(context, "template") ?? DEFAULT_TEMPLATE;
+  if (template === "deno") {
+    throw usageError(
+      context,
+      "the `deno` template was removed: apps are built with Node and npm only. " +
+        "Drop `--template` (or pass `--template node`).",
+    );
+  }
+  if (template !== DEFAULT_TEMPLATE) {
+    throw usageError(context, `\`--template\` must be \`node\`, not \`${template}\`.`);
   }
   const h = await host();
   const target = h.resolve(textFlag(context, "dir") ?? id);
@@ -72,7 +84,7 @@ const appsInit: CommandHandler = async (context) => {
     throw new Error(`\`${target}\` is not empty; refusing to scaffold into it.`);
   }
 
-  const files = templateFiles(template as TemplateName, id);
+  const files = templateFiles(template, id);
   for (const [path, body] of Object.entries(files)) {
     const full = h.join(target, path);
     await h.mkdir(h.dirname(full), { recursive: true });
@@ -81,7 +93,9 @@ const appsInit: CommandHandler = async (context) => {
   const written = Object.keys(files);
   context.out.emit(
     { id, template, dir: target, files: written },
-    () => `created ${id} (${template}) in ${target}\n  ${written.join("\n  ")}`,
+    () =>
+      `created ${id} (${template}) in ${target}\n  ${written.join("\n  ")}\n` +
+      `next: cd ${target} && npm install && npm run build && npm test && npm run validate`,
   );
 };
 

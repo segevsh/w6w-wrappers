@@ -9,7 +9,7 @@
  * @module
  */
 
-import { type HttpResponse, type RequestOptions } from "../http.ts";
+import type { HttpResponse, RequestOptions } from "../http.ts";
 
 /** The slice of `W6WClient` this namespace needs: the transport. */
 export interface AiCredentialPolicyHost {
