@@ -478,6 +478,10 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
   ],
   "appManagement.get": ["w6w app-management get sendgrid"],
   "appManagement.preview": ["w6w app-management preview github:acme/app --target account"],
+  "appManagement.discover": [
+    "w6w apps search hello",
+    "w6w apps search hello --registry jsr --limit 5",
+  ],
   "appManagement.register": [
     "w6w app-management register github:acme/app --target account",
     `w6w app-management register '{"folder":{"grant":"sgr_01HQ8N","path":"./my-app"}}' --target personal`,
@@ -924,6 +928,9 @@ const PARAM_HELP: Record<string, string> = {
     'A canonical remote ref (e.g. github:owner/repo), or a JSON object {"folder":{"grant":"…","path":"…"}} naming a path inside a granted server folder',
   "appManagement.preview.target":
     "Where it would go: account, tenant or personal (the server's targets list says which you may use)",
+  "appManagement.discover.registry": "Registry to search: npm (default) or jsr",
+  "appManagement.discover.q": "Search text",
+  "appManagement.discover.limit": "Maximum results (a positive integer)",
   "appManagement.register.source":
     'A canonical remote ref (e.g. github:owner/repo), or a JSON object {"folder":{"grant":"…","path":"…"}} naming a path inside a granted server folder',
   "appManagement.register.target":

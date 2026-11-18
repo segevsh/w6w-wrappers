@@ -99,7 +99,7 @@ export interface HelpExitCode {
 /** The command tree, generated from the shared wrapper surface contract. */
 export const HELP_TREE: HelpTree = {
   "binary": "w6w",
-  "contractVersion": "0.20.0",
+  "contractVersion": "0.21.0",
   "tagline": "command-line client for the w6w workflow platform",
   "usage": "w6w <command> [options]",
   "docsUrl": "https://w6w.dev/docs/cli",
@@ -2642,6 +2642,56 @@ export const HELP_TREE: HelpTree = {
           "examples": [
             "w6w apps by-ids sendgrid,slack",
             "w6w apps by-ids sendgrid --json",
+          ],
+          "notes": [],
+        },
+        {
+          "operation": "appManagement.discover",
+          "path": [
+            "apps",
+            "search",
+          ],
+          "name": "search",
+          "aliases": [],
+          "summary": "Search an npm or JSR registry for installable w6w apps.",
+          "short": "Search an npm or JSR registry for installable w6w apps",
+          "headline": "search an npm or JSR registry for installable w6w apps",
+          "usage": "w6w apps search <q> [options]",
+          "naming": "w6w apps search <q> [--registry npm|jsr] [--limit <n>]",
+          "status": "required",
+          "params": [
+            {
+              "name": "registry",
+              "kind": "flag",
+              "display": "--registry <value>",
+              "description": "Registry to search: npm (default) or jsr",
+              "required": false,
+            },
+            {
+              "name": "q",
+              "kind": "argument",
+              "display": "<q>",
+              "description": "Search text",
+              "required": true,
+            },
+            {
+              "name": "limit",
+              "kind": "flag",
+              "display": "--limit <n>",
+              "description": "Maximum results (a positive integer)",
+              "required": false,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w apps search hello",
+            "w6w apps search hello --registry jsr --limit 5",
           ],
           "notes": [],
         },
@@ -7144,6 +7194,10 @@ export const COMMAND_PATHS: string[][] = [
   [
     "apps",
     "by-ids",
+  ],
+  [
+    "apps",
+    "search",
   ],
   [
     "apps",
